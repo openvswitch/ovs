@@ -240,34 +240,14 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
     return udp + 1;
 }
 
-/* Calculate inner l2 l3 l4 len as tunnel outer header is not
- * encapsulated now. */
 static void
 dp_packet_tnl_ol_process(struct dp_packet *packet,
                          const struct ovs_action_push_tnl *data)
 {
-    struct udp_header *udp = NULL;
-    uint8_t opt_len = 0;
-    struct eth_header *eth = NULL;
     struct ip_header *ip = NULL;
-    struct genevehdr *gnh = NULL;
 
-    /* l2 l3 l4 len refer to inner len, tunnel outer
-     * header is not encapsulated here. */
     if (dp_packet_hwol_l4_mask(packet)) {
         ip = dp_packet_l3(packet);
-
-        if (ip->ip_proto == IPPROTO_TCP) {
-            struct tcp_header *th = dp_packet_l4(packet);
-            dp_packet_set_l4_len(packet, TCP_OFFSET(th->tcp_ctl) * 4);
-        } else if (ip->ip_proto == IPPROTO_UDP) {
-            dp_packet_set_l4_len(packet, UDP_HEADER_LEN);
-        } else if (ip->ip_proto == IPPROTO_SCTP) {
-            dp_packet_set_l4_len(packet, SCTP_HEADER_LEN);
-        }
-
-        dp_packet_set_l3_len(packet, (char *) dp_packet_l4(packet) -
-                                     (char *) dp_packet_l3(packet));
 
         if (data->tnl_type == OVS_VPORT_TYPE_GENEVE ||
             data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
@@ -279,32 +259,12 @@ dp_packet_tnl_ol_process(struct dp_packet *packet,
                 dp_packet_hwol_set_tx_ipv6(packet);
             }
         }
+    }
 
-        /* Attention please, tunnel inner l2 len is consist of udp header
-         * len and tunnel header len and inner l2 len. */
-        if (data->tnl_type == OVS_VPORT_TYPE_GENEVE) {
-            eth = (struct eth_header *)(data->header);
-            ip = (struct ip_header *)(eth + 1);
-            udp = (struct udp_header *)(ip + 1);
-            gnh = (struct genevehdr *)(udp + 1);
-            opt_len = gnh->opt_len * 4;
-            dp_packet_hwol_set_tunnel_geneve(packet);
-            dp_packet_set_l2_len(packet, (char *) dp_packet_l3(packet) -
-                                         (char *) dp_packet_eth(packet) +
-                                         GENEVE_BASE_HLEN + opt_len);
-        } else if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
-            dp_packet_hwol_set_tunnel_vxlan(packet);
-            dp_packet_set_l2_len(packet, (char *) dp_packet_l3(packet) -
-                                         (char *) dp_packet_eth(packet) +
-                                         VXLAN_HLEN);
-        }
-    } else {
-        /* Mark non-l4 packets as tunneled. */
-        if (data->tnl_type == OVS_VPORT_TYPE_GENEVE) {
-            dp_packet_hwol_set_tunnel_geneve(packet);
-        } else if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
-            dp_packet_hwol_set_tunnel_vxlan(packet);
-        }
+    if (data->tnl_type == OVS_VPORT_TYPE_GENEVE) {
+        dp_packet_hwol_set_tunnel_geneve(packet);
+    } else if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
+        dp_packet_hwol_set_tunnel_vxlan(packet);
     }
 }
 

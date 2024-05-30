@@ -604,25 +604,6 @@ dp_packet_get_nd_payload(const struct dp_packet *b)
 }
 
 #ifdef DPDK_NETDEV
-static inline void
-dp_packet_set_l2_len(struct dp_packet *b, size_t l2_len)
-{
-    b->mbuf.l2_len = l2_len;
-}
-
-static inline void
-dp_packet_set_l3_len(struct dp_packet *b, size_t l3_len)
-{
-    b->mbuf.l3_len = l3_len;
-}
-
-static inline void
-dp_packet_set_l4_len(struct dp_packet *b, size_t l4_len)
-{
-    b->mbuf.l4_len = l4_len;
-}
-
-
 static inline uint64_t *
 dp_packet_ol_flags_ptr(const struct dp_packet *b)
 {
@@ -642,24 +623,6 @@ dp_packet_flow_mark_ptr(const struct dp_packet *b)
 }
 
 #else
-static inline void
-dp_packet_set_l2_len(struct dp_packet *b OVS_UNUSED, size_t l2_len OVS_UNUSED)
-{
-    /* There is no implementation. */
-}
-
-static inline void
-dp_packet_set_l3_len(struct dp_packet *b OVS_UNUSED, size_t l3_len OVS_UNUSED)
-{
-    /* There is no implementation. */
-}
-
-static inline void
-dp_packet_set_l4_len(struct dp_packet *b OVS_UNUSED, size_t l4_len OVS_UNUSED)
-{
-    /* There is no implementation. */
-}
-
 static inline uint32_t *
 dp_packet_ol_flags_ptr(const struct dp_packet *b)
 {
