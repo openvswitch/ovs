@@ -2583,7 +2583,6 @@ static bool
 netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 {
     struct dp_packet *pkt = CONTAINER_OF(mbuf, struct dp_packet, mbuf);
-    struct tcp_header *th;
 
     const uint64_t all_inner_requests = (RTE_MBUF_F_TX_IP_CKSUM |
                                          RTE_MBUF_F_TX_L4_MASK |
@@ -2612,6 +2611,8 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
         }
         return true;
     }
+
+    ovs_assert(dp_packet_l4(pkt));
 
     /* If packet is vxlan or geneve tunnel packet, calculate outer
      * l2 len and outer l3 len. Inner l2/l3/l4 len are calculated
@@ -2666,22 +2667,10 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
         mbuf->l3_len = (char *) dp_packet_l4(pkt) -
                        (char *) dp_packet_l3(pkt);
     }
-    th = dp_packet_l4(pkt);
 
     if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
-        if (!th) {
-            VLOG_WARN_RL(&rl, "%s: TCP Segmentation without L4 header"
-                         " pkt len: %"PRIu32"", dev->up.name, mbuf->pkt_len);
-            return false;
-        }
-    }
-
-    if ((mbuf->ol_flags & RTE_MBUF_F_TX_L4_MASK) == RTE_MBUF_F_TX_TCP_CKSUM) {
-        if (!th) {
-            VLOG_WARN_RL(&rl, "%s: TCP offloading without L4 header"
-                         " pkt len: %"PRIu32"", dev->up.name, mbuf->pkt_len);
-            return false;
-        }
+        struct tcp_header *th = dp_packet_l4(pkt);
+        int hdr_len;
 
         if (tunnel_type) {
             mbuf->tso_segsz = dev->mtu - mbuf->l2_len - mbuf->l3_len -
@@ -2691,16 +2680,13 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
             mbuf->tso_segsz = dev->mtu - mbuf->l3_len - mbuf->l4_len;
         }
 
-        if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
-            int hdr_len = mbuf->l2_len + mbuf->l3_len + mbuf->l4_len;
-            if (OVS_UNLIKELY((hdr_len +
-                              mbuf->tso_segsz) > dev->max_packet_len)) {
-                VLOG_WARN_RL(&rl, "%s: Oversized TSO packet. hdr: %"PRIu32", "
-                             "gso: %"PRIu32", max len: %"PRIu32"",
-                             dev->up.name, hdr_len, mbuf->tso_segsz,
-                             dev->max_packet_len);
-                return false;
-            }
+        hdr_len = mbuf->l2_len + mbuf->l3_len + mbuf->l4_len;
+        if (OVS_UNLIKELY((hdr_len + mbuf->tso_segsz) > dev->max_packet_len)) {
+            VLOG_WARN_RL(&rl, "%s: Oversized TSO packet. hdr: %"PRIu32", "
+                         "gso: %"PRIu32", max len: %"PRIu32"",
+                         dev->up.name, hdr_len, mbuf->tso_segsz,
+                         dev->max_packet_len);
+            return false;
         }
     }
 
