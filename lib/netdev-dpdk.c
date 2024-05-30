@@ -2628,10 +2628,21 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     }
 
     if (tunnel_type && (mbuf->ol_flags & all_inner_requests)) {
-        mbuf->outer_l2_len = (char *) dp_packet_l3(pkt) -
-                             (char *) dp_packet_eth(pkt);
-        mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
-                             (char *) dp_packet_l3(pkt);
+        if (mbuf->ol_flags & all_outer_requests) {
+            mbuf->outer_l2_len = (char *) dp_packet_l3(pkt) -
+                                 (char *) dp_packet_eth(pkt);
+            mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
+                                 (char *) dp_packet_l3(pkt);
+        } else {
+            /* If no outer offloading is requested, clear outer marks. */
+            mbuf->ol_flags &= ~all_outer_marks;
+            mbuf->outer_l2_len = 0;
+            mbuf->outer_l3_len = 0;
+
+            /* Skip outer headers. */
+            mbuf->l2_len += (char *) dp_packet_l4(pkt) -
+                            (char *) dp_packet_eth(pkt);
+        }
     } else {
         if (tunnel_type) {
             /* No inner offload is requested, fallback to non tunnel
