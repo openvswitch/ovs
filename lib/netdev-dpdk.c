@@ -2583,16 +2583,18 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     struct dp_packet *pkt = CONTAINER_OF(mbuf, struct dp_packet, mbuf);
     struct tcp_header *th;
 
-    const uint64_t all_requests = (RTE_MBUF_F_TX_IP_CKSUM |
-                                   RTE_MBUF_F_TX_L4_MASK  |
-                                   RTE_MBUF_F_TX_OUTER_IP_CKSUM  |
-                                   RTE_MBUF_F_TX_OUTER_UDP_CKSUM |
-                                   RTE_MBUF_F_TX_TCP_SEG);
-    const uint64_t all_marks = (RTE_MBUF_F_TX_IPV4 |
-                                RTE_MBUF_F_TX_IPV6 |
-                                RTE_MBUF_F_TX_OUTER_IPV4 |
-                                RTE_MBUF_F_TX_OUTER_IPV6 |
-                                RTE_MBUF_F_TX_TUNNEL_MASK);
+    const uint64_t all_inner_requests = (RTE_MBUF_F_TX_IP_CKSUM |
+                                         RTE_MBUF_F_TX_L4_MASK |
+                                         RTE_MBUF_F_TX_TCP_SEG);
+    const uint64_t all_outer_requests = (RTE_MBUF_F_TX_OUTER_IP_CKSUM |
+                                         RTE_MBUF_F_TX_OUTER_UDP_CKSUM);
+    const uint64_t all_requests = all_inner_requests | all_outer_requests;
+    const uint64_t all_inner_marks = (RTE_MBUF_F_TX_IPV4 |
+                                      RTE_MBUF_F_TX_IPV6);
+    const uint64_t all_outer_marks = (RTE_MBUF_F_TX_OUTER_IPV4 |
+                                      RTE_MBUF_F_TX_OUTER_IPV6 |
+                                      RTE_MBUF_F_TX_TUNNEL_MASK);
+    const uint64_t all_marks = all_inner_marks | all_outer_marks;
 
     if (!(mbuf->ol_flags & all_requests)) {
         /* No offloads requested, no marks should be set. */
@@ -2613,34 +2615,43 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
      * l2 len and outer l3 len. Inner l2/l3/l4 len are calculated
      * before. */
     const uint64_t tunnel_type = mbuf->ol_flags & RTE_MBUF_F_TX_TUNNEL_MASK;
-    if (tunnel_type == RTE_MBUF_F_TX_TUNNEL_GENEVE ||
-        tunnel_type == RTE_MBUF_F_TX_TUNNEL_VXLAN) {
-        mbuf->outer_l2_len = (char *) dp_packet_l3(pkt) -
-                 (char *) dp_packet_eth(pkt);
-        mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
-                 (char *) dp_packet_l3(pkt);
-
-        /* If neither inner checksums nor TSO is requested, inner marks
-         * should not be set. */
-        if (!(mbuf->ol_flags & (RTE_MBUF_F_TX_IP_CKSUM |
-                                RTE_MBUF_F_TX_L4_MASK  |
-                                RTE_MBUF_F_TX_TCP_SEG))) {
-            mbuf->ol_flags &= ~(RTE_MBUF_F_TX_IPV4 |
-                                RTE_MBUF_F_TX_IPV6);
-        }
-    } else if (OVS_UNLIKELY(tunnel_type)) {
+    if (OVS_UNLIKELY(tunnel_type &&
+                     tunnel_type != RTE_MBUF_F_TX_TUNNEL_GENEVE &&
+                     tunnel_type != RTE_MBUF_F_TX_TUNNEL_VXLAN)) {
         VLOG_WARN_RL(&rl, "%s: Unexpected tunnel type: %#"PRIx64,
                      netdev_get_name(&dev->up), tunnel_type);
         netdev_dpdk_mbuf_dump(netdev_get_name(&dev->up),
                               "Packet with unexpected tunnel type", mbuf);
         return false;
+    }
+
+    if (tunnel_type && (mbuf->ol_flags & all_inner_requests)) {
+        mbuf->outer_l2_len = (char *) dp_packet_l3(pkt) -
+                             (char *) dp_packet_eth(pkt);
+        mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
+                             (char *) dp_packet_l3(pkt);
     } else {
-        mbuf->l2_len = (char *) dp_packet_l3(pkt) -
-               (char *) dp_packet_eth(pkt);
-        mbuf->l3_len = (char *) dp_packet_l4(pkt) -
-               (char *) dp_packet_l3(pkt);
+        if (tunnel_type) {
+            /* No inner offload is requested, fallback to non tunnel
+             * checksum offloads. */
+            mbuf->ol_flags &= ~all_inner_marks;
+            if (mbuf->ol_flags & RTE_MBUF_F_TX_OUTER_IP_CKSUM) {
+                mbuf->ol_flags |= RTE_MBUF_F_TX_IP_CKSUM;
+                mbuf->ol_flags |= RTE_MBUF_F_TX_IPV4;
+            }
+            if (mbuf->ol_flags & RTE_MBUF_F_TX_OUTER_UDP_CKSUM) {
+                mbuf->ol_flags |= RTE_MBUF_F_TX_UDP_CKSUM;
+                mbuf->ol_flags |= mbuf->ol_flags & RTE_MBUF_F_TX_OUTER_IPV4
+                                  ? RTE_MBUF_F_TX_IPV4 : RTE_MBUF_F_TX_IPV6;
+            }
+            mbuf->ol_flags &= ~(all_outer_requests | all_outer_marks);
+        }
         mbuf->outer_l2_len = 0;
         mbuf->outer_l3_len = 0;
+        mbuf->l2_len = (char *) dp_packet_l3(pkt) -
+                       (char *) dp_packet_eth(pkt);
+        mbuf->l3_len = (char *) dp_packet_l4(pkt) -
+                       (char *) dp_packet_l3(pkt);
     }
     th = dp_packet_l4(pkt);
 
