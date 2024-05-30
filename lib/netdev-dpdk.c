@@ -2670,14 +2670,19 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 
     if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
         struct tcp_header *th = dp_packet_l4(pkt);
+        uint16_t link_tso_segsz;
         int hdr_len;
 
         if (tunnel_type) {
-            mbuf->tso_segsz = dev->mtu - mbuf->l2_len - mbuf->l3_len -
-                              mbuf->l4_len - mbuf->outer_l3_len;
+            link_tso_segsz = dev->mtu - mbuf->l2_len - mbuf->l3_len -
+                             mbuf->l4_len - mbuf->outer_l3_len;
         } else {
             mbuf->l4_len = TCP_OFFSET(th->tcp_ctl) * 4;
-            mbuf->tso_segsz = dev->mtu - mbuf->l3_len - mbuf->l4_len;
+            link_tso_segsz = dev->mtu - mbuf->l3_len - mbuf->l4_len;
+        }
+
+        if (mbuf->tso_segsz > link_tso_segsz) {
+            mbuf->tso_segsz = link_tso_segsz;
         }
 
         hdr_len = mbuf->l2_len + mbuf->l3_len + mbuf->l4_len;
