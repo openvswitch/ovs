@@ -2583,6 +2583,9 @@ static bool
 netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 {
     struct dp_packet *pkt = CONTAINER_OF(mbuf, struct dp_packet, mbuf);
+    void *l2;
+    void *l3;
+    void *l4;
 
     const uint64_t all_inner_requests = (RTE_MBUF_F_TX_IP_CKSUM |
                                          RTE_MBUF_F_TX_L4_MASK |
@@ -2612,11 +2615,6 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
         return true;
     }
 
-    ovs_assert(dp_packet_l4(pkt));
-
-    /* If packet is vxlan or geneve tunnel packet, calculate outer
-     * l2 len and outer l3 len. Inner l2/l3/l4 len are calculated
-     * before. */
     const uint64_t tunnel_type = mbuf->ol_flags & RTE_MBUF_F_TX_TUNNEL_MASK;
     if (OVS_UNLIKELY(tunnel_type &&
                      tunnel_type != RTE_MBUF_F_TX_TUNNEL_GENEVE &&
@@ -2634,6 +2632,11 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
                                  (char *) dp_packet_eth(pkt);
             mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
                                  (char *) dp_packet_l3(pkt);
+
+            /* Inner L2 length must account for the tunnel header length. */
+            l2 = dp_packet_l4(pkt);
+            l3 = dp_packet_inner_l3(pkt);
+            l4 = dp_packet_inner_l4(pkt);
         } else {
             /* If no outer offloading is requested, clear outer marks. */
             mbuf->ol_flags &= ~all_outer_marks;
@@ -2641,8 +2644,9 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
             mbuf->outer_l3_len = 0;
 
             /* Skip outer headers. */
-            mbuf->l2_len += (char *) dp_packet_l4(pkt) -
-                            (char *) dp_packet_eth(pkt);
+            l2 = dp_packet_eth(pkt);
+            l3 = dp_packet_inner_l3(pkt);
+            l4 = dp_packet_inner_l4(pkt);
         }
     } else {
         if (tunnel_type) {
@@ -2662,22 +2666,27 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
         }
         mbuf->outer_l2_len = 0;
         mbuf->outer_l3_len = 0;
-        mbuf->l2_len = (char *) dp_packet_l3(pkt) -
-                       (char *) dp_packet_eth(pkt);
-        mbuf->l3_len = (char *) dp_packet_l4(pkt) -
-                       (char *) dp_packet_l3(pkt);
+
+        l2 = dp_packet_eth(pkt);
+        l3 = dp_packet_l3(pkt);
+        l4 = dp_packet_l4(pkt);
     }
 
+    ovs_assert(l4);
+
+    mbuf->l2_len = (char *) l3 - (char *) l2;
+    mbuf->l3_len = (char *) l4 - (char *) l3;
+
     if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
-        struct tcp_header *th = dp_packet_l4(pkt);
+        struct tcp_header *th = l4;
         uint16_t link_tso_segsz;
         int hdr_len;
 
+        mbuf->l4_len = TCP_OFFSET(th->tcp_ctl) * 4;
         if (tunnel_type) {
             link_tso_segsz = dev->mtu - mbuf->l2_len - mbuf->l3_len -
                              mbuf->l4_len - mbuf->outer_l3_len;
         } else {
-            mbuf->l4_len = TCP_OFFSET(th->tcp_ctl) * 4;
             link_tso_segsz = dev->mtu - mbuf->l3_len - mbuf->l4_len;
         }
 
