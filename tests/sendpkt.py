@@ -48,28 +48,10 @@ if len(args) < 2:
 if options.packet_type != "eth":
     parser.error('invalid argument to "-t"/"--type". Allowed value is "eth".')
 
-# store the hex bytes with 0x appended at the beginning
-# if not present in the user input and validate the hex bytes
-hex_list = []
-for a in args[1:]:
-    if a[:2] != "0x":
-        hex_byte = "0x" + a
-    else:
-        hex_byte = a
-    try:
-        temp = int(hex_byte, 0)
-    except:
-        parser.error("invalid hex byte " + a)
-
-    if temp > 0xff:
-        parser.error("hex byte " + a + " cannot be greater than 0xff!")
-
-    hex_list.append(temp)
-
-if sys.version_info < (3, 0):
-    pkt = "".join(map(chr, hex_list))
-else:
-    pkt = bytes(hex_list)
+# Strip '0x' prefixes from hex input, combine into a single string and
+# convert to bytes.
+hex_str = "".join([a[2:] if a.startswith("0x") else a for a in args[1:]])
+pkt = bytes.fromhex(hex_str)
 
 try:
     sockfd = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
