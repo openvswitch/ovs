@@ -3426,6 +3426,24 @@ flow_compose(struct dp_packet *p, const struct flow *flow,
             arp->ar_sha = flow->arp_sha;
             arp->ar_tha = flow->arp_tha;
         }
+    } else if (flow->dl_type == htons(ETH_TYPE_NSH)) {
+        struct nsh_hdr *nsh;
+
+        nsh = dp_packet_put_zeros(p, sizeof *nsh);
+        dp_packet_set_l3(p, nsh);
+
+        nsh_set_flags_ttl_len(nsh, flow->nsh.flags, flow->nsh.ttl,
+                              flow->nsh.mdtype == NSH_M_TYPE1
+                              ? NSH_M_TYPE1_LEN : NSH_BASE_HDR_LEN);
+        nsh->next_proto = flow->nsh.np;
+        nsh->md_type = flow->nsh.mdtype;
+        put_16aligned_be32(&nsh->path_hdr, flow->nsh.path_hdr);
+
+        if (flow->nsh.mdtype == NSH_M_TYPE1) {
+            for (size_t i = 0; i < 4; i++) {
+                put_16aligned_be32(&nsh->md1.context[i], flow->nsh.context[i]);
+            }
+        }
     }
 
     if (eth_type_mpls(flow->dl_type)) {
