@@ -2084,11 +2084,22 @@ table=20 actions=drop
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+m4_define([ND_NS_PKT], [m4_join([,],
+  [eth_src=36:b1:ee:7c:01:03,eth_dst=36:b1:ee:7c:01:02,eth_type=0x86dd],
+  [ipv6_src=fe80::f816:3eff:fe04:6604,ipv6_dst=fe80::f816:3eff:fea7:dd0e],
+  [nw_proto=58,nw_ttl=255,nw_frag=no],
+  [icmpv6_type=136,icmpv6_code=0],
+  [nd_options_type=2,nd_tll=36:b1:ee:7c:01:03])])
+
 dnl Send a mismatching neighbor discovery.
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 86 dd 60 00 00 00 00 20 3a ff fe 80 00 00 00 00 00 00 f8 16 3e ff fe 04 66 04 fe 80 00 00 00 00 00 00 f8 16 3e ff fe a7 dd 0e 88 00 f1 f2 20 00 00 00 30 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 02 01 36 b1 ee 7c 01 03 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'ND_NS_PKT,nd_target=3000::1')],
+  [0], [ignore])
 
 dnl Send a matching neighbor discovery.
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 86 dd 60 00 00 00 00 20 3a ff fe 80 00 00 00 00 00 00 f8 16 3e ff fe 04 66 04 fe 80 00 00 00 00 00 00 f8 16 3e ff fe a7 dd 0e 88 00 fe 5f 20 00 00 00 20 01 00 00 00 00 00 00 00 00 00 01 00 00 03 92 02 01 36 b1 ee 7c 01 03 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'ND_NS_PKT,nd_target=2001::1:0:392')],
+  [0], [ignore])
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | strip_stats | strip_used | dnl
           strip_key32 | strip_ptype | strip_eth | strip_recirc | dnl
@@ -2100,10 +2111,14 @@ recirc_id(<recirc>),in_port(2),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(ty
 OVS_WAIT_UNTIL([ovs-appctl dpctl/dump-flows | grep ",nd" | wc -l | grep -E ^0])
 
 dnl Send a matching neighbor discovery.
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 86 dd 60 00 00 00 00 20 3a ff fe 80 00 00 00 00 00 00 f8 16 3e ff fe 04 66 04 fe 80 00 00 00 00 00 00 f8 16 3e ff fe a7 dd 0e 88 00 fe 5f 20 00 00 00 20 01 00 00 00 00 00 00 00 00 00 01 00 00 03 92 02 01 36 b1 ee 7c 01 03 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'ND_NS_PKT,nd_target=2001::1:0:392')],
+  [0], [ignore])
 
 dnl Send a mismatching neighbor discovery.
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 86 dd 60 00 00 00 00 20 3a ff fe 80 00 00 00 00 00 00 f8 16 3e ff fe 04 66 04 fe 80 00 00 00 00 00 00 f8 16 3e ff fe a7 dd 0e 88 00 f1 f2 20 00 00 00 30 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 02 01 36 b1 ee 7c 01 03 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'ND_NS_PKT,nd_target=3000::1')],
+  [0], [ignore])
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | strip_stats | strip_used | dnl
           strip_key32 | strip_ptype | strip_eth | strip_recirc | dnl
@@ -2132,20 +2147,29 @@ dnl The flow will encap a mpls header to the ip packet
 dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
 
-rm -rf p1.pcap
-NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
-sleep 1
+NETNS_DAEMONIZE([at_ns1],
+  [tcpdump -l -n -xx -U -i p1 -w p1.pcap 2>tcpdump_err], [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump_err])
 
-dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
+m4_define([ICMP_PKT], [m4_join([,],
+  [eth_src=36:b1:ee:7c:01:03,eth_dst=36:b1:ee:7c:01:02,eth_type=0x0800],
+  [nw_src=10.1.1.1,nw_dst=10.1.1.2],
+  [nw_proto=1,nw_ttl=64,nw_frag=no],
+  [icmp_type=8,icmp_code=0])])
+
 dnl The packet is sent from p0(at_ns0) interface directed to
-dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+dnl p1(at_ns1) interface.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'ICMP_PKT')], [0], [ignore])
 
-dnl Check the expected mpls encapsulated packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8847 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+dnl Check the expected mpls encapsulated packet on the egress interface.
+m4_define([MPLS_HEADER], [m4_join([,],
+  [eth_src=00:00:00:00:00:01,eth_dst=00:00:00:00:00:02,eth_type=0x8847],
+  [mpls_label=2,mpls_ttl=64,mpls_bos=1])])
+
+OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q "m4_join([], [^],
+    $(ovs-ofctl compose-packet --bare 'MPLS_HEADER'),
+    $(ovs-ofctl compose-packet --bare 'ICMP_PKT'), [\$])"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -2164,20 +2188,29 @@ dnl The flow will encap a mpls header to the ip packet
 dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
 
-rm -rf p1.pcap
-NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
-sleep 1
+NETNS_DAEMONIZE([at_ns1],
+  [tcpdump -l -n -xx -U -i p1 -w p1.pcap 2>tcpdump_err], [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump_err])
 
-dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
+m4_define([ICMP_PKT], [m4_join([,],
+  [eth_src=36:b1:ee:7c:01:03,eth_dst=36:b1:ee:7c:01:02,eth_type=0x0800],
+  [nw_src=10.1.1.1,nw_dst=10.1.1.2],
+  [nw_proto=1,nw_ttl=64,nw_frag=no],
+  [icmp_type=8,icmp_code=0])])
+
 dnl The packet is sent from p0(at_ns0) interface directed to
-dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+dnl p1(at_ns1) interface.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'ICMP_PKT')], [0], [ignore])
 
-dnl Check the expected mpls encapsulated packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8847 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+dnl Check the expected mpls encapsulated packet on the egress interface.
+m4_define([MPLS_HEADER], [m4_join([,],
+  [eth_src=00:00:00:00:00:01,eth_dst=00:00:00:00:00:02,eth_type=0x8847],
+  [mpls_label=2,mpls_ttl=64,mpls_bos=1])])
+
+OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q "m4_join([], [^],
+    $(ovs-ofctl compose-packet --bare 'MPLS_HEADER'),
+    $(ovs-ofctl compose-packet --bare 'ICMP_PKT'), [\$])"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -2197,20 +2230,29 @@ dnl The flow will encap a mpls header to the ip packet
 dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls_mc),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
 
-rm -rf p1.pcap
-NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
-sleep 1
+NETNS_DAEMONIZE([at_ns1],
+  [tcpdump -l -n -xx -U -i p1 -w p1.pcap 2>tcpdump_err], [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump_err])
 
-dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
+m4_define([ICMP_PKT], [m4_join([,],
+  [eth_src=36:b1:ee:7c:01:03,eth_dst=36:b1:ee:7c:01:02,eth_type=0x0800],
+  [nw_src=10.1.1.1,nw_dst=10.1.1.2],
+  [nw_proto=1,nw_ttl=64,nw_frag=no],
+  [icmp_type=8,icmp_code=0])])
+
 dnl The packet is sent from p0(at_ns0) interface directed to
-dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+dnl p1(at_ns1) interface.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'ICMP_PKT')], [0], [ignore])
 
-dnl Check the expected mpls encapsulated packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8848 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+dnl Check the expected mpls encapsulated packet on the egress interface.
+m4_define([MPLS_HEADER], [m4_join([,],
+  [eth_src=00:00:00:00:00:01,eth_dst=00:00:00:00:00:02,eth_type=0x8848],
+  [mpls_label=2,mpls_ttl=64,mpls_bos=1])])
+
+OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q "m4_join([], [^],
+    $(ovs-ofctl compose-packet --bare 'MPLS_HEADER'),
+    $(ovs-ofctl compose-packet --bare 'ICMP_PKT'), [\$])"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -2229,20 +2271,29 @@ dnl The flow will encap a mpls header to the ip packet
 dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls_mc),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
 
-rm -rf p1.pcap
-NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
-sleep 1
+NETNS_DAEMONIZE([at_ns1],
+  [tcpdump -l -n -xx -U -i p1 -w p1.pcap 2>tcpdump_err], [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump_err])
 
-dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
+m4_define([ICMP_PKT], [m4_join([,],
+  [eth_src=36:b1:ee:7c:01:03,eth_dst=36:b1:ee:7c:01:02,eth_type=0x0800],
+  [nw_src=10.1.1.1,nw_dst=10.1.1.2],
+  [nw_proto=1,nw_ttl=64,nw_frag=no],
+  [icmp_type=8,icmp_code=0])])
+
 dnl The packet is sent from p0(at_ns0) interface directed to
-dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+dnl p1(at_ns1) interface.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'ICMP_PKT')], [0], [ignore])
 
-dnl Check the expected mpls encapsulated packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8848 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+dnl Check the expected mpls encapsulated packet on the egress interface.
+m4_define([MPLS_HEADER], [m4_join([,],
+  [eth_src=00:00:00:00:00:01,eth_dst=00:00:00:00:00:02,eth_type=0x8848],
+  [mpls_label=2,mpls_ttl=64,mpls_bos=1])])
+
+OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q "m4_join([], [^],
+    $(ovs-ofctl compose-packet --bare 'MPLS_HEADER'),
+    $(ovs-ofctl compose-packet --bare 'ICMP_PKT'), [\$])"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -2263,24 +2314,30 @@ dnl eth/mpls/eth/ip/icmp --> OVS --> eth/ip/icmp
 
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=0,type=0)),ovs-p1"])
 
-rm -rf p1.pcap
-NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
-sleep 1
+NETNS_DAEMONIZE([at_ns1],
+  [tcpdump -l -n -xx -U -i p1 -w p1.pcap 2>tcpdump_err], [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump_err])
 
-dnl The hex dump is an mpls packet encapsulating ethernet packet. pkt=eth/mpls/eth/ip/icmp
-dnl The packet is sent from p0(at_ns0) interface directed to
-dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 00 00 00 00 00 02 00 00 00 00 00 01 88 47 00 00 21 40 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+m4_define([MPLS_HEADER], [m4_join([,],
+  [eth_src=00:00:00:00:00:01,eth_dst=00:00:00:00:00:02,eth_type=0x8847],
+  [mpls_label=2,mpls_ttl=64,mpls_bos=1])])
 
-dnl Check the expected decapsulated on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800 *4500" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *0054 *0344 *4000 *4001 *2161 *0a01 *0101 *0a01" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0000 *500b *0200 *0000 *0000 *1011 *1213 *1415" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0040:  *1617 *1819 *1a1b *1c1d *1e1f *2021 *2223 *2425" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0050:  *2627 *2829 *2a2b *2c2d *2e2f *3031 *3233 *3435" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0060:  *3637" 2>&1 1>/dev/null])
+m4_define([ICMP_PKT], [m4_join([,],
+  [eth_src=36:b1:ee:7c:01:03,eth_dst=36:b1:ee:7c:01:02,eth_type=0x0800],
+  [nw_src=10.1.1.1,nw_dst=10.1.1.2],
+  [nw_proto=1,nw_ttl=64,nw_frag=no],
+  [icmp_type=8,icmp_code=0])])
 
+dnl The packet is an eth/mpls/eth/ip/icmp sent from p0(at_ns0) interface
+dnl directed to p1(at_ns1) interface.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    "$(ovs-ofctl compose-packet --bare 'MPLS_HEADER')"  \
+    "$(ovs-ofctl compose-packet --bare 'ICMP_PKT')"],
+  [0], [ignore])
+
+dnl Check the expected decapsulated on the egress interface.
+OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q \
+    "^$(ovs-ofctl compose-packet --bare 'ICMP_PKT')\$"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -2300,24 +2357,30 @@ dnl eth/mpls/eth/ip/icmp --> OVS --> eth/ip/icmp
 
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=0,type=0)),ovs-p1"])
 
-rm -rf p1.pcap
-NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
-sleep 1
+NETNS_DAEMONIZE([at_ns1],
+  [tcpdump -l -n -xx -U -i p1 -w p1.pcap 2>tcpdump_err], [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump_err])
 
-dnl The hex dump is an mpls packet encapsulating ethernet packet. pkt=eth/mpls/eth/ip/icmp
-dnl The packet is sent from p0(at_ns0) interface directed to
-dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 00 00 00 00 00 02 00 00 00 00 00 01 88 47 00 00 21 40 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+m4_define([MPLS_HEADER], [m4_join([,],
+  [eth_src=00:00:00:00:00:01,eth_dst=00:00:00:00:00:02,eth_type=0x8847],
+  [mpls_label=2,mpls_ttl=64,mpls_bos=1])])
 
-dnl Check the expected decapsulated on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800 *4500" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *0054 *0344 *4000 *4001 *2161 *0a01 *0101 *0a01" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0000 *500b *0200 *0000 *0000 *1011 *1213 *1415" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0040:  *1617 *1819 *1a1b *1c1d *1e1f *2021 *2223 *2425" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0050:  *2627 *2829 *2a2b *2c2d *2e2f *3031 *3233 *3435" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0060:  *3637" 2>&1 1>/dev/null])
+m4_define([ICMP_PKT], [m4_join([,],
+  [eth_src=36:b1:ee:7c:01:03,eth_dst=36:b1:ee:7c:01:02,eth_type=0x0800],
+  [nw_src=10.1.1.1,nw_dst=10.1.1.2],
+  [nw_proto=1,nw_ttl=64,nw_frag=no],
+  [icmp_type=8,icmp_code=0])])
 
+dnl The packet is an eth/mpls/eth/ip/icmp sent from p0(at_ns0) interface
+dnl directed to p1(at_ns1) interface.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    "$(ovs-ofctl compose-packet --bare 'MPLS_HEADER')"  \
+    "$(ovs-ofctl compose-packet --bare 'ICMP_PKT')"],
+  [0], [ignore])
+
+dnl Check the expected decapsulated on the egress interface.
+OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q \
+    "^$(ovs-ofctl compose-packet --bare 'ICMP_PKT')\$"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -7333,10 +7396,18 @@ table=2,priority=10  ct_state=+trk+est action=drop
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-# sending icmp pkts, first and second
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f0 00 00 01 01 02 f0 00 00 01 01 01 08 00 45 00 00 1c 00 01 00 00 40 01 64 dc 0a 01 01 01 0a 01 01 02 08 00 f7 ff ff ff ff ff > /dev/null])
+m4_define([ICMP_PKT], [m4_join([,],
+  [eth_src=f0:00:00:01:01:01,eth_dst=f0:00:00:01:01:02,eth_type=0x0800],
+  [nw_src=10.1.1.1,nw_dst=10.1.1.2],
+  [nw_proto=1,nw_ttl=64,nw_frag=no],
+  [icmp_type=8,icmp_code=0])])
 
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f0 00 00 01 01 02 f0 00 00 01 01 01 08 00 45 00 00 1c 00 01 00 00 40 01 64 dc 0a 01 01 01 0a 01 01 02 08 00 f7 ff ff ff ff ff > /dev/null])
+# Sending ICMP packets, first and second.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'ICMP_PKT' '')], [0], [ignore])
+
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'ICMP_PKT' '')], [0], [ignore])
 
 sleep 1
 
