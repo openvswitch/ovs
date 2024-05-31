@@ -8861,21 +8861,29 @@ dnl The flow will encap a nsh header to the TCP syn packet
 dnl eth/ip/tcp --> OVS --> eth/nsh/eth/ip/tcp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,in_port=ovs-p0,ip,actions=encap(nsh(md_type=1)),set_field:0x1234->nsh_spi,set_field:0x11223344->nsh_c1,encap(ethernet),set_field:f2:ff:00:00:00:02->dl_dst,set_field:f2:ff:00:00:00:01->dl_src,ovs-p1"])
 
-NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
-sleep 1
+NETNS_DAEMONIZE([at_ns1],
+  [tcpdump -l -n -xx -U -i p1 -w p1.pcap 2>tcpdump_err], [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump_err])
 
-dnl The hex dump is a TCP syn packet. pkt=eth/ip/tcp
-dnl The packet is sent from p0(at_ns0) interface directed to
-dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+m4_define([TCP_SYN_PKT], [m4_join([,],
+  [eth_src=f2:00:00:00:00:01,eth_dst=f2:00:00:00:00:02,eth_type=0x0800],
+  [nw_src=192.168.0.10,nw_dst=10.0.0.10],
+  [nw_proto=6,nw_ttl=64,nw_frag=no],
+  [tcp_src=1024,tcp_dst=2048,tcp_flags=syn])])
 
-dnl Check the expected nsh encapsulated packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0fc6" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010: *0103 *0012 *34ff *1122 *3344 *0000 *0000 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020: *0000 *0000 *0000 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+dnl Send the TCP SYN packet from p0(at_ns0) interface directed to
+dnl p1(at_ns1) interface.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    $(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT')], [0], [ignore])
+
+m4_define([NSH_HEADER], [m4_join([,],
+  [eth_src=f2:ff:00:00:00:01,eth_dst=f2:ff:00:00:00:02,eth_type=0x894f],
+  [nsh_ttl=63,nsh_np=3,nsh_spi=0x1234,nsh_si=255],
+  [nsh_mdtype=1,nsh_c1=0x11223344])])
+
+OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q "m4_join([], [^],
+    $(ovs-ofctl compose-packet --bare 'NSH_HEADER'),
+    $(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT'), [\$])"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -8893,19 +8901,31 @@ dnl The flow will decap a nsh header which in turn carries a TCP syn packet
 dnl eth/nsh/eth/ip/tcp --> OVS --> eth/ip/tcp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,in_port=ovs-p0,dl_type=0x894f, actions=decap(),decap(), ovs-p1"])
 
-NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
-sleep 1
+NETNS_DAEMONIZE([at_ns1],
+  [tcpdump -l -n -xx -U -i p1 -w p1.pcap 2>tcpdump_err], [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump_err])
 
-dnl The hex dump is NSH packet with TCP syn payload. pkt=eth/nsh/eth/ip/tcp
-dnl The packet is sent from p0(at_ns0) interface directed to
-dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 00 64 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+m4_define([TCP_SYN_PKT], [m4_join([,],
+  [eth_src=f2:00:00:00:00:01,eth_dst=f2:00:00:00:00:02,eth_type=0x0800],
+  [nw_src=192.168.0.10,nw_dst=10.0.0.10],
+  [nw_proto=6,nw_ttl=64,nw_frag=no],
+  [tcp_src=1024,tcp_dst=2048,tcp_flags=syn])])
+
+m4_define([NSH_HEADER], [m4_join([,],
+  [eth_src=f2:ff:00:00:00:01,eth_dst=f2:ff:00:00:00:02,eth_type=0x894f],
+  [nsh_ttl=63,nsh_np=3,nsh_spi=0x1234,nsh_si=255],
+  [nsh_mdtype=1,nsh_c1=0x11223344])])
+
+dnl Send the NSH packet with TCP SYN payload from p0(at_ns0) interface directed
+dnl to p1(at_ns1) interface.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    "$(ovs-ofctl compose-packet --bare 'NSH_HEADER')" \
+    "$(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT')"],
+  [0], [ignore])
 
 dnl Check the expected de-capsulated TCP packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000: *f200 *0000 *0002 *f200 *0000 *0001 *0800 *4500" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010: *0028 *0001 *0000 *4006 *b013 *c0a8 *000a *0a00" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020: *000a *0400 *0800 *0000 *00c8 *0000 *0000 *5002" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030: *2000 *b85e *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q \
+    "^$(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT')\$"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -8925,22 +8945,38 @@ dnl The flow will add another NSH header with nsh_spi=0x101, nsh_si=4,
 dnl nsh_ttl=7 and change the md1 context
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,in_port=ovs-p0,dl_type=0x894f,nsh_spi=0x100,nsh_si=0x03,actions=decap(),decap(),encap(nsh(md_type=1)),set_field:0x07->nsh_ttl,set_field:0x0101->nsh_spi,set_field:0x04->nsh_si,set_field:0x100f0e0d->nsh_c1,set_field:0x0c0b0a09->nsh_c2,set_field:0x08070605->nsh_c3,set_field:0x04030201->nsh_c4,encap(ethernet),set_field:f2:ff:00:00:00:02->dl_dst,set_field:f2:ff:00:00:00:01->dl_src,ovs-p1"])
 
-NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
-sleep 1
+NETNS_DAEMONIZE([at_ns1],
+  [tcpdump -l -n -xx -U -i p1 -w p1.pcap 2>tcpdump_err], [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump_err])
 
-dnl The hex dump is NSH packet with TCP syn payload. pkt=eth/nsh/eth/ip/tcp
-dnl The nsh_ttl is 8, nsh_spi is 0x100 and nsh_si is 3
-dnl The packet is sent from p0(at_ns0) interface directed to
-dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+m4_define([TCP_SYN_PKT], [m4_join([,],
+  [eth_src=f2:00:00:00:00:01,eth_dst=f2:00:00:00:00:02,eth_type=0x0800],
+  [nw_src=192.168.0.10,nw_dst=10.0.0.10],
+  [nw_proto=6,nw_ttl=64,nw_frag=no],
+  [tcp_src=1024,tcp_dst=2048,tcp_flags=syn])])
 
-dnl Check the expected NSH packet with new fields in the header
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000: *f2ff *0000 *0002 *f2ff *0000* 0001 *894f *01c6" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010: *0103 *0001 *0104 *100f *0e0d *0c0b *0a09 *0807" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020: *0605 *0403 *0201 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+m4_define([NSH_HEADER_1], [m4_join([,],
+  [eth_src=f2:ff:00:00:00:01,eth_dst=f2:ff:00:00:00:02,eth_type=0x894f],
+  [nsh_ttl=8,nsh_np=3,nsh_spi=0x100,nsh_si=3,nsh_mdtype=1],
+  [nsh_c1=0x01020304,nsh_c2=0x05060708,nsh_c3=0x090a0b0c,nsh_c4=0x0d0e0f10])])
+
+dnl Send the NSH packet with TCP SYN payload from p0(at_ns0) interface directed
+dnl to p1(at_ns1) interface.
+dnl The nsh_ttl is 8, nsh_spi is 0x100 and nsh_si is 3.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    "$(ovs-ofctl compose-packet --bare 'NSH_HEADER_1')" \
+    "$(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT')"],
+  [0], [ignore])
+
+m4_define([NSH_HEADER_2], [m4_join([,],
+  [eth_src=f2:ff:00:00:00:01,eth_dst=f2:ff:00:00:00:02,eth_type=0x894f],
+  [nsh_ttl=7,nsh_np=3,nsh_spi=0x101,nsh_si=4,nsh_mdtype=1],
+  [nsh_c1=0x100f0e0d,nsh_c2=0x0c0b0a09,nsh_c3=0x08070605,nsh_c4=0x04030201])])
+
+dnl Check the expected NSH packet with new fields in the header.
+OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q "m4_join([], [^],
+    $(ovs-ofctl compose-packet --bare 'NSH_HEADER_2'),
+    $(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT'), [\$])"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -8961,31 +8997,50 @@ dnl packet to to at_ns2.
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x894f,nsh_spi=0x100,nsh_si=0x02,actions=ovs-p1"])
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x894f,nsh_spi=0x100,nsh_si=0x01,actions=ovs-p2"])
 
-NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
-NETNS_DAEMONIZE([at_ns2], [tcpdump -l -n -xx -U -i p2 > p2.pcap], [tcpdump2.pid])
-sleep 1
+NETNS_DAEMONIZE([at_ns1],
+  [tcpdump -l -n -xx -U -i p1 -w p1.pcap 2>tcpdump_err], [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump_err])
+NETNS_DAEMONIZE([at_ns2],
+  [tcpdump -l -n -xx -U -i p2 -w p2.pcap 2>tcpdump2_err], [tcpdump2.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump2_err])
 
-dnl First send packet from at_ns0 --> OVS with SPI=0x100 and SI=2
-NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 02 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+m4_define([TCP_SYN_PKT], [m4_join([,],
+  [eth_src=f2:00:00:00:00:01,eth_dst=f2:00:00:00:00:02,eth_type=0x0800],
+  [nw_src=192.168.0.10,nw_dst=10.0.0.10],
+  [nw_proto=6,nw_ttl=64,nw_frag=no],
+  [tcp_src=1024,tcp_dst=2048,tcp_flags=syn])])
 
-dnl Check for the above packet on p1 interface
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0206" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010: *0103 *0001 *0002 *0102 *0304 *0506 *0708 *090a" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020: *0b0c *0d0e *0f10 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+dnl First send packet from at_ns0 --> OVS with SPI=0x100 and SI=2.
+m4_define([NSH_HEADER_1], [m4_join([,],
+  [eth_src=f2:ff:00:00:00:01,eth_dst=f2:ff:00:00:00:02,eth_type=0x894f],
+  [nsh_ttl=8,nsh_np=3,nsh_spi=0x100,nsh_si=2,nsh_mdtype=1],
+  [nsh_c1=0x01020304,nsh_c2=0x05060708,nsh_c3=0x090a0b0c,nsh_c4=0x0d0e0f10])])
 
-dnl Send the second packet from at_ns1 --> OVS with SPI=0x100 and SI=1
-NS_CHECK_EXEC([at_ns1], [$PYTHON3 $srcdir/sendpkt.py p1 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 01 c6 01 03 00 01 00 01 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
+    "$(ovs-ofctl compose-packet --bare 'NSH_HEADER_1')" \
+    "$(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT')"],
+  [0], [ignore])
 
-dnl Check for the above packet on p2 interface
-OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *01c6" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0010: *0103 *0001 *0001 *0102 *0304 *0506 *0708 *090a" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0020: *0b0c *0d0e *0f10 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+dnl Check for the above packet on p1 interface.
+OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q "m4_join([], [^],
+    $(ovs-ofctl compose-packet --bare 'NSH_HEADER_1'),
+    $(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT'), [\$])"])
+
+dnl Send the second packet from at_ns1 --> OVS with SPI=0x100 and SI=1.
+m4_define([NSH_HEADER_2], [m4_join([,],
+  [eth_src=f2:ff:00:00:00:01,eth_dst=f2:ff:00:00:00:02,eth_type=0x894f],
+  [nsh_ttl=8,nsh_np=3,nsh_spi=0x100,nsh_si=1,nsh_mdtype=1],
+  [nsh_c1=0x01020304,nsh_c2=0x05060708,nsh_c3=0x090a0b0c,nsh_c4=0x0d0e0f10])])
+
+NS_CHECK_EXEC([at_ns1], [$PYTHON3 $srcdir/sendpkt.py p1 \
+    "$(ovs-ofctl compose-packet --bare 'NSH_HEADER_2')" \
+    "$(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT')"],
+  [0], [ignore])
+
+dnl Check for the above packet on p2 interface.
+OVS_WAIT_UNTIL([ovs-pcap p2.pcap | grep -q "m4_join([], [^],
+    $(ovs-ofctl compose-packet --bare 'NSH_HEADER_2'),
+    $(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT'), [\$])"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
