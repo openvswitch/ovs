@@ -353,6 +353,31 @@ try_checkpatch \
          if (--mcs->n_refs==0) {
 "
 
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +char *string;
+    +char **list;
+    +char ***ptr_list;
+    "
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +char** list;
+    " \
+    "WARNING: Line lacks whitespace around operator
+    #8 FILE: A.c:1:
+    char** list;
+    "
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +char*** list;
+    " \
+    "WARNING: Line lacks whitespace around operator
+    #8 FILE: A.c:1:
+    char*** list;
+    "
+
 AT_CLEANUP
 
 AT_SETUP([checkpatch - check misuse APIs])
