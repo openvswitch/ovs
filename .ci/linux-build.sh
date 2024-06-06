@@ -25,7 +25,7 @@ function install_dpdk()
     export PKG_CONFIG_PATH=$DPDK_LIB/pkgconfig/:$PKG_CONFIG_PATH
 
     # Expose dpdk binaries.
-    export PATH=$(pwd)/dpdk-dir/build/bin:$PATH
+    export PATH=$(pwd)/dpdk-dir/bin:$PATH
 
     if [ ! -f "${VERSION_FILE}" ]; then
         echo "Could not find DPDK in $DPDK_INSTALL_DIR"
