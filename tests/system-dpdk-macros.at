@@ -102,7 +102,7 @@ m4_define([OVS_DPDK_CHECK_TESTPMD],
 m4_define([OVS_DPDK_START_TESTPMD],
   [AT_CHECK([lscpu], [], [stdout])
    AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
-   eal_options="$DPDK_EAL_OPTIONS --in-memory --socket-mem="$(cat NUMA_NODE)" --single-file-segments --no-pci"
+   eal_options="$DPDK_EAL_OPTIONS --in-memory --socket-mem="$(cat NUMA_NODE)" --single-file-segments --no-pci --file-prefix testpmd"
    options="$1"
    test "$options" != "${options%% -- *}" || options="$options -- "
    eal_options="$eal_options ${options%% -- *}"
