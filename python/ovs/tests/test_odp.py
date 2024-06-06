@@ -542,6 +542,35 @@ def test_odp_fields(input_string, expected):
             ],
         ),
         (
+            "actions:check_pkt_len(size=200,gt(check_pkt_len(size=400,gt(4),le(2))),le(check_pkt_len(size=100,gt(1),le(drop))))",  # noqa: E501
+            [
+                KeyValue(
+                    "check_pkt_len",
+                    {
+                        "size": 200,
+                        "gt": [
+                            {
+                                "check_pkt_len": {
+                                    "size": 400,
+                                    "gt": [{"output": {"port": 4}}],
+                                    "le": [{"output": {"port": 2}}],
+                                }
+                            }
+                        ],
+                        "le": [
+                            {
+                                "check_pkt_len": {
+                                    "size": 100,
+                                    "gt": [{"output": {"port": 1}}],
+                                    "le": [{"drop": True}],
+                                }
+                            }
+                        ],
+                    },
+                )
+            ],
+        ),
+        (
             "actions:meter(1),hash(l4(0))",
             [
                 KeyValue("meter", 1),
