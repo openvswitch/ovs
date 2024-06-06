@@ -365,29 +365,30 @@ class ODPFlow(Flow):
             is_list=True,
         )
 
+        _decoders["check_pkt_len"] = nested_kv_decoder(
+            KVDecoders(
+                {
+                    "size": decode_int,
+                    "gt": nested_kv_decoder(
+                        KVDecoders(
+                            decoders=_decoders,
+                            default_free=decode_free_output,
+                        ),
+                        is_list=True,
+                    ),
+                    "le": nested_kv_decoder(
+                        KVDecoders(
+                            decoders=_decoders,
+                            default_free=decode_free_output,
+                        ),
+                        is_list=True,
+                    ),
+                }
+            )
+        )
+
         return {
             **_decoders,
-            "check_pkt_len": nested_kv_decoder(
-                KVDecoders(
-                    {
-                        "size": decode_int,
-                        "gt": nested_kv_decoder(
-                            KVDecoders(
-                                decoders=_decoders,
-                                default_free=decode_free_output,
-                            ),
-                            is_list=True,
-                        ),
-                        "le": nested_kv_decoder(
-                            KVDecoders(
-                                decoders=_decoders,
-                                default_free=decode_free_output,
-                            ),
-                            is_list=True,
-                        ),
-                    }
-                )
-            ),
         }
 
     @staticmethod
