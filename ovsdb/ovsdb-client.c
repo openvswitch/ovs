@@ -474,6 +474,8 @@ usage(void)
     vlog_usage();
     ovs_replay_usage();
     printf("\nOther options:\n"
+           "  -t, --timeout=SECS          limits ovsdb-client runtime to\n"
+           "                              approximately SECS seconds.\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
