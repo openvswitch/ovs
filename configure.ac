@@ -13,7 +13,7 @@
 # limitations under the License.
 
 AC_PREREQ(2.63)
-AC_INIT(openvswitch, 3.2.3, bugs@openvswitch.org)
+AC_INIT(openvswitch, 3.2.4, bugs@openvswitch.org)
 AC_CONFIG_SRCDIR([vswitchd/ovs-vswitchd.c])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([build-aux])
