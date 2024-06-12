@@ -704,6 +704,14 @@ action_avx512_set_ipv6(struct dp_packet_batch *batch, const struct nlattr *a)
         }
         /* Write back the modified IPv6 addresses. */
         _mm512_mask_storeu_epi64((void *) nh, 0x1F, v_new_hdr);
+
+        /* Scalar method for setting IPv6 tclass field. */
+        if (key->ipv6_tclass) {
+            uint8_t old_tc = ntohl(get_16aligned_be32(&nh->ip6_flow)) >> 20;
+            uint8_t key_tc = key->ipv6_tclass | (old_tc & ~mask->ipv6_tclass);
+
+            packet_set_ipv6_tc(&nh->ip6_flow, key_tc);
+        }
     }
 }
 #endif /* HAVE_AVX512VBMI */
