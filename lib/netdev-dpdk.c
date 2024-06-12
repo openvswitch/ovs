@@ -464,9 +464,8 @@ struct netdev_dpdk {
         bool attached;
         /* If true, rte_eth_dev_start() was successfully called */
         bool started;
-        bool reset_needed;
-        /* 1 pad byte here. */
         struct eth_addr hwaddr;
+        /* 2 pad bytes here. */
         int mtu;
         int socket_id;
         int buf_size;
@@ -1531,7 +1530,6 @@ common_construct(struct netdev *netdev, dpdk_port_t port_no,
     dev->virtio_features_state = OVS_VIRTIO_F_CLEAN;
     dev->attached = false;
     dev->started = false;
-    dev->reset_needed = false;
 
     ovsrcu_init(&dev->qos_conf, NULL);
 
@@ -2154,13 +2152,11 @@ netdev_dpdk_run(const struct netdev_class *netdev_class OVS_UNUSED)
             if (!pending_reset) {
                 continue;
             }
-            atomic_store_relaxed(&netdev_dpdk_pending_reset[port_id], false);
 
             ovs_mutex_lock(&dpdk_mutex);
             dev = netdev_dpdk_lookup_by_port_id(port_id);
             if (dev) {
                 ovs_mutex_lock(&dev->mutex);
-                dev->reset_needed = true;
                 netdev_request_reconfigure(&dev->up);
                 VLOG_DBG_RL(&rl, "%s: Device reset requested.",
                             netdev_get_name(&dev->up));
@@ -6072,6 +6068,7 @@ static int
 netdev_dpdk_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    bool pending_reset;
     bool try_rx_steer;
     int err = 0;
 
@@ -6083,6 +6080,9 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
         dev->requested_n_rxq += 1;
     }
 
+    atomic_read_relaxed(&netdev_dpdk_pending_reset[dev->port_id],
+                        &pending_reset);
+
     if (netdev->n_txq == dev->requested_n_txq
         && netdev->n_rxq == dev->requested_n_rxq
         && dev->rx_steer_flags == dev->requested_rx_steer_flags
@@ -6092,7 +6092,7 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
         && dev->txq_size == dev->requested_txq_size
         && eth_addr_equals(dev->hwaddr, dev->requested_hwaddr)
         && dev->socket_id == dev->requested_socket_id
-        && dev->started && !dev->reset_needed) {
+        && dev->started && !pending_reset) {
         /* Reconfiguration is unnecessary */
 
         goto out;
@@ -6101,10 +6101,14 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
 retry:
     dpdk_rx_steer_unconfigure(dev);
 
-    if (dev->reset_needed) {
+    if (pending_reset) {
+        /*
+         * Set false before reset to avoid missing a new reset interrupt event
+         * in a race with event callback.
+         */
+        atomic_store_relaxed(&netdev_dpdk_pending_reset[dev->port_id], false);
         rte_eth_dev_reset(dev->port_id);
         if_notifier_manual_report();
-        dev->reset_needed = false;
     } else {
         rte_eth_dev_stop(dev->port_id);
     }
