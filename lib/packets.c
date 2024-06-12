@@ -1301,7 +1301,7 @@ packet_set_ipv6_flow_label(ovs_16aligned_be32 *flow_label, ovs_be32 flow_key)
     put_16aligned_be32(flow_label, new_label);
 }
 
-static void
+void
 packet_set_ipv6_tc(ovs_16aligned_be32 *flow_label, uint8_t tc)
 {
     ovs_be32 old_label = get_16aligned_be32(flow_label);
