@@ -337,7 +337,9 @@ dpdk_init__(const struct smap *ovs_other_config)
     }
 #endif
 
-    if (args_contains(&args, "-c") || args_contains(&args, "-l")) {
+    if (args_contains(&args, "-c") ||
+        args_contains(&args, "-l") ||
+        args_contains(&args, "--lcores")) {
         auto_determine = false;
     }
 
