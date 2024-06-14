@@ -156,8 +156,8 @@ void ctl_timeout_setup(unsigned int secs);
 
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
 
-void set_memory_locked(void);
-bool memory_locked(void);
+void set_all_memory_locked(void);
+bool memory_all_locked(void);
 
 OVS_NO_RETURN void out_of_memory(void);
 

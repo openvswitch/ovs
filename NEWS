@@ -1,5 +1,7 @@
 Post-v3.3.0
 --------------------
+   - Option '--mlockall' now only locks memory pages on fault, if possible.
+     This also makes it compatible with vHost Post-copy Live Migration.
    - Userspace datapath:
      * Conntrack now supports 'random' flag for selecting ports in a range
        while natting and 'persistent' flag for selection of the IP address

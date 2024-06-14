@@ -340,8 +340,10 @@ The default value is ``false``.
     fixes (like userfaulfd leak) was released in 3.0.1.
 
     DPDK Post-copy feature requires avoiding to populate the guest memory
-    (application must not call mlock* syscall). So enabling mlockall is
-    incompatible with post-copy feature.
+    (application must not call mlock* syscall without MCL_ONFAULT).
+    So enabling mlockall is incompatible with post-copy feature in OVS 3.3 and
+    older. Newer versions of OVS only lock memory pages that are faulted in,
+    so both features can be used at the same time.
 
     Note that during migration of vhost-user device, PMD threads hang for the
     time of faulted pages download from source host. Transferring 1GB hugepage

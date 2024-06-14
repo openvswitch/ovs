@@ -56,7 +56,8 @@
 
 VLOG_DEFINE_THIS_MODULE(vswitchd);
 
-/* --mlockall: If set, locks all process memory into physical RAM, preventing
+/* --mlockall: If set, locks all present process memory pages into physical
+ * RAM and all the new pages the moment they are faulted in, preventing
  * the kernel from paging any of its memory to disk. */
 static bool want_mlockall;
 
@@ -96,10 +97,16 @@ main(int argc, char *argv[])
 
     if (want_mlockall) {
 #ifdef HAVE_MLOCKALL
-        if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
-            VLOG_ERR("mlockall failed: %s", ovs_strerror(errno));
-        } else {
-            set_memory_locked();
+/* MCL_ONFAULT introduced in Linux kernel 4.4. */
+#ifndef MCL_ONFAULT
+#define MCL_ONFAULT 4
+#endif
+        if (mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT)) {
+            if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
+                VLOG_ERR("mlockall failed: %s", ovs_strerror(errno));
+            } else {
+                set_all_memory_locked();
+            }
         }
 #else
         VLOG_ERR("mlockall not supported on this system");

@@ -68,10 +68,11 @@ load the Open vSwitch kernel module.
 .PP
 .SH OPTIONS
 .IP "\fB\-\-mlockall\fR"
-Causes \fBovs\-vswitchd\fR to call the \fBmlockall()\fR function, to
-attempt to lock all of its process memory into physical RAM,
-preventing the kernel from paging any of its memory to disk.  This
-helps to avoid networking interruptions due to system memory pressure.
+Causes \fBovs\-vswitchd\fR to call the \fBmlockall()\fR function, to attempt to
+lock all of its process memory into physical RAM on page faults (on allocation,
+when running on Linux kernel 4.4 or older), preventing the kernel from paging
+any of its memory to disk.  This helps to avoid networking interruptions due to
+system memory pressure.
 .IP
 Some systems do not support \fBmlockall()\fR at all, and other systems
 only allow privileged users, such as the superuser, to use it.

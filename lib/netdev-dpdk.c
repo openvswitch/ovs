@@ -6719,7 +6719,7 @@ parse_vhost_config(const struct smap *ovs_other_config)
 
     vhost_postcopy_enabled = smap_get_bool(ovs_other_config,
                                            "vhost-postcopy-support", false);
-    if (vhost_postcopy_enabled && memory_locked()) {
+    if (vhost_postcopy_enabled && memory_all_locked()) {
         VLOG_WARN("vhost-postcopy-support and mlockall are not compatible.");
         vhost_postcopy_enabled = false;
     }
