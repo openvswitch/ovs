@@ -86,6 +86,7 @@ static struct hmap meter_id_to_police_idx OVS_GUARDED_BY(meter_mutex)
     = HMAP_INITIALIZER(&meter_id_to_police_idx);
 static struct hmap police_idx_to_meter_id OVS_GUARDED_BY(meter_mutex)
     = HMAP_INITIALIZER(&police_idx_to_meter_id);
+static atomic_bool is_tc_init = ATOMIC_VAR_INIT(false);
 
 static int meter_id_lookup(uint32_t meter_id, uint32_t *police_idx);
 static int police_idx_lookup(uint32_t police_idx, uint32_t *meter_id);
@@ -3012,6 +3013,7 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     }
 
     VLOG_INFO("added ingress qdisc to %s", netdev_get_name(netdev));
+    atomic_store_relaxed(&is_tc_init, true);
 
     return 0;
 }
@@ -3128,6 +3130,13 @@ meter_tc_set_policer(ofproto_meter_id meter_id,
     uint32_t rate, burst;
     bool add_policer;
     int err;
+    bool init;
+
+    atomic_read_relaxed(&is_tc_init, &init);
+    if (!init) {
+        VLOG_WARN("Do not call meter set before init.");
+        return 0;
+    }
 
     if (!config->bands || config->n_bands < 1 ||
         config->bands[0].type != OFPMBT13_DROP) {
