@@ -459,7 +459,7 @@ ovsdb_execute_select(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     if (!error) {
         struct ovsdb_row_set rows = OVSDB_ROW_SET_INITIALIZER;
 
-        ovsdb_query_distinct(table, &condition, &columns, &rows);
+        ovsdb_query_distinct(table, &condition, &columns, &rows, x->txn);
         ovsdb_row_set_sort(&rows, &sort);
         json_object_put(result, "rows",
                         ovsdb_row_set_to_json(&rows, &columns));
@@ -545,8 +545,8 @@ ovsdb_execute_update(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         ur.row = row;
         ur.columns = &columns;
         if (ovsdb_rbac_update(x->db, table, &columns, &condition, x->role,
-                              x->id)) {
-            ovsdb_query(table, &condition, update_row_cb, &ur);
+                              x->id, x->txn)) {
+            ovsdb_query(table, &condition, update_row_cb, &ur, x->txn);
         } else {
             error = ovsdb_perm_error("RBAC rules for client \"%s\" role "
                                      "\"%s\" prohibit modification of "
@@ -626,7 +626,7 @@ ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                             json_integer_create(hmap_count(&table->rows)));
         } else {
             size_t row_count = 0;
-            ovsdb_query(table, &condition, count_row_cb, &row_count);
+            ovsdb_query(table, &condition, count_row_cb, &row_count, x->txn);
             json_object_put(result, "count",
                             json_integer_create(row_count));
         }
@@ -636,8 +636,8 @@ ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         mr.mutations = &mutations;
         mr.error = &error;
         if (ovsdb_rbac_mutate(x->db, table, &mutations, &condition, x->role,
-                              x->id)) {
-            ovsdb_query(table, &condition, mutate_row_cb, &mr);
+                              x->id, x->txn)) {
+            ovsdb_query(table, &condition, mutate_row_cb, &mr, x->txn);
         } else {
             error = ovsdb_perm_error("RBAC rules for client \"%s\" role "
                                      "\"%s\" prohibit mutate operation on "
@@ -693,8 +693,9 @@ ovsdb_execute_delete(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         dr.table = table;
         dr.txn = x->txn;
 
-        if (ovsdb_rbac_delete(x->db, table, &condition, x->role, x->id)) {
-            ovsdb_query(table, &condition, delete_row_cb, &dr);
+        if (ovsdb_rbac_delete(x->db, table, &condition, x->role, x->id,
+                              x->txn)) {
+            ovsdb_query(table, &condition, delete_row_cb, &dr, x->txn);
         } else {
             error = ovsdb_perm_error("RBAC rules for client \"%s\" role "
                                      "\"%s\" prohibit row deletion from "
@@ -813,7 +814,8 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         aux.actual = &actual;
         aux.expected = &expected;
         aux.equal = &equal;
-        ovsdb_query(table, &condition, ovsdb_execute_wait_query_cb, &aux);
+        ovsdb_query(table, &condition, ovsdb_execute_wait_query_cb, &aux,
+                    x->txn);
         if (equal) {
             /* We know that every row in 'actual' is also in 'expected'.  We
              * also know that all of the rows in 'actual' are distinct and that

@@ -1,6 +1,6 @@
 AT_BANNER([OVSDB -- queries])
 
-OVSDB_CHECK_POSITIVE([queries on scalars],
+OVSDB_CHECK_POSITIVE_IDX([queries on scalars],
   [[query \
     '{"columns":
         {"i": {"type": "integer"},
@@ -90,9 +90,9 @@ query 24: 111-1
 query 25: 1----
 query 26: 1-111
 query 27: --1--],
-  [query])
+  [query], [], [["i"], ["r"], ["s"], ["u"]])
 
-OVSDB_CHECK_POSITIVE([queries on sets],
+OVSDB_CHECK_POSITIVE_IDX([queries on sets],
   [[query \
     '{"columns": {"i": {"type": {"key": "integer", "min": 0, "max": "unlimited"}}}}' \
     '[{"i": ["set", []]},
@@ -169,11 +169,11 @@ query 28: 1---1 ---
 query 29: 1111- ---
 query 30: 1-1-- ---
 query 31: 11--- ---
-query 32: 1---- ---], [query])
+query 32: 1---- ---], [query], [], [["i"]])
 
 # This is the same as the "set" test except that it adds values,
 # all of which always match.
-OVSDB_CHECK_POSITIVE([queries on maps (1)],
+OVSDB_CHECK_POSITIVE_IDX([queries on maps (1)],
   [[query \
     '{"columns": {"i": {"type": {"key": "integer",
                                  "value": "boolean",
@@ -253,11 +253,11 @@ query 28: 1---1 ---
 query 29: 1111- ---
 query 30: 1-1-- ---
 query 31: 11--- ---
-query 32: 1---- ---], [query])
+query 32: 1---- ---], [query], [], [["i"]])
 
 # This is the same as the "set" test except that it adds values,
 # and those values don't always match.
-OVSDB_CHECK_POSITIVE([queries on maps (2)],
+OVSDB_CHECK_POSITIVE_IDX([queries on maps (2)],
   [[query \
     '{"columns": {"i": {"type": {"key": "integer",
                                  "value": "boolean",
@@ -346,7 +346,7 @@ query 28: 1-1-1 --11- --1--
 query 29: 11111 11-1- 1----
 query 30: 1-111 ---1- -----
 query 31: 111-1 -1-1- 1----
-query 32: 1-1-1 ---1- -----], [query])
+query 32: 1-1-1 ---1- -----], [query], [], [["i"]])
 
 OVSDB_CHECK_POSITIVE([UUID-distinct queries on scalars],
   [[query-distinct \
@@ -439,7 +439,7 @@ query 24: abc-e
 query 25: a----
 query 26: a-cde
 query 27: --c--],
-  [query])
+  [query], [], [["i"], ["r"], ["s"], ["u"]])
 
 OVSDB_CHECK_POSITIVE([Boolean-distinct queries on scalars],
   [[query-distinct \

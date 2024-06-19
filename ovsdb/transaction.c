@@ -194,33 +194,6 @@ ovsdb_txn_row_abort(struct ovsdb_txn *txn OVS_UNUSED,
     return NULL;
 }
 
-/* Returns the offset in bytes from the start of an ovsdb_row for 'table' to
- * the hmap_node for the index numbered 'i'. */
-static size_t
-ovsdb_row_index_offset__(const struct ovsdb_table *table, size_t i)
-{
-    size_t n_fields = shash_count(&table->schema->columns);
-    return (offsetof(struct ovsdb_row, fields)
-            + n_fields * sizeof(struct ovsdb_datum)
-            + i * sizeof(struct hmap_node));
-}
-
-/* Returns the hmap_node in 'row' for the index numbered 'i'. */
-static struct hmap_node *
-ovsdb_row_get_index_node(struct ovsdb_row *row, size_t i)
-{
-    return (void *) ((char *) row + ovsdb_row_index_offset__(row->table, i));
-}
-
-/* Returns the ovsdb_row given 'index_node', which is a pointer to that row's
- * hmap_node for the index numbered 'i' within 'table'. */
-static struct ovsdb_row *
-ovsdb_row_from_index_node(struct hmap_node *index_node,
-                          const struct ovsdb_table *table, size_t i)
-{
-    return (void *) ((char *) index_node - ovsdb_row_index_offset__(table, i));
-}
-
 void
 ovsdb_txn_abort(struct ovsdb_txn *txn)
 {
@@ -889,7 +862,7 @@ check_max_rows(struct ovsdb_txn *txn)
     return NULL;
 }
 
-static struct ovsdb_row *
+struct ovsdb_row *
 ovsdb_index_search(struct hmap *index, struct ovsdb_row *row, size_t i,
                    uint32_t hash)
 {

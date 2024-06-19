@@ -17,8 +17,10 @@
 #define OVSDB_TRANSACTION_H 1
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "compiler.h"
 
+struct hmap;
 struct json;
 struct ovsdb;
 struct ovsdb_row;
@@ -66,6 +68,9 @@ typedef bool ovsdb_txn_row_cb_func(const struct ovsdb_row *old,
                                    void *aux);
 void ovsdb_txn_for_each_change(const struct ovsdb_txn *,
                                ovsdb_txn_row_cb_func *, void *aux);
+struct ovsdb_row *ovsdb_index_search(struct hmap *index,
+                                     struct ovsdb_row *, size_t i,
+                                     uint32_t hash);
 
 void ovsdb_txn_add_comment(struct ovsdb_txn *, const char *);
 const char *ovsdb_txn_get_comment(const struct ovsdb_txn *);

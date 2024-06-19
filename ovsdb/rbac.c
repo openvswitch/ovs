@@ -219,7 +219,8 @@ denied:
 bool
 ovsdb_rbac_delete(const struct ovsdb *db, struct ovsdb_table *table,
                   struct ovsdb_condition *condition,
-                  const char *role, const char *id)
+                  const char *role, const char *id,
+                  const struct ovsdb_txn *txn)
 {
     const struct ovsdb_table_schema *ts = table->schema;
     const struct ovsdb_row *perms;
@@ -244,7 +245,7 @@ ovsdb_rbac_delete(const struct ovsdb *db, struct ovsdb_table *table,
     rd.role = role;
     rd.id = id;
 
-    ovsdb_query(table, condition, rbac_delete_cb, &rd);
+    ovsdb_query(table, condition, rbac_delete_cb, &rd, txn);
 
     if (rd.permitted) {
         return true;
@@ -309,7 +310,8 @@ ovsdb_rbac_update(const struct ovsdb *db,
                   struct ovsdb_table *table,
                   struct ovsdb_column_set *columns,
                   struct ovsdb_condition *condition,
-                  const char *role, const char *id)
+                  const char *role, const char *id,
+                  const struct ovsdb_txn *txn)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
     const struct ovsdb_table_schema *ts = table->schema;
@@ -348,7 +350,7 @@ ovsdb_rbac_update(const struct ovsdb *db,
     ru.modifiable = datum;
     ru.permitted = true;
 
-    ovsdb_query(table, condition, rbac_update_cb, &ru);
+    ovsdb_query(table, condition, rbac_update_cb, &ru, txn);
 
     if (ru.permitted) {
         return true;
@@ -398,7 +400,8 @@ ovsdb_rbac_mutate(const struct ovsdb *db,
                   struct ovsdb_table *table,
                   struct ovsdb_mutation_set *mutations,
                   struct ovsdb_condition *condition,
-                  const char *role, const char *id)
+                  const char *role, const char *id,
+                  const struct ovsdb_txn *txn)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
     const struct ovsdb_table_schema *ts = table->schema;
@@ -437,7 +440,7 @@ ovsdb_rbac_mutate(const struct ovsdb *db,
     rm.modifiable = datum;
     rm.permitted = true;
 
-    ovsdb_query(table, condition, rbac_mutate_cb, &rm);
+    ovsdb_query(table, condition, rbac_mutate_cb, &rm, txn);
 
     if (rm.permitted) {
         return true;

@@ -1277,13 +1277,22 @@ do_execute_mutations(struct ovs_cmdl_context *ctx)
     ovsdb_table_destroy(table); /* Also destroys 'ts'. */
 }
 
-/* Inserts a row, without bothering to update metadata such as refcounts. */
+/* Inserts a row and update the indexes, without bothering to update metadata
+ * such as refcounts. */
 static void
 put_row(struct ovsdb_table *table, struct ovsdb_row *row)
 {
     const struct uuid *uuid = ovsdb_row_get_uuid(row);
     if (!ovsdb_table_get_row(table, uuid)) {
         hmap_insert(&table->rows, &row->hmap_node, uuid_hash(uuid));
+    }
+
+    for (size_t i = 0; i < table->schema->n_indexes; i++) {
+        const struct ovsdb_column_set *index = &table->schema->indexes[i];
+        struct hmap_node *node = ovsdb_row_get_index_node(row, i);
+        uint32_t hash = ovsdb_row_hash_columns(row, index, 0);
+
+        hmap_insert(&table->indexes[i], node, hash);
     }
 }
 
@@ -1362,7 +1371,7 @@ do_query(struct ovs_cmdl_context *ctx)
                                                     NULL, &cnd));
 
         memset(cbdata.counts, 0, cbdata.n_rows * sizeof *cbdata.counts);
-        ovsdb_query(table, &cnd, do_query_cb, &cbdata);
+        ovsdb_query(table, &cnd, do_query_cb, &cbdata, NULL);
 
         printf("query %2"PRIuSIZE":", i);
         for (j = 0; j < cbdata.n_rows; j++) {
@@ -1490,7 +1499,7 @@ do_query_distinct(struct ovs_cmdl_context *ctx)
             classes[j].count = 0;
         }
         ovsdb_row_set_init(&results);
-        ovsdb_query_distinct(table, &cnd, &columns, &results);
+        ovsdb_query_distinct(table, &cnd, &columns, &results, NULL);
         for (j = 0; j < results.n_rows; j++) {
             size_t k;
 

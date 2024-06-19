@@ -27,11 +27,11 @@ struct ovsdb_txn;
 
 void ovsdb_query(struct ovsdb_table *, const struct ovsdb_condition *,
                  bool (*output_row)(const struct ovsdb_row *, void *aux),
-                 void *aux);
+                 void *aux, const struct ovsdb_txn *);
 void ovsdb_query_row_set(struct ovsdb_table *, const struct ovsdb_condition *,
-                         struct ovsdb_row_set *);
+                         struct ovsdb_row_set *, const struct ovsdb_txn *);
 void ovsdb_query_distinct(struct ovsdb_table *, const struct ovsdb_condition *,
                           const struct ovsdb_column_set *,
-                          struct ovsdb_row_set *);
+                          struct ovsdb_row_set *, const struct ovsdb_txn *);
 
 #endif /* ovsdb/query.h */

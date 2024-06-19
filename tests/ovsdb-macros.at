@@ -38,6 +38,16 @@ m4_define([OVSDB_CHECK_POSITIVE],
 ], [])
    AT_CLEANUP])
 
+# OVSDB_CHECK_POSITIVE_IDX(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ], [INDEX])
+#
+# Runs "test-ovsdb TEST-OVSDB-ARGS" twice, with and without an index, and checks
+# that it exits with status 0 and prints OUTPUT on stdout.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_POSITIVE_IDX],
+  [OVSDB_CHECK_POSITIVE($1, [$2], $3, $4, $5)
+  OVSDB_CHECK_POSITIVE([indexed $1], [m4_bpatsubst([$2], ["columns":], ["indexes": [$6], "columns":])], $3, $4, $5)])
+
 # OVSDB_CHECK_POSITIVE_PY(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ],
 #                          [PY-CHECK])
 #

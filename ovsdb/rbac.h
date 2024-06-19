@@ -25,6 +25,7 @@ struct ovsdb_condition;
 struct ovsdb_mutation_set;
 struct ovsdb_row;
 struct ovsdb_table;
+struct ovsdb_txn;
 
 bool ovsdb_rbac_insert(const struct ovsdb *,
                        const struct ovsdb_table *,
@@ -33,16 +34,19 @@ bool ovsdb_rbac_insert(const struct ovsdb *,
 bool ovsdb_rbac_delete(const struct ovsdb *,
                        struct ovsdb_table *,
                        struct ovsdb_condition *,
-                       const char *role, const char *id);
+                       const char *role, const char *id,
+                       const struct ovsdb_txn *);
 bool ovsdb_rbac_update(const struct ovsdb *,
                        struct ovsdb_table *,
                        struct ovsdb_column_set *,
                        struct ovsdb_condition *condition,
-                       const char *role, const char *id);
+                       const char *role, const char *id,
+                       const struct ovsdb_txn *);
 bool ovsdb_rbac_mutate(const struct ovsdb *,
                        struct ovsdb_table *,
                        struct ovsdb_mutation_set *,
                        struct ovsdb_condition *,
-                       const char *role, const char *id);
+                       const char *role, const char *id,
+                       const struct ovsdb_txn *);
 
 #endif /* ovsdb/rbac.h */
