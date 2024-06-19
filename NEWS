@@ -9,6 +9,9 @@ Post-v3.3.0
      https://github.com/openvswitch/ovs.git
    - DPDK:
      * OVS validated with DPDK 23.11.1.
+     * Link status changes are now handled via interrupt mode if the DPDK
+       driver supports it.  It is possible to revert to polling mode by setting
+       per interface 'options:dpdk-lsc-interrupt' to 'false'.
 
 
 v3.3.0 - 16 Feb 2024

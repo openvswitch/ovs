@@ -546,8 +546,8 @@ the firmware every time to fulfil this request.
 
 Note that not all PMD drivers support LSC interrupts.
 
-The default configuration is polling mode. To set interrupt mode, option
-``dpdk-lsc-interrupt`` has to be set to ``true``.
+The default configuration is interrupt mode. To set polling mode, option
+``dpdk-lsc-interrupt`` has to be set to ``false``.
 
 Command to set interrupt mode for a specific interface::
     $ ovs-vsctl set interface <iface_name> options:dpdk-lsc-interrupt=true

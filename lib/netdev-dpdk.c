@@ -2397,7 +2397,18 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
         }
     }
 
-    lsc_interrupt_mode = smap_get_bool(args, "dpdk-lsc-interrupt", false);
+    lsc_interrupt_mode = smap_get_bool(args, "dpdk-lsc-interrupt", true);
+    if (lsc_interrupt_mode && !(*info.dev_flags & RTE_ETH_DEV_INTR_LSC)) {
+        if (smap_get(args, "dpdk-lsc-interrupt")) {
+            VLOG_WARN_BUF(errp, "'%s': link status interrupt is not "
+                          "supported.", netdev_get_name(netdev));
+            err = EINVAL;
+            goto out;
+        }
+        VLOG_DBG("'%s': not enabling link status interrupt.",
+                 netdev_get_name(netdev));
+        lsc_interrupt_mode = false;
+    }
     if (dev->requested_lsc_interrupt_mode != lsc_interrupt_mode) {
         dev->requested_lsc_interrupt_mode = lsc_interrupt_mode;
         netdev_request_reconfigure(netdev);
