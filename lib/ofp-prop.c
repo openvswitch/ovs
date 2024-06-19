@@ -21,6 +21,7 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-prop.h"
 #include "openvswitch/vlog.h"
+#include "unaligned.h"
 #include "util.h"
 #include "uuid.h"
 
@@ -190,11 +191,12 @@ ofpprop_parse_be64(const struct ofpbuf *property, ovs_be64 *value)
 enum ofperr
 ofpprop_parse_be128(const struct ofpbuf *property, ovs_be128 *value)
 {
-    ovs_be128 *p = property->msg;
+    ovs_32aligned_be128 *p = property->msg;
+
     if (ofpbuf_msgsize(property) != sizeof *p) {
         return OFPERR_OFPBPC_BAD_LEN;
     }
-    *value = *p;
+    *value = get_32aligned_be128(p);
     return 0;
 }
 
@@ -270,12 +272,13 @@ ofpprop_parse_u64(const struct ofpbuf *property, uint64_t *value)
 enum ofperr
 ofpprop_parse_u128(const struct ofpbuf *property, ovs_u128 *value)
 {
-    ovs_be128 *p = property->msg;
-    if (ofpbuf_msgsize(property) != sizeof *p) {
-        return OFPERR_OFPBPC_BAD_LEN;
+    enum ofperr error = ofpprop_parse_be128(property, (ovs_be128 *) value);
+
+    if (!error) {
+        *value = ntoh128(*(ovs_be128 *) value);
     }
-    *value = ntoh128(*p);
-    return 0;
+
+    return error;
 }
 
 /* Attempts to parse 'property' as a property containing a UUID.  If
