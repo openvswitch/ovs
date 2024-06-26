@@ -96,6 +96,9 @@ struct ovsdb_storage *ovsdb_storage_open_standalone(const char *filename,
                                                     bool rw);
 struct ovsdb_schema *ovsdb_storage_read_schema(struct ovsdb_storage *);
 
-const struct uuid *ovsdb_storage_peek_last_eid(struct ovsdb_storage *);
+/* Checks that there is a chance for a record with specified prerequisites
+ * to be successfully written to the storage. */
+bool ovsdb_storage_precheck_prereq(const struct ovsdb_storage *,
+                                   const struct uuid *prereq);
 
 #endif /* ovsdb/storage.h */

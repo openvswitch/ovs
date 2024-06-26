@@ -661,11 +661,12 @@ ovsdb_storage_write_schema_change(struct ovsdb_storage *storage,
     return w;
 }
 
-const struct uuid *
-ovsdb_storage_peek_last_eid(struct ovsdb_storage *storage)
+bool
+ovsdb_storage_precheck_prereq(const struct ovsdb_storage *storage,
+                              const struct uuid *prereq)
 {
     if (!storage->raft) {
-        return NULL;
+        return true;
     }
-    return raft_current_eid(storage->raft);
+    return raft_precheck_prereq(storage->raft, prereq);
 }

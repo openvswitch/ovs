@@ -2307,10 +2307,53 @@ raft_get_eid(const struct raft *raft, uint64_t index)
     return &raft->snap.eid;
 }
 
-const struct uuid *
+static const struct uuid *
 raft_current_eid(const struct raft *raft)
 {
     return raft_get_eid(raft, raft->log_end - 1);
+}
+
+bool
+raft_precheck_prereq(const struct raft *raft, const struct uuid *prereq)
+{
+    if (!uuid_equals(raft_current_eid(raft), prereq)) {
+        VLOG_DBG("%s: prerequisites (" UUID_FMT ") "
+                 "do not match current eid (" UUID_FMT ")",
+                 __func__, UUID_ARGS(prereq),
+                 UUID_ARGS(raft_current_eid(raft)));
+        return false;
+    }
+
+    /* Incomplete commands on a leader will not change the leader's current
+     * 'eid' on commit as they are already part of the leader's log. */
+    if (raft->role == RAFT_LEADER) {
+        return true;
+    }
+
+    /* Having incomplete commands on a follower means that the leader has
+     * these commands and they will change the prerequisites once added to
+     * the leader's log.
+     *
+     * There is a chance that all these commands will actually fail and the
+     * record with current prerequisites will in fact succeed, but, since
+     * these are our own commands, the chances are low. */
+    struct raft_command *cmd;
+    HMAP_FOR_EACH (cmd, hmap_node, &raft->commands) {
+        /* Skip commands that are already part of the log (have non-zero
+         * index) and ones that do not carry any data (have zero 'eid'),
+         * as they can't change prerequisites.
+         *
+         * Database will not re-run triggers unless the data changes or
+         * one of the data-carrying triggers completes.  So, pre-check must
+         * not fail if there are no outstanding data-carrying commands. */
+        if (!cmd->index && !uuid_is_zero(&cmd->eid)) {
+            VLOG_DBG("%s: follower still has an incomplete command "
+                     UUID_FMT, __func__, UUID_ARGS(&cmd->eid));
+            return false;
+        }
+    }
+
+    return true;
 }
 
 static struct raft_command *

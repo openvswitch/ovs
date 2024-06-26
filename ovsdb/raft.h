@@ -189,5 +189,5 @@ struct ovsdb_error *raft_store_snapshot(struct raft *,
 void raft_take_leadership(struct raft *);
 void raft_transfer_leadership(struct raft *, const char *reason);
 
-const struct uuid *raft_current_eid(const struct raft *);
+bool raft_precheck_prereq(const struct raft *, const struct uuid *prereq);
 #endif /* lib/raft.h */

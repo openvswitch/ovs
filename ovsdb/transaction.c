@@ -1277,11 +1277,7 @@ struct ovsdb_txn_progress {
 bool
 ovsdb_txn_precheck_prereq(const struct ovsdb *db)
 {
-    const struct uuid *eid = ovsdb_storage_peek_last_eid(db->storage);
-    if (!eid) {
-        return true;
-    }
-    return uuid_equals(&db->prereq, eid);
+    return ovsdb_storage_precheck_prereq(db->storage, &db->prereq);
 }
 
 struct ovsdb_txn_progress *
