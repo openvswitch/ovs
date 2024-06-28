@@ -464,7 +464,7 @@ conn prevent_unencrypted_vxlan
                                 encoding="latin1")
         pout, perr = proc.communicate()
 
-        v = re.match("^Libreswan (.*)$", pout)
+        v = re.match("^Libreswan v?(.*)$", pout)
         try:
             version = int(v.group(1).split(".")[0])
         except:
