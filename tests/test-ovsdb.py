@@ -36,6 +36,66 @@ vlog.set_levels_from_string("console:dbg")
 vlog.init(None)
 
 
+def substitute_object_text(data, quotechar='"', obj_chars=("{}", "[]"),
+                           tag_format="_OBJECT_{}_"):
+    """Replace objects in strings with tags that can later be retrieved
+
+    Given data like:
+    'cmd1 1, cmd2 {"a": {"a": "b"}}, cmd3 1 2, cmd4 ["a", "b"]'
+
+    Return an output string:
+    'cmd1 1, cmd2 _OBJECT_0_, cmd3 1 2, cmd4 _OBJECT_1_'
+
+    and a dictionary of replaced text:
+    {'_OBJECT_0_': '{"a": {"a": "b"}}', '_OBJECT_1_': '["a", "b"]'}
+    """
+
+    obj_chars = dict(obj_chars)
+    in_quote = False
+    in_object = []  # Stack of nested outer object opening characters.
+    replaced_text = {}
+    output = ""
+    start = end = 0
+    for i, c in enumerate(data):
+        if not in_object:
+            if not in_quote and c in obj_chars:
+                # This is the start of a non-quoted outer object that will
+                # be replaced by a tag.
+                in_object.append(c)
+                start = i
+            else:
+                # Regular output.
+                output += c
+            if c == quotechar:
+                in_quote = not in_quote
+        elif not in_quote:  # Unquoted object.
+            if c == in_object[0]:
+                # Record on the stack that we are in a nested object of the
+                # same type as the outer object, this object will not be
+                # substituted with a tag.
+                in_object.append(c)
+            elif c == obj_chars[in_object[0]]:
+                # This is the closing character to this potentially nested
+                # object's opening character, so pop it off the stack.
+                in_object.pop()
+                if not in_object:
+                    # This is the outer object's closing character, so record
+                    # the substituted text and generate the tagged text.
+                    end = i + 1
+                    tag = tag_format.format(len(replaced_text))
+                    replaced_text[tag] = data[start:end]
+                    output += tag
+    return output, replaced_text
+
+
+def recover_object_text_from_list(words, json):
+    if not json:
+        return words
+    # NOTE(twilson) This does not handle the case of having multiple replaced
+    # objects in the same word, e.g. two json adjacent json strings.
+    return [json.get(word, word) for word in words]
+
+
 def unbox_json(json):
     if type(json) is list and len(json) == 1:
         return json[0]
@@ -389,8 +449,15 @@ def idl_set(idl, commands, step):
     increment = False
     fetch_cmds = []
     events = []
+    # `commands` is a comma-separated list of space-separated arguments.  To
+    # handle commands that take arguments that may contain spaces or commas,
+    # e.g. JSON, it is necessary to process `commands` to extract those
+    # arguments before splitting by ',' or ' ' below, and then re-insert them
+    # after the arguments are split.
+    commands, data = substitute_object_text(commands)
     for command in commands.split(','):
         words = command.split()
+        words = recover_object_text_from_list(words, data)
         name = words[0]
         args = words[1:]
 
@@ -449,6 +516,12 @@ def idl_set(idl, commands, step):
             s = txn.insert(idl.tables["simple"], new_uuid=uuid.UUID(args[0]),
                            persist_uuid=True)
             s.i = int(args[1])
+        elif name == "add_op":
+            if len(args) != 1:
+                sys.stderr.write('"add_op" command requires 1 argument\n')
+                sys.stderr.write(f"args={args}\n")
+                sys.exit(1)
+            txn.add_op(ovs.json.from_string(args[0]))
         elif name == "delete":
             if len(args) != 1:
                 sys.stderr.write('"delete" command requires 1 argument\n')

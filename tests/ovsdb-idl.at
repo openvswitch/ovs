@@ -2863,6 +2863,33 @@ OVSDB_CHECK_IDL_PERS_UUID_INSERT([simple idl, persistent uuid insert],
   [['This UUID would duplicate a UUID already present within the table or deleted within the same transaction']])
 
 
+OVSDB_CHECK_IDL_PY([simple idl, python, add_op],
+  [],
+  [['insert 1, insert 2, insert 3, insert 1' \
+    'add_op {"op": "delete", "table": "simple", "where": [["i", "==", 1]]}' \
+    'add_op {"op": "insert", "table": "simple", "row": {"i": 2}}, delete 3' \
+    'insert 2, add_op {"op": "update", "table": "simple", "row": {"i": 1}, "where": [["i", "==", 2]]}'
+  ]],
+  [[000: empty
+001: commit, status=success
+002: table simple: i=1 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+002: table simple: i=1 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+002: table simple: i=2 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
+002: table simple: i=3 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<4>
+003: commit, status=success
+004: table simple: i=2 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
+004: table simple: i=3 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<4>
+005: commit, status=success
+006: table simple: i=2 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
+006: table simple: i=2 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<5>
+007: commit, status=success
+008: table simple: i=1 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
+008: table simple: i=1 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<5>
+008: table simple: i=1 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<6>
+009: done
+]],[],sort)
+
+
 m4_define([OVSDB_CHECK_IDL_CHANGE_AWARE],
   [AT_SETUP([simple idl, database change aware, online conversion - $1])
    AT_KEYWORDS([ovsdb server idl db_change_aware conversion $1])
