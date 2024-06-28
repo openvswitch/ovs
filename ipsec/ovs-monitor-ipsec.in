@@ -459,6 +459,7 @@ conn prevent_unencrypted_vxlan
     def __init__(self, libreswan_root_prefix, args):
         # Collect version infromation
         self.IPSEC = libreswan_root_prefix + "/usr/sbin/ipsec"
+        self.IPSEC_AUTO = [self.IPSEC]
         proc = subprocess.Popen([self.IPSEC, "--version"],
                                 stdout=subprocess.PIPE,
                                 encoding="latin1")
@@ -469,6 +470,11 @@ conn prevent_unencrypted_vxlan
             version = int(v.group(1).split(".")[0])
         except:
             version = 0
+
+        if version < 5:
+            # With v5, LibreSWAN removed the auto command, however, it is
+            # still required for older versions
+            self.IPSEC_AUTO.append("auto")
 
         if version >= 4:
             ipsec_d = args.ipsec_d if args.ipsec_d else "/var/lib/ipsec/nss"
@@ -593,7 +599,7 @@ conn prevent_unencrypted_vxlan
 
     def refresh(self, monitor):
         vlog.info("Refreshing LibreSwan configuration")
-        subprocess.call([self.IPSEC, "auto", "--ctlsocket", self.IPSEC_CTL,
+        subprocess.call(self.IPSEC_AUTO + ["--ctlsocket", self.IPSEC_CTL,
                         "--config", self.IPSEC_CONF, "--rereadsecrets"])
         tunnels = set(monitor.tunnels.keys())
 
@@ -621,7 +627,7 @@ conn prevent_unencrypted_vxlan
 
                 if not tunnel or tunnel.version != ver:
                     vlog.info("%s is outdated %u" % (conn, ver))
-                    subprocess.call([self.IPSEC, "auto", "--ctlsocket",
+                    subprocess.call(self.IPSEC_AUTO + ["--ctlsocket",
                                     self.IPSEC_CTL, "--config",
                                     self.IPSEC_CONF, "--delete", conn])
                 elif ifname in tunnels:
@@ -643,44 +649,44 @@ conn prevent_unencrypted_vxlan
         # Update shunt policy if changed
         if monitor.conf_in_use["skb_mark"] != monitor.conf["skb_mark"]:
             if monitor.conf["skb_mark"]:
-                subprocess.call([self.IPSEC, "auto",
-                            "--config", self.IPSEC_CONF,
+                subprocess.call(self.IPSEC_AUTO +
+                            ["--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_gre"])
-                subprocess.call([self.IPSEC, "auto",
-                            "--config", self.IPSEC_CONF,
+                subprocess.call(self.IPSEC_AUTO +
+                            ["--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_geneve"])
-                subprocess.call([self.IPSEC, "auto",
-                            "--config", self.IPSEC_CONF,
+                subprocess.call(self.IPSEC_AUTO +
+                            ["--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_stt"])
-                subprocess.call([self.IPSEC, "auto",
-                            "--config", self.IPSEC_CONF,
+                subprocess.call(self.IPSEC_AUTO +
+                            ["--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_vxlan"])
             else:
-                subprocess.call([self.IPSEC, "auto",
-                            "--config", self.IPSEC_CONF,
+                subprocess.call(self.IPSEC_AUTO +
+                            ["--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_gre"])
-                subprocess.call([self.IPSEC, "auto",
-                            "--config", self.IPSEC_CONF,
+                subprocess.call(self.IPSEC_AUTO +
+                            ["--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_geneve"])
-                subprocess.call([self.IPSEC, "auto",
-                            "--config", self.IPSEC_CONF,
+                subprocess.call(self.IPSEC_AUTO +
+                            ["--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_stt"])
-                subprocess.call([self.IPSEC, "auto",
-                            "--config", self.IPSEC_CONF,
+                subprocess.call(self.IPSEC_AUTO +
+                            ["--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_vxlan"])
@@ -726,8 +732,8 @@ conn prevent_unencrypted_vxlan
         # the "ipsec auto --start" command is lost. Just retry to make sure
         # the command is received by LibreSwan.
         while True:
-            proc = subprocess.Popen([self.IPSEC, "auto",
-                                    "--config", self.IPSEC_CONF,
+            proc = subprocess.Popen(self.IPSEC_AUTO +
+                                    ["--config", self.IPSEC_CONF,
                                     "--ctlsocket", self.IPSEC_CTL,
                                     "--start",
                                     "--asynchronous", conn],

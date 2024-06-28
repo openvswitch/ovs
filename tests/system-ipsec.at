@@ -110,16 +110,16 @@ m4_define([CHECK_LIBRESWAN],
 dnl IPSEC_STATUS_LOADED([])
 dnl
 dnl Get number of loaded connections from ipsec status
-m4_define([IPSEC_STATUS_LOADED], [ipsec status --rundir $ovs_base/$1 | \
+m4_define([IPSEC_STATUS_LOADED], [ipsec --rundir $ovs_base/$1 status | \
            grep "Total IPsec connections" | \
-           sed 's/[[0-9]]* Total IPsec connections: loaded \([[0-2]]\), active \([[0-2]]\).*/\1/m'])
+           sed 's/[[0-9]]* *Total IPsec connections: loaded \([[0-2]]\), active \([[0-2]]\).*/\1/m'])
 
 dnl IPSEC_STATUS_ACTIVE([])
 dnl
 dnl Get number of active connections from ipsec status
-m4_define([IPSEC_STATUS_ACTIVE], [ipsec status --rundir $ovs_base/$1 | \
+m4_define([IPSEC_STATUS_ACTIVE], [ipsec --rundir $ovs_base/$1 status | \
            grep "Total IPsec connections" | \
-           sed 's/[[0-9]]* Total IPsec connections: loaded \([[0-2]]\), active \([[0-2]]\).*/\2/m'])
+           sed 's/[[0-9]]* *Total IPsec connections: loaded \([[0-2]]\), active \([[0-2]]\).*/\2/m'])
 
 dnl CHECK_ESP_TRAFFIC()
 dnl
