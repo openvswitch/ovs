@@ -610,6 +610,15 @@ AT_CHECK([ovs-appctl tnl/arp/show | tail -n+3 | sort], [0], [dnl
 2001:cafe::93                                 f8:bc:12:44:34:b7   br0
 ])
 
+dnl Disable checksum from VXLAN port.
+AT_CHECK([ovs-vsctl set Interface t3 options:csum=false])
+AT_CHECK([ovs-ofctl del-flows int-br])
+AT_CHECK([ovs-ofctl add-flow int-br action=4])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=36:b1:ee:7c:01:01,dst=36:b1:ee:7c:01:02),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: tnl_push(tnl_port(4789),header(size=70,type=4,eth(dst=f8:bc:12:44:34:b7,src=aa:55:aa:55:00:00,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::93,label=0,proto=17,tclass=0x0,hlimit=64),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0x8000000,vni=0x0)),out_port(100)),1
+])
+
 ovs-appctl time/warp 10000
 
 AT_CHECK([ovs-vsctl del-port int-br t3 \

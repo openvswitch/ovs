@@ -384,7 +384,7 @@ udp_build_header(const struct netdev_tunnel_config *tnl_cfg,
     udp = netdev_tnl_ip_build_header(data, params, IPPROTO_UDP, 0);
     udp->udp_dst = tnl_cfg->dst_port;
 
-    if (params->is_ipv6 || params->flow->tunnel.flags & FLOW_TNL_F_CSUM) {
+    if (params->flow->tunnel.flags & FLOW_TNL_F_CSUM) {
         /* Write a value in now to mark that we should compute the checksum
          * later. 0xffff is handy because it is transparent to the
          * calculation. */

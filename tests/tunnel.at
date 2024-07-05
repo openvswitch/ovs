@@ -1038,7 +1038,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0,src=1.1.1.1,dst=1.1.1.2,ttl=64),in_port(4789)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: set(tunnel(ipv6_dst=2001:cafe::1,ttl=64,tp_dst=4789,flags(df))),4789
+  [Datapath actions: set(tunnel(ipv6_dst=2001:cafe::1,ttl=64,tp_dst=4789,flags(df|csum))),4789
 ])
 
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,ipv6_src=2001:cafe::1,ipv6_dst=2001:cafe::2,ttl=64),in_port(4789)'], [0], [stdout])

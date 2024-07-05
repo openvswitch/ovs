@@ -3207,9 +3207,15 @@
         <column name="options" key="csum" type='{"type": "boolean"}'>
           <p>
             Optional.  Compute encapsulation header (either GRE or UDP)
-            checksums on outgoing packets.  Default is disabled, set to
-            <code>true</code> to enable.  Checksums present on incoming
-            packets will be validated regardless of this setting.
+            checksums on outgoing packets.  When unset (the default value),
+            checksum computing for outgoing packets is enabled for UDP IPv6
+            tunnels, and disabled for GRE and IPv4 UDP tunnels.  When set to
+            <code>false</code>, no checksums will be computed for outgoing
+            tunnel encapsulation headers.  When <code>true</code>, checksums
+            will be computed for all outgoing tunnel encapsulation headers.
+            Checksums present on incoming packets will be validated
+            regardless of this setting.  Incoming packets without a checksum
+            will also be accepted regardless of this setting.
           </p>
 
           <p>

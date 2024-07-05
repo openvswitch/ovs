@@ -11,6 +11,10 @@ Post-v3.3.0
      * Conntrack now supports 'random' flag for selecting ports in a range
        while natting and 'persistent' flag for selection of the IP address
        from a range.
+     * IPv6 UDP tunnel encapsulation including Geneve and VXLAN will now
+       honour the csum option.  Configuring the interface with
+       "options:csum=false" now has the same effect as the udp6zerocsumtx
+       option has with Linux kernel UDP tunnels.
    - The primary development branch has been renamed from 'master' to 'main'.
      The OVS tree remains hosted on GitHub.
      https://github.com/openvswitch/ovs.git
@@ -23,6 +27,13 @@ Post-v3.3.0
      * Added custom transaction support to the Idl via add_op().
      * Added support for different output formats like 'json' to Python's
        unixctl classes.
+   - Tunnels:
+     * Previously the kernel datapath did not enable UDP checksums by default
+       in IPv6 tunnels.  This behaviour is non-standard, differs from the
+       Linux kernel, and as also different than the userspace datapath.  Now
+       these tunnels will calculate checksums by default and that behaviour can
+       be changed with "options:csum=false" just as with the userspace
+       datapath.
 
 
 v3.3.0 - 16 Feb 2024

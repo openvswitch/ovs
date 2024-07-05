@@ -111,6 +111,22 @@ enum netdev_srv6_flowlabel {
     SRV6_FLOWLABEL_COMPUTE,
 };
 
+enum netdev_tnl_csum {
+    /* Default value for UDP tunnels if no configurations is present.  Enforce
+     * checksum calculation in IPv6 tunnels, disable in IPv4 tunnels. */
+    NETDEV_TNL_CSUM_DEFAULT = 0,
+
+    /* Checksum explicitly to be calculated. */
+    NETDEV_TNL_CSUM_ENABLED,
+
+    /* Checksum calculation explicitly disabled. */
+    NETDEV_TNL_CSUM_DISABLED,
+
+    /* A value for when there is no checksum or the default value is no
+     * checksum regardless of IP version. */
+    NETDEV_TNL_DEFAULT_NO_CSUM,
+};
+
 /* Configuration specific to tunnels. */
 struct netdev_tunnel_config {
     ovs_be64 in_key;
@@ -139,7 +155,7 @@ struct netdev_tunnel_config {
     uint8_t tos;
     bool tos_inherit;
 
-    bool csum;
+    enum netdev_tnl_csum csum;
     bool dont_fragment;
     enum netdev_pt_mode pt_mode;
 

@@ -702,7 +702,9 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
             tnl_cfg.dst_port = htons(atoi(node->value));
         } else if (!strcmp(node->key, "csum") && has_csum) {
             if (!strcmp(node->value, "true")) {
-                tnl_cfg.csum = true;
+                tnl_cfg.csum = NETDEV_TNL_CSUM_ENABLED;
+            } else if (!strcmp(node->value, "false")) {
+                tnl_cfg.csum = NETDEV_TNL_CSUM_DISABLED;
             }
         } else if (!strcmp(node->key, "seq") && has_seq) {
             if (!strcmp(node->value, "true")) {
@@ -848,6 +850,15 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
             ds_put_format(&errors, "%s: unknown %s argument '%s'\n", name,
                           type, node->key);
         }
+    }
+
+    /* The default csum state for GRE is special as it does have an optional
+     * checksum but the default configuration isn't correlated with IP version
+     * like UDP tunnels are.  Likewise, tunnels with no checksum at all must be
+     * in this state. */
+    if (tnl_cfg.csum == NETDEV_TNL_CSUM_DEFAULT &&
+        (!has_csum || strstr(type, "gre"))) {
+        tnl_cfg.csum = NETDEV_TNL_DEFAULT_NO_CSUM;
     }
 
     enum tunnel_layers layers = tunnel_supported_layers(type, &tnl_cfg);
@@ -1026,8 +1037,10 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
         }
     }
 
-    if (tnl_cfg->csum) {
+    if (tnl_cfg->csum == NETDEV_TNL_CSUM_ENABLED) {
         smap_add(args, "csum", "true");
+    } else if (tnl_cfg->csum == NETDEV_TNL_CSUM_DISABLED) {
+        smap_add(args, "csum", "false");
     }
 
     if (tnl_cfg->set_seq) {
