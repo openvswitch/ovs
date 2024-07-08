@@ -9,6 +9,12 @@ Post-v3.3.0
      * 'dpif/show' and 'list-commands' now support output in JSON format.
      * Added 'ofproto/detrace' command that outputs the set of OpenFlow rules
        and groups that contributed to the creation of a specific datapath flow.
+   - ovs-vsctl:
+     * Added a new filter column in the Mirror table which can be used to
+       apply filters to mirror ports.
+   - ovs-tcpdump:
+     * Added command line parameter --filter to enable filtering the packets
+       that are captured by tcpdump.
    - Userspace datapath:
      * Conntrack now supports 'random' flag for selecting ports in a range
        while natting and 'persistent' flag for selection of the IP address

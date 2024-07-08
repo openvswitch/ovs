@@ -142,6 +142,7 @@ The following options are available:
    --mirror-to                The name for the mirror port to use (optional)
                               Default 'miINTERFACE'
    --span                     If specified, mirror all ports (optional)
+   --filter                   Set an OpenFlow formatted preselection filter
 """ % {'prog': sys.argv[0]})
     sys.exit(0)
 
@@ -354,13 +355,16 @@ class OVSDB(object):
         return result
 
     def bridge_mirror(self, intf_name, mirror_intf_name, br_name,
-                      mirror_select_all=False):
+                      mirror_select_all=False, mirror_filter=None):
 
         txn = self._start_txn()
         mirror = txn.insert(self.get_table('Mirror'))
         mirror.name = 'm_%s' % intf_name
 
         mirror.select_all = mirror_select_all
+
+        if mirror_filter is not None:
+            mirror.filter = mirror_filter
 
         mirrored_port = self._find_row_by_name('Port', intf_name)
 
@@ -445,6 +449,7 @@ def main():
     mirror_interface = None
     mirror_select_all = False
     dump_cmd = 'tcpdump'
+    mirror_filter = None
 
     for cur, nxt in argv_tuples(sys.argv[1:]):
         if skip_next:
@@ -473,6 +478,10 @@ def main():
             continue
         elif cur in ['--span']:
             mirror_select_all = True
+            continue
+        elif cur in ['--filter']:
+            mirror_filter = nxt
+            skip_next = True
             continue
         tcpdargs.append(cur)
 
@@ -526,7 +535,7 @@ def main():
         ovsdb.make_port(mirror_interface, ovsdb.port_bridge(interface))
         ovsdb.bridge_mirror(interface, mirror_interface,
                             ovsdb.port_bridge(interface),
-                            mirror_select_all)
+                            mirror_select_all, mirror_filter=mirror_filter)
     except OVSDBException as oe:
         print("ERROR: Unable to properly setup the mirror: %s." % str(oe))
         sys.exit(1)

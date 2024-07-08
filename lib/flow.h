@@ -939,6 +939,15 @@ flow_union_with_miniflow(struct flow *dst, const struct miniflow *src)
     flow_union_with_miniflow_subset(dst, src, src->map);
 }
 
+/* Perform a bitwise OR of minimask 'src' mask data with the equivalent
+ * fields in 'dst', storing the result in 'dst'. */
+static inline void
+flow_wildcards_union_with_minimask(struct flow_wildcards *dst,
+                                   const struct minimask *src)
+{
+    flow_union_with_miniflow_subset(&dst->masks, &src->masks, src->masks.map);
+}
+
 static inline bool is_ct_valid(const struct flow *flow,
                                const struct flow_wildcards *mask,
                                struct flow_wildcards *wc)

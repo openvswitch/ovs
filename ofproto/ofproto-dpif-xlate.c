@@ -2262,7 +2262,8 @@ lookup_input_bundle(const struct xlate_ctx *ctx,
 
 /* Mirrors the packet represented by 'ctx' to appropriate mirror destinations,
  * given the packet is ingressing or egressing on 'xbundle', which has ingress
- * or egress (as appropriate) mirrors 'mirrors'. */
+ * or egress (as appropriate) mirrors 'mirrors'.  In cases where a mirror is
+ * filtered, the current wildcard for the flow's current filter is modified. */
 static void
 mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
               mirror_mask_t mirrors)
@@ -2311,6 +2312,18 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
         if (mc.vlans && !bitmap_is_set(mc.vlans, xvlan.v[0].vid)) {
             mirrors = zero_rightmost_1bit(mirrors);
             continue;
+        }
+
+        /* After the VLAN check, apply a flow mask if a filter is specified. */
+        if (ctx->wc && mc.filter_flow) {
+            flow_wildcards_union_with_minimask(ctx->wc, mc.filter_mask);
+            if (!OVS_UNLIKELY(
+                 miniflow_equal_flow_in_minimask(mc.filter_flow,
+                                                 &ctx->xin->flow,
+                                                 mc.filter_mask))) {
+                mirrors = zero_rightmost_1bit(mirrors);
+                continue;
+            }
         }
 
         /* We sent a packet to this mirror. */

@@ -5220,6 +5220,172 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - mirroring, filter])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+AT_CHECK([ovs-vsctl \
+          set Bridge br0 mirrors=@m -- \
+          --id=@p3 get Port p3 -- \
+          --id=@m create Mirror name=mymirror select_all=true output_port=@p3 filter="icmp"], [0], [ignore])
+
+icmp_flow="eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+tcp_flow1="eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=128,frag=no),tcp(dst=443)"
+tcp_flow2="eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=128,frag=no),tcp(dst=80)"
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 'actions=normal' ])
+
+dnl Add non-matching flows, then change the mirror to match one of the flows,
+dnl then add a matching flow.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 $icmp_flow])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 $tcp_flow1])
+AT_CHECK([ovs-vsctl set mirror mymirror filter="tcp"], [0])
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 $tcp_flow2])
+AT_CHECK([ovs-appctl dpif/dump-flows --names br0 | strip_ufid | strip_used | sort], [0], [dnl
+recirc_id(0),in_port(p1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),dnl
+eth_type(0x0800),ipv4(proto=1,frag=no), packets:0, bytes:0, used:never, actions:br0,p2
+recirc_id(0),in_port(p1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),dnl
+eth_type(0x0800),ipv4(proto=6,frag=no), packets:1, bytes:118, used:0.0s, actions:p3,br0,p2
+])
+AT_CHECK([ovs-appctl dpctl/dump-flows --names | strip_ufid | strip_used | sort], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(p1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),dnl
+eth_type(0x0800),ipv4(proto=1,frag=no), packets:0, bytes:0, used:never, actions:br0,p2
+recirc_id(0),in_port(p1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),dnl
+eth_type(0x0800),ipv4(proto=6,frag=no), packets:1, bytes:118, used:0.0s, actions:p3,br0,p2
+])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=1 actions=output:2"])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=output:1"])
+
+dnl Add mirrored flow after non-mirrored flow.
+AT_CHECK([ovs-vsctl set mirror mymirror filter="icmp"], [0])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 $tcp_flow1])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 $icmp_flow])
+AT_CHECK([ovs-appctl dpif/dump-flows --names br0 | strip_ufid | strip_used | sort], [0], [dnl
+recirc_id(0),in_port(p1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),dnl
+eth_type(0x0800),ipv4(proto=1,frag=no), packets:1, bytes:106, used:0.0s, actions:p3,p2
+recirc_id(0),in_port(p1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),dnl
+eth_type(0x0800),ipv4(proto=6,frag=no), packets:2, bytes:236, used:0.0s, actions:p2
+])
+
+dnl Check one direction, only icmp should mirror.
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(1),$icmp_flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 3,2
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(1),$tcp_flow1"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+dnl Check other direction, only icmp should mirror.
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(2),$icmp_flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 3,1
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(2),$tcp_flow1"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 1
+])
+
+dnl Change filter to tcp, only tcp should mirror.
+AT_CHECK([ovs-vsctl set mirror mymirror filter="tcp"], [0])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(1),$icmp_flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(1),$tcp_flow1"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 3,2
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(2),$icmp_flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 1
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(2),$tcp_flow1"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 3,1
+])
+
+dnl Invalid filter. Nothing should mirror, error should be logged.
+AT_CHECK([ovs-vsctl set mirror mymirror filter="invalid"], [0])
+dnl Setting an in_port is also invalid.
+AT_CHECK([ovs-vsctl set mirror mymirror filter="\"in_port=p1\""], [0])
+
+dnl Each of the above two lines should produce two log messages.
+OVS_WAIT_UNTIL([test $(grep -Ec "filter is invalid|mirror mymirror configuration is invalid" ovs-vswitchd.log) -eq 4])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(1),$icmp_flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(1),$tcp_flow1"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(2),$icmp_flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 1
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(2),$tcp_flow1"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 1
+])
+
+dnl Check more complex filter cases with partially overlapping default wildcards.
+AT_CHECK([ovs-vsctl set mirror mymirror filter="\"tcp,tcp_dst=80\""], [0])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(1),$tcp_flow1"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+dnl Change port number.
+AT_CHECK([ovs-appctl dpif-dummy/change-port-number ovs-dummy p1 8])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(8),$tcp_flow2"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 3,2
+])
+
+dnl Empty filter, all traffic should mirror.
+AT_CHECK([ovs-vsctl clear mirror mymirror filter], [0])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(8),$icmp_flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 3,2
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(8),$tcp_flow1"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 3,2
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(2),$icmp_flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 3,8
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(2),$tcp_flow1"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 3,8
+])
+
+OVS_VSWITCHD_STOP(["/filter is invalid: invalid: unknown field invalid/d
+/filter is invalid due to in_port field/d
+/mirror mymirror configuration is invalid/d"])
+AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - mirroring, select_all])
 AT_KEYWORDS([mirror mirrors mirroring])

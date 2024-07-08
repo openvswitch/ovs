@@ -3843,7 +3843,17 @@ mirror_set__(struct ofproto *ofproto_, void *aux,
     mb.n_dsts = s->n_dsts;
     mb.out_bundle = bundle_lookup(ofproto, s->out_bundle);
 
-    error = mirror_set(ofproto->mbridge, aux, s, &mb);
+    error = mirror_set(ofproto->mbridge, ofproto_, aux, s, &mb);
+
+    if (!error) {
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    } else if (error == ECANCELED) {
+        /* The user requested a change that is identical to the current state,
+         * the reconfiguration is canceled, but don't log an error message
+         * about that. */
+        error = 0;
+    }
+
     free(mb.srcs);
     free(mb.dsts);
     return error;

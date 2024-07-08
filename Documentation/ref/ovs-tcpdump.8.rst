@@ -61,8 +61,14 @@ Options
 
   If specified, mirror all ports (optional).
 
+* ``--filter <flow>``
+
+  If specified, only mirror packets that match the provided OpenFlow filter.
+  The available fields are documented in ``ovs-fields(7)``.
+
 See Also
 ========
 
 ``ovs-appctl(8)``, ``ovs-vswitchd(8)``, ``ovs-pcap(1)``,
-``ovs-tcpundump(1)``, ``tcpdump(8)``, ``wireshark(8)``.
+``ovs-fields(7)``, ``ovs-tcpundump(1)``, ``tcpdump(8)``,
+``wireshark(8)``.

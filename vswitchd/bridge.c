@@ -5217,6 +5217,7 @@ mirror_configure(struct mirror *m)
 {
     const struct ovsrec_mirror *cfg = m->cfg;
     struct ofproto_mirror_settings s;
+    int ret;
 
     /* Set name. */
     if (strcmp(cfg->name, m->name)) {
@@ -5285,8 +5286,18 @@ mirror_configure(struct mirror *m)
     /* Get VLAN selection. */
     s.src_vlans = vlan_bitmap_from_array(cfg->select_vlan, cfg->n_select_vlan);
 
+    /* Set the filter, mirror_set() will strdup this pointer. */
+    s.filter = cfg->filter;
+
     /* Configure. */
-    ofproto_mirror_register(m->bridge->ofproto, m, &s);
+    ret = ofproto_mirror_register(m->bridge->ofproto, m, &s);
+    if (ret == EOPNOTSUPP) {
+        VLOG_ERR("ofproto %s: does not support mirroring",
+                 m->bridge->ofproto->name);
+    } else if (ret) {
+        VLOG_ERR("bridge %s: mirror %s configuration is invalid",
+                 m->bridge->name, m->name);
+    }
 
     /* Clean up. */
     if (s.srcs != s.dsts) {

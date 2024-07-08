@@ -5286,6 +5286,21 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         VLANs on which packets are selected for mirroring.  An empty set
         selects packets on all VLANs.
       </column>
+      <column name="filter">
+        <p>
+          When set, only packets that match <ref column="filter"/> are
+          selected for mirroring.  Packets that do not match are ignored
+          by thie mirror.  The <ref column="filter"/> syntax is described
+          in <code>ovs-fields</code>(7).  However, the <code>in_port</code>
+          field is not supported; <ref column="select_src_port"/> should be
+          used to limit the mirror to a source port.
+        </p>
+        <p>
+          This filter is applied after <ref column="select_all"/>, <ref
+          column="select_dst_port"/>, <ref column="select_src_port"/>, and
+          <ref column="select_vlan"/>.
+        </p>
+      </column>
     </group>
 
     <group title="Mirroring Destination Configuration">

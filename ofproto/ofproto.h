@@ -511,6 +511,9 @@ struct ofproto_mirror_settings {
     uint16_t out_vlan;          /* Output VLAN, only if out_bundle is NULL. */
     uint16_t snaplen;           /* Max packet size of a mirrored packet
                                    in byte, set to 0 equals 65535. */
+
+    /* Output filter. */
+    char *filter;
 };
 
 int ofproto_mirror_register(struct ofproto *, void *aux,
