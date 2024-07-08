@@ -207,19 +207,22 @@ mirror_bundle_dst(struct mbridge *mbridge, struct ofbundle *ofbundle)
 }
 
 int
-mirror_set(struct mbridge *mbridge, void *aux, const char *name,
-           struct ofbundle **srcs, size_t n_srcs,
-           struct ofbundle **dsts, size_t n_dsts,
-           unsigned long *src_vlans, struct ofbundle *out_bundle,
-           uint16_t snaplen,
-           uint16_t out_vlan)
+mirror_set(struct mbridge *mbridge, void *aux,
+           const struct ofproto_mirror_settings *ms,
+           const struct mirror_bundles *mb)
 {
     struct mbundle *mbundle, *out;
     mirror_mask_t mirror_bit;
     struct mirror *mirror;
     struct hmapx srcs_map;          /* Contains "struct ofbundle *"s. */
     struct hmapx dsts_map;          /* Contains "struct ofbundle *"s. */
+    uint16_t out_vlan;
 
+    if (!ms || !mbridge) {
+        return EINVAL;
+    }
+
+    out_vlan = ms->out_vlan;
     mirror = mirror_lookup(mbridge, aux);
     if (!mirror) {
         int idx;
@@ -227,7 +230,7 @@ mirror_set(struct mbridge *mbridge, void *aux, const char *name,
         idx = mirror_scan(mbridge);
         if (idx < 0) {
             VLOG_WARN("maximum of %d port mirrors reached, cannot create %s",
-                      MAX_MIRRORS, name);
+                      MAX_MIRRORS, ms->name);
             return EFBIG;
         }
 
@@ -242,8 +245,8 @@ mirror_set(struct mbridge *mbridge, void *aux, const char *name,
     unsigned long *vlans = ovsrcu_get(unsigned long *, &mirror->vlans);
 
     /* Get the new configuration. */
-    if (out_bundle) {
-        out = mbundle_lookup(mbridge, out_bundle);
+    if (mb->out_bundle) {
+        out = mbundle_lookup(mbridge, mb->out_bundle);
         if (!out) {
             mirror_destroy(mbridge, mirror->aux);
             return EINVAL;
@@ -252,16 +255,16 @@ mirror_set(struct mbridge *mbridge, void *aux, const char *name,
     } else {
         out = NULL;
     }
-    mbundle_lookup_multiple(mbridge, srcs, n_srcs, &srcs_map);
-    mbundle_lookup_multiple(mbridge, dsts, n_dsts, &dsts_map);
+    mbundle_lookup_multiple(mbridge, mb->srcs, mb->n_srcs, &srcs_map);
+    mbundle_lookup_multiple(mbridge, mb->dsts, mb->n_dsts, &dsts_map);
 
     /* If the configuration has not changed, do nothing. */
     if (hmapx_equals(&srcs_map, &mirror->srcs)
         && hmapx_equals(&dsts_map, &mirror->dsts)
-        && vlan_bitmap_equal(vlans, src_vlans)
+        && vlan_bitmap_equal(vlans, ms->src_vlans)
         && mirror->out == out
         && mirror->out_vlan == out_vlan
-        && mirror->snaplen == snaplen)
+        && mirror->snaplen == ms->snaplen)
     {
         hmapx_destroy(&srcs_map);
         hmapx_destroy(&dsts_map);
@@ -275,15 +278,15 @@ mirror_set(struct mbridge *mbridge, void *aux, const char *name,
     hmapx_swap(&dsts_map, &mirror->dsts);
     hmapx_destroy(&dsts_map);
 
-    if (vlans || src_vlans) {
+    if (vlans || ms->src_vlans) {
         ovsrcu_postpone(free, vlans);
-        vlans = vlan_bitmap_clone(src_vlans);
+        vlans = vlan_bitmap_clone(ms->src_vlans);
         ovsrcu_set(&mirror->vlans, vlans);
     }
 
     mirror->out = out;
     mirror->out_vlan = out_vlan;
-    mirror->snaplen = snaplen;
+    mirror->snaplen = ms->snaplen;
 
     /* Update mbundles. */
     mirror_bit = MIRROR_MASK_C(1) << mirror->idx;
@@ -406,23 +409,22 @@ mirror_update_stats(struct mbridge *mbridge, mirror_mask_t mirrors,
 /* Retrieves the mirror numbered 'index' in 'mbridge'.  Returns true if such a
  * mirror exists, false otherwise.
  *
- * If successful, '*vlans' receives the mirror's VLAN membership information,
+ * If successful 'mc->vlans' receives the mirror's VLAN membership information,
  * either a null pointer if the mirror includes all VLANs or a 4096-bit bitmap
  * in which a 1-bit indicates that the mirror includes a particular VLAN,
- * '*dup_mirrors' receives a bitmap of mirrors whose output duplicates mirror
- * 'index', '*out' receives the output ofbundle (if any), and '*out_vlan'
- * receives the output VLAN (if any).
+ * 'mc->dup_mirrors' receives a bitmap of mirrors whose output duplicates
+ * mirror 'index', 'mc->out' receives the output ofbundle (if any),
+ * and 'mc->out_vlan' receives the output VLAN (if any).
  *
  * Everything returned here is assumed to be RCU protected.
  */
 bool
-mirror_get(struct mbridge *mbridge, int index, const unsigned long **vlans,
-           mirror_mask_t *dup_mirrors, struct ofbundle **out,
-           int *snaplen, int *out_vlan)
+mirror_get(struct mbridge *mbridge, int index,
+           struct mirror_config *mc)
 {
     struct mirror *mirror;
 
-    if (!mbridge) {
+    if (!mc || !mbridge) {
         return false;
     }
 
@@ -433,11 +435,11 @@ mirror_get(struct mbridge *mbridge, int index, const unsigned long **vlans,
     /* Assume 'mirror' is RCU protected, i.e., it will not be freed until this
      * thread quiesces. */
 
-    *vlans = ovsrcu_get(unsigned long *, &mirror->vlans);
-    *dup_mirrors = mirror->dup_mirrors;
-    *out = mirror->out ? mirror->out->ofbundle : NULL;
-    *out_vlan = mirror->out_vlan;
-    *snaplen = mirror->snaplen;
+    mc->vlans = ovsrcu_get(unsigned long *, &mirror->vlans);
+    mc->dup_mirrors = mirror->dup_mirrors;
+    mc->out_bundle = mirror->out ? mirror->out->ofbundle : NULL;
+    mc->out_vlan = mirror->out_vlan;
+    mc->snaplen = mirror->snaplen;
     return true;
 }
 

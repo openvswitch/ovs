@@ -22,8 +22,36 @@
 #define MAX_MIRRORS 32
 typedef uint32_t mirror_mask_t;
 
+struct ofproto_mirror_settings;
 struct ofproto_dpif;
 struct ofbundle;
+
+struct mirror_bundles {
+    struct ofbundle **srcs;
+    size_t n_srcs;
+
+    struct ofbundle **dsts;
+    size_t n_dsts;
+
+    struct ofbundle *out_bundle;
+};
+
+struct mirror_config {
+    /* A bitmap of mirrors that duplicate the current mirror. */
+    mirror_mask_t dup_mirrors;
+
+    /* VLANs of packets to select for mirroring. */
+    unsigned long *vlans;           /* vlan_bitmap, NULL selects all VLANs. */
+
+    /* Output (mutually exclusive). */
+    struct ofbundle *out_bundle;    /* A registered ofbundle handle or NULL. */
+    uint16_t out_vlan;              /* Output VLAN, not used if out_bundle is
+                                       set. */
+
+    /* Max size of a mirrored packet in bytes, if set to zero then no
+     * truncation will occur.  */
+    uint16_t snaplen;
+};
 
 /* The following functions are used by handler threads without any locking,
  * assuming RCU protection. */
@@ -38,9 +66,7 @@ mirror_mask_t mirror_bundle_dst(struct mbridge *, struct ofbundle *);
 
 void mirror_update_stats(struct mbridge*, mirror_mask_t, uint64_t packets,
                          uint64_t bytes);
-bool mirror_get(struct mbridge *, int index, const unsigned long **vlans,
-                mirror_mask_t *dup_mirrors, struct ofbundle **out,
-                int *snaplen, int *out_vlan);
+bool mirror_get(struct mbridge *, int index, struct mirror_config *);
 
 /* The remaining functions are assumed to be called by the main thread only. */
 
@@ -50,11 +76,9 @@ bool mbridge_need_revalidate(struct mbridge *);
 void mbridge_register_bundle(struct mbridge *, struct ofbundle *);
 void mbridge_unregister_bundle(struct mbridge *, struct ofbundle *);
 
-int mirror_set(struct mbridge *, void *aux, const char *name,
-               struct ofbundle **srcs, size_t n_srcs,
-               struct ofbundle **dsts, size_t n_dsts,
-               unsigned long *src_vlans, struct ofbundle *out_bundle,
-               uint16_t snaplen, uint16_t out_vlan);
+int mirror_set(struct mbridge *, void *aux,
+               const struct ofproto_mirror_settings *,
+               const struct mirror_bundles *);
 void mirror_destroy(struct mbridge *, void *aux);
 int mirror_get_stats(struct mbridge *, void *aux, uint64_t *packets,
                      uint64_t *bytes);

@@ -3819,7 +3819,7 @@ mirror_set__(struct ofproto *ofproto_, void *aux,
              const struct ofproto_mirror_settings *s)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofbundle **srcs, **dsts;
+    struct mirror_bundles mb;
     int error;
     size_t i;
 
@@ -3828,23 +3828,24 @@ mirror_set__(struct ofproto *ofproto_, void *aux,
         return 0;
     }
 
-    srcs = xmalloc(s->n_srcs * sizeof *srcs);
-    dsts = xmalloc(s->n_dsts * sizeof *dsts);
+    mb.srcs = xmalloc(s->n_srcs * sizeof *mb.srcs);
+    mb.dsts = xmalloc(s->n_dsts * sizeof *mb.dsts);
 
     for (i = 0; i < s->n_srcs; i++) {
-        srcs[i] = bundle_lookup(ofproto, s->srcs[i]);
+        mb.srcs[i] = bundle_lookup(ofproto, s->srcs[i]);
     }
 
     for (i = 0; i < s->n_dsts; i++) {
-        dsts[i] = bundle_lookup(ofproto, s->dsts[i]);
+        mb.dsts[i] = bundle_lookup(ofproto, s->dsts[i]);
     }
 
-    error = mirror_set(ofproto->mbridge, aux, s->name, srcs, s->n_srcs, dsts,
-                       s->n_dsts, s->src_vlans,
-                       bundle_lookup(ofproto, s->out_bundle),
-                       s->snaplen, s->out_vlan);
-    free(srcs);
-    free(dsts);
+    mb.n_srcs = s->n_srcs;
+    mb.n_dsts = s->n_dsts;
+    mb.out_bundle = bundle_lookup(ofproto, s->out_bundle);
+
+    error = mirror_set(ofproto->mbridge, aux, s, &mb);
+    free(mb.srcs);
+    free(mb.dsts);
     return error;
 }
 

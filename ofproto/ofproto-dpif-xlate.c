@@ -2291,16 +2291,11 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
      * 'used_mirrors', as long as some candidates remain.  */
     mirror_mask_t used_mirrors = 0;
     while (mirrors) {
-        const unsigned long *vlans;
-        mirror_mask_t dup_mirrors;
-        struct ofbundle *out;
-        int out_vlan;
-        int snaplen;
+        struct mirror_config mc;
 
         /* Get the details of the mirror represented by the rightmost 1-bit. */
-        if (OVS_UNLIKELY(!mirror_get(xbridge->mbridge, raw_ctz(mirrors),
-                                     &vlans, &dup_mirrors,
-                                     &out, &snaplen, &out_vlan))) {
+        if (OVS_UNLIKELY(!mirror_get(xbridge->mbridge,
+                                     raw_ctz(mirrors), &mc))) {
             /* The mirror got reconfigured before we got to read it's
              * configuration. */
             mirrors = zero_rightmost_1bit(mirrors);
@@ -2310,10 +2305,10 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
 
         /* If this mirror selects on the basis of VLAN, and it does not select
          * 'vlan', then discard this mirror and go on to the next one. */
-        if (vlans) {
+        if (mc.vlans) {
             ctx->wc->masks.vlans[0].tci |= htons(VLAN_CFI | VLAN_VID_MASK);
         }
-        if (vlans && !bitmap_is_set(vlans, xvlan.v[0].vid)) {
+        if (mc.vlans && !bitmap_is_set(mc.vlans, xvlan.v[0].vid)) {
             mirrors = zero_rightmost_1bit(mirrors);
             continue;
         }
@@ -2325,21 +2320,22 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
          * destination, so that we don't mirror to them again.  This must be
          * done now to ensure that output_normal(), below, doesn't recursively
          * output to the same mirrors. */
-        ctx->mirrors |= dup_mirrors;
-        ctx->mirror_snaplen = snaplen;
+        ctx->mirrors |= mc.dup_mirrors;
+        ctx->mirror_snaplen = mc.snaplen;
 
         /* Send the packet to the mirror. */
-        if (out) {
-            struct xbundle *out_xbundle = xbundle_lookup(ctx->xcfg, out);
+        if (mc.out_bundle) {
+            struct xbundle *out_xbundle = xbundle_lookup(ctx->xcfg,
+                                                         mc.out_bundle);
             if (out_xbundle) {
                 output_normal(ctx, out_xbundle, &xvlan);
             }
-        } else if (xvlan.v[0].vid != out_vlan
+        } else if (xvlan.v[0].vid != mc.out_vlan
                    && !eth_addr_is_reserved(ctx->xin->flow.dl_dst)) {
             struct xbundle *xb;
             uint16_t old_vid = xvlan.v[0].vid;
 
-            xvlan.v[0].vid = out_vlan;
+            xvlan.v[0].vid = mc.out_vlan;
             LIST_FOR_EACH (xb, list_node, &xbridge->xbundles) {
                 if (xbundle_includes_vlan(xb, &xvlan)
                     && !xbundle_mirror_out(xbridge, xb)) {
