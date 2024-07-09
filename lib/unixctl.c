@@ -95,24 +95,40 @@ static void
 unixctl_list_commands(struct unixctl_conn *conn, int argc OVS_UNUSED,
                       const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    const struct shash_node **nodes = shash_sort(&commands);
-    size_t i;
+    if (unixctl_command_get_output_format(conn) == UNIXCTL_OUTPUT_FMT_JSON) {
+        struct json *json_commands = json_object_create();
+        const struct shash_node *node;
 
-    ds_put_cstr(&ds, "The available commands are:\n");
+        SHASH_FOR_EACH (node, &commands) {
+            const struct unixctl_command *command = node->data;
 
-    for (i = 0; i < shash_count(&commands); i++) {
-        const struct shash_node *node = nodes[i];
-        const struct unixctl_command *command = node->data;
-
-        if (command->usage) {
-            ds_put_format(&ds, "  %-23s %s\n", node->name, command->usage);
+            if (command->usage) {
+                json_object_put_string(json_commands, node->name,
+                                       command->usage);
+            }
         }
-    }
-    free(nodes);
+        unixctl_command_reply_json(conn, json_commands);
+    } else {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+        const struct shash_node **nodes = shash_sort(&commands);
+        size_t i;
 
-    unixctl_command_reply(conn, ds_cstr(&ds));
-    ds_destroy(&ds);
+        ds_put_cstr(&ds, "The available commands are:\n");
+
+        for (i = 0; i < shash_count(&commands); ++i) {
+            const struct shash_node *node = nodes[i];
+            const struct unixctl_command *command = node->data;
+
+            if (command->usage) {
+                ds_put_format(&ds, "  %-23s %s\n", node->name,
+                              command->usage);
+            }
+        }
+        free(nodes);
+
+        unixctl_command_reply(conn, ds_cstr(&ds));
+        ds_destroy(&ds);
+    }
 }
 
 static void

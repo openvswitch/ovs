@@ -283,3 +283,18 @@ AT_CHECK_UNQUOTED([ovs-appctl --format json --pretty version], [0], [dnl
 ])
 
 AT_CLEANUP
+
+AT_SETUP([ovs-vswitchd list-commands])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-appctl list-commands], [0], [ignore])
+AT_CHECK([ovs-appctl --format json list-commands], [0], [stdout])
+
+# Check that ovs-appctl prints a single line with a trailing newline.
+AT_CHECK([wc -l stdout], [0], [1 stdout
+])
+
+# Check that ovs-appctl prints a JSON document.
+AT_CHECK([ovstest test-json stdout], [0], [ignore])
+
+AT_CLEANUP
