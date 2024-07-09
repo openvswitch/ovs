@@ -40,13 +40,15 @@ static void usage(void);
 /* Parsed command line args. */
 struct cmdl_args {
     enum unixctl_output_fmt format;
+    unsigned int format_flags;
     char *target;
 };
 
 static struct cmdl_args *cmdl_args_create(void);
 static struct cmdl_args *parse_command_line(int argc, char *argv[]);
 static struct jsonrpc *connect_to_target(const char *target);
-static char *reply_to_string(struct json *reply, enum unixctl_output_fmt fmt);
+static char *reply_to_string(struct json *reply, enum unixctl_output_fmt fmt,
+                             unsigned int fmt_flags);
 
 int
 main(int argc, char *argv[])
@@ -84,7 +86,7 @@ main(int argc, char *argv[])
 
         if (cmd_error) {
             jsonrpc_close(client);
-            msg = reply_to_string(cmd_error, UNIXCTL_OUTPUT_FMT_TEXT);
+            msg = reply_to_string(cmd_error, UNIXCTL_OUTPUT_FMT_TEXT, 0);
             fputs(msg, stderr);
             free(msg);
             ovs_error(0, "%s: server returned an error", args->target);
@@ -108,13 +110,13 @@ main(int argc, char *argv[])
 
     if (cmd_error) {
         jsonrpc_close(client);
-        msg = reply_to_string(cmd_error, UNIXCTL_OUTPUT_FMT_TEXT);
+        msg = reply_to_string(cmd_error, UNIXCTL_OUTPUT_FMT_TEXT, 0);
         fputs(msg, stderr);
         free(msg);
         ovs_error(0, "%s: server returned an error", args->target);
         exit(2);
     } else if (cmd_result) {
-        msg = reply_to_string(cmd_result, args->format);
+        msg = reply_to_string(cmd_result, args->format, args->format_flags);
         fputs(msg, stdout);
         free(msg);
     } else {
@@ -151,6 +153,8 @@ Other options:\n\
   --timeout=SECS     wait at most SECS seconds for a response\n\
   -f, --format=FMT   Output format. One of: 'json', or 'text'\n\
                      (default: text)\n\
+  --pretty           Format the output in a more readable fashion.\n\
+                     Requires: --format=json.\n\
   -h, --help         Print this helpful information\n\
   -V, --version      Display ovs-appctl version information\n",
            program_name, program_name);
@@ -163,6 +167,7 @@ cmdl_args_create(void)
     struct cmdl_args *args = xmalloc(sizeof *args);
 
     args->format = UNIXCTL_OUTPUT_FMT_TEXT;
+    args->format_flags = 0;
     args->target = NULL;
 
     return args;
@@ -173,7 +178,8 @@ parse_command_line(int argc, char *argv[])
 {
     enum {
         OPT_START = UCHAR_MAX + 1,
-        VLOG_OPTION_ENUMS
+        OPT_PRETTY,
+        VLOG_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
         {"target", required_argument, NULL, 't'},
@@ -181,6 +187,7 @@ parse_command_line(int argc, char *argv[])
         {"format", required_argument, NULL, 'f'},
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
+        {"pretty", no_argument, NULL, OPT_PRETTY},
         {"version", no_argument, NULL, 'V'},
         {"timeout", required_argument, NULL, 'T'},
         VLOG_LONG_OPTIONS,
@@ -190,6 +197,7 @@ parse_command_line(int argc, char *argv[])
     char *short_options = xasprintf("+%s", short_options_);
     struct cmdl_args *args = cmdl_args_create();
     unsigned int timeout = 0;
+    bool pretty = false;
     int e_options;
 
     e_options = 0;
@@ -232,6 +240,10 @@ parse_command_line(int argc, char *argv[])
             ovs_cmdl_print_options(long_options);
             exit(EXIT_SUCCESS);
 
+        case OPT_PRETTY:
+            pretty = true;
+            break;
+
         case 'T':
             if (!str_to_uint(optarg, 10, &timeout) || !timeout) {
                 ovs_fatal(0, "value %s on -T or --timeout is invalid", optarg);
@@ -259,6 +271,13 @@ parse_command_line(int argc, char *argv[])
     if (optind >= argc) {
         ovs_fatal(0, "at least one non-option argument is required "
                   "(use --help for help)");
+    }
+
+    if (pretty) {
+        if (args->format != UNIXCTL_OUTPUT_FMT_JSON) {
+            ovs_fatal(0, "--pretty is supported with --format json only");
+        }
+        args->format_flags |= JSSF_PRETTY;
     }
 
     if (!args->target) {
@@ -309,7 +328,8 @@ connect_to_target(const char *target)
 /* The caller is responsible for freeing the returned string, with free(), when
  * it is no longer needed. */
 static char *
-reply_to_string(struct json *reply, enum unixctl_output_fmt fmt)
+reply_to_string(struct json *reply, enum unixctl_output_fmt fmt,
+                unsigned int fmt_flags)
 {
     ovs_assert(reply);
 
@@ -324,7 +344,7 @@ reply_to_string(struct json *reply, enum unixctl_output_fmt fmt)
     if (fmt == UNIXCTL_OUTPUT_FMT_TEXT) {
         ds_put_cstr(&ds, json_string(reply));
     } else {
-        json_to_ds(reply, JSSF_SORT, &ds);
+        json_to_ds(reply, JSSF_SORT | fmt_flags, &ds);
     }
 
     if (ds_last(&ds) != EOF && ds_last(&ds) != '\n') {

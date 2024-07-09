@@ -9,6 +9,7 @@ Synopsis
 [``--target=``<target> | ``-t`` <target>]
 [``--timeout=``<secs> | ``-T`` <secs>]
 [``--format=``<format> | ``-f`` <format>]
+[``--pretty``]
 <command> [<arg>...]
 
 ``ovs-appctl --help``
@@ -78,6 +79,13 @@ In normal use only a single option is accepted:
   document with the following structure::
 
     {"reply-format":"plain","reply":"$PLAIN_TEXT_HERE"}
+
+* ``--pretty``
+
+  By default, JSON output is printed as compactly as possible.  This option
+  causes JSON in output to be printed in a more readable fashion.  For
+  example, members of objects and elements of arrays are printed one
+  per line, with indentation.  Requires ``--format=json``.
 
 Common Commands
 ===============

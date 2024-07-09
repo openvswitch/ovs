@@ -276,4 +276,10 @@ AT_CHECK_UNQUOTED([ovs-appctl --format json version], [0], [dnl
 {"reply":"$ovs_version","reply-format":"plain"}
 ])
 
+AT_CHECK_UNQUOTED([ovs-appctl --format json --pretty version], [0], [dnl
+{
+  "reply": "$ovs_version",
+  "reply-format": "plain"}
+])
+
 AT_CLEANUP

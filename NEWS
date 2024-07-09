@@ -5,6 +5,7 @@ Post-v3.3.0
    - ovs-appctl:
      * Added new option [-f|--format] to choose the output format, e.g. 'json'
        or 'text' (by default).
+     * Added new option [--pretty] to print JSON output in a readable fashion.
    - Userspace datapath:
      * Conntrack now supports 'random' flag for selecting ports in a range
        while natting and 'persistent' flag for selection of the IP address
