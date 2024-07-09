@@ -119,6 +119,12 @@ AT_CHECK_UNQUOTED([PYAPPCTL_PY -t test-unixctl.py --format json version], [0], [
 AT_CHECK_UNQUOTED([PYAPPCTL_PY -t test-unixctl.py --format JSON version], [0], [dnl
 {"reply":"$(cat expout)","reply-format":"plain"}
 ])
+AT_CHECK_UNQUOTED([PYAPPCTL_PY -t test-unixctl.py --format json --pretty version], [0], [dnl
+{
+  "reply":"$(cat expout)",
+  "reply-format":"plain"
+}
+])
 
 AT_CHECK([APPCTL -t test-unixctl.py echo robot ninja], [0], [stdout])
 AT_CHECK([cat stdout | sed -e "s/u'/'/g"], [0], [dnl
