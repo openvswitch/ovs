@@ -100,6 +100,7 @@ The available commands are:
   exit
   help
   log                     [[arg ...]]
+  set-options             [[--format text|json]]
   version
   vlog/close
   vlog/list
@@ -112,6 +113,12 @@ AT_CHECK([PYAPPCTL_PY -t test-unixctl.py help], [0], [expout])
 AT_CHECK([ovs-vsctl --version | sed 's/ovs-vsctl/test-unixctl.py/' | head -1 > expout])
 AT_CHECK([APPCTL -t test-unixctl.py version], [0], [expout])
 AT_CHECK([PYAPPCTL_PY -t test-unixctl.py version], [0], [expout])
+AT_CHECK_UNQUOTED([PYAPPCTL_PY -t test-unixctl.py --format json version], [0], [dnl
+{"reply":"$(cat expout)","reply-format":"plain"}
+])
+AT_CHECK_UNQUOTED([PYAPPCTL_PY -t test-unixctl.py --format JSON version], [0], [dnl
+{"reply":"$(cat expout)","reply-format":"plain"}
+])
 
 AT_CHECK([APPCTL -t test-unixctl.py echo robot ninja], [0], [stdout])
 AT_CHECK([cat stdout | sed -e "s/u'/'/g"], [0], [dnl

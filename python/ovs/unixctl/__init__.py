@@ -12,11 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import enum
 import sys
 
 import ovs.util
 
 commands = {}
+
+
+@enum.unique
+# FIXME: Use @enum.verify(enum.NAMED_FLAGS) from Python 3.11 when available.
+class UnixctlOutputFormat(enum.IntFlag):
+    TEXT = 1 << 0
+    JSON = 1 << 1
 
 
 class _UnixctlCommand(object):

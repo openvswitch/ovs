@@ -14,6 +14,7 @@
 
 import os
 
+import ovs.json
 import ovs.jsonrpc
 import ovs.stream
 import ovs.util
@@ -41,10 +42,10 @@ class UnixctlClient(object):
             return error, None, None
 
         if reply.error is not None:
-            return 0, str(reply.error), None
+            return 0, reply.error, None
         else:
             assert reply.result is not None
-            return 0, None, str(reply.result)
+            return 0, None, reply.result
 
     def close(self):
         self._conn.close()

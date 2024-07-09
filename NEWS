@@ -19,6 +19,8 @@ Post-v3.3.0
        per interface 'options:dpdk-lsc-interrupt' to 'false'.
    - Python:
      * Added custom transaction support to the Idl via add_op().
+     * Added support for different output formats like 'json' to Python's
+       unixctl classes.
 
 
 v3.3.0 - 16 Feb 2024
