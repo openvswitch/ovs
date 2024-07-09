@@ -63,11 +63,16 @@ def main():
         ovs.util.ovs_fatal(err_no, "%s: transaction error" % target)
     elif error is not None:
         sys.stderr.write(error)
+        if error and not error.endswith("\n"):
+            sys.stderr.write("\n")
+
         ovs.util.ovs_error(0, "%s: server returned an error" % target)
         sys.exit(2)
     else:
         assert result is not None
         sys.stdout.write(result)
+        if result and not result.endswith("\n"):
+            sys.stdout.write("\n")
 
 
 if __name__ == '__main__':

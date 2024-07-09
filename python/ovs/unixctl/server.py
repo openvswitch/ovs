@@ -87,9 +87,6 @@ class UnixctlConnection(object):
         if body is None:
             body = ""
 
-        if body and not body.endswith("\n"):
-            body += "\n"
-
         if success:
             reply = Message.create_reply(body, self._request_id)
         else:

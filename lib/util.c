@@ -619,11 +619,11 @@ ovs_set_program_name(const char *argv0, const char *version)
 
     free(program_version);
     if (!strcmp(version, VERSION)) {
-        program_version = xasprintf("%s (Open vSwitch) "VERSION"\n",
+        program_version = xasprintf("%s (Open vSwitch) "VERSION,
                                     program_name);
     } else {
         program_version = xasprintf("%s %s\n"
-                                    "Open vSwitch Library "VERSION"\n",
+                                    "Open vSwitch Library "VERSION,
                                     program_name, version);
     }
 }
@@ -760,7 +760,7 @@ ovs_get_program_name(void)
 void
 ovs_print_version(uint8_t min_ofp, uint8_t max_ofp)
 {
-    printf("%s", program_version);
+    printf("%s\n", program_version);
     if (min_ofp || max_ofp) {
         printf("OpenFlow versions %#x:%#x\n", min_ofp, max_ofp);
     }

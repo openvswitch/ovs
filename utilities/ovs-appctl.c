@@ -26,57 +26,105 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "openvswitch/dynamic-string.h"
+#include "openvswitch/json.h"
 #include "jsonrpc.h"
 #include "process.h"
 #include "timeval.h"
+#include "svec.h"
 #include "unixctl.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 
 static void usage(void);
-static const char *parse_command_line(int argc, char *argv[]);
+
+/* Parsed command line args. */
+struct cmdl_args {
+    enum unixctl_output_fmt format;
+    char *target;
+};
+
+static struct cmdl_args *cmdl_args_create(void);
+static struct cmdl_args *parse_command_line(int argc, char *argv[]);
 static struct jsonrpc *connect_to_target(const char *target);
+static char *reply_to_string(struct json *reply, enum unixctl_output_fmt fmt);
 
 int
 main(int argc, char *argv[])
 {
-    char *cmd_result, *cmd_error;
+    struct svec opt_argv = SVEC_EMPTY_INITIALIZER;
+    struct json *cmd_result, *cmd_error;
     struct jsonrpc *client;
+    struct cmdl_args *args;
     char *cmd, **cmd_argv;
-    const char *target;
+    char *msg = NULL;
     int cmd_argc;
     int error;
 
     set_program_name(argv[0]);
 
     /* Parse command line and connect to target. */
-    target = parse_command_line(argc, argv);
-    client = connect_to_target(target);
+    args = parse_command_line(argc, argv);
+    client = connect_to_target(args->target);
 
-    /* Transact request and process reply. */
+    /* Transact options request (if required) and process reply. */
+    if (args->format != UNIXCTL_OUTPUT_FMT_TEXT) {
+        svec_add(&opt_argv, "--format");
+        svec_add(&opt_argv, unixctl_output_fmt_to_string(args->format));
+    }
+    svec_terminate(&opt_argv);
+
+    if (!svec_is_empty(&opt_argv)) {
+        error = unixctl_client_transact(client, "set-options",
+                                        opt_argv.n, opt_argv.names,
+                                        &cmd_result, &cmd_error);
+
+        if (error) {
+            ovs_fatal(error, "%s: transaction error", args->target);
+        }
+
+        if (cmd_error) {
+            jsonrpc_close(client);
+            msg = reply_to_string(cmd_error, UNIXCTL_OUTPUT_FMT_TEXT);
+            fputs(msg, stderr);
+            free(msg);
+            ovs_error(0, "%s: server returned an error", args->target);
+            exit(2);
+        }
+
+        json_destroy(cmd_result);
+        json_destroy(cmd_error);
+    }
+    svec_destroy(&opt_argv);
+
+    /* Transact command request and process reply. */
     cmd = argv[optind++];
     cmd_argc = argc - optind;
     cmd_argv = cmd_argc ? argv + optind : NULL;
     error = unixctl_client_transact(client, cmd, cmd_argc, cmd_argv,
                                     &cmd_result, &cmd_error);
     if (error) {
-        ovs_fatal(error, "%s: transaction error", target);
+        ovs_fatal(error, "%s: transaction error", args->target);
     }
 
     if (cmd_error) {
         jsonrpc_close(client);
-        fputs(cmd_error, stderr);
-        ovs_error(0, "%s: server returned an error", target);
+        msg = reply_to_string(cmd_error, UNIXCTL_OUTPUT_FMT_TEXT);
+        fputs(msg, stderr);
+        free(msg);
+        ovs_error(0, "%s: server returned an error", args->target);
         exit(2);
     } else if (cmd_result) {
-        fputs(cmd_result, stdout);
+        msg = reply_to_string(cmd_result, args->format);
+        fputs(msg, stdout);
+        free(msg);
     } else {
         OVS_NOT_REACHED();
     }
 
     jsonrpc_close(client);
-    free(cmd_result);
-    free(cmd_error);
+    json_destroy(cmd_result);
+    json_destroy(cmd_error);
+    free(args);
     return 0;
 }
 
@@ -101,13 +149,26 @@ Common commands:\n\
   vlog/reopen        Make the program reopen its log file\n\
 Other options:\n\
   --timeout=SECS     wait at most SECS seconds for a response\n\
+  -f, --format=FMT   Output format. One of: 'json', or 'text'\n\
+                     (default: text)\n\
   -h, --help         Print this helpful information\n\
   -V, --version      Display ovs-appctl version information\n",
            program_name, program_name);
     exit(EXIT_SUCCESS);
 }
 
-static const char *
+static struct cmdl_args *
+cmdl_args_create(void)
+{
+    struct cmdl_args *args = xmalloc(sizeof *args);
+
+    args->format = UNIXCTL_OUTPUT_FMT_TEXT;
+    args->target = NULL;
+
+    return args;
+}
+
+static struct cmdl_args *
 parse_command_line(int argc, char *argv[])
 {
     enum {
@@ -117,6 +178,7 @@ parse_command_line(int argc, char *argv[])
     static const struct option long_options[] = {
         {"target", required_argument, NULL, 't'},
         {"execute", no_argument, NULL, 'e'},
+        {"format", required_argument, NULL, 'f'},
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
         {"version", no_argument, NULL, 'V'},
@@ -126,11 +188,10 @@ parse_command_line(int argc, char *argv[])
     };
     char *short_options_ = ovs_cmdl_long_options_to_short_options(long_options);
     char *short_options = xasprintf("+%s", short_options_);
-    const char *target;
-    int e_options;
+    struct cmdl_args *args = cmdl_args_create();
     unsigned int timeout = 0;
+    int e_options;
 
-    target = NULL;
     e_options = 0;
     for (;;) {
         int option;
@@ -141,10 +202,10 @@ parse_command_line(int argc, char *argv[])
         }
         switch (option) {
         case 't':
-            if (target) {
+            if (args->target) {
                 ovs_fatal(0, "-t or --target may be specified only once");
             }
-            target = optarg;
+            args->target = optarg;
             break;
 
         case 'e':
@@ -154,6 +215,12 @@ parse_command_line(int argc, char *argv[])
              * arguments, this just works in the common case. */
             if (e_options++) {
                 ovs_fatal(0, "-e or --execute may be speciifed only once");
+            }
+            break;
+
+        case 'f':
+            if (!unixctl_output_fmt_from_string(optarg, &args->format)) {
+                ovs_fatal(0, "value %s on -f or --format is invalid", optarg);
             }
             break;
 
@@ -194,7 +261,10 @@ parse_command_line(int argc, char *argv[])
                   "(use --help for help)");
     }
 
-    return target ? target : "ovs-vswitchd";
+    if (!args->target) {
+        args->target = "ovs-vswitchd";
+    }
+    return args;
 }
 
 static struct jsonrpc *
@@ -236,3 +306,30 @@ connect_to_target(const char *target)
     return client;
 }
 
+/* The caller is responsible for freeing the returned string, with free(), when
+ * it is no longer needed. */
+static char *
+reply_to_string(struct json *reply, enum unixctl_output_fmt fmt)
+{
+    ovs_assert(reply);
+
+    if (fmt == UNIXCTL_OUTPUT_FMT_TEXT && reply->type != JSON_STRING) {
+        ovs_error(0, "Unexpected reply type in JSON rpc reply: %s",
+                  json_type_to_string(reply->type));
+        exit(2);
+    }
+
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    if (fmt == UNIXCTL_OUTPUT_FMT_TEXT) {
+        ds_put_cstr(&ds, json_string(reply));
+    } else {
+        json_to_ds(reply, JSSF_SORT, &ds);
+    }
+
+    if (ds_last(&ds) != EOF && ds_last(&ds) != '\n') {
+        ds_put_char(&ds, '\n');
+    }
+
+    return ds_steal_cstr(&ds);
+}

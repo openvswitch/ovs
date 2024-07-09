@@ -17,9 +17,20 @@
 #ifndef UNIXCTL_H
 #define UNIXCTL_H 1
 
+#include <stdbool.h>
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
+
+struct json;
+enum unixctl_output_fmt {
+    UNIXCTL_OUTPUT_FMT_TEXT = 1 << 0,
+    UNIXCTL_OUTPUT_FMT_JSON = 1 << 1,
+};
+
+const char *unixctl_output_fmt_to_string(enum unixctl_output_fmt);
+bool unixctl_output_fmt_from_string(const char *, enum unixctl_output_fmt *);
 
 /* Server for Unix domain socket control connection. */
 struct unixctl_server;
@@ -36,7 +47,7 @@ int unixctl_client_create(const char *path, struct jsonrpc **client);
 int unixctl_client_transact(struct jsonrpc *client,
                             const char *command,
                             int argc, char *argv[],
-                            char **result, char **error);
+                            struct json **result, struct json **error);
 
 /* Command registration. */
 struct unixctl_conn;
@@ -45,8 +56,12 @@ typedef void unixctl_cb_func(struct unixctl_conn *,
 void unixctl_command_register(const char *name, const char *usage,
                               int min_args, int max_args,
                               unixctl_cb_func *cb, void *aux);
+enum unixctl_output_fmt unixctl_command_get_output_format(
+    struct unixctl_conn *);
 void unixctl_command_reply_error(struct unixctl_conn *, const char *error);
 void unixctl_command_reply(struct unixctl_conn *, const char *body);
+void unixctl_command_reply_json(struct unixctl_conn *,
+                                struct json *body);
 
 #ifdef  __cplusplus
 }

@@ -8,6 +8,7 @@ Synopsis
 ``ovs-appctl``
 [``--target=``<target> | ``-t`` <target>]
 [``--timeout=``<secs> | ``-T`` <secs>]
+[``--format=``<format> | ``-f`` <format>]
 <command> [<arg>...]
 
 ``ovs-appctl --help``
@@ -66,6 +67,17 @@ In normal use only a single option is accepted:
   connect to the daemon and receive a response.  This option limits
   runtime to approximately <secs> seconds.  If the timeout expires,
   ``ovs-appctl`` exits with a ``SIGALRM`` signal.
+
+* ``-f <format>`` or ``--format=<format>``
+
+  Tells ``ovs-appctl`` which output format to use.  By default, or with a
+  <format> of ``text``, ``ovs-appctl`` will print plain-text for humans.
+  When <format> is ``json``, ``ovs-appctl`` will return a JSON document.
+  When ``json`` is requested, but a command has not implemented JSON
+  output, the plain-text output will be wrapped in a provisional JSON
+  document with the following structure::
+
+    {"reply-format":"plain","reply":"$PLAIN_TEXT_HERE"}
 
 Common Commands
 ===============
