@@ -28,6 +28,7 @@
 #include "fail-open.h"
 #include "guarded-list.h"
 #include "hmapx.h"
+#include "openvswitch/json.h"
 #include "lacp.h"
 #include "learn.h"
 #include "mac-learning.h"
@@ -6519,19 +6520,108 @@ done:
     return changed;
 }
 
-static void
-dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
+static struct json *
+dpif_show_backer_json(struct json *backers, const struct dpif_backer *backer)
 {
+    struct json *json_backer = json_object_create();
+
+    /* Add datapath as new JSON object using its name as key. */
+    json_object_put(backers, dpif_name(backer->dpif), json_backer);
+
+    /* Add datapath's stats under "stats" key. */
+    struct json *json_dp_stats = json_object_create();
+    struct dpif_dp_stats dp_stats;
+
+    dpif_get_dp_stats(backer->dpif, &dp_stats);
+    json_object_put_format(json_dp_stats, "hit", "%"PRIu64, dp_stats.n_hit);
+    json_object_put_format(json_dp_stats, "missed", "%"PRIu64,
+                           dp_stats.n_missed);
+    json_object_put(json_backer, "stats", json_dp_stats);
+
+    /* Add datapath's bridges under "bridges" key. */
+    struct json *json_dp_bridges = json_object_create();
+
+    struct shash ofproto_shash = SHASH_INITIALIZER(&ofproto_shash);
+    free(get_ofprotos(&ofproto_shash));
+
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &ofproto_shash) {
+        struct ofproto_dpif *ofproto = node->data;
+
+        if (ofproto->backer != backer) {
+            continue;
+        }
+
+        /* Add bridge to "bridges" dictionary using its name as key. */
+        struct json *json_ofproto = json_object_create();
+
+        /* Add bridge ports to the current bridge dictionary. */
+        const struct shash_node *port;
+        SHASH_FOR_EACH (port, &ofproto->up.port_by_name) {
+            /* Add bridge port to a bridge's dict using port name as key. */
+            struct json *json_ofproto_port = json_object_create();
+            struct ofport *ofport = port->data;
+
+            /* Add OpenFlow port associated with a bridge port. */
+            json_object_put_format(json_ofproto_port, "ofport", "%"PRIu32,
+                                   ofport->ofp_port);
+
+            /* Add bridge port number. */
+            odp_port_t odp_port = ofp_port_to_odp_port(ofproto,
+                                                       ofport->ofp_port);
+            if (odp_port != ODPP_NONE) {
+                json_object_put_format(json_ofproto_port, "port_no",
+                                       "%"PRIu32, odp_port);
+            } else {
+                json_object_put_string(json_ofproto_port, "port_no", "none");
+            }
+
+            /* Add type of a bridge port. */
+            json_object_put_string(json_ofproto_port, "type",
+                                   netdev_get_type(ofport->netdev));
+
+            /* Add config entries for a bridge port. */
+
+            struct smap config = SMAP_INITIALIZER(&config);
+
+            if (!netdev_get_config(ofport->netdev, &config)
+                && smap_count(&config)) {
+                struct json *json_port_config = json_object_create();
+                struct smap_node *cfg_node;
+
+                SMAP_FOR_EACH (cfg_node, &config) {
+                    json_object_put_string(json_port_config, cfg_node->key,
+                                           cfg_node->value);
+                }
+                json_object_put(json_ofproto_port, "config", json_port_config);
+            }
+            smap_destroy(&config);
+
+            json_object_put(json_ofproto, netdev_get_name(ofport->netdev),
+                            json_ofproto_port);
+        } /* End of bridge port(s). */
+
+        json_object_put(json_dp_bridges, ofproto->up.name, json_ofproto);
+    } /* End of bridge(s). */
+
+    shash_destroy(&ofproto_shash);
+
+    json_object_put(json_backer, "bridges", json_dp_bridges);
+    return json_backer;
+}
+
+static void
+dpif_show_backer_text(const struct dpif_backer *backer, struct ds *ds)
+{
+    struct shash ofproto_shash = SHASH_INITIALIZER(&ofproto_shash);
     const struct shash_node **ofprotos;
     struct dpif_dp_stats dp_stats;
-    struct shash ofproto_shash;
     size_t i;
 
     dpif_get_dp_stats(backer->dpif, &dp_stats);
     ds_put_format(ds, "%s: hit:%"PRIu64" missed:%"PRIu64"\n",
                   dpif_name(backer->dpif), dp_stats.n_hit, dp_stats.n_missed);
 
-    shash_init(&ofproto_shash);
     ofprotos = get_ofprotos(&ofproto_shash);
     for (i = 0; i < shash_count(&ofproto_shash); i++) {
         struct ofproto_dpif *ofproto = ofprotos[i]->data;
@@ -6587,18 +6677,26 @@ static void
 ofproto_unixctl_dpif_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
                           const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    const struct shash_node **backers;
-    int i;
+    if (unixctl_command_get_output_format(conn) == UNIXCTL_OUTPUT_FMT_JSON) {
+        struct json *backers = json_object_create();
+        const struct shash_node *backer;
 
-    backers = shash_sort(&all_dpif_backers);
-    for (i = 0; i < shash_count(&all_dpif_backers); i++) {
-        dpif_show_backer(backers[i]->data, &ds);
+        SHASH_FOR_EACH (backer, &all_dpif_backers) {
+            dpif_show_backer_json(backers, backer->data);
+        }
+        unixctl_command_reply_json(conn, backers);
+    } else {
+        const struct shash_node **backers = shash_sort(&all_dpif_backers);
+        struct ds ds = DS_EMPTY_INITIALIZER;
+
+        for (int i = 0; i < shash_count(&all_dpif_backers); i++) {
+            dpif_show_backer_text(backers[i]->data, &ds);
+        }
+        free(backers);
+
+        unixctl_command_reply(conn, ds_cstr(&ds));
+        ds_destroy(&ds);
     }
-    free(backers);
-
-    unixctl_command_reply(conn, ds_cstr(&ds));
-    ds_destroy(&ds);
 }
 
 static void

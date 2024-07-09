@@ -8879,6 +8879,46 @@ dummy@ovs-dummy: hit:0 missed:0
     br1 65534/101: (dummy-internal)
     p3 3/3: (dummy)
 ])
+
+AT_CHECK([ovs-appctl --format json --pretty dpif/show], [0], [dnl
+[{
+  "dummy@ovs-dummy": {
+    "bridges": {
+      "br0": {
+        "br0": {
+          "ofport": "65534",
+          "port_no": "100",
+          "type": "dummy-internal"},
+        "p1": {
+          "config": {
+            "n_rxq": "1",
+            "n_txq": "1",
+            "numa_id": "0"},
+          "ofport": "1",
+          "port_no": "1",
+          "type": "dummy-pmd"},
+        "p2": {
+          "config": {
+            "n_rxq": "1",
+            "n_txq": "1",
+            "numa_id": "0"},
+          "ofport": "2",
+          "port_no": "2",
+          "type": "dummy-pmd"}},
+      "br1": {
+        "br1": {
+          "ofport": "65534",
+          "port_no": "101",
+          "type": "dummy-internal"},
+        "p3": {
+          "ofport": "3",
+          "port_no": "3",
+          "type": "dummy"}}},
+    "stats": {
+      "hit": "0",
+      "missed": "0"}}}]
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
