@@ -186,6 +186,7 @@ This package provides IPsec tunneling support for OVS tunnels.
         --disable-static \
         --enable-shared \
         --with-pkidir=%{_sharedstatedir}/openvswitch/pki \
+        --with-version-suffix=-%{release} \
         PYTHON3=%{__python3}
 
 build-aux/dpdkstrip.py \

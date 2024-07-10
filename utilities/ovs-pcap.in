@@ -85,7 +85,7 @@ if __name__ == "__main__":
             if key in ['-h', '--help']:
                 usage()
             elif key in ['-V', '--version']:
-                print("ovs-pcap (Open vSwitch) @VERSION@")
+                print("ovs-pcap (Open vSwitch) @VERSION@@VERSION_SUFFIX@")
             else:
                 sys.exit(0)
 

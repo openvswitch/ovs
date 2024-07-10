@@ -47,7 +47,7 @@ try:
     from ovs.fatal_signal import add_hook
 except Exception:
     print("ERROR: Please install the correct Open vSwitch python support")
-    print("       libraries (version @VERSION@).")
+    print("       libraries (version @VERSION@@VERSION_SUFFIX@).")
     print("       Alternatively, check that your PYTHONPATH is pointing to")
     print("       the correct location.")
     sys.exit(1)
@@ -453,7 +453,7 @@ def main():
         if cur in ['-h', '--help']:
             usage()
         elif cur in ['-V', '--version']:
-            print("ovs-tcpdump (Open vSwitch) @VERSION@")
+            print("ovs-tcpdump (Open vSwitch) @VERSION@@VERSION_SUFFIX@")
             sys.exit(0)
         elif cur in ['--db-sock']:
             db_sock = nxt

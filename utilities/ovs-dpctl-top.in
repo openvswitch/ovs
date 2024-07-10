@@ -351,7 +351,7 @@ def args_get():
     # None is a special value indicating to read flows from stdin.
     # This handles the case
     #   ovs-dpctl dump-flows | ovs-dpctl-flows.py
-    parser.add_argument("-v", "--version", version="@VERSION@",
+    parser.add_argument("-v", "--version", version="@VERSION@@VERSION_SUFFIX@",
                         action="version", help="show version")
     parser.add_argument("-f", "--flow-file", dest="flowFiles", default=None,
                         action="append",

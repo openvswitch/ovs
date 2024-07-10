@@ -23,24 +23,16 @@ except ImportError:  # Needed for setuptools < 59.0
 
 import setuptools
 
-VERSION = "unknown"
+VERSION = "@VERSION@"
 
-try:
-    # Try to set the version from the generated ovs/version.py
-    exec(open("ovs/version.py").read())
-except IOError:
-    print("Ensure version.py is created by running make python/ovs/version.py",
-          file=sys.stderr)
-    sys.exit(-1)
-
-try:
-    # Try to open generated ovs/dirs.py. However, in this case we
-    # don't need to exec()
-    open("ovs/dirs.py")
-except IOError:
-    print("Ensure dirs.py is created by running make python/ovs/dirs.py",
-          file=sys.stderr)
-    sys.exit(-1)
+for x in ("version.py", "dirs.py"):
+    try:
+        # Try to open generated ovs/{version,dirs}.py
+        open(f"ovs/{x}")
+    except IOError:
+        print(f"Ensure {x} is created by running make python/ovs/{x}",
+              file=sys.stderr)
+        sys.exit(-1)
 
 ext_errors = (CCompilerError, ExecError, PlatformError)
 if sys.platform == 'win32':

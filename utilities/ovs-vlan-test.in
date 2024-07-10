@@ -393,7 +393,7 @@ def main():
             usage()
             return 0
         elif key in ['-V', '--version']:
-            print_safe('ovs-vlan-test (Open vSwitch) @VERSION@')
+            print_safe('ovs-vlan-test (Open vSwitch) @VERSION@@VERSION_SUFFIX@')
             return 0
         elif key in ['-s', '--server']:
             server = True

@@ -497,6 +497,19 @@ AC_DEFUN([OVS_CHECK_DPDK], [
   AM_CONDITIONAL([DPDK_NETDEV], test "$DPDKLIB_FOUND" = true)
 ])
 
+dnl Append a version suffix.
+
+AC_DEFUN([OVS_CHECK_VERSION_SUFFIX], [
+  AC_ARG_WITH([version-suffix],
+              [AS_HELP_STRING([--with-version-suffix=ver_suffix],
+                              [Specify a string that will be appended
+                               to OVS version])])
+  AC_DEFINE_UNQUOTED([VERSION_SUFFIX], ["$with_version_suffix"],
+                     [Package version suffix])
+  AC_SUBST([VERSION_SUFFIX], [$with_version_suffix])
+  ])
+])
+
 dnl Checks for net/if_dl.h.
 dnl
 dnl (We use this as a proxy for checking whether we're building on FreeBSD

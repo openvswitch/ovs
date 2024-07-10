@@ -189,7 +189,7 @@ EOF
             exit 0
             ;;
         -V|--version)
-            echo "ovs-pki (Open vSwitch) @VERSION@"
+            echo "ovs-pki (Open vSwitch) @VERSION@@VERSION_SUFFIX@"
             exit 0
             ;;
         --di*=*)

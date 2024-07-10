@@ -70,7 +70,7 @@ ovs_ctl () {
     esac
 }
 
-VERSION='@VERSION@'
+VERSION='@VERSION@@VERSION_SUFFIX@'
 
 DAEMON_CWD=/
 

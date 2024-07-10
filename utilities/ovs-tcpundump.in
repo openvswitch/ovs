@@ -46,7 +46,7 @@ if __name__ == "__main__":
         if key in ['-h', '--help']:
             usage()
         elif key in ['-V', '--version']:
-            print("ovs-tcpundump (Open vSwitch) @VERSION@")
+            print("ovs-tcpundump (Open vSwitch) @VERSION@@VERSION_SUFFIX@")
             sys.exit(0)
         else:
             sys.exit(0)

@@ -51,7 +51,7 @@ def addr2line(binary, addr):
 
 
 def main():
-    parser = optparse.OptionParser(version='@VERSION@',
+    parser = optparse.OptionParser(version='@VERSION@@VERSION_SUFFIX@',
                                    usage="usage: %prog [binary]",
                                    description="""\
 Parses the output of ovs-appctl backtrace producing a more human readable

@@ -146,7 +146,7 @@ ovsdb_internal_error(struct ovsdb_error *inner_error,
         ds_put_char(&ds, ')');
     }
 
-    ds_put_format(&ds, " (%s %s)", program_name, VERSION);
+    ds_put_format(&ds, " (%s %s)", program_name, VERSION VERSION_SUFFIX);
 
     if (inner_error) {
         char *s = ovsdb_error_to_string_free(inner_error);

@@ -816,7 +816,8 @@ main(int argc, char *argv[])
         /* ovsdb-server is usually a long-running process, in which case it
          * makes plenty of sense to log the version, but --run makes
          * ovsdb-server more like a command-line tool, so skip it.  */
-        VLOG_INFO("%s (Open vSwitch) %s", program_name, VERSION);
+        VLOG_INFO("%s (Open vSwitch) %s", program_name,
+                  VERSION VERSION_SUFFIX);
     }
 
     unixctl_command_register("exit", "", 0, 0, ovsdb_server_exit, &exiting);

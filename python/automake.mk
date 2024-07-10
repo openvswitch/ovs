@@ -75,25 +75,24 @@ EXTRA_DIST += \
 EXTRA_DIST += \
 	python/ovs/compat/sortedcontainers/LICENSE \
 	python/README.rst \
-	python/setup.py \
 	python/test_requirements.txt
 
 # C extension support.
 EXTRA_DIST += python/ovs/_json.c
 
-PYFILES = $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles) $(ovs_pytests)
+PYFILES = $(ovs_pyfiles) python/ovs/dirs.py python/setup.py $(ovstest_pyfiles) $(ovs_pytests)
 
 EXTRA_DIST += $(PYFILES)
 PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
 
 FLAKE8_PYFILES += \
-	$(filter-out python/ovs/compat/% python/ovs/dirs.py,$(PYFILES)) \
+	$(filter-out python/ovs/compat/% python/ovs/dirs.py python/setup.py,$(PYFILES)) \
 	python/ovs_build_helpers/__init__.py \
 	python/ovs_build_helpers/extract_ofp_fields.py \
 	python/ovs_build_helpers/nroff.py \
 	python/ovs_build_helpers/soutil.py \
 	python/ovs/dirs.py.template \
-	python/setup.py
+	python/setup.py.template
 
 nobase_pkgdata_DATA = $(ovs_pyfiles) $(ovstest_pyfiles)
 ovs-install-data-local:
@@ -113,7 +112,7 @@ ovs-install-data-local:
 	rm python/ovs/dirs.py.tmp
 
 .PHONY: python-sdist
-python-sdist: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
+python-sdist: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py python/setup.py
 	cd python/ && $(PYTHON3) -m build --sdist
 
 .PHONY: pypi-upload
@@ -129,8 +128,8 @@ ovs-uninstall-local:
 ALL_LOCAL += $(srcdir)/python/ovs/version.py
 $(srcdir)/python/ovs/version.py: config.status
 	$(AM_V_GEN)$(ro_shell) > $(@F).tmp && \
-	echo 'VERSION = "$(VERSION)"' >> $(@F).tmp && \
-	if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi
+	echo 'VERSION = "$(VERSION)$(VERSION_SUFFIX)"' >> $(@F).tmp && \
+	if cmp -s $(@F).tmp $@; then touch $@; else cp $(@F).tmp $@; fi; rm $(@F).tmp
 
 ALL_LOCAL += $(srcdir)/python/ovs/dirs.py
 $(srcdir)/python/ovs/dirs.py: python/ovs/dirs.py.template
@@ -146,6 +145,15 @@ $(srcdir)/python/ovs/dirs.py: python/ovs/dirs.py.template
 	mv $@.tmp $@
 EXTRA_DIST += python/ovs/dirs.py.template
 CLEANFILES += python/ovs/dirs.py
+
+ALL_LOCAL += $(srcdir)/python/setup.py
+$(srcdir)/python/setup.py: python/setup.py.template config.status
+	$(AM_V_GEN)sed \
+		-e 's,[@]VERSION[@],$(VERSION),g' \
+		< $(srcdir)/python/setup.py.template > $(@F).tmp && \
+	if cmp -s $(@F).tmp $@; then touch $@; else cp $(@F).tmp $@; fi; rm $(@F).tmp
+EXTRA_DIST += python/setup.py.template
+CLEANFILES += python/setup.py
 
 EXTRA_DIST += python/TODO.rst
 
