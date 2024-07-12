@@ -4865,9 +4865,9 @@ handle_flow_stats_request(struct ofconn *ofconn,
     return 0;
 }
 
-static void
-flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results,
-              bool offload_stats)
+void
+ofproto_rule_stats_ds(struct ds *results, struct rule *rule,
+                      bool offload_stats)
 {
     struct pkt_stats stats;
     const struct rule_actions *actions;
@@ -4896,7 +4896,8 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results,
         ds_put_format(results, "n_offload_bytes=%"PRIu64", ",
                       stats.n_offload_bytes);
     }
-    cls_rule_format(&rule->cr, ofproto_get_tun_tab(ofproto), NULL, results);
+    cls_rule_format(&rule->cr, ofproto_get_tun_tab(rule->ofproto), NULL,
+                    results);
     ds_put_char(results, ',');
 
     ds_put_cstr(results, "actions=");
@@ -4918,7 +4919,7 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results,
         struct rule *rule;
 
         CLS_FOR_EACH (rule, cr, &table->cls) {
-            flow_stats_ds(p, rule, results, offload_stats);
+            ofproto_rule_stats_ds(results, rule, offload_stats);
         }
     }
 }

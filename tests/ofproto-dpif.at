@@ -12439,3 +12439,59 @@ Datapath actions: psample(group=42,cookie=0x64000000c8),drop
 
 OVS_VSWITCHD_STOP("/Enabling an unsupported feature is very dangerous/d")
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - Dump OF rules corresponding to UFID])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2 3
+
+dnl Add some OpenFlow rules and groups.
+AT_DATA([groups.txt], [dnl
+group_id=1,type=select,selection_method=dp_hash,bucket=bucket_id:0,weight:100,actions=ct(commit,table=2,nat(dst=20.0.0.2))
+group_id=2,type=all,bucket=resubmit(,3),bucket=resubmit(,4)
+])
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,cookie=0x12345678,in_port=p1,ip,nw_dst=10.0.0.2,actions=resubmit(,1)
+table=1,priority=200,ip,actions=group:1
+table=2,ip,actions=group:2
+table=3,ip,actions=p2
+table=4,ip,actions=p3
+])
+AT_CHECK([ovs-ofctl add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'ipv4(src=10.0.0.1,dst=10.0.0.2,proto=6),tcp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'ipv4(src=10.0.0.1,dst=10.0.0.2,proto=6),tcp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl revalidator/pause])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | strip_used | strip_stats | strip_duration | strip_dp_hash | sort], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=10.0.0.2,frag=no), packets:0, bytes:0, used:0.0s, actions:hash(l4(0)),recirc(0x1)
+recirc_id(0x1),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:ct(commit,nat(dst=20.0.0.2)),recirc(0x2)
+recirc_id(0x2),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:2,3
+])
+
+ufid=$(ovs-appctl dpctl/dump-flows -m filter='recirc_id(0)' | parse_ufid)
+AT_CHECK([ovs-appctl ofproto/detrace $ufid | ofctl_strip], [0], [dnl
+cookie=0x12345678, n_packets=2, n_bytes=236, priority=100,ip,in_port=1,nw_dst=10.0.0.2,actions=resubmit(,1)
+table_id=1, n_packets=2, n_bytes=236, priority=200,ip,actions=group:1
+])
+
+ufid=$(ovs-appctl dpctl/dump-flows -m filter='recirc_id(0x1)' | parse_ufid)
+AT_CHECK([ovs-appctl ofproto/detrace $ufid | ofctl_strip], [0], [dnl
+group_id=1,type=select,selection_method=dp_hash,bucket=bucket_id:0,weight:100,actions=ct(commit,table=2,nat(dst=20.0.0.2))
+])
+
+ufid=$(ovs-appctl dpctl/dump-flows -m filter='recirc_id(0x2)' | parse_ufid)
+AT_CHECK([ovs-appctl ofproto/detrace $ufid | ofctl_strip], [0], [dnl
+table_id=2, n_packets=2, n_bytes=236, ip,actions=group:2
+table_id=3, n_packets=2, n_bytes=236, ip,actions=output:2
+table_id=4, n_packets=2, n_bytes=236, ip,actions=output:3
+group_id=2,type=all,bucket=bucket_id:0,actions=resubmit(,3),bucket=bucket_id:1,actions=resubmit(,4)
+])
+
+AT_CHECK([ovs-appctl revalidator/resume])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

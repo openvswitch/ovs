@@ -383,6 +383,7 @@ static void upcall_unixctl_disable_ufid(struct unixctl_conn *, int argc,
                                               const char *argv[], void *aux);
 static void upcall_unixctl_enable_ufid(struct unixctl_conn *, int argc,
                                              const char *argv[], void *aux);
+
 static void upcall_unixctl_set_flow_limit(struct unixctl_conn *conn, int argc,
                                             const char *argv[], void *aux);
 static void upcall_unixctl_dump_wait(struct unixctl_conn *conn, int argc,
@@ -393,6 +394,9 @@ static void upcall_unixctl_pause(struct unixctl_conn *conn, int argc,
                                  const char *argv[], void *aux);
 static void upcall_unixctl_resume(struct unixctl_conn *conn, int argc,
                                   const char *argv[], void *aux);
+
+static void upcall_unixctl_ofproto_detrace(struct unixctl_conn *, int argc,
+                                           const char *argv[], void *aux);
 
 static struct udpif_key *ukey_create_from_upcall(struct upcall *,
                                                  struct flow_wildcards *);
@@ -470,6 +474,8 @@ udpif_init(void)
                                  upcall_unixctl_pause, NULL);
         unixctl_command_register("revalidator/resume", NULL, 0, 0,
                                  upcall_unixctl_resume, NULL);
+        unixctl_command_register("ofproto/detrace", "UFID [pmd=PMD-ID]", 1, 2,
+                                 upcall_unixctl_ofproto_detrace, NULL);
         ovsthread_once_done(&once);
     }
 }
@@ -3308,6 +3314,51 @@ upcall_unixctl_resume(struct unixctl_conn *conn, int argc OVS_UNUSED,
         udpif_resume_revalidators(udpif);
     }
     unixctl_command_reply(conn, "");
+}
+
+static void
+upcall_unixctl_ofproto_detrace(struct unixctl_conn *conn, int argc,
+                               const char *argv[], void *aux OVS_UNUSED)
+{
+    unsigned int pmd_id = NON_PMD_CORE_ID;
+    const char *key_s = argv[1];
+    ovs_u128 ufid;
+
+    if (odp_ufid_from_string(key_s, &ufid) <= 0) {
+        unixctl_command_reply_error(conn, "failed to parse ufid");
+        return;
+    }
+
+    if (argc == 3) {
+        const char *pmd_str = argv[2];
+        if (!ovs_scan(pmd_str, "pmd=%d", &pmd_id)) {
+            unixctl_command_reply_error(conn,
+                                        "Invalid pmd argument format. "
+                                        "Expecting 'pmd=PMD-ID'");
+            return;
+        }
+    }
+
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct udpif *udpif;
+
+    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
+        struct udpif_key *ukey = ukey_lookup(udpif, &ufid, pmd_id);
+        if (!ukey) {
+            continue;
+        }
+
+        ovs_mutex_lock(&ukey->mutex);
+        /* It only makes sense to format rules for ukeys that are (still)
+         * in use. */
+        if ((ukey->state == UKEY_VISIBLE || ukey->state == UKEY_OPERATIONAL)
+            && ukey->xcache) {
+            xlate_xcache_format(&ds, ukey->xcache);
+        }
+        ovs_mutex_unlock(&ukey->mutex);
+    }
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 }
 
 

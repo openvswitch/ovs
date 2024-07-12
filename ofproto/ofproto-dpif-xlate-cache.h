@@ -151,4 +151,6 @@ void xlate_cache_uninit(struct xlate_cache *);
 void xlate_cache_delete(struct xlate_cache *);
 void xlate_cache_steal_entries(struct xlate_cache *, struct xlate_cache *);
 
+void xlate_xcache_format(struct ds *, const struct xlate_cache *);
+
 #endif /* ofproto-dpif-xlate-cache.h */

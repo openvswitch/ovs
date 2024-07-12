@@ -1526,6 +1526,31 @@ ofputil_group_properties_destroy(struct ofputil_group_props *gp)
     free(gp->fields.values);
 }
 
+void
+ofputil_group_properties_format(const struct ofputil_group_props *gp,
+                                struct ds *ds)
+{
+    if (!gp->selection_method[0]) {
+        return;
+    }
+
+    ds_put_format(ds, ",selection_method=%s", gp->selection_method);
+    if (gp->selection_method_param) {
+        ds_put_format(ds, ",selection_method_param=%"PRIu64,
+                      gp->selection_method_param);
+    }
+
+    size_t n = bitmap_count1(gp->fields.used.bm, MFF_N_IDS);
+    if (n == 1) {
+        ds_put_cstr(ds, ",fields=");
+        oxm_format_field_array(ds, &gp->fields);
+    } else if (n > 1) {
+        ds_put_cstr(ds, ",fields(");
+        oxm_format_field_array(ds, &gp->fields);
+        ds_put_char(ds, ')');
+    }
+}
+
 static enum ofperr
 parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
                                       enum ofp11_group_type group_type,
@@ -1813,16 +1838,45 @@ ofp_print_bucket_id(struct ds *s, const char *label, uint32_t bucket_id,
     ds_put_char(s, ',');
 }
 
-static void
-ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
-                const struct ovs_list *p_buckets,
-                const struct ofputil_group_props *props,
-                enum ofp_version ofp_version, bool suppress_type,
-                const struct ofputil_port_map *port_map,
-                const struct ofputil_table_map *table_map)
+void
+ofputil_bucket_format(struct ds * s, const struct ofputil_bucket *bucket,
+                      enum ofp11_group_type type, enum ofp_version ofp_version,
+                      const struct ofputil_port_map *port_map,
+                      const struct ofputil_table_map *table_map)
 {
-    struct ofputil_bucket *bucket;
+    ds_put_cstr(s, "bucket=");
 
+    ofp_print_bucket_id(s, "bucket_id:", bucket->bucket_id, ofp_version);
+    if (bucket->weight != (type == OFPGT11_SELECT ? 1 : 0)) {
+        ds_put_format(s, "weight:%"PRIu16",", bucket->weight);
+    }
+    if (bucket->watch_port != OFPP_NONE) {
+        ds_put_cstr(s, "watch_port:");
+        ofputil_format_port(bucket->watch_port, port_map, s);
+        ds_put_char(s, ',');
+    }
+    if (bucket->watch_group != OFPG_ANY) {
+        ds_put_format(s, "watch_group:%"PRIu32",", bucket->watch_group);
+    }
+
+    ds_put_cstr(s, "actions=");
+    struct ofpact_format_params fp = {
+        .port_map = port_map,
+        .table_map = table_map,
+        .s = s,
+    };
+    ofpacts_format(bucket->ofpacts, bucket->ofpacts_len, &fp);
+}
+
+void
+ofputil_group_format(struct ds *s, uint32_t group_id, uint8_t type,
+                     const struct ofputil_bucket *bucket,
+                     const struct ovs_list *p_buckets,
+                     const struct ofputil_group_props *props,
+                     enum ofp_version ofp_version, bool suppress_type,
+                     const struct ofputil_port_map *port_map,
+                     const struct ofputil_table_map *table_map)
+{
     ds_put_format(s, "group_id=%"PRIu32, group_id);
 
     if (!suppress_type) {
@@ -1831,57 +1885,24 @@ ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
         ds_put_format(s, ",type=%s", type_str[type > 4 ? 4 : type]);
     }
 
-    if (props->selection_method[0]) {
-        ds_put_format(s, ",selection_method=%s", props->selection_method);
-        if (props->selection_method_param) {
-            ds_put_format(s, ",selection_method_param=%"PRIu64,
-                          props->selection_method_param);
-        }
+    ofputil_group_properties_format(props, s);
 
-        size_t n = bitmap_count1(props->fields.used.bm, MFF_N_IDS);
-        if (n == 1) {
-            ds_put_cstr(s, ",fields=");
-            oxm_format_field_array(s, &props->fields);
-        } else if (n > 1) {
-            ds_put_cstr(s, ",fields(");
-            oxm_format_field_array(s, &props->fields);
-            ds_put_char(s, ')');
-        }
-    }
-
-    if (!p_buckets) {
+    if (!bucket && !p_buckets) {
         return;
     }
 
     ds_put_char(s, ',');
 
-    LIST_FOR_EACH (bucket, list_node, p_buckets) {
-        ds_put_cstr(s, "bucket=");
-
-        ofp_print_bucket_id(s, "bucket_id:", bucket->bucket_id, ofp_version);
-        if (bucket->weight != (type == OFPGT11_SELECT ? 1 : 0)) {
-            ds_put_format(s, "weight:%"PRIu16",", bucket->weight);
-        }
-        if (bucket->watch_port != OFPP_NONE) {
-            ds_put_cstr(s, "watch_port:");
-            ofputil_format_port(bucket->watch_port, port_map, s);
+    if (bucket) {
+        ofputil_bucket_format(s, bucket, type, ofp_version, NULL, NULL);
+    } else {
+        LIST_FOR_EACH (bucket, list_node, p_buckets) {
+            ofputil_bucket_format(s, bucket, type, ofp_version,
+                                port_map, table_map);
             ds_put_char(s, ',');
         }
-        if (bucket->watch_group != OFPG_ANY) {
-            ds_put_format(s, "watch_group:%"PRIu32",", bucket->watch_group);
-        }
-
-        ds_put_cstr(s, "actions=");
-        struct ofpact_format_params fp = {
-            .port_map = port_map,
-            .table_map = table_map,
-            .s = s,
-        };
-        ofpacts_format(bucket->ofpacts, bucket->ofpacts_len, &fp);
-        ds_put_char(s, ',');
+        ds_chomp(s, ',');
     }
-
-    ds_chomp(s, ',');
 }
 
 enum ofperr
@@ -1901,8 +1922,9 @@ ofputil_group_desc_format(struct ds *s, const struct ofp_header *oh,
 
         ds_put_char(s, '\n');
         ds_put_char(s, ' ');
-        ofp_print_group(s, gd.group_id, gd.type, &gd.buckets, &gd.props,
-                        oh->version, false, port_map, table_map);
+        ofputil_group_format(s, gd.group_id, gd.type, NULL, &gd.buckets,
+                             &gd.props, oh->version, false,
+                             port_map, table_map);
         ofputil_uninit_group_desc(&gd);
      }
 }
@@ -2368,8 +2390,9 @@ ofputil_group_mod_format__(struct ds *s, enum ofp_version ofp_version,
                             gm->command_bucket_id, ofp_version);
     }
 
-    ofp_print_group(s, gm->group_id, gm->type, &gm->buckets, &gm->props,
-                    ofp_version, bucket_command, port_map, table_map);
+    ofputil_group_format(s, gm->group_id, gm->type, NULL, &gm->buckets,
+                         &gm->props, ofp_version, bucket_command,
+                         port_map, table_map);
 }
 
 enum ofperr

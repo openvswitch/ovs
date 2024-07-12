@@ -9,7 +9,9 @@ s/ duration=[0-9.]*s,//
 s/ cookie=0x0,//
 s/ table=0,//
 s/ n_packets=0,//
+s/ n_offload_packets=0,//
 s/ n_bytes=0,//
+s/ n_offload_bytes=0,//
 s/ idle_age=[0-9]*,//
 s/ hard_age=[0-9]*,//
 s/dp_hash=0x[0-9a-f]*\//dp_hash=0x0\//
@@ -130,7 +132,7 @@ strip_used () {
 
 # Removes all 'duration=...' to make output easier to compare.
 strip_duration () {
-    sed 's/duration=[[0-9]]*\.[[0-9]]*s,//'
+    sed 's/duration=[[0-9.]]*s,//'
 }
 
 # Strips 'ufid:...' from output, to make it easier to compare.
@@ -138,6 +140,10 @@ strip_duration () {
 strip_ufid () {
     sed 's/mega_ufid:[[-0-9a-f]]* //
     s/ufid:[[-0-9a-f]]* //'
+}
+
+parse_ufid () {
+    grep -o 'ufid:[[-0-9a-f]]*'
 }
 
 # Strips packets: and bytes: from output
@@ -169,6 +175,12 @@ strip_recirc() {
         s/recirc_id=[[x0-9]]*/recirc_id=<recirc>/
         s/recirc([[x0-9]]*)/recirc(<recirc>)/'
 }
+
+# Strips dp_hash from output.
+strip_dp_hash() {
+    sed 's/dp_hash([[0-9a-fx/]]*),//'
+}
+
 m4_divert_pop([PREPARE_TESTS])
 
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])

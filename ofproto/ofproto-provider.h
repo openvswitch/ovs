@@ -450,6 +450,8 @@ void ofproto_rule_ref(struct rule *);
 bool ofproto_rule_try_ref(struct rule *);
 void ofproto_rule_unref(struct rule *);
 
+void ofproto_rule_stats_ds(struct ds *, struct rule *, bool offload_stats);
+
 static inline const struct rule_actions * rule_get_actions(const struct rule *);
 static inline bool rule_is_table_miss(const struct rule *);
 static inline bool rule_is_hidden(const struct rule *);
