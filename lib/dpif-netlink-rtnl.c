@@ -561,6 +561,7 @@ dpif_netlink_rtnl_probe_oot_tunnels(void)
 
         tnl_cfg = netdev_get_tunnel_config(netdev);
         if (!tnl_cfg) {
+            netdev_close(netdev);
             return true;
         }
 
