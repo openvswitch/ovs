@@ -1000,6 +1000,18 @@ ofproto_get_datapath_cap(const char *datapath_type, struct smap *dp_cap)
     }
 }
 
+int ofproto_set_local_sample(struct ofproto *ofproto,
+                             const struct ofproto_lsample_options *options,
+                             size_t n_options)
+{
+    if (ofproto->ofproto_class->set_local_sample) {
+        return ofproto->ofproto_class->set_local_sample(ofproto, options,
+                                                        n_options);
+    } else {
+        return EOPNOTSUPP;
+    }
+}
+
 /* Connection tracking configuration. */
 void
 ofproto_ct_set_zone_timeout_policy(const char *datapath_type, uint16_t zone_id,

@@ -1489,6 +1489,15 @@ struct ofproto_class {
         bool bridge_ipfix, struct ovs_list *replies
         );
 
+    /* Configures local sampling on 'ofproto' according to the options array
+     * of 'options' which contains 'n_options' elements.
+     *
+     * EOPNOTSUPP as a return value indicates that 'ofproto' does not support
+     * local sampling. */
+    int (*set_local_sample)(struct ofproto *ofproto,
+                            const struct ofproto_lsample_options *options,
+                            size_t n_options);
+
     /* Configures connectivity fault management on 'ofport'.
      *
      * If 'cfm_settings' is nonnull, configures CFM according to its members.

@@ -331,6 +331,7 @@ struct ofproto_dpif {
     struct netflow *netflow;
     struct dpif_sflow *sflow;
     struct dpif_ipfix *ipfix;
+    struct dpif_lsample *lsample;
     struct hmap bundles;        /* Contains "struct ofbundle"s. */
     struct mac_learning *ml;
     struct mcast_snooping *ms;

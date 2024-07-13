@@ -103,6 +103,11 @@ struct ofproto_ipfix_flow_exporter_options {
     char *virtual_obs_id;
 };
 
+struct ofproto_lsample_options {
+    uint32_t collector_set_id;
+    uint32_t group_id;
+};
+
 struct ofproto_rstp_status {
     bool enabled;               /* If false, ignore other members. */
     rstp_identifier root_id;
@@ -371,6 +376,9 @@ int ofproto_set_ipfix(struct ofproto *,
                       const struct ofproto_ipfix_bridge_exporter_options *,
                       const struct ofproto_ipfix_flow_exporter_options *,
                       size_t);
+int ofproto_set_local_sample(struct ofproto *ofproto,
+                             const struct ofproto_lsample_options *,
+                             size_t n_options);
 void ofproto_set_flow_restore_wait(bool flow_restore_wait_db);
 bool ofproto_get_flow_restore_wait(void);
 int ofproto_set_stp(struct ofproto *, const struct ofproto_stp_settings *);
