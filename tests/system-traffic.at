@@ -9103,3 +9103,309 @@ OVS_WAIT_UNTIL([ovs-pcap p2.pcap | grep -q "m4_join([], [^],
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_BANNER([local-sampling])
+
+m4_define([SAMPLE_ACTION],
+    [sample(probability=65535,collector_set_id=$1,obs_domain_id=$2,obs_point_id=$3)]dnl
+)
+
+AT_SETUP([psample - sanity check])
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_PSAMPLE()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- create Flow_Sample_Collector_Set id=1 bridge=@br0 \
+                       local-group-id=10 \
+                    -- create Flow_Sample_Collector_Set id=2 bridge=@br0 \
+                       local-group-id=12],
+         [0], [ignore])
+
+AT_DATA([flows.txt], [dnl
+arp actions=NORMAL
+in_port=ovs-p0,ip actions=SAMPLE_ACTION(1, 2853183536, 2856341600),ovs-p1
+in_port=ovs-p1,ip actions=SAMPLE_ACTION(2, 3138396208, 3141554272),ovs-p0
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+OVS_DAEMONIZE([ovstest test-psample > psample.out], [psample.pid])
+OVS_WAIT_UNTIL([grep -q "Listening for psample events" psample.out])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 1 10.1.1.2 | FORMAT_PING], [0], [dnl
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows -m --names], [0], [stdout])
+AT_CHECK([grep -q 'actions:psample(group=10,cookie=0xaa102030aa405060),ovs-p1' stdout])
+AT_CHECK([grep -q 'actions:psample(group=12,cookie=0xbb102030bb405060),ovs-p0' stdout])
+
+m4_define([SAMPLE1], [m4_join([ ],
+    [group_id=0xa,prob=4294967295],
+    [obs_domain=0xaa102030,obs_point=0xaa405060],
+    [.*icmp.*nw_src=10.1.1.1,nw_dst=10.1.1.2])])
+
+m4_define([SAMPLE2], [m4_join([ ],
+    [group_id=0xc,prob=4294967295],
+    [obs_domain=0xbb102030,obs_point=0xbb405060],
+    [.*icmp.*nw_src=10.1.1.2,nw_dst=10.1.1.1])])
+
+OVS_WAIT_UNTIL([grep -qE 'SAMPLE1' psample.out])
+OVS_WAIT_UNTIL([grep -qE 'SAMPLE2' psample.out])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([psample - sanity check IPv6])
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_PSAMPLE()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- create Flow_Sample_Collector_Set id=1 bridge=@br0 \
+                       local-group-id=10 \
+                    -- create Flow_Sample_Collector_Set id=2 bridge=@br0 \
+                       local-group-id=12],
+         [0], [ignore])
+
+AT_DATA([flows.txt], [dnl
+priority=100,in_port=ovs-p0,ip6,icmp6,icmpv6_type=128 actions=SAMPLE_ACTION(1, 2853183536, 2856341600),ovs-p1
+priority=100,in_port=ovs-p1,ip6,icmp6,icmpv6_type=129 actions=SAMPLE_ACTION(2, 3138396208, 3141554272),ovs-p0
+priority=0 actions=NORMAL
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+OVS_DAEMONIZE([ovstest test-psample > psample.out], [psample.pid])
+OVS_WAIT_UNTIL([grep -q "Listening for psample events" psample.out])
+
+OVS_WAIT_UNTIL_EQUAL([ip netns exec at_ns0 ping6 -I fc00::1 -q -W 2 -c 1 fc00::2 | FORMAT_PING], [dnl
+1 packets transmitted, 1 received, 0% packet loss, time 0ms])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows -m --names], [0], [stdout])
+AT_CHECK([grep -q 'actions:psample(group=10,cookie=0xaa102030aa405060),ovs-p1' stdout])
+AT_CHECK([grep -q 'actions:psample(group=12,cookie=0xbb102030bb405060),ovs-p0' stdout])
+
+m4_define([SAMPLE1], [m4_join([ ],
+    [group_id=0xa,prob=4294967295],
+    [obs_domain=0xaa102030,obs_point=0xaa405060],
+    [.*icmp6.*ipv6_src=fc00::1,ipv6_dst=fc00::2])])
+m4_define([SAMPLE2], [m4_join([ ],
+    [group_id=0xc,prob=4294967295],
+    [obs_domain=0xbb102030,obs_point=0xbb405060],
+    [.*icmp6.*ipv6_src=fc00::2,ipv6_dst=fc00::1])])
+
+OVS_WAIT_UNTIL([grep -qE 'SAMPLE1' psample.out])
+OVS_WAIT_UNTIL([grep -qE 'SAMPLE2' psample.out])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([psample - slow])
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_PSAMPLE()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- create Flow_Sample_Collector_Set id=1 bridge=@br0 \
+                       local-group-id=10 \
+                    -- create Flow_Sample_Collector_Set id=2 bridge=@br0 \
+                       local-group-id=12],
+         [0], [ignore])
+
+AT_DATA([flows.txt], [dnl
+arp actions=NORMAL
+in_port=ovs-p0,ip actions=SAMPLE_ACTION(1, 2853183536, 2856341600),output(port=ovs-p1,max_len=200)
+in_port=ovs-p1,ip actions=SAMPLE_ACTION(2, 3138396208, 3141554272),output(port=ovs-p0,max_len=200)
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Disable datapath truncate support to force actions to run in slow path.
+AT_CHECK([ovs-appctl dpif/set-dp-features br0 trunc false], [0])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+    'in_port=ovs-p0,dl_src=e4:11:22:33:44:55,dl_dst=e4:11:22:33:44:66,dl_type=0x0800,nw_src=10.1.1.1,nw_dst=10.1.1.12'],
+    [0], [stdout])
+
+AT_CHECK([tail -3 stdout], [0], [dnl
+Datapath actions: psample(group=10,cookie=0xaa102030aa405060),trunc(200),3
+This flow is handled by the userspace slow path because it:
+  - Uses action(s) not supported by datapath.
+])
+
+OVS_DAEMONIZE([ovstest test-psample > psample.out], [psample.pid])
+OVS_WAIT_UNTIL([grep -q "Listening for psample events" psample.out])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 1 10.1.1.2 | FORMAT_PING], [0], [dnl
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+])
+
+m4_define([SAMPLE1], [m4_join([ ],
+    [group_id=0xa,prob=4294967295],
+    [obs_domain=0xaa102030,obs_point=0xaa405060],
+    [.*icmp.*nw_src=10.1.1.1,nw_dst=10.1.1.2])])
+
+m4_define([SAMPLE2], [m4_join([ ],
+    [group_id=0xc,prob=4294967295],
+    [obs_domain=0xbb102030,obs_point=0xbb405060],
+    [.*icmp.*nw_src=10.1.1.2,nw_dst=10.1.1.1])])
+
+AT_CHECK([grep -qE 'SAMPLE1' psample.out])
+AT_CHECK([grep -qE 'SAMPLE2' psample.out])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([psample - slow with probability])
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_PSAMPLE()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- create Flow_Sample_Collector_Set id=1 bridge=@br0 \
+                       local-group-id=10],
+         [0], [ignore])
+
+dnl A probability != 100% but still pretty high (99.99847%). This ensures that
+dnl the outer sample action is not optimized out.
+m4_define([PROBABLE_SAMPLE_ACTION],
+    [sample(probability=65534,collector_set_id=$1,obs_domain_id=$2,obs_point_id=$3)]dnl
+)
+
+AT_DATA([flows.txt], [dnl
+arp actions=NORMAL
+in_port=ovs-p0,ip actions=PROBABLE_SAMPLE_ACTION(1, 2853183536, 2856341600),output(port=ovs-p1,max_len=200)
+in_port=ovs-p1,ip actions=PROBABLE_SAMPLE_ACTION(1, 2853183536, 2856341600),output(port=ovs-p0,max_len=200)
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Disable datapath truncate support to force actions to run in slow path.
+AT_CHECK([ovs-appctl dpif/set-dp-features br0 trunc false], [0])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+    'in_port=ovs-p0,dl_src=e4:11:22:33:44:55,dl_dst=e4:11:22:33:44:66,dl_type=0x0800,nw_src=10.1.1.1,nw_dst=10.1.1.12'],
+    [0], [stdout])
+
+AT_CHECK([tail -3 stdout], [0], [dnl
+Datapath actions: sample(sample=100.0%,actions(psample(group=10,cookie=0xaa102030aa405060))),trunc(200),3
+This flow is handled by the userspace slow path because it:
+  - Uses action(s) not supported by datapath.
+])
+
+OVS_DAEMONIZE([ovstest test-psample > psample.out], [psample.pid])
+OVS_WAIT_UNTIL([grep -q "Listening for psample events" psample.out])
+
+dnl Sending 10 packets to decrease even more the odds of not sampling a packet.
+NS_CHECK_EXEC([at_ns0], [ping -q -i 0.1 -c 10 10.1.1.2 | FORMAT_PING], [0], [dnl
+10 packets transmitted, 10 received, 0% packet loss, time 0ms
+])
+
+m4_define([SAMPLE], [m4_join([ ],
+    [group_id=0xa,prob=4294901758],
+    [obs_domain=0xaa102030,obs_point=0xaa405060],
+    [.*icmp.*nw_src=10.1.1.1,nw_dst=10.1.1.2])])
+
+AT_CHECK([grep -qE 'SAMPLE' psample.out])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([psample - with IPFIX])
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_PSAMPLE()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- --id=@i create IPFIX targets=\"127.0.0.1:4739\" \
+                    -- create Flow_Sample_Collector_Set id=1 ipfix=@i \
+                       bridge=@br0 local-group-id=10 \
+                    -- create Flow_Sample_Collector_Set id=2 ipfix=@i \
+                       bridge=@br0 local-group-id=12],
+         [0], [ignore])
+
+AT_DATA([flows.txt], [dnl
+arp actions=NORMAL
+in_port=ovs-p0,ip actions=SAMPLE_ACTION(1, 2853183536, 2856341600),ovs-p1
+in_port=ovs-p1,ip actions=SAMPLE_ACTION(2, 3138396208, 3141554272),ovs-p0
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+    'in_port=ovs-p0,dl_src=e4:11:22:33:44:55,dl_dst=e4:11:22:33:44:66,dl_type=0x0800,nw_src=10.1.1.1,nw_dst=10.1.1.12'],
+    [0], [stdout])
+
+m4_define([ACTIONS], [m4_join([],
+    [psample(group=10,cookie=0xaa102030aa405060),],
+    [userspace(pid=4294967295,],
+        [flow_sample(probability=65535,],
+        [collector_set_id=1,],
+        [obs_domain_id=2853183536,],
+        [obs_point_id=2856341600,],
+        [output_port=4294967295)),],
+    [3])])
+
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: ACTIONS
+])
+
+OVS_DAEMONIZE([ovstest test-psample > psample.out], [psample.pid])
+OVS_WAIT_UNTIL([grep -q "Listening for psample events" psample.out])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 1 10.1.1.2 | FORMAT_PING], [0], [dnl
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+])
+
+m4_define([SAMPLE1], [m4_join([ ],
+    [group_id=0xa,prob=4294967295],
+    [obs_domain=0xaa102030,obs_point=0xaa405060],
+    [.*icmp.*nw_src=10.1.1.1,nw_dst=10.1.1.2])])
+
+m4_define([SAMPLE2], [m4_join([ ],
+    [group_id=0xc,prob=4294967295],
+    [obs_domain=0xbb102030,obs_point=0xbb405060],
+    [.*icmp.*nw_src=10.1.1.2,nw_dst=10.1.1.1])])
+
+OVS_WAIT_UNTIL([grep -qE 'SAMPLE1' psample.out])
+OVS_WAIT_UNTIL([grep -qE 'SAMPLE2' psample.out])
+
+dnl Check IPFIX samples have been received.
+dnl Entries can be unsorted and IFPIX packets might not have been sent (or
+dnl at least tried to be sent) yet.
+OVS_WAIT_UNTIL_EQUAL([ovs-ofctl dump-ipfix-flow br0 | \
+                sed 's/tx pkts=[[0-9]]*/tx pkts=24/' | \
+                sed 's/tx errs=[[0-9]]*/tx errs=0/' | \
+                sed 's/id   [[1-2]]:/id   ?:/'], [dnl
+NXST_IPFIX_FLOW reply (xid=0x2): 2 ids
+  id   ?: flows=1, current flows=0, sampled pkts=1, ipv4 ok=1, ipv6 ok=0, tx pkts=24
+          pkts errs=0, ipv4 errs=0, ipv6 errs=0, tx errs=0
+  id   ?: flows=1, current flows=0, sampled pkts=1, ipv4 ok=1, ipv6 ok=0, tx pkts=24
+          pkts errs=0, ipv4 errs=0, ipv6 errs=0, tx errs=0])
+
+dnl OVS will fail to send IPFIX packets because the target is localhost
+dnl and the port is closed. Ignore the message it generates.
+OVS_TRAFFIC_VSWITCHD_STOP(["/sending to collector failed/d"])
+AT_CLEANUP

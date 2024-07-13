@@ -378,3 +378,7 @@ m4_define([OVS_CHECK_GITHUB_ACTION],
 # OVS_CHECK_DROP_ACTION()
 m4_define([OVS_CHECK_DROP_ACTION],
     [AT_SKIP_IF([! grep -q "Datapath supports explicit drop action" ovs-vswitchd.log])])
+
+# OVS_CHECK_PSAMPLE()
+m4_define([OVS_CHECK_PSAMPLE],
+    [AT_SKIP_IF([! grep -q "Datapath supports psample action" ovs-vswitchd.log])])
