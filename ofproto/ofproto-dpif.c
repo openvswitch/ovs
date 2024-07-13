@@ -874,6 +874,12 @@ ovs_lb_output_action_supported(struct ofproto_dpif *ofproto)
     return ofproto->backer->rt_support.lb_output_action;
 }
 
+bool
+ovs_psample_supported(struct ofproto_dpif *ofproto)
+{
+    return ofproto->backer->rt_support.psample;
+}
+
 /* Tests whether 'backer''s datapath supports recirculation.  Only newer
  * datapaths support OVS_KEY_ATTR_RECIRC_ID in keys.  We need to disable some
  * features on older datapaths that don't support this feature.
@@ -1610,6 +1616,44 @@ check_add_mpls(struct dpif_backer *backer)
     return supported;
 }
 
+/* Tests whether 'backer''s datapath supports the OVS_ACTION_ATTR_PSAMPLE
+ * action. */
+static bool
+check_psample(struct dpif_backer *backer)
+{
+    uint8_t cookie[OVS_PSAMPLE_COOKIE_MAX_SIZE];
+    struct odputil_keybuf keybuf;
+    struct ofpbuf actions;
+    struct ofpbuf key;
+    bool supported;
+
+    /* Intentionally bogus dl_type. */
+    struct flow flow = {
+        .dl_type = CONSTANT_HTONS(0x1234),
+    };
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+        .probe = true,
+    };
+
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&odp_parms, &key);
+    ofpbuf_init(&actions, 32);
+
+    /* Generate a random max-size cookie. */
+    random_bytes(cookie, sizeof cookie);
+
+    odp_put_psample_action(&actions, 10, cookie, sizeof cookie);
+
+    supported = dpif_may_support_psample(backer->dpif) &&
+        dpif_probe_feature(backer->dpif, "psample", &key, &actions, NULL);
+
+    ofpbuf_uninit(&actions);
+    VLOG_INFO("%s: Datapath %s psample action", dpif_name(backer->dpif),
+              supported ? "supports" : "does not support");
+    return supported;
+}
+
 #define CHECK_FEATURE__(NAME, SUPPORT, FIELD, VALUE, ETHTYPE)               \
 static bool                                                                 \
 check_##NAME(struct dpif_backer *backer)                                    \
@@ -1699,6 +1743,7 @@ check_support(struct dpif_backer *backer)
         dpif_supports_lb_output_action(backer->dpif);
     backer->rt_support.ct_zero_snat = dpif_supports_ct_zero_snat(backer);
     backer->rt_support.add_mpls = check_add_mpls(backer);
+    backer->rt_support.psample = check_psample(backer);
 
     /* Flow fields. */
     backer->rt_support.odp.ct_state = check_ct_state(backer);
@@ -5822,6 +5867,7 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
     smap_add(cap, "lb_output_action", s->lb_output_action ? "true" : "false");
     smap_add(cap, "ct_zero_snat", s->ct_zero_snat ? "true" : "false");
     smap_add(cap, "add_mpls", s->add_mpls ? "true" : "false");
+    smap_add(cap, "psample", s->psample ? "true" : "false");
 
     /* The ct_tuple_flush is implemented on dpif level, so it is supported
      * for all backers. */

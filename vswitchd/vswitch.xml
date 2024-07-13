@@ -6517,6 +6517,11 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         called <code>NXT_CT_FLUSH</code>. The <code>NXT_CT_FLUSH</code>
         extensions allows to flush CT entries based on specified parameters.
       </column>
+      <column name="capabilities" key="psample"
+              type='{"type": "boolean"}'>
+        True if the datapath supports OVS_ACTION_ATTR_PSAMPLE.  If false,
+        local sampling will not be supported with the Linux kernel datapath.
+      </column>
     </group>
 
     <column name="ct_zone_default_limit">

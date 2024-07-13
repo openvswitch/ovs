@@ -213,7 +213,10 @@ struct group_dpif *group_dpif_lookup(struct ofproto_dpif *,
     DPIF_SUPPORT_FIELD(bool, ct_zero_snat, "Conntrack all-zero IP SNAT")    \
                                                                             \
     /* True if the datapath supports add_mpls action. */                    \
-    DPIF_SUPPORT_FIELD(bool, add_mpls, "MPLS Label add")
+    DPIF_SUPPORT_FIELD(bool, add_mpls, "MPLS Label add")                    \
+                                                                            \
+    /* True if the datapath supports psample action. */                     \
+    DPIF_SUPPORT_FIELD(bool, psample, "psample action")
 
 
 /* Stores the various features which the corresponding backer supports. */
@@ -411,5 +414,6 @@ bool ofproto_dpif_ct_zone_timeout_policy_get_name(
     uint8_t nw_proto, char **tp_name, bool *unwildcard);
 
 bool ovs_explicit_drop_action_supported(struct ofproto_dpif *);
+bool ovs_psample_supported(struct ofproto_dpif *);
 
 #endif /* ofproto-dpif.h */

@@ -1953,6 +1953,13 @@ dpif_supports_lb_output_action(const struct dpif *dpif)
     return dpif_is_netdev(dpif);
 }
 
+bool
+dpif_may_support_psample(const struct dpif *dpif)
+{
+    /* Userspace datapath does not support this action. */
+    return !dpif_is_netdev(dpif);
+}
+
 /* Meters */
 void
 dpif_meter_get_features(const struct dpif *dpif,
