@@ -71,8 +71,10 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 #define MF_VALUE_EXACT_64 MF_VALUE_EXACT_32, MF_VALUE_EXACT_32
 #define MF_VALUE_EXACT_128 MF_VALUE_EXACT_64, MF_VALUE_EXACT_64
 #define MF_VALUE_EXACT_INITIALIZER { .tun_metadata = { MF_VALUE_EXACT_128 } }
+#define MF_SUBVALUE_EXACT_INITIALIZER { .u8 = { MF_VALUE_EXACT_128 } }
 
 const union mf_value exact_match_mask = MF_VALUE_EXACT_INITIALIZER;
+const union mf_subvalue exact_sub_match_mask = MF_SUBVALUE_EXACT_INITIALIZER;
 
 static void nxm_init(void);
 

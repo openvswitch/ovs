@@ -2233,6 +2233,9 @@ union mf_subvalue {
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof (union mf_subvalue));
 
+/* A const mf_subvalue with all bits initialized to ones. */
+extern const union mf_subvalue exact_sub_match_mask;
+
 bool mf_subvalue_intersect(const union mf_subvalue *a_value,
                            const union mf_subvalue *a_mask,
                            const union mf_subvalue *b_value,

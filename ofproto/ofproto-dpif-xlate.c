@@ -5598,15 +5598,12 @@ xlate_output_reg_action(struct xlate_ctx *ctx,
 {
     uint64_t port = mf_get_subfield(&or->src, &ctx->xin->flow);
     if (port <= UINT16_MAX) {
-        union mf_subvalue *value = xmalloc(sizeof *value);
-
         xlate_report(ctx, OFT_DETAIL, "output port is %"PRIu64, port);
-        memset(value, 0xff, sizeof *value);
-        mf_write_subfield_flow(&or->src, value, &ctx->wc->masks);
+        mf_write_subfield_flow(&or->src, &exact_sub_match_mask,
+                               &ctx->wc->masks);
         xlate_output_action(ctx, u16_to_ofp(port), or->max_len,
                             false, is_last_action, false,
                             group_bucket_action);
-        free(value);
     } else {
         xlate_report(ctx, OFT_WARN, "output port %"PRIu64" is out of range",
                      port);
@@ -6561,9 +6558,6 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc,
 {
     uint16_t zone;
     if (ofc->zone_src.field) {
-        union mf_subvalue *value = xmalloc(sizeof *value);
-        memset(value, 0xff, sizeof *value);
-
         zone = mf_get_subfield(&ofc->zone_src, &ctx->xin->flow);
         if (ctx->xin->frozen_state) {
             /* If the upcall is a resume of a recirculation, we only need to
@@ -6572,13 +6566,13 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc,
              * which will invalidate the megaflow with old the recirc_id.
              */
             if (!mf_is_frozen_metadata(ofc->zone_src.field)) {
-                mf_write_subfield_flow(&ofc->zone_src, value,
+                mf_write_subfield_flow(&ofc->zone_src, &exact_sub_match_mask,
                                        &ctx->wc->masks);
             }
         } else {
-            mf_write_subfield_flow(&ofc->zone_src, value, &ctx->wc->masks);
+            mf_write_subfield_flow(&ofc->zone_src, &exact_sub_match_mask,
+                                   &ctx->wc->masks);
         }
-        free(value);
     } else {
         zone = ofc->zone_imm;
     }
