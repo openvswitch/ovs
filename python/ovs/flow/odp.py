@@ -343,6 +343,14 @@ class ODPFlow(Flow):
                     }
                 )
             ),
+            "psample": nested_kv_decoder(
+                KVDecoders(
+                    {
+                        "group": decode_int,
+                        "cookie": decode_default,
+                    }
+                )
+            )
         }
 
         _decoders["sample"] = nested_kv_decoder(

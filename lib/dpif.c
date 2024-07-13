@@ -1192,6 +1192,8 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
     case OVS_ACTION_ATTR_TUNNEL_POP:
     case OVS_ACTION_ATTR_USERSPACE:
+    case OVS_ACTION_ATTR_PSAMPLE:
+    case OVS_ACTION_ATTR_SAMPLE:
     case OVS_ACTION_ATTR_RECIRC: {
         struct dpif_execute execute;
         struct ofpbuf execute_actions;
@@ -1278,7 +1280,6 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_POP_MPLS:
     case OVS_ACTION_ATTR_SET:
     case OVS_ACTION_ATTR_SET_MASKED:
-    case OVS_ACTION_ATTR_SAMPLE:
     case OVS_ACTION_ATTR_TRUNC:
     case OVS_ACTION_ATTR_PUSH_ETH:
     case OVS_ACTION_ATTR_POP_ETH:

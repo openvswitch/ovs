@@ -393,6 +393,10 @@ check_pkt_len(size=200,gt(ct(nat)),le(drop))
 check_pkt_len(size=200,gt(set(eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15))),le(set(eth(src=00:01:02:03:04:06,dst=10:11:12:13:14:16))))
 lb_output(1)
 add_mpls(label=200,tc=7,ttl=64,bos=1,eth_type=0x8847)
+psample(group=12,cookie=0xf1020304050607080910111213141516)
+psample(group=12)
+sample(sample=50.0%,actions(psample(group=12,cookie=0xf1020304)))
+sample(sample=50.0%,actions(userspace(pid=42,userdata(0102030400000000)),psample(group=12)))
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`
@@ -406,8 +410,20 @@ AT_DATA([actions.txt], [dnl
 encap_nsh@:{@
 tnl_push(tnl_port(6),header(size=94,type=112,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=43,tclass=0x0,hlimit=64),srv6(segments_left=2,segs(2001:cafe::90,2001:cafe::91))),out_port(1))
 tnl_push(tnl_port(6),header(size=126,type=112,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=43,tclass=0x0,hlimit=64),srv6(segments_left=2,segs(2001:cafe::90,2001:cafe::91,2001:cafe::92,2001:cafe::93))),out_port(1))
+psample(group_id=12,cookie=0x0102030405060708090a0b0c0d0e0f0f0f)
+psample(cookie=0x010203)
+psample(group=12,cookie=0x010203,group=12)
+psample(group=abc)
+psample(group=12,cookie=wrong)
+psample()
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0], [dnl
+odp_actions_from_string: error
+odp_actions_from_string: error
+odp_actions_from_string: error
+odp_actions_from_string: error
+odp_actions_from_string: error
+odp_actions_from_string: error
 odp_actions_from_string: error
 odp_actions_from_string: error
 odp_actions_from_string: error

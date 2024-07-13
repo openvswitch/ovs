@@ -818,13 +818,13 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_RECIRC:
     case OVS_ACTION_ATTR_CT:
     case OVS_ACTION_ATTR_METER:
+    case OVS_ACTION_ATTR_PSAMPLE:
         return true;
 
     case OVS_ACTION_ATTR_SET:
     case OVS_ACTION_ATTR_SET_MASKED:
     case OVS_ACTION_ATTR_PUSH_VLAN:
     case OVS_ACTION_ATTR_POP_VLAN:
-    case OVS_ACTION_ATTR_SAMPLE:
     case OVS_ACTION_ATTR_HASH:
     case OVS_ACTION_ATTR_PUSH_MPLS:
     case OVS_ACTION_ATTR_POP_MPLS:
@@ -840,6 +840,28 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_DEC_TTL:
     case OVS_ACTION_ATTR_DROP:
         return false;
+
+    case OVS_ACTION_ATTR_SAMPLE: {
+        /* Nested "psample" actions rely on the datapath executing the
+         * parent "sample", storing the probability and making it available
+         * when the nested "psample" is run. */
+        const struct nlattr *attr;
+        unsigned int left;
+
+        NL_NESTED_FOR_EACH (attr, left, a) {
+            if (nl_attr_type(attr) == OVS_SAMPLE_ATTR_ACTIONS) {
+                const struct nlattr *act;
+                unsigned int act_left;
+
+                NL_NESTED_FOR_EACH (act, act_left, attr) {
+                    if (nl_attr_type(act) == OVS_ACTION_ATTR_PSAMPLE) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
 
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -1229,6 +1251,7 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
         case OVS_ACTION_ATTR_CT:
         case OVS_ACTION_ATTR_UNSPEC:
         case OVS_ACTION_ATTR_DEC_TTL:
+        case OVS_ACTION_ATTR_PSAMPLE:
         case __OVS_ACTION_ATTR_MAX:
         /* The following actions are handled by the scalar implementation. */
         case OVS_ACTION_ATTR_POP_VLAN:

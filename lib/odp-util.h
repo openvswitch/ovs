@@ -376,6 +376,9 @@ void odp_put_pop_eth_action(struct ofpbuf *odp_actions);
 void odp_put_push_eth_action(struct ofpbuf *odp_actions,
                              const struct eth_addr *eth_src,
                              const struct eth_addr *eth_dst);
+void odp_put_psample_action(struct ofpbuf *odp_actions,
+                            uint32_t group_id, uint8_t *cookie,
+                            size_t cookie_len);
 
 static inline void odp_decode_gbp_raw(uint32_t gbp_raw,
                                       ovs_be16 *id,
