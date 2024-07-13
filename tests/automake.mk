@@ -499,7 +499,8 @@ endif
 if LINUX
 tests_ovstest_SOURCES += \
 	tests/test-netlink-conntrack.c \
-	tests/test-netlink-policy.c
+	tests/test-netlink-policy.c \
+	tests/test-psample.c
 endif
 
 tests_ovstest_LDADD = lib/libopenvswitch.la
