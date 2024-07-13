@@ -12335,3 +12335,52 @@ Datapath actions: EXPECTED_ACT
 
 OVS_VSWITCHD_STOP("/Enabling an unsupported feature is very dangerous/d")
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - Local sampling - drop])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl dpif/set-dp-features --force br0 psample true], [0], [ignore])
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- create Flow_Sample_Collector_Set id=1 bridge=@br0 local-group-id=42],
+         [0], [ignore])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=slowpath pktps stats bands=type=drop rate=2'])
+
+AT_DATA([flows.txt], [dnl
+in_port=1, actions=sample(probability=32767,collector_set_id=1,obs_domain_id=100,obs_point_id=200)
+in_port=2, actions=sample(probability=65535,collector_set_id=1,obs_domain_id=100,obs_point_id=200)
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+
+m4_define([TRACE_PKT], [m4_join([,],
+    [eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)],
+    [ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no)],
+    [icmp(type=8,code=0)])])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1) TRACE_PKT'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: sample(sample=50.0%,actions(psample(group=42,cookie=0x64000000c8)))
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2) TRACE_PKT'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: psample(group=42,cookie=0x64000000c8)
+])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other-config:explicit-sampled-drops=true])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1) TRACE_PKT'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: sample(sample=50.0%,actions(psample(group=42,cookie=0x64000000c8))),drop
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2) TRACE_PKT'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: psample(group=42,cookie=0x64000000c8),drop
+])
+
+OVS_VSWITCHD_STOP("/Enabling an unsupported feature is very dangerous/d")
+AT_CLEANUP

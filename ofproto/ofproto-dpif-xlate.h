@@ -61,6 +61,10 @@ struct xlate_out {
 
     /* Recirc action IDs on which references are held. */
     struct recirc_refs recircs;
+
+    /* Keep track of the last action whose purpose is purely observational.
+     * e.g: IPFIX, sFlow, local sampling. */
+    uint32_t last_observe_offset;
 };
 
 struct xlate_in {

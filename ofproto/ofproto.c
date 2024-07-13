@@ -312,6 +312,7 @@ unsigned ofproto_max_idle = OFPROTO_MAX_IDLE_DEFAULT;
 unsigned ofproto_max_revalidator = OFPROTO_MAX_REVALIDATOR_DEFAULT;
 unsigned ofproto_min_revalidate_pps = OFPROTO_MIN_REVALIDATE_PPS_DEFAULT;
 unsigned ofproto_offloaded_stats_delay = OFPROTO_OFFLOADED_STATS_DELAY;
+bool ofproto_explicit_sampled_drops = OFPROTO_EXPLICIT_SAMPLED_DROPS_DEFAULT;
 
 uint32_t n_handlers, n_revalidators;
 
@@ -735,6 +736,14 @@ void
 ofproto_set_offloaded_stats_delay(unsigned offloaded_stats_delay)
 {
     ofproto_offloaded_stats_delay = offloaded_stats_delay;
+}
+
+/* Set if an explicit datapath drop action shall be added after trailing sample
+ * actions coming from IPFIX / sFlow / local sampling. */
+void
+ofproto_set_explicit_sampled_drops(bool explicit_sampled_drops)
+{
+    ofproto_explicit_sampled_drops = explicit_sampled_drops;
 }
 
 /* If forward_bpdu is true, the NORMAL action will forward frames with

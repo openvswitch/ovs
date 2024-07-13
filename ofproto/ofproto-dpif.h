@@ -365,6 +365,8 @@ struct ofproto_dpif {
 
     bool is_controller_connected; /* True if any controller admitted this
                                    * switch connection. */
+    bool explicit_sampled_drops;  /* If explicit drop actions must added after
+                                   * trailing sample actions. */
 };
 
 struct ofproto_dpif *ofproto_dpif_lookup_by_name(const char *name);

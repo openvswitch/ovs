@@ -326,6 +326,7 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
 #define OFPROTO_MAX_REVALIDATOR_DEFAULT 500 /* ms */
 #define OFPROTO_MIN_REVALIDATE_PPS_DEFAULT 5
 #define OFPROTO_OFFLOADED_STATS_DELAY 2000 /* ms */
+#define OFPROTO_EXPLICIT_SAMPLED_DROPS_DEFAULT false
 
 const char *ofproto_port_open_type(const struct ofproto *,
                                    const char *port_type);
@@ -398,6 +399,7 @@ void ofproto_ct_zone_limit_protection_update(const char *datapath_type,
                                              bool protected);
 void ofproto_get_datapath_cap(const char *datapath_type,
                               struct smap *dp_cap);
+void ofproto_set_explicit_sampled_drops(bool explicit_sampled_drops);
 
 /* Configuration of ports. */
 void ofproto_port_unregister(struct ofproto *, ofp_port_t ofp_port);

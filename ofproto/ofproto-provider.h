@@ -550,6 +550,10 @@ extern unsigned ofproto_offloaded_stats_delay;
  * ofproto-dpif implementation. */
 extern uint32_t n_handlers, n_revalidators;
 
+/* If an explicit datapath drop action shall be added after trailing sample
+ * actions coming from IPFIX / sFlow / local sampling. */
+extern bool ofproto_explicit_sampled_drops;
+
 static inline struct rule *rule_from_cls_rule(const struct cls_rule *);
 
 void ofproto_rule_expire(struct rule *rule, uint8_t reason)

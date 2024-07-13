@@ -39,6 +39,10 @@ Post-v3.3.0
      datapath-specific manner.  The Linux kernel datapath is the first to
      support this feature by using the new datapath 'psample' action.  See
      'local-group-id' column in the Flow_Sample_Collector_Set table.
+   - A new configuration knob 'other-config:explicit-sampled-drops' in the
+     Open_vSwitch table controls whether an explicit drop action shall be
+     added at the end of datapath flows whose last action is an
+     observability-driven sample action.
 
 
 v3.3.0 - 16 Feb 2024

@@ -869,6 +869,30 @@
           The feature is considered experimental.
         </p>
       </column>
+
+      <column name="other_config" key="explicit-sampled-drops"
+              type='{"type": "boolean"}'>
+        <p>
+         When a flow is installed in the datapath with an empty action list,
+         it indicates an implicit "drop" action.  Most datapaths report this
+         for event for statistics and monitoring (in datapath-specific ways).
+        </p>
+        <p>
+         However, if any of the per-bridge or per-flow sampling functionalities
+         are enabled (e.g: sFlow, IPFIX, local sampling), the action list might
+         not be empty, but contain an action to implement such functionality.
+         This makes the datapaths not report the packet drop.
+        </p>
+        <p>
+         This knob makes Open vSwitch detect when the last datapath action
+         comes from these sampling features and add an explicit drop action at
+         the end to keep drop statistics accurate.
+        </p>
+        <p>
+         The default value is <code>false</code>.
+        </p>
+      </column>
+
     </group>
     <group title="Status">
       <column name="next_cfg">

@@ -3415,6 +3415,7 @@ compose_sample_action(struct xlate_ctx *ctx,
     struct ofproto *ofproto = &ctx->xin->ofproto->up;
     uint32_t meter_id = ofproto->slowpath_meter_id;
     size_t cookie_offset = 0;
+    size_t observe_offset;
 
     /* The meter action is only used to throttle userspace actions.
      * If they are not needed and the sampling rate is 100%, avoid generating
@@ -3432,6 +3433,7 @@ compose_sample_action(struct xlate_ctx *ctx,
     }
 
     if (args->psample) {
+        observe_offset = ctx->odp_actions->size;
         odp_put_psample_action(ctx->odp_actions,
                                args->psample->group_id,
                                (void *) &args->psample->cookie,
@@ -3443,6 +3445,7 @@ compose_sample_action(struct xlate_ctx *ctx,
             nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_METER, meter_id);
         }
 
+        observe_offset = ctx->odp_actions->size;
         odp_port_t odp_port = ofp_port_to_odp_port(
             ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
         uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port);
@@ -3457,6 +3460,9 @@ compose_sample_action(struct xlate_ctx *ctx,
     if (is_sample) {
         nl_msg_end_nested(ctx->odp_actions, actions_offset);
         nl_msg_end_nested(ctx->odp_actions, sample_offset);
+        ctx->xout->last_observe_offset = sample_offset;
+    } else {
+        ctx->xout->last_observe_offset = observe_offset;
     }
 
     return cookie_offset;
@@ -8053,12 +8059,16 @@ xlate_wc_finish(struct xlate_ctx *ctx)
     }
 }
 
-/* This will optimize the odp actions generated. For now, it will remove
- * trailing clone actions that are unnecessary. */
+/* This will tweak the odp actions generated. For now, it will:
+ *  - Remove trailing clone actions that are unnecessary.
+ *  - Add an explicit drop action if the action list is empty.
+ *  - Add an explicit drop action if the last action is an observability
+ *    sample. This tweak is controlled by a configurable knob. */
 static void
-xlate_optimize_odp_actions(struct xlate_in *xin)
+xlate_tweak_odp_actions(struct xlate_ctx *ctx)
 {
-    struct ofpbuf *actions = xin->odp_actions;
+    uint32_t last_observe_offset = ctx->xout->last_observe_offset;
+    struct ofpbuf *actions = ctx->xin->odp_actions;
     struct nlattr *last_action = NULL;
     struct nlattr *a;
     int left;
@@ -8072,10 +8082,27 @@ xlate_optimize_odp_actions(struct xlate_in *xin)
         last_action = a;
     }
 
+    if (!last_action) {
+        if (ovs_explicit_drop_action_supported(ctx->xbridge->ofproto)) {
+            put_drop_action(actions, XLATE_OK);
+        }
+        return;
+    }
+
     /* Remove the trailing clone() action, by directly embedding the nested
      * actions. */
-    if (last_action && nl_attr_type(last_action) == OVS_ACTION_ATTR_CLONE) {
+    if (nl_attr_type(last_action) == OVS_ACTION_ATTR_CLONE) {
         void *dest;
+
+        if (last_observe_offset != UINT32_MAX &&
+            (unsigned char *) actions->data + last_observe_offset >
+                 (unsigned char *) last_action) {
+            /* The last sample is inside the trailing clone.
+             * Adjust its offset. */
+            last_observe_offset -= (unsigned char *) nl_attr_get(last_action) -
+                                   (unsigned char *) last_action;
+            ctx->xout->last_observe_offset = last_observe_offset;
+        }
 
         nl_msg_reset_size(actions,
                           (unsigned char *) last_action -
@@ -8083,6 +8110,16 @@ xlate_optimize_odp_actions(struct xlate_in *xin)
 
         dest = nl_msg_put_uninit(actions, nl_attr_get_size(last_action));
         memmove(dest, nl_attr_get(last_action), nl_attr_get_size(last_action));
+    }
+
+    /* If the last action of the list is an observability action, add an
+     * explicit drop action so that drop statistics remain reliable. */
+    if (ctx->xbridge->ofproto->explicit_sampled_drops &&
+        ovs_explicit_drop_action_supported(ctx->xbridge->ofproto) &&
+        last_observe_offset != UINT32_MAX &&
+        (unsigned char *) last_action == (unsigned char *) actions->data +
+                                         last_observe_offset) {
+        put_drop_action(actions, XLATE_OK);
     }
 }
 
@@ -8100,6 +8137,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     *xout = (struct xlate_out) {
         .slow = 0,
         .recircs = RECIRC_REFS_EMPTY_INITIALIZER,
+        .last_observe_offset = UINT32_MAX,
     };
 
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
@@ -8528,17 +8566,15 @@ exit:
         xout->slow = 0;
         if (xin->odp_actions) {
             ofpbuf_clear(xin->odp_actions);
+            /* Make the drop explicit if the datapath supports it. */
+            if (ovs_explicit_drop_action_supported(ctx.xbridge->ofproto)) {
+                put_drop_action(xin->odp_actions, ctx.error);
+            }
         }
     } else {
-        /* In the non-error case, see if we can further optimize the datapath
-         * rules by removing redundant (clone) actions. */
-        xlate_optimize_odp_actions(xin);
-    }
-
-    /* Install drop action if datapath supports explicit drop action. */
-    if (xin->odp_actions && !xin->odp_actions->size &&
-        ovs_explicit_drop_action_supported(ctx.xbridge->ofproto)) {
-        put_drop_action(xin->odp_actions, ctx.error);
+        /* In the non-error case, see if we can further optimize or tweak
+         * datapath actions. */
+        xlate_tweak_odp_actions(&ctx);
     }
 
     /* Since congestion drop and forwarding drop are not exactly
