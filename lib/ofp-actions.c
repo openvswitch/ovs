@@ -330,6 +330,8 @@ enum ofp_raw_action_type {
     NXAST_RAW_SAMPLE2,
     /* NX1.0+(41): struct nx_action_sample2. */
     NXAST_RAW_SAMPLE3,
+    /* NX1.0+(51): struct nx_action_sample4. VLMFF */
+    NXAST_RAW_SAMPLE4,
 
     /* NX1.0+(34): struct nx_action_conjunction. */
     NXAST_RAW_CONJUNCTION,
@@ -6188,6 +6190,34 @@ struct nx_action_sample2 {
  };
  OFP_ASSERT(sizeof(struct nx_action_sample2) == 32);
 
+/* Action structure for NXAST_SAMPLE4
+ *
+ * NXAST_SAMPLE4 was added in Open vSwitch 3.4.0.  Compared to NXAST_SAMPLE3,
+ * it adds support for using field specifiers for observation_domain_id and
+ * observation_point_id. */
+struct nx_action_sample4 {
+    ovs_be16 type;                      /* OFPAT_VENDOR. */
+    ovs_be16 len;                       /* Length is 40. */
+    ovs_be32 vendor;                    /* NX_VENDOR_ID. */
+    ovs_be16 subtype;                   /* NXAST_SAMPLE4. */
+    ovs_be16 probability;               /* Fraction of packets to sample. */
+    ovs_be32 collector_set_id;          /* ID of collector set in OVSDB. */
+    ovs_be32 obs_domain_src;            /* The observation_domain_id source. */
+    union {
+        ovs_be16 obs_domain_ofs_nbits;  /* Range to use from source field. */
+        ovs_be32 obs_domain_imm;        /* Immediate value for domain id. */
+    };
+    ovs_be32 obs_point_src;             /* The observation_point_id source. */
+    union {
+        ovs_be16 obs_point_ofs_nbits;   /* Range to use from source field. */
+        ovs_be32 obs_point_imm;         /* Immediate value for point id. */
+    };
+    ovs_be16 sampling_port;             /* Sampling port. */
+    uint8_t direction;                  /* Sampling direction. */
+    uint8_t zeros[5];                   /* Pad to a multiple of 8 bytes */
+ };
+ OFP_ASSERT(sizeof(struct nx_action_sample4) == 40);
+
 static enum ofperr
 decode_NXAST_RAW_SAMPLE(const struct nx_action_sample *nas,
                         enum ofp_version ofp_version OVS_UNUSED,
@@ -6199,11 +6229,14 @@ decode_NXAST_RAW_SAMPLE(const struct nx_action_sample *nas,
     sample->ofpact.raw = NXAST_RAW_SAMPLE;
     sample->probability = ntohs(nas->probability);
     sample->collector_set_id = ntohl(nas->collector_set_id);
-    sample->obs_domain_id = ntohl(nas->obs_domain_id);
-    sample->obs_point_id = ntohl(nas->obs_point_id);
+    sample->obs_domain_imm = ntohl(nas->obs_domain_id);
+    sample->obs_domain_src.field = NULL;
+    sample->obs_point_imm = ntohl(nas->obs_point_id);
+    sample->obs_point_src.field = NULL;
     sample->sampling_port = OFPP_NONE;
     sample->direction = NX_ACTION_SAMPLE_DEFAULT;
-
+    sample->obs_domain_src.field = NULL;
+    sample->obs_point_src.field = NULL;
     if (sample->probability == 0) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
@@ -6220,8 +6253,10 @@ decode_SAMPLE2(const struct nx_action_sample2 *nas,
     sample->ofpact.raw = raw;
     sample->probability = ntohs(nas->probability);
     sample->collector_set_id = ntohl(nas->collector_set_id);
-    sample->obs_domain_id = ntohl(nas->obs_domain_id);
-    sample->obs_point_id = ntohl(nas->obs_point_id);
+    sample->obs_domain_imm = ntohl(nas->obs_domain_id);
+    sample->obs_domain_src.field = NULL;
+    sample->obs_point_imm = ntohl(nas->obs_point_id);
+    sample->obs_point_src.field = NULL;
     sample->sampling_port = u16_to_ofp(ntohs(nas->sampling_port));
     sample->direction = direction;
 
@@ -6241,22 +6276,116 @@ decode_NXAST_RAW_SAMPLE2(const struct nx_action_sample2 *nas,
                           ofpact_put_SAMPLE(out));
 }
 
+static int
+check_sample_direction(enum nx_action_sample_direction direction)
+{
+    if (direction != NX_ACTION_SAMPLE_DEFAULT &&
+        direction != NX_ACTION_SAMPLE_INGRESS &&
+        direction != NX_ACTION_SAMPLE_EGRESS) {
+        VLOG_WARN_RL(&rl, "invalid sample direction %"PRIu8, direction);
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+    return 0;
+}
+
 static enum ofperr
 decode_NXAST_RAW_SAMPLE3(const struct nx_action_sample2 *nas,
                          enum ofp_version ofp_version OVS_UNUSED,
                          struct ofpbuf *out)
 {
     struct ofpact_sample *sample = ofpact_put_SAMPLE(out);
+    int err;
+
     if (!is_all_zeros(nas->zeros, sizeof nas->zeros)) {
         return OFPERR_NXBRC_MUST_BE_ZERO;
     }
-    if (nas->direction != NX_ACTION_SAMPLE_DEFAULT &&
-        nas->direction != NX_ACTION_SAMPLE_INGRESS &&
-        nas->direction != NX_ACTION_SAMPLE_EGRESS) {
-        VLOG_WARN_RL(&rl, "invalid sample direction %"PRIu8, nas->direction);
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    err = check_sample_direction(nas->direction);
+    if (err) {
+        return err;
     }
     return decode_SAMPLE2(nas, NXAST_RAW_SAMPLE3, nas->direction, sample);
+}
+
+static int
+decode_sample_obs_id(ovs_be32 src, ovs_be16 ofs_nbits, ovs_be32 imm,
+                     const struct vl_mff_map *vl_mff_map, uint64_t *tlv_bitmap,
+                     struct mf_subfield *src_out, uint32_t *imm_out)
+{
+    if (src) {
+        enum ofperr error;
+
+        src_out->ofs = nxm_decode_ofs(ofs_nbits);
+        src_out->n_bits = nxm_decode_n_bits(ofs_nbits);
+        error = mf_vl_mff_mf_from_nxm_header(ntohl(src),
+                                             vl_mff_map, &src_out->field,
+                                             tlv_bitmap);
+        if (error) {
+            return error;
+        }
+
+        error = mf_check_src(src_out, NULL);
+        if (error) {
+            return error;
+        }
+
+        if (src_out->n_bits > 32) {
+            VLOG_WARN_RL(&rl, "size of field used in observation_id (%d) "
+                               "exceeds maximum (32)", src_out->n_bits);
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
+        }
+    } else {
+        src_out->field = NULL;
+        *imm_out = ntohl(imm);
+    }
+
+    return 0;
+}
+
+static enum ofperr
+decode_NXAST_RAW_SAMPLE4(const struct nx_action_sample4 *nas,
+                         enum ofp_version ofp_version OVS_UNUSED,
+                         const struct vl_mff_map *vl_mff_map,
+                         uint64_t *tlv_bitmap,
+                         struct ofpbuf *out)
+{
+    struct ofpact_sample *sample = ofpact_put_SAMPLE(out);
+    int err;
+
+    if (!is_all_zeros(nas->zeros, sizeof nas->zeros)) {
+        return OFPERR_NXBRC_MUST_BE_ZERO;
+    }
+
+    err = check_sample_direction(nas->direction);
+    if (err) {
+        return err;
+    }
+
+    sample->ofpact.raw = NXAST_RAW_SAMPLE4;
+    sample->probability = ntohs(nas->probability);
+    sample->collector_set_id = ntohl(nas->collector_set_id);
+    sample->sampling_port = u16_to_ofp(ntohs(nas->sampling_port));
+    sample->direction = nas->direction;
+
+    if (sample->probability == 0) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    err = decode_sample_obs_id(nas->obs_domain_src,
+                               nas->obs_domain_ofs_nbits,
+                               nas->obs_domain_imm,
+                               vl_mff_map, tlv_bitmap,
+                               &sample->obs_domain_src,
+                               &sample->obs_domain_imm);
+    if (err) {
+        return err;
+    }
+
+    return decode_sample_obs_id(nas->obs_point_src,
+                                nas->obs_point_ofs_nbits,
+                                nas->obs_point_imm,
+                                vl_mff_map, tlv_bitmap,
+                                &sample->obs_point_src,
+                                &sample->obs_point_imm);
 }
 
 static void
@@ -6265,17 +6394,52 @@ encode_SAMPLE2(const struct ofpact_sample *sample,
 {
     nas->probability = htons(sample->probability);
     nas->collector_set_id = htonl(sample->collector_set_id);
-    nas->obs_domain_id = htonl(sample->obs_domain_id);
-    nas->obs_point_id = htonl(sample->obs_point_id);
+    nas->obs_domain_id = htonl(sample->obs_domain_imm);
+    nas->obs_point_id = htonl(sample->obs_point_imm);
     nas->sampling_port = htons(ofp_to_u16(sample->sampling_port));
     nas->direction = sample->direction;
+}
+
+static void
+encode_SAMPLE4(const struct ofpact_sample *sample,
+               struct nx_action_sample4 *nas)
+{
+    nas->probability = htons(sample->probability);
+    nas->collector_set_id = htonl(sample->collector_set_id);
+    nas->sampling_port = htons(ofp_to_u16(sample->sampling_port));
+    nas->direction = sample->direction;
+
+    if (sample->obs_domain_src.field) {
+        nas->obs_domain_src =
+            htonl(nxm_header_from_mff(sample->obs_domain_src.field));
+        nas->obs_domain_ofs_nbits =
+            nxm_encode_ofs_nbits(sample->obs_domain_src.ofs,
+                                 sample->obs_domain_src.n_bits);
+    } else {
+        nas->obs_domain_src = htonl(0);
+        nas->obs_domain_imm = htonl(sample->obs_domain_imm);
+    }
+    if (sample->obs_point_src.field) {
+        nas->obs_point_src =
+            htonl(nxm_header_from_mff(sample->obs_point_src.field));
+        nas->obs_point_ofs_nbits =
+            nxm_encode_ofs_nbits(sample->obs_point_src.ofs,
+                                 sample->obs_point_src.n_bits);
+    } else {
+        nas->obs_point_src = htonl(0);
+        nas->obs_point_imm = htonl(sample->obs_point_imm);
+    }
 }
 
 static void
 encode_SAMPLE(const struct ofpact_sample *sample,
               enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
 {
-    if (sample->ofpact.raw == NXAST_RAW_SAMPLE3
+    if (sample->ofpact.raw == NXAST_RAW_SAMPLE4 ||
+        sample->obs_domain_src.field ||
+        sample->obs_point_src.field) {
+        encode_SAMPLE4(sample, put_NXAST_SAMPLE4(out));
+    } else if (sample->ofpact.raw == NXAST_RAW_SAMPLE3
         || sample->direction != NX_ACTION_SAMPLE_DEFAULT) {
         encode_SAMPLE2(sample, put_NXAST_SAMPLE3(out));
     } else if (sample->ofpact.raw == NXAST_RAW_SAMPLE2
@@ -6285,8 +6449,8 @@ encode_SAMPLE(const struct ofpact_sample *sample,
         struct nx_action_sample *nas = put_NXAST_SAMPLE(out);
         nas->probability = htons(sample->probability);
         nas->collector_set_id = htonl(sample->collector_set_id);
-        nas->obs_domain_id = htonl(sample->obs_domain_id);
-        nas->obs_point_id = htonl(sample->obs_point_id);
+        nas->obs_domain_id = htonl(sample->obs_domain_imm);
+        nas->obs_point_id = htonl(sample->obs_point_imm);
     }
 }
 
@@ -6314,9 +6478,35 @@ parse_SAMPLE(char *arg, const struct ofpact_parse_params *pp)
         } else if (!strcmp(key, "collector_set_id")) {
             error = str_to_u32(value, &os->collector_set_id);
         } else if (!strcmp(key, "obs_domain_id")) {
-            error = str_to_u32(value, &os->obs_domain_id);
+            error = str_to_u32(value, &os->obs_domain_imm);
+
+            if (error) {
+                free(error);
+                error = mf_parse_subfield(&os->obs_domain_src, value);
+                if (error) {
+                    return error;
+                }
+                if (os->obs_domain_src.n_bits > 32) {
+                    return xasprintf("size of obs_domain_id field (%d) "
+                                     "exceeds maximum (32)",
+                                     os->obs_point_src.n_bits);
+                }
+            }
         } else if (!strcmp(key, "obs_point_id")) {
-            error = str_to_u32(value, &os->obs_point_id);
+            error = str_to_u32(value, &os->obs_point_imm);
+
+            if (error) {
+                free(error);
+                error = mf_parse_subfield(&os->obs_point_src, value);
+                if (error) {
+                    return error;
+                }
+                if (os->obs_point_src.n_bits > 32) {
+                    return xasprintf("size of obs_point_id field (%d) "
+                                     "exceeds maximum (32)",
+                                     os->obs_point_src.n_bits);
+                }
+            }
         } else if (!strcmp(key, "sampling_port")) {
             if (!ofputil_port_from_string(value, pp->port_map,
                                           &os->sampling_port)) {
@@ -6346,14 +6536,23 @@ format_SAMPLE(const struct ofpact_sample *a,
               const struct ofpact_format_params *fp)
 {
     ds_put_format(fp->s, "%ssample(%s%sprobability=%s%"PRIu16
-                  ",%scollector_set_id=%s%"PRIu32
-                  ",%sobs_domain_id=%s%"PRIu32
-                  ",%sobs_point_id=%s%"PRIu32,
+                  ",%scollector_set_id=%s%"PRIu32,
                   colors.paren, colors.end,
                   colors.param, colors.end, a->probability,
-                  colors.param, colors.end, a->collector_set_id,
-                  colors.param, colors.end, a->obs_domain_id,
-                  colors.param, colors.end, a->obs_point_id);
+                  colors.param, colors.end, a->collector_set_id);
+
+    ds_put_format(fp->s, ",%sobs_domain_id=%s", colors.param, colors.end);
+    if (a->obs_domain_src.field) {
+        mf_format_subfield(&a->obs_domain_src, fp->s);
+    } else {
+        ds_put_format(fp->s, "%"PRIu32, a->obs_domain_imm);
+    }
+    ds_put_format(fp->s, ",%sobs_point_id=%s", colors.param, colors.end);
+    if (a->obs_point_src.field) {
+        mf_format_subfield(&a->obs_point_src, fp->s);
+    } else {
+        ds_put_format(fp->s, "%"PRIu32, a->obs_point_imm);
+    }
     if (a->sampling_port != OFPP_NONE) {
         ds_put_format(fp->s, ",%ssampling_port=%s", colors.param, colors.end);
         ofputil_format_port(a->sampling_port, fp->port_map, fp->s);

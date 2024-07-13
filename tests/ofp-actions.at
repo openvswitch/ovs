@@ -136,6 +136,9 @@ ffff 0020 00002320 0026 3039 00005BA0 00008707 0000B26E DDD50000 00000000
 # actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789,egress)
 ffff 0020 00002320 0029 3039 00005BA0 00008707 0000B26E DDD50200 00000000
 
+# actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=0)
+ffff 0028 00002320 0033 3039 00005ba0 00000002 000f0000 0001d810 081f0000 0000 000000000000
+
 # bad OpenFlow10 actions: OFPBAC_BAD_LEN
 & ofp_actions|WARN|OpenFlow action OFPAT_OUTPUT length 240 exceeds action buffer length 8
 & ofp_actions|WARN|bad action at offset 0 (OFPBAC_BAD_LEN):
@@ -488,6 +491,9 @@ ffff 0020 00002320 0015 000500000000 80003039005A02fd 0400000000000000
 
 # actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ffff 0018 00002320 001d 3039 00005BA0 00008707 0000B26E
+
+# actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=0)
+ffff 0028 00002320 0033 3039 00005ba0 00000002 000f0000 0001d810 081f0000 0000 000000000000
 
 # bad OpenFlow11 actions: OFPBAC_BAD_OUT_PORT
 & ofp_actions|WARN|bad action at offset 0 (OFPBAC_BAD_OUT_PORT):
@@ -1121,6 +1127,8 @@ bad_action 'unroll_xlate' "UNROLL is an internal action that shouldn't be used v
 # sample
 bad_action 'sample(probability=0)' 'invalid probability value "0"'
 bad_action 'sample(sampling_port=asdf)' 'asdf: unknown port'
+bad_action 'sample(probability=12345,obs_point_id=NXM_NX_CT_LABEL[[0..32]])' \
+    'size of obs_point_id field (33) exceeds maximum (32)'
 bad_action 'sample(foo=bar)' 'invalid key "foo" in "sample" argument'
 bad_action 'sample' 'non-zero "probability" must be specified on sample'
 

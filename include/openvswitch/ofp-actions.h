@@ -1015,14 +1015,16 @@ enum nx_action_sample_direction {
 
 /* OFPACT_SAMPLE.
  *
- * Used for NXAST_SAMPLE, NXAST_SAMPLE2, and NXAST_SAMPLE3. */
+ * Used for NXAST_SAMPLE, NXAST_SAMPLE2, NXAST_SAMPLE3 and NXAST_SAMPLE4. */
 struct ofpact_sample {
     OFPACT_PADDED_MEMBERS(
         struct ofpact ofpact;
         uint16_t probability;   /* Always positive. */
         uint32_t collector_set_id;
-        uint32_t obs_domain_id;
-        uint32_t obs_point_id;
+        uint32_t obs_domain_imm;
+        struct mf_subfield obs_domain_src;
+        uint32_t obs_point_imm;
+        struct mf_subfield obs_point_src;
         ofp_port_t sampling_port;
         enum nx_action_sample_direction direction;
     );

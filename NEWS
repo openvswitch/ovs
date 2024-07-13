@@ -43,6 +43,9 @@ Post-v3.3.0
      Open_vSwitch table controls whether an explicit drop action shall be
      added at the end of datapath flows whose last action is an
      observability-driven sample action.
+   - OpenFlow:
+     * A new version of the 'sample' action (NXAST_SAMPLE4) is introduced
+       that allows use of subfields in 'obs_point_id' and 'obs_domain_id'.
 
 
 v3.3.0 - 16 Feb 2024

@@ -9409,3 +9409,82 @@ dnl OVS will fail to send IPFIX packets because the target is localhost
 dnl and the port is closed. Ignore the message it generates.
 OVS_TRAFFIC_VSWITCHD_STOP(["/sending to collector failed/d"])
 AT_CLEANUP
+
+AT_SETUP([psample - from ct label])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_PSAMPLE()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+NS_CHECK_EXEC([at_ns0], [sysctl -w net.ipv6.conf.all.disable_ipv6=1], [0], [ignore])
+NS_CHECK_EXEC([at_ns1], [sysctl -w net.ipv6.conf.all.disable_ipv6=1], [0], [ignore])
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", "e4:11:22:33:44:55")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", "e4:11:22:33:44:66")
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- --id=@ipfix create IPFIX targets=\"127.0.0.1:4739\" \
+                    -- create Flow_Sample_Collector_Set id=1 bridge=@br0 \
+                       ipfix=@ipfix, local-group-id=10 \
+                    -- create Flow_Sample_Collector_Set id=2 bridge=@br0 \
+                       ipfix=@ipfix, local-group-id=12],
+         [0], [ignore])
+
+m4_define([CT_STORE_ACT],
+    [ct(zone=5,commit,exec(load:0x0bb102030->NXM_NX_CT_LABEL[[0..31]],load:0xbb405060->NXM_NX_CT_LABEL[[32..63]]))])
+
+AT_DATA([flows.txt], [dnl
+priority=100,ip actions=ct(zone=5, table=10)
+priority=0 actions=NORMAL
+table=10,priority=100,ip,ct_state=+trk+new action=SAMPLE_ACTION(1, 2853183536, 2856341600),CT_STORE_ACT,NORMAL
+table=10,priority=100,ip,ct_state=+trk-new action=SAMPLE_ACTION(2, NXM_NX_CT_LABEL[[[0..31]]], NXM_NX_CT_LABEL[[[32..63]]]),NORMAL
+table=10, priority=50, ip, actions=DROP
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+OVS_DAEMONIZE([ovstest test-psample > psample.out], [psample1.pid])
+OVS_WAIT_UNTIL([grep -q "Listening for psample events" psample.out])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 1 10.1.1.2 | FORMAT_PING], [0], [dnl
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+])
+
+m4_define([SAMPLE1], [m4_join([ ],
+    [group_id=0xa,prob=4294967295],
+    [obs_domain=0xaa102030,obs_point=0xaa405060],
+    [.*icmp.*nw_src=10.1.1.1,nw_dst=10.1.1.2])])
+
+m4_define([SAMPLE2], [m4_join([ ],
+    [group_id=0xc,prob=4294967295],
+    [obs_domain=0xbb102030,obs_point=0xbb405060],
+    [.*icmp.*nw_src=10.1.1.2,nw_dst=10.1.1.1])])
+AT_CHECK([grep -qE 'SAMPLE1' psample.out])
+AT_CHECK([grep -qE 'SAMPLE2' psample.out])
+
+m4_define([FLOW_MATCH], [m4_join([],
+    [ct_label(0xbb405060bb102030/0xffffffffffffffff).*actions:],
+    [actions:psample(group=12,cookie=0xbb102030bb405060),],
+    [userspace(pid=[[0-9]]+,flow_sample(.*obs_domain_id=3138396208,obs_point_id=3141554272.*))]
+)])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows --names filter=in_port=ovs-p1 \
+          | grep -qE 'FLOW_MATCH' ], [0], [])
+
+dnl Check IPFIX samples have been received.
+dnl Entries can be unsorted and IFPIX packets might not have been sent (or
+dnl at least tried to be sent) yet.
+OVS_WAIT_UNTIL_EQUAL([ovs-ofctl dump-ipfix-flow br0 | \
+                sed 's/tx pkts=[[0-9]]*/tx pkts=24/' | \
+                sed 's/tx errs=[[0-9]]*/tx errs=0/' | \
+                sed 's/id   [[1-2]]:/id   ?:/'], [dnl
+NXST_IPFIX_FLOW reply (xid=0x2): 2 ids
+  id   ?: flows=1, current flows=0, sampled pkts=1, ipv4 ok=1, ipv6 ok=0, tx pkts=24
+          pkts errs=0, ipv4 errs=0, ipv6 errs=0, tx errs=0
+  id   ?: flows=1, current flows=0, sampled pkts=1, ipv4 ok=1, ipv6 ok=0, tx pkts=24
+          pkts errs=0, ipv4 errs=0, ipv6 errs=0, tx errs=0])
+
+dnl OVS will fail to send IPFIX packets because the target is localhost
+dnl and the port is closed. Ignore the message it generates.
+OVS_TRAFFIC_VSWITCHD_STOP(["/sending to collector failed/d"])
+AT_CLEANUP

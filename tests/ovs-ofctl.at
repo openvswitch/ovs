@@ -198,6 +198,8 @@ actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,ingress)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789,egress)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=56789,egress)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63])
 ip,actions=ct(nat)
 ip,actions=ct(commit,nat(dst))
 ip,actions=ct(commit,nat(src))
@@ -233,6 +235,8 @@ OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_d
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,ingress)
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789,egress)
+OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=56789,egress)
+OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63])
 OFPT_FLOW_MOD: ADD ip actions=ct(nat)
 OFPT_FLOW_MOD: ADD ip actions=ct(commit,nat(dst))
 OFPT_FLOW_MOD: ADD ip actions=ct(commit,nat(src))
@@ -265,6 +269,7 @@ sctp actions=drop
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=0)
 ]])
 
 AT_CHECK([ovs-ofctl --protocols OpenFlow11 parse-flows flows.txt
@@ -286,6 +291,7 @@ OFPT_FLOW_MOD (OF1.1): ADD sctp actions=drop
 OFPT_FLOW_MOD (OF1.1): ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD (OF1.1): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 OFPT_FLOW_MOD (OF1.1): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+OFPT_FLOW_MOD (OF1.1): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=0)
 ]])
 AT_CLEANUP
 
@@ -312,6 +318,7 @@ in_port=0 actions=mod_dl_src:11:22:33:44:55:66,mod_dl_dst:10:20:30:40:50:60
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=0)
 ]])
 
 AT_CHECK([ovs-ofctl --protocols OpenFlow12 parse-flows flows.txt
@@ -339,6 +346,7 @@ OFPT_FLOW_MOD (OF1.2): ADD in_port=0 actions=set_field:11:22:33:44:55:66->eth_sr
 OFPT_FLOW_MOD (OF1.2): ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD (OF1.2): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 OFPT_FLOW_MOD (OF1.2): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+OFPT_FLOW_MOD (OF1.2): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=0)
 ]])
 AT_CLEANUP
 
@@ -441,6 +449,7 @@ tcp,actions=fin_timeout(idle_timeout=5,hard_timeout=15)
 actions=controller(max_len=123,reason=invalid_ttl,id=555)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=56789)
 mpls,mpls_label=5,mpls_tc=1,mpls_ttl=1,mpls_bos=0,actions=drop
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
@@ -508,6 +517,7 @@ NXT_FLOW_MOD: ADD table:255 tcp actions=fin_timeout(idle_timeout=5,hard_timeout=
 NXT_FLOW_MOD: ADD table:255 actions=controller(reason=invalid_ttl,max_len=123,id=555)
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=56789)
 NXT_FLOW_MOD: ADD table:255 mpls,mpls_label=5,mpls_tc=1,mpls_ttl=1,mpls_bos=0 actions=drop
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
@@ -567,6 +577,7 @@ dl_dst=aa:bb:cc:dd:ee:ff/fe:ff:ff:ff:ff:ff,actions=drop
 dl_dst=aa:bb:cc:dd:ee:ff/00:00:00:00:00:00,actions=drop
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+actions=sample(probability=12341,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[[]],obs_point_id=NXM_NX_CT_LABEL[[32..63]],sampling_port=56789,egress)
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[[]])))
 ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[[]])))
@@ -608,6 +619,7 @@ NXT_FLOW_MOD: ADD dl_dst=aa:bb:cc:dd:ee:ff/fe:ff:ff:ff:ff:ff actions=drop
 NXT_FLOW_MOD: ADD actions=drop
 NXT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 NXT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+NXT_FLOW_MOD: ADD actions=sample(probability=12341,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[[]],obs_point_id=NXM_NX_CT_LABEL[[32..63]],sampling_port=56789,egress)
 NXT_FLOW_MOD: ADD ip actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[[]]))
 NXT_FLOW_MOD: ADD ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[[0..63]],load:0->NXM_NX_CT_LABEL[[64..127]]))
@@ -648,6 +660,7 @@ actions=push:reg0[0..31],pop:reg0
 vlan_tci=0x1123/0x1fff,actions=drop
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+actions=sample(probability=12341,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=56789,egress)
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_LABEL[])))
@@ -688,6 +701,7 @@ NXT_FLOW_MOD: ADD <any> actions=push:NXM_NX_REG0[],pop:NXM_NX_REG0[]
 NXT_FLOW_MOD: ADD NXM_OF_VLAN_TCI_W(1123/1fff) actions=drop
 NXT_FLOW_MOD: ADD <any> actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 NXT_FLOW_MOD: ADD <any> actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+NXT_FLOW_MOD: ADD <any> actions=sample(probability=12341,collector_set_id=23456,obs_domain_id=NXM_OF_IN_PORT[],obs_point_id=NXM_NX_CT_LABEL[32..63],sampling_port=56789,egress)
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))

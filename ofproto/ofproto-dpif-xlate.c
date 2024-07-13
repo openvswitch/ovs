@@ -5902,6 +5902,40 @@ xlate_fin_timeout(struct xlate_ctx *ctx,
     }
 }
 
+static uint32_t
+ofpact_sample_get_domain(struct xlate_ctx *ctx,
+                         const struct ofpact_sample *os)
+{
+    if (os->obs_domain_src.field) {
+        uint32_t obs_domain_id;
+
+        obs_domain_id = mf_get_subfield(&os->obs_domain_src, &ctx->xin->flow);
+        mf_write_subfield_flow(&os->obs_domain_src, &exact_sub_match_mask,
+                               &ctx->wc->masks);
+
+        return obs_domain_id;
+    } else {
+        return os->obs_domain_imm;
+    }
+}
+
+static uint32_t
+ofpact_sample_get_point(struct xlate_ctx *ctx,
+                        const struct ofpact_sample *os)
+{
+    if (os->obs_point_src.field) {
+        uint32_t obs_point_id;
+
+        obs_point_id = mf_get_subfield(&os->obs_point_src, &ctx->xin->flow);
+        mf_write_subfield_flow(&os->obs_point_src, &exact_sub_match_mask,
+                               &ctx->wc->masks);
+
+        return obs_point_id;
+    } else {
+        return os->obs_point_imm;
+    }
+}
+
 static void
 xlate_fill_ipfix_sample(struct xlate_ctx *ctx,
                         const struct ofpact_sample *os,
@@ -5968,8 +6002,10 @@ xlate_fill_ipfix_sample(struct xlate_ctx *ctx,
     userspace->cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
     userspace->cookie.flow_sample.probability = os->probability;
     userspace->cookie.flow_sample.collector_set_id = os->collector_set_id;
-    userspace->cookie.flow_sample.obs_domain_id = os->obs_domain_id;
-    userspace->cookie.flow_sample.obs_point_id = os->obs_point_id;
+    userspace->cookie.flow_sample.obs_domain_id =
+        ofpact_sample_get_domain(ctx, os);
+    userspace->cookie.flow_sample.obs_point_id =
+        ofpact_sample_get_point(ctx, os);
     userspace->cookie.flow_sample.output_odp_port = output_odp_port;
     userspace->cookie.flow_sample.direction = os->direction;
     userspace->include_actions = false;
@@ -6003,8 +6039,8 @@ xlate_sample_action(struct xlate_ctx *ctx,
         dpif_lsample_get_group_id(lsample,
                                   os->collector_set_id,
                                   &psample.group_id)) {
-        psample.cookie.hi = htonl(os->obs_domain_id);
-        psample.cookie.lo = htonl(os->obs_point_id);
+        psample.cookie.hi = htonl(ofpact_sample_get_domain(ctx, os));
+        psample.cookie.lo = htonl(ofpact_sample_get_point(ctx, os));
 
         compose_args.psample = &psample;
     }

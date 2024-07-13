@@ -8304,6 +8304,61 @@ AT_CHECK([ovs-vsctl destroy Flow_Sample_Collector_Set 1], [0], [ignore])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - Flow IPFIX sanity check - from field])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- --id=@ipfix create IPFIX targets=\"127.0.0.1:5500\" \
+                    -- --id=@cs create Flow_Sample_Collector_Set id=0 \
+                         bridge=@br0 ipfix=@ipfix],
+         [0], [ignore])
+
+m4_define([SAMPLE_ACTION],
+    [sample(probability=65535,collector_set_id=1,obs_domain_id=NXM_OF_IN_PORT,obs_point_id=$1)]dnl
+)
+
+dnl Store in_port in obs_domain_id and dp_hash in the obs_point_id.
+AT_DATA([flows.txt], [dnl
+priority=100,arp,action=normal
+priority=10,in_port=1,ip actions=SAMPLE_ACTION(NXM_NX_DP_HASH),2
+priority=10,in_port=2,ip actions=SAMPLE_ACTION(NXM_NX_CT_LABEL[[[0..31]]]),1
+priority=10,in_port=3,ip actions=SAMPLE_ACTION(NXM_NX_CT_LABEL[[[10..14]]]),1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt], [0], [ignore])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy \
+    "in_port(1),dp_hash(45),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),\
+     ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)"], [0], [stdout])
+
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,dp_hash=0x2d,eth,ip,in_port=1,nw_frag=no
+Datapath actions: userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=1,obs_point_id=45,output_port=4294967295)),2
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy \
+    "in_port(2),ct_label(0x1234567890abcdef1234567890abcdef),\
+     eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),\
+     ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)"], [0], [stdout])
+
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,ct_label=0x90abcdef/0xffffffff,eth,ip,in_port=2,nw_frag=no
+Datapath actions: userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=2,obs_point_id=2427178479,output_port=4294967295)),1
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy \
+    "in_port(3),ct_label(0x1234567890abcdef1234567890abcdef),\
+     eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),\
+     ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)"], [0], [stdout])
+
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,ct_label=0x4c00/0x7c00,eth,ip,in_port=3,nw_frag=no
+Datapath actions: userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=3,obs_point_id=19,output_port=4294967295)),1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - clone action])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3 4
