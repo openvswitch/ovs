@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "8.5.0",
- "cksum": "4040946650 27557",
+ "version": "8.6.0",
+ "cksum": "1543805939 27765",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -561,6 +561,11 @@
        "ipfix": {
          "type": {"key": {"type": "uuid",
                           "refTable": "IPFIX"},
+                  "min": 0, "max": 1}},
+       "local_group_id": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 4294967295},
                   "min": 0, "max": 1}},
        "external_ids": {
          "type": {"key": "string", "value": "string",

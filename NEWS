@@ -34,6 +34,11 @@ Post-v3.3.0
        these tunnels will calculate checksums by default and that behaviour can
        be changed with "options:csum=false" just as with the userspace
        datapath.
+   - Local sampling is introduced.  It reuses the OpenFlow sample action and
+     allows samples to be emitted locally (instead of via IPFIX) in a
+     datapath-specific manner.  The Linux kernel datapath is the first to
+     support this feature by using the new datapath 'psample' action.  See
+     'local-group-id' column in the Flow_Sample_Collector_Set table.
 
 
 v3.3.0 - 16 Feb 2024
