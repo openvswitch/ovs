@@ -12176,3 +12176,162 @@ AT_CHECK([test 1 = `ovs-ofctl parse-pcap p2-tx.pcap | wc -l`])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - Local sampling - not supported])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- create Flow_Sample_Collector_Set id=1 bridge=@br0 \
+                       local-group-id=10 \
+                    -- create Flow_Sample_Collector_Set id=2 bridge=@br0 \
+                       local-group-id=12],
+         [0], [ignore])
+
+m4_define([NOT_SUPPORTED_WARN], [dnl
+ignoring local sampling configuration: not supported by this datapath])
+
+AT_CHECK([grep -q "NOT_SUPPORTED_WARN" ovs-vswitchd.log ])
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=sample(probability=32767,obs_domain_id=100,obs_point_id=200),2
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+
+m4_define([TRACE_PKT], [m4_join([,],
+    [in_port(1)],
+    [eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)],
+    [ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no)],
+    [icmp(type=8,code=0)])])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'TRACE_PKT'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 2
+])
+
+OVS_VSWITCHD_STOP(["/NOT_SUPPORTED_WARN/d"])
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - Local sampling - sanity check])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+
+dnl Enabling an usupported feature is dangerous but we are not sending traffic.
+AT_CHECK([ovs-appctl dpif/set-dp-features --force br0 psample true], [0], [ignore])
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- create Flow_Sample_Collector_Set id=1 bridge=@br0 \
+                       local-group-id=42],
+         [0], [ignore])
+
+AT_DATA([flows.txt], [dnl
+in_port=1, actions=sample(probability=32767,collector_set_id=1,obs_domain_id=100,obs_point_id=200),3
+in_port=2, actions=sample(probability=32767,collector_set_id=20,obs_domain_id=100,obs_point_id=200),3
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+
+m4_define([TRACE_PKT], [m4_join([,],
+    [eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)],
+    [ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no)],
+    [icmp(type=8,code=0)])])
+
+dnl collector_set_id does not match.
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2) TRACE_PKT'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 3
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1) TRACE_PKT'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: sample(sample=50.0%,actions(psample(group=42,cookie=0x64000000c8))),3
+])
+
+OVS_VSWITCHD_STOP("/Enabling an unsupported feature is very dangerous/d")
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - Local sampling - with IPFIX])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+dnl Enabling an usupported feature is dangerous but we are not sending traffic.
+AT_CHECK([ovs-appctl dpif/set-dp-features --force br0 psample true], [0], [ignore])
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- --id=@i create ipfix targets=\"127.0.0.1:4739\" \
+                    -- create Flow_Sample_Collector_Set ipfix=@i id=1 \
+                       bridge=@br0 local-group-id=42],
+         [0], [ignore])
+
+AT_DATA([flows.txt], [dnl
+in_port=1, actions=sample(probability=32767,collector_set_id=1,obs_domain_id=100,obs_point_id=200),2
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+
+m4_define([TRACE_PKT], [m4_join([,],
+    [eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)],
+    [ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no)],
+    [icmp(type=8,code=0)])])
+
+m4_define([EXPECTED_ACT], [m4_join([],
+    [sample(sample=50.0%,actions(],
+    [psample(group=42,cookie=0x64000000c8),],
+    [userspace(pid=0,],
+    [flow_sample(probability=32767,collector_set_id=1,obs_domain_id=100,obs_point_id=200,output_port=4294967295)],
+    [))),],
+    [2],
+)])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1) TRACE_PKT'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: EXPECTED_ACT
+])
+
+OVS_VSWITCHD_STOP("/Enabling an unsupported feature is very dangerous/d")
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - Local sampling - with metered IPFIX])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+dnl Enabling an usupported feature is dangerous but we are not sending traffic.
+AT_CHECK([ovs-appctl dpif/set-dp-features --force br0 psample true], [0], [ignore])
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- --id=@i create ipfix targets=\"127.0.0.1:4739\" \
+                    -- create Flow_Sample_Collector_Set ipfix=@i id=1 \
+                       bridge=@br0 local-group-id=42],
+         [0], [ignore])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=slowpath pktps stats bands=type=drop rate=2'])
+
+AT_DATA([flows.txt], [dnl
+in_port=1, actions=sample(probability=32767,collector_set_id=1,obs_domain_id=100,obs_point_id=200),2
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+
+m4_define([TRACE_PKT], [m4_join([,],
+    [eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)],
+    [ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no)],
+    [icmp(type=8,code=0)])])
+
+m4_define([EXPECTED_ACT], [m4_join([],
+    [sample(sample=50.0%,actions(],
+    [psample(group=42,cookie=0x64000000c8),],
+    [meter(0),],
+    [userspace(pid=0,],
+    [flow_sample(probability=32767,collector_set_id=1,obs_domain_id=100,obs_point_id=200,output_port=4294967295)],
+    [))),],
+    [2],
+)])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1) TRACE_PKT'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: EXPECTED_ACT
+])
+
+OVS_VSWITCHD_STOP("/Enabling an unsupported feature is very dangerous/d")
+AT_CLEANUP

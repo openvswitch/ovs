@@ -45,6 +45,7 @@
 #include "nx-match.h"
 #include "odp-execute.h"
 #include "ofproto/ofproto-dpif-ipfix.h"
+#include "ofproto/ofproto-dpif-lsample.h"
 #include "ofproto/ofproto-dpif-mirror.h"
 #include "ofproto/ofproto-dpif-monitor.h"
 #include "ofproto/ofproto-dpif-sflow.h"
@@ -116,6 +117,7 @@ struct xbridge {
     struct mbridge *mbridge;      /* Mirroring. */
     struct dpif_sflow *sflow;     /* SFlow handle, or null. */
     struct dpif_ipfix *ipfix;     /* Ipfix handle, or null. */
+    struct dpif_lsample *lsample; /* Local sample handle, or null. */
     struct netflow *netflow;      /* Netflow handle, or null. */
     struct stp *stp;              /* STP or null if disabled. */
     struct rstp *rstp;            /* RSTP or null if disabled. */
@@ -686,6 +688,7 @@ static void xlate_xbridge_set(struct xbridge *, struct dpif *,
                               const struct mbridge *,
                               const struct dpif_sflow *,
                               const struct dpif_ipfix *,
+                              const struct dpif_lsample *,
                               const struct netflow *,
                               bool forward_bpdu, bool has_in_band,
                               const struct dpif_backer_support *,
@@ -1069,6 +1072,7 @@ xlate_xbridge_set(struct xbridge *xbridge,
                   const struct mbridge *mbridge,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix,
+                  const struct dpif_lsample *lsample,
                   const struct netflow *netflow,
                   bool forward_bpdu, bool has_in_band,
                   const struct dpif_backer_support *support,
@@ -1097,6 +1101,11 @@ xlate_xbridge_set(struct xbridge *xbridge,
     if (xbridge->ipfix != ipfix) {
         dpif_ipfix_unref(xbridge->ipfix);
         xbridge->ipfix = dpif_ipfix_ref(ipfix);
+    }
+
+    if (xbridge->lsample != lsample) {
+        dpif_lsample_unref(xbridge->lsample);
+        xbridge->lsample = dpif_lsample_ref(lsample);
     }
 
     if (xbridge->stp != stp) {
@@ -1213,9 +1222,10 @@ xlate_xbridge_copy(struct xbridge *xbridge)
     xlate_xbridge_set(new_xbridge,
                       xbridge->dpif, xbridge->ml, xbridge->stp,
                       xbridge->rstp, xbridge->ms, xbridge->mbridge,
-                      xbridge->sflow, xbridge->ipfix, xbridge->netflow,
-                      xbridge->forward_bpdu, xbridge->has_in_band,
-                      &xbridge->support, xbridge->addr);
+                      xbridge->sflow, xbridge->ipfix, xbridge->lsample,
+                      xbridge->netflow, xbridge->forward_bpdu,
+                      xbridge->has_in_band, &xbridge->support,
+                      xbridge->addr);
     LIST_FOR_EACH (xbundle, list_node, &xbridge->xbundles) {
         xlate_xbundle_copy(new_xbridge, xbundle);
     }
@@ -1372,6 +1382,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
                   const struct mbridge *mbridge,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix,
+                  const struct dpif_lsample *lsample,
                   const struct netflow *netflow,
                   bool forward_bpdu, bool has_in_band,
                   const struct dpif_backer_support *support)
@@ -1396,7 +1407,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     old_addr = xbridge->addr;
 
     xlate_xbridge_set(xbridge, dpif, ml, stp, rstp, ms, mbridge, sflow, ipfix,
-                      netflow, forward_bpdu, has_in_band, support,
+                      lsample, netflow, forward_bpdu, has_in_band, support,
                       xbridge_addr);
 
     if (xbridge_addr != old_addr) {
@@ -1428,6 +1439,7 @@ xlate_xbridge_remove(struct xlate_cfg *xcfg, struct xbridge *xbridge)
     mbridge_unref(xbridge->mbridge);
     dpif_sflow_unref(xbridge->sflow);
     dpif_ipfix_unref(xbridge->ipfix);
+    dpif_lsample_unref(xbridge->lsample);
     netflow_unref(xbridge->netflow);
     stp_unref(xbridge->stp);
     rstp_unref(xbridge->rstp);
@@ -3357,58 +3369,91 @@ xlate_normal(struct xlate_ctx *ctx)
     }
 }
 
-/* Appends a "sample" action for sFlow or IPFIX to 'ctx->odp_actions'.  The
- * 'probability' is the number of packets out of UINT32_MAX to sample.  The
- * 'cookie' is passed back in the callback for each sampled packet.
- * 'tunnel_out_port', if not ODPP_NONE, is added as the
- * OVS_USERSPACE_ATTR_EGRESS_TUN_PORT attribute.  If 'include_actions',
- * an OVS_USERSPACE_ATTR_ACTIONS attribute is added.  If
- * 'emit_set_tunnel', sample(sampling_port=1) would translate into
- * datapath sample action set(tunnel(...)), sample(...) and it is used
- * for sampling egress tunnel information.
- */
+/* Psample-related arguments for compose_sample_action. */
+struct sample_psample_args {
+    uint32_t group_id;                  /* Group to be used in psample. */
+    ovs_32aligned_be64 cookie;          /* Cookie to be used in psample. */
+};
+
+/* Userspace-related arguments for compose_sample_action. */
+struct sample_userspace_args {
+    struct user_action_cookie cookie;   /* Data passed back in the upcall
+                                         * for each sampled packet. */
+    odp_port_t tunnel_out_port;         /* If not ODPP_NONE, it is added in
+                                         * OVS_USERSPACE_ATTR_EGRESS_TUN_PORT
+                                         * attribute. */
+    bool include_actions;               /* Whether OVS_USERSPACE_ATTR_ACTIONS
+                                         * is to be set. */
+
+};
+
+/* Arguments for compose_sample_action. */
+struct compose_sample_args {
+    uint32_t probability;                     /* Number of packets out of
+                                               * UINT32_MAX to sample. */
+    struct sample_userspace_args *userspace;  /* Optional,
+                                               * arguments for userspace. */
+    struct sample_psample_args *psample;      /* Optional,
+                                               * arguments for psample. */
+};
+
+/* Composes sample action according to 'args'. */
 static size_t
 compose_sample_action(struct xlate_ctx *ctx,
-                      const uint32_t probability,
-                      const struct user_action_cookie *cookie,
-                      const odp_port_t tunnel_out_port,
-                      bool include_actions)
+                      const struct compose_sample_args *args)
 {
-    if (probability == 0) {
+    if (args->probability == 0) {
         /* No need to generate sampling or the inner action. */
         return 0;
     }
+
+    /* At least one of userspace or psample config must be provided. */
+    ovs_assert(args->userspace || args->psample);
 
     /* If the slow path meter is configured by the controller,
      * insert a meter action before the user space action.  */
     struct ofproto *ofproto = &ctx->xin->ofproto->up;
     uint32_t meter_id = ofproto->slowpath_meter_id;
+    size_t cookie_offset = 0;
 
-    /* When meter action is not required, avoid generate sample action
-     * for 100% sampling rate.  */
-    bool is_sample = probability < UINT32_MAX || meter_id != UINT32_MAX;
+    /* The meter action is only used to throttle userspace actions.
+     * If they are not needed and the sampling rate is 100%, avoid generating
+     * a sample action. */
+    bool is_sample = (args->probability < UINT32_MAX ||
+                      (args->userspace && meter_id != UINT32_MAX));
     size_t sample_offset = 0, actions_offset = 0;
     if (is_sample) {
         sample_offset = nl_msg_start_nested(ctx->odp_actions,
                                             OVS_ACTION_ATTR_SAMPLE);
         nl_msg_put_u32(ctx->odp_actions, OVS_SAMPLE_ATTR_PROBABILITY,
-                       probability);
+                       args->probability);
         actions_offset = nl_msg_start_nested(ctx->odp_actions,
                                              OVS_SAMPLE_ATTR_ACTIONS);
     }
 
-    if (meter_id != UINT32_MAX) {
-        nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_METER, meter_id);
+    if (args->psample) {
+        odp_put_psample_action(ctx->odp_actions,
+                               args->psample->group_id,
+                               (void *) &args->psample->cookie,
+                               sizeof args->psample->cookie);
     }
 
-    odp_port_t odp_port = ofp_port_to_odp_port(
-        ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
-    uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port);
-    size_t cookie_offset;
-    int res = odp_put_userspace_action(pid, cookie, sizeof *cookie,
-                                       tunnel_out_port, include_actions,
-                                       ctx->odp_actions, &cookie_offset);
-    ovs_assert(res == 0);
+    if (args->userspace) {
+        if (meter_id != UINT32_MAX) {
+            nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_METER, meter_id);
+        }
+
+        odp_port_t odp_port = ofp_port_to_odp_port(
+            ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
+        uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port);
+        int res = odp_put_userspace_action(pid, &args->userspace->cookie,
+                                           sizeof args->userspace->cookie,
+                                           args->userspace->tunnel_out_port,
+                                           args->userspace->include_actions,
+                                           ctx->odp_actions, &cookie_offset);
+        ovs_assert(res == 0);
+    }
+
     if (is_sample) {
         nl_msg_end_nested(ctx->odp_actions, actions_offset);
         nl_msg_end_nested(ctx->odp_actions, sample_offset);
@@ -3428,19 +3473,24 @@ static size_t
 compose_sflow_action(struct xlate_ctx *ctx)
 {
     struct dpif_sflow *sflow = ctx->xbridge->sflow;
+    struct sample_userspace_args userspace;
+    struct compose_sample_args args = {0};
+
     if (!sflow || ctx->xin->flow.in_port.ofp_port == OFPP_NONE) {
         return 0;
     }
 
-    struct user_action_cookie cookie;
+    memset(&userspace, 0, sizeof userspace);
+    userspace.cookie.type = USER_ACTION_COOKIE_SFLOW;
+    userspace.cookie.ofp_in_port = ctx->xin->flow.in_port.ofp_port;
+    userspace.cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
+    userspace.tunnel_out_port = ODPP_NONE;
+    userspace.include_actions = true;
 
-    memset(&cookie, 0, sizeof cookie);
-    cookie.type = USER_ACTION_COOKIE_SFLOW;
-    cookie.ofp_in_port = ctx->xin->flow.in_port.ofp_port;
-    cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
+    args.probability = dpif_sflow_get_probability(sflow);
+    args.userspace = &userspace;
 
-    return compose_sample_action(ctx, dpif_sflow_get_probability(sflow),
-                                 &cookie, ODPP_NONE, true);
+    return compose_sample_action(ctx, &args);
 }
 
 /* If flow IPFIX is enabled, make sure IPFIX flow sample action
@@ -3451,7 +3501,11 @@ static void
 compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
 {
     struct dpif_ipfix *ipfix = ctx->xbridge->ipfix;
-    odp_port_t tunnel_out_port = ODPP_NONE;
+    struct sample_userspace_args userspace;
+    struct compose_sample_args args = {0};
+
+    memset(&userspace, 0, sizeof userspace);
+    userspace.tunnel_out_port = ODPP_NONE;
 
     if (!ipfix ||
         (output_odp_port == ODPP_NONE &&
@@ -3476,21 +3530,20 @@ compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
          */
         if (dpif_ipfix_get_bridge_exporter_tunnel_sampling(ipfix) &&
             dpif_ipfix_is_tunnel_port(ipfix, output_odp_port) ) {
-           tunnel_out_port = output_odp_port;
+           userspace.tunnel_out_port = output_odp_port;
         }
     }
 
-    struct user_action_cookie cookie;
+    userspace.cookie.type = USER_ACTION_COOKIE_IPFIX;
+    userspace.cookie.ofp_in_port = ctx->xin->flow.in_port.ofp_port;
+    userspace.cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
+    userspace.cookie.ipfix.output_odp_port = output_odp_port;
+    userspace.include_actions = false;
 
-    memset(&cookie, 0, sizeof cookie);
-    cookie.type = USER_ACTION_COOKIE_IPFIX;
-    cookie.ofp_in_port = ctx->xin->flow.in_port.ofp_port;
-    cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
-    cookie.ipfix.output_odp_port = output_odp_port;
+    args.probability = dpif_ipfix_get_bridge_exporter_probability(ipfix);
+    args.userspace = &userspace;
 
-    compose_sample_action(ctx,
-                          dpif_ipfix_get_bridge_exporter_probability(ipfix),
-                          &cookie, tunnel_out_port, false);
+    compose_sample_action(ctx, &args);
 }
 
 /* Fix "sample" action according to data collected while composing ODP actions,
@@ -5847,22 +5900,16 @@ xlate_fin_timeout(struct xlate_ctx *ctx,
 }
 
 static void
-xlate_sample_action(struct xlate_ctx *ctx,
-                    const struct ofpact_sample *os)
+xlate_fill_ipfix_sample(struct xlate_ctx *ctx,
+                        const struct ofpact_sample *os,
+                        const struct dpif_ipfix *ipfix,
+                        struct sample_userspace_args *userspace)
 {
     odp_port_t output_odp_port = ODPP_NONE;
-    odp_port_t tunnel_out_port = ODPP_NONE;
-    struct dpif_ipfix *ipfix = ctx->xbridge->ipfix;
     bool emit_set_tunnel = false;
 
-    if (!ipfix) {
-        return;
-    }
-
-    /* Scale the probability from 16-bit to 32-bit while representing
-     * the same percentage. */
-    uint32_t probability =
-        ((uint32_t) os->probability << 16) | os->probability;
+    memset(userspace, 0, sizeof *userspace);
+    userspace->tunnel_out_port = ODPP_NONE;
 
     /* If ofp_port in flow sample action is equel to ofp_port,
      * this sample action is a input port action. */
@@ -5879,7 +5926,7 @@ xlate_sample_action(struct xlate_ctx *ctx,
         if (dpif_ipfix_get_flow_exporter_tunnel_sampling(ipfix,
                                                          os->collector_set_id)
             && dpif_ipfix_is_tunnel_port(ipfix, output_odp_port)) {
-            tunnel_out_port = output_odp_port;
+            userspace->tunnel_out_port = output_odp_port;
             emit_set_tunnel = true;
         }
     }
@@ -5913,20 +5960,57 @@ xlate_sample_action(struct xlate_ctx *ctx,
         }
     }
 
-    struct user_action_cookie cookie;
+    userspace->cookie.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
+    userspace->cookie.ofp_in_port = ctx->xin->flow.in_port.ofp_port;
+    userspace->cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
+    userspace->cookie.flow_sample.probability = os->probability;
+    userspace->cookie.flow_sample.collector_set_id = os->collector_set_id;
+    userspace->cookie.flow_sample.obs_domain_id = os->obs_domain_id;
+    userspace->cookie.flow_sample.obs_point_id = os->obs_point_id;
+    userspace->cookie.flow_sample.output_odp_port = output_odp_port;
+    userspace->cookie.flow_sample.direction = os->direction;
+    userspace->include_actions = false;
+}
 
-    memset(&cookie, 0, sizeof cookie);
-    cookie.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
-    cookie.ofp_in_port = ctx->xin->flow.in_port.ofp_port;
-    cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
-    cookie.flow_sample.probability = os->probability;
-    cookie.flow_sample.collector_set_id = os->collector_set_id;
-    cookie.flow_sample.obs_domain_id = os->obs_domain_id;
-    cookie.flow_sample.obs_point_id = os->obs_point_id;
-    cookie.flow_sample.output_odp_port = output_odp_port;
-    cookie.flow_sample.direction = os->direction;
+static void
+xlate_sample_action(struct xlate_ctx *ctx,
+                    const struct ofpact_sample *os)
+{
+    struct dpif_lsample *lsample = ctx->xbridge->lsample;
+    struct dpif_ipfix *ipfix = ctx->xbridge->ipfix;
+    struct compose_sample_args compose_args = {0};
+    struct sample_userspace_args userspace;
+    struct sample_psample_args psample;
 
-    compose_sample_action(ctx, probability, &cookie, tunnel_out_port, false);
+    if (!ipfix && !lsample) {
+        return;
+    }
+
+    /* Scale the probability from 16-bit to 32-bit while representing
+     * the same percentage. */
+    compose_args.probability =
+        ((uint32_t) os->probability << 16) | os->probability;
+
+    if (ipfix) {
+        xlate_fill_ipfix_sample(ctx, os, ipfix, &userspace);
+        compose_args.userspace = &userspace;
+    }
+
+    if (lsample &&
+        dpif_lsample_get_group_id(lsample,
+                                  os->collector_set_id,
+                                  &psample.group_id)) {
+        psample.cookie.hi = htonl(os->obs_domain_id);
+        psample.cookie.lo = htonl(os->obs_point_id);
+
+        compose_args.psample = &psample;
+    }
+
+    if (!compose_args.userspace && !compose_args.psample) {
+        return;
+    }
+
+    compose_sample_action(ctx, &compose_args);
 }
 
 /* Determine if an datapath action translated from the openflow action

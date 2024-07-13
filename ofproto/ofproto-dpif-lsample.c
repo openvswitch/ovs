@@ -138,6 +138,20 @@ dpif_lsample_set_options(struct dpif_lsample *lsample,
     return changed;
 }
 
+/* Returns the group_id for a given collector_set_id, if it exists. */
+bool
+dpif_lsample_get_group_id(struct dpif_lsample *ps, uint32_t collector_set_id,
+                          uint32_t *group_id)
+{
+    struct lsample_exporter_node *node;
+
+    node = dpif_lsample_find_exporter_node(ps, collector_set_id);
+    if (node) {
+        *group_id = node->exporter.options.group_id;
+    }
+    return !!node;
+}
+
 struct dpif_lsample *
 dpif_lsample_create(void)
 {
