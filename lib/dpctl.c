@@ -725,8 +725,8 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
                 continue;
             }
             error = netdev_get_stats(netdev, &s);
+            netdev_close(netdev);
             if (!error) {
-                netdev_close(netdev);
                 print_stat(dpctl_p, "    RX packets:", s.rx_packets);
                 print_stat(dpctl_p, " errors:", s.rx_errors);
                 print_stat(dpctl_p, " dropped:", s.rx_dropped);
