@@ -6489,7 +6489,7 @@ parse_SAMPLE(char *arg, const struct ofpact_parse_params *pp)
                 if (os->obs_domain_src.n_bits > 32) {
                     return xasprintf("size of obs_domain_id field (%d) "
                                      "exceeds maximum (32)",
-                                     os->obs_point_src.n_bits);
+                                     os->obs_domain_src.n_bits);
                 }
             }
         } else if (!strcmp(key, "obs_point_id")) {
