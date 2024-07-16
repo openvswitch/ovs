@@ -408,7 +408,8 @@ parse_ethertype(const void **datap, size_t *sizep)
 static inline bool
 parse_icmpv6(const void **datap, size_t *sizep,
              const struct icmp6_data_header *icmp6,
-             ovs_be32 *rso_flags, const struct in6_addr **nd_target,
+             ovs_be32 *rso_flags,
+             const union ovs_16aligned_in6_addr **nd_target,
              struct eth_addr arp_buf[2], uint8_t *opt_type)
 {
     if (icmp6->icmp6_base.icmp6_code != 0 ||
@@ -1117,7 +1118,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_ICMPV6)) {
             if (OVS_LIKELY(size >= sizeof(struct icmp6_data_header))) {
-                const struct in6_addr *nd_target;
+                const union ovs_16aligned_in6_addr *nd_target;
                 struct eth_addr arp_buf[2];
                 /* This will populate whether we received Option 1
                  * or Option 2. */
