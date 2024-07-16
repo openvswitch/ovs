@@ -2315,7 +2315,7 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
         }
 
         /* After the VLAN check, apply a flow mask if a filter is specified. */
-        if (ctx->wc && mc.filter_flow) {
+        if (mc.filter_flow) {
             flow_wildcards_union_with_minimask(ctx->wc, mc.filter_mask);
             if (!OVS_UNLIKELY(
                  miniflow_equal_flow_in_minimask(mc.filter_flow,
