@@ -1618,7 +1618,7 @@ match_format(const struct match *match,
         ds_put_char(s, ',');
     }
     for (i = 0; i < FLOW_MAX_VLAN_HEADERS; i++) {
-        char str_i[8];
+        char str_i[12];
 
         if (!wc->masks.vlans[i].tci) {
             break;
