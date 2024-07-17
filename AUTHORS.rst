@@ -760,6 +760,7 @@ Tytus Kurek                     Tytus.Kurek@pega.com
 Valentin Bud                    valentin@hackaserver.com
 Vasiliy Tolstov                 v.tolstov@selfip.ru
 Vinllen Chen                    cvinllen@gmail.com
+Vipul Ashri                     vipul.ashri@ericsson.com
 Vishal Swarankar                vishal.swarnkar@gmail.com
 Vjekoslav Brajkovic             balkan@cs.washington.edu
 Voravit T.                      voravit@kth.se
