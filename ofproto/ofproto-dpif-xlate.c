@@ -3423,8 +3423,8 @@ compose_sample_action(struct xlate_ctx *ctx,
      * insert a meter action before the user space action.  */
     struct ofproto *ofproto = &ctx->xin->ofproto->up;
     uint32_t meter_id = ofproto->slowpath_meter_id;
+    size_t observe_offset = UINT32_MAX;
     size_t cookie_offset = 0;
-    size_t observe_offset;
 
     /* The meter action is only used to throttle userspace actions.
      * If they are not needed and the sampling rate is 100%, avoid generating
