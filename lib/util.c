@@ -221,6 +221,8 @@ xvasprintf(const char *format, va_list args)
     size_t needed;
     char *s;
 
+    ovs_assert(format);
+
     va_copy(args2, args);
     needed = vsnprintf(NULL, 0, format, args);
 
