@@ -223,7 +223,7 @@ nln_wait(struct nln *nln)
     }
 }
 
-void
+void OVS_NO_SANITIZE_FUNCTION
 nln_report(const struct nln *nln, void *change, int group)
 {
     struct nln_notifier *notifier;
