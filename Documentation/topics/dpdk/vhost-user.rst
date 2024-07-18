@@ -312,7 +312,7 @@ predictable migration time. Mostly used as a second phase after the normal
 
 More information can be found in QEMU `docs`_.
 
-.. _`docs`: https://git.qemu.org/?p=qemu.git;a=blob;f=docs/devel/migration.rst
+.. _`docs`: https://www.qemu.org/docs/master/devel/migration/postcopy.html
 
 Post-copy support may be enabled via a global config value
 ``vhost-postcopy-support``. Setting this to ``true`` enables Post-copy support
@@ -487,7 +487,7 @@ Sample XML
       </devices>
     </domain>
 
-.. _QEMU documentation: http://git.qemu-project.org/?p=qemu.git;a=blob;f=docs/specs/vhost-user.txt;h=7890d7169;hb=HEAD
+.. _QEMU documentation: https://www.qemu.org/docs/master/interop/vhost-user.html
 
 Jumbo Frames
 ------------
