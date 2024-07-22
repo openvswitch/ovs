@@ -1090,7 +1090,6 @@ ovsdb_txn_precommit(struct ovsdb_txn *txn)
      * was really a no-op. */
     error = for_each_txn_row(txn, determine_changes);
     if (error) {
-        ovsdb_txn_abort(txn);
         return OVSDB_WRAP_BUG("can't happen", error);
     }
     if (ovs_list_is_empty(&txn->txn_tables)) {
