@@ -2,7 +2,7 @@ README.Debian for openvswitch-switch
 ---------------------------------
 
 The Linux kernel 3.3 or later has an integrated Open vSwitch kernel
-module.  Theis Linux kernel module lacks a few features that are in
+module.  The Linux kernel module lacks a few features that are in
 the third-party module.  For details, please see the FAQ, "What
 features are not available in the Open vSwitch kernel datapath that
 ships as part of the upstream Linux kernel?".  If you need the
