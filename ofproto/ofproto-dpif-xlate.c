@@ -677,6 +677,7 @@ static size_t count_skb_priorities(const struct xport *);
 static bool dscp_from_skb_priority(const struct xport *, uint32_t skb_priority,
                                    uint8_t *dscp);
 
+static bool xlate_resubmit_resource_check(struct xlate_ctx *);
 static void xlate_xbridge_init(struct xlate_cfg *, struct xbridge *);
 static void xlate_xbundle_init(struct xlate_cfg *, struct xbundle *);
 static void xlate_xport_init(struct xlate_cfg *, struct xport *);
@@ -3655,6 +3656,10 @@ compose_table_xlate(struct xlate_ctx *ctx, const struct xport *out_dev,
     struct ofpact_output output;
     struct flow flow;
 
+    if (!xlate_resubmit_resource_check(ctx)) {
+        return 0;
+    }
+
     ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
     flow_extract(packet, &flow);
     flow.in_port.ofp_port = out_dev->ofp_port;
@@ -3663,7 +3668,8 @@ compose_table_xlate(struct xlate_ctx *ctx, const struct xport *out_dev,
 
     return ofproto_dpif_execute_actions__(xbridge->ofproto, version, &flow,
                                           NULL, &output.ofpact, sizeof output,
-                                          ctx->depth, ctx->resubmits, packet);
+                                          ctx->depth + 1, ctx->resubmits,
+                                          packet);
 }
 
 static void
