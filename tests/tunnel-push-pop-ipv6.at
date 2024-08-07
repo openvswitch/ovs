@@ -816,3 +816,86 @@ hash(l4(0)),recirc(0x2)
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([tunnel_push_pop_ipv6 - Mirror over tunnels])
+OVS_VSWITCHD_START([dnl
+    add-br br-ext -- set bridge br-ext datapath_type=dummy \
+        other-config:hwaddr=aa:55:aa:55:00:00 \
+    -- add-port br0 t1 -- set Interface t1 type=geneve \
+        options:remote_ip=2001:cafe::91 \
+    -- add-port br0 t2 -- set Interface t2 type=erspan \
+        options:remote_ip=2001:cafe::92 options:key=flow \
+        options:erspan_ver=1 options:erspan_idx=flow \
+    -- add-port br0 p0 -- set Interface p0 type=dummy \
+    -- add-port br0 p1 -- set Interface p1 type=dummy \
+    -- add-port br-ext p-ext -- set Interface p-ext type=dummy \
+        options:pcap=ext.pcap])
+
+dnl Configure mirroring over the UDP and ERSPAN tunnels.
+AT_CHECK([dnl
+    ovs-vsctl \
+        set Bridge br0 mirrors=@m1,@m2 -- \
+        --id=@t1 get Port t1 -- \
+        --id=@t2 get Port t2 -- \
+        --id=@m1 create Mirror name=vxlan select_all=true output_port=@t1 -- \
+        --id=@m2 create Mirror name=erspan select_all=true output_port=@t2],
+    [0], [stdout])
+
+AT_CHECK([ovs-ofctl add-flow br-ext actions=normal])
+AT_CHECK([ovs-ofctl add-flow br0 actions=normal])
+
+dnl Make sure ephemeral ports stay static across tests.
+AT_CHECK([ovs-appctl tnl/egress_port_range 35190 35190], [0], [OK
+])
+
+dnl Setup an IP address.
+AT_CHECK([ovs-appctl netdev-dummy/ip6addr br-ext 2001:cafe::90/64], [0], [OK
+])
+
+dnl Send two ND packets to set the tunnel's port and mac address.
+AT_CHECK([ovs-appctl netdev-dummy/receive p-ext dnl
+ 'eth(src=f8:bc:12:44:34:b3,dst=aa:55:aa:55:00:00),eth_type(0x86dd),dnl
+  ipv6(src=2001:cafe::91,dst=2001:cafe::90,label=0,proto=58,tclass=0,hlimit=255,frag=no),dnl
+  icmpv6(type=136,code=0),dnl
+  nd(target=2001:cafe::91,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b3)'
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p-ext dnl
+ 'eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x86dd),dnl
+  ipv6(src=2001:cafe::92,dst=2001:cafe::90,label=0,proto=58,tclass=0,hlimit=255,frag=no),dnl
+  icmpv6(type=136,code=0),dnl
+  nd(target=2001:cafe::92,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b6)'
+])
+
+m4_define([FLOW], [m4_join([,],
+  [in_port(p1)],
+  [eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800)],
+  [ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no)],
+  [icmp(type=8,code=0)])])
+
+m4_define([ERSPAN_ACT], [m4_join([,],
+  [clone(tnl_push(tnl_port(erspan_sys)],
+           [header(size=70,type=108],
+                  [eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x86dd)],
+                  [ipv6(src=2001:cafe::90,dst=2001:cafe::92,label=0,proto=47,tclass=0x0,hlimit=64)],
+                  [erspan(ver=1,sid=0x0,idx=0x0))],
+           [out_port(br-ext))],
+         [p-ext)])])
+
+m4_define([GENEVE_ACT], [m4_join([,],
+  [clone(tnl_push(tnl_port(genev_sys_6081)],
+           [header(size=70,type=5],
+                   [eth(dst=f8:bc:12:44:34:b3,src=aa:55:aa:55:00:00,dl_type=0x86dd)],
+                   [ipv6(src=2001:cafe::90,dst=2001:cafe::91,label=0,proto=17,tclass=0x0,hlimit=64)],
+                   [udp(src=0,dst=6081,csum=0xffff)],
+                   [geneve(vni=0x0))],
+           [out_port(br-ext))],
+         [p-ext)])])
+
+dnl Verify packet is mirrored to both tunnels.  Tunnel actions may happen
+dnl in any order.
+AT_CHECK([ovs-appctl ofproto/trace --names ovs-dummy "FLOW"], [0], [stdout])
+AT_CHECK([grep -q "ERSPAN_ACT" stdout])
+AT_CHECK([grep -q "GENEVE_ACT" stdout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
