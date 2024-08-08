@@ -67,6 +67,12 @@ AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.lo
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
 
+dnl Check that no mempool was allocated.
+AT_CHECK([ovs-appctl netdev-dpdk/get-mempool-info dpdkvhostuserclient0], [2], [], [dnl
+Not allocated
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
