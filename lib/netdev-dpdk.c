@@ -4069,10 +4069,11 @@ netdev_dpdk_get_mempool_info(struct unixctl_conn *conn,
                              int argc, const char *argv[],
                              void *aux OVS_UNUSED)
 {
-    size_t size;
-    FILE *stream;
-    char *response = NULL;
     struct netdev *netdev = NULL;
+    const char *error = NULL;
+    char *response = NULL;
+    FILE *stream;
+    size_t size;
 
     if (argc == 2) {
         netdev = netdev_from_name(argv[1]);
@@ -4096,10 +4097,14 @@ netdev_dpdk_get_mempool_info(struct unixctl_conn *conn,
         ovs_mutex_lock(&dev->mutex);
         ovs_mutex_lock(&dpdk_mp_mutex);
 
-        rte_mempool_dump(stream, dev->dpdk_mp->mp);
-        fprintf(stream, "    count: avail (%u), in use (%u)\n",
-                rte_mempool_avail_count(dev->dpdk_mp->mp),
-                rte_mempool_in_use_count(dev->dpdk_mp->mp));
+        if (dev->dpdk_mp) {
+            rte_mempool_dump(stream, dev->dpdk_mp->mp);
+            fprintf(stream, "    count: avail (%u), in use (%u)\n",
+                    rte_mempool_avail_count(dev->dpdk_mp->mp),
+                    rte_mempool_in_use_count(dev->dpdk_mp->mp));
+        } else {
+            error = "Not allocated";
+        }
 
         ovs_mutex_unlock(&dpdk_mp_mutex);
         ovs_mutex_unlock(&dev->mutex);
@@ -4111,7 +4116,11 @@ netdev_dpdk_get_mempool_info(struct unixctl_conn *conn,
 
     fclose(stream);
 
-    unixctl_command_reply(conn, response);
+    if (error) {
+        unixctl_command_reply_error(conn, error);
+    } else {
+        unixctl_command_reply(conn, response);
+    }
 out:
     free(response);
     netdev_close(netdev);
