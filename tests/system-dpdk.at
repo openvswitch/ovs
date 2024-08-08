@@ -88,6 +88,12 @@ ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhos
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
 
+dnl Check that no mempool was allocated.
+AT_CHECK([ovs-appctl netdev-dpdk/get-mempool-info dpdkvhostuserclient0], [2], [], [dnl
+Not allocated
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_DPDK_STOP_VSWITCHD(["dnl
