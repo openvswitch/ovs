@@ -6735,7 +6735,8 @@ get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
             struct rtnl_link_stats64 aligned_lstats;
 
             if (!IS_PTR_ALIGNED(lstats)) {
-                memcpy(&aligned_lstats, lstats, sizeof aligned_lstats);
+                memcpy(&aligned_lstats, (void *) lstats,
+                       sizeof aligned_lstats);
                 lstats = &aligned_lstats;
             }
             netdev_stats_from_rtnl_link_stats64(stats, lstats);
