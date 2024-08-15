@@ -807,6 +807,41 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
 AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
 AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
 ])
+
+dnl Test with IP optional fields in a valid packet.  Note that neither this
+dnl packet nor the following one contain a correct checksum.  OVS is
+dnl expected to replace this dummy checksum with a valid one if possible.
+m4_define([OPT_PKT], m4_join([],
+dnl eth(dst=aa:aa:aa:aa:aa:aa,src=bb:bb:bb:bb:bb:bb,type=0x0800)
+[aaaaaaaaaaaabbbbbbbbbbbb0800],
+dnl ipv4(dst=10.0.0.2,src=10.0.0.1,proto=1,len=60,tot_len=68,csum=0xeeee)
+[4f000044abab00004001eeee0a0000010a000002],
+dnl IPv4 Opt: type 7 (Record Route) len 39 + type 0 (EOL).
+[07270c010203040a000003000000000000000000],
+[0000000000000000000000000000000000000000],
+dnl icmp(type=8,code=0), csum 0x3e2f incorrect, should be 0x412f.
+[08003e2fb6d00000]))
+
+dnl IP header indicates optional fields but doesn't contain any.
+m4_define([MICROGRAM], m4_join([],
+dnl eth(dst=aa:aa:aa:aa:aa:aa,src=bb:bb:bb:bb:bb:bb,type=0x0800)
+[aaaaaaaaaaaabbbbbbbbbbbb0800],
+dnl ipv4(dst=10.0.0.2,src=10.0.0.1,proto=1,len=60,tot_len=68,csum=0xeeee)
+[4f000044abab00004001eeee0a0000010a000002]))
+
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=true])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 OPT_PKT])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 MICROGRAM])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+
+dnl Build the expected modified packets.  The first packet has a valid IPv4
+dnl checksum and modified destination IP address.  The second packet isn't
+dnl expected to change.
+AT_CHECK([echo "OPT_PKT" | sed -e "s/0a000002/c0a80101/" -e "s/eeee/dd2e/" > expout])
+AT_CHECK([echo "MICROGRAM" >> expout])
+AT_CHECK([tail -n 2 p2.pcap.txt], [0], [expout])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
