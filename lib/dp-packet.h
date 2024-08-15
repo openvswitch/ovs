@@ -529,6 +529,16 @@ dp_packet_inner_l3(const struct dp_packet *b)
            : NULL;
 }
 
+static inline size_t
+dp_packet_inner_l3_size(const struct dp_packet *b)
+{
+    return OVS_LIKELY(b->inner_l3_ofs != UINT16_MAX)
+           ? (const char *) dp_packet_tail(b)
+           - (const char *) dp_packet_inner_l3(b)
+           - dp_packet_l2_pad_size(b)
+           : 0;
+}
+
 static inline void *
 dp_packet_inner_l4(const struct dp_packet *b)
 {
@@ -1390,11 +1400,26 @@ dp_packet_hwol_l3_ipv4(const struct dp_packet *b)
 static inline void
 dp_packet_ip_set_header_csum(struct dp_packet *p, bool inner)
 {
-    struct ip_header *ip = (inner) ? dp_packet_inner_l3(p) : dp_packet_l3(p);
+    struct ip_header *ip;
+    size_t l3_size;
+    size_t ip_len;
+
+    if (inner) {
+        ip = dp_packet_inner_l3(p);
+        l3_size = dp_packet_inner_l3_size(p);
+    } else {
+        ip = dp_packet_l3(p);
+        l3_size = dp_packet_l3_size(p);
+    }
 
     ovs_assert(ip);
-    ip->ip_csum = 0;
-    ip->ip_csum = csum(ip, sizeof *ip);
+
+    ip_len = IP_IHL(ip->ip_ihl_ver) * 4;
+
+    if (OVS_LIKELY(ip_len >= IP_HEADER_LEN && ip_len < l3_size)) {
+        ip->ip_csum = 0;
+        ip->ip_csum = csum(ip, ip_len);
+    }
 }
 
 /* Returns 'true' if the packet 'p' has good integrity and the
