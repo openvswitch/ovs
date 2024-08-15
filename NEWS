@@ -1,3 +1,6 @@
+v3.4.1 - xx xxx xxxx
+--------------------
+
 v3.4.0 - 15 Aug 2024
 --------------------
    - Option '--mlockall' now only locks memory pages on fault, if possible.
