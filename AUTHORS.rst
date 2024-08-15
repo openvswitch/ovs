@@ -398,7 +398,7 @@ Rohith Basavaraja                  rohith.basavaraja@gmail.com
 Roi Dayan                          roid@nvidia.com
 Róbert Mulik                       robert.mulik@ericsson.com
 Romain Lenglet                     romain.lenglet@berabera.info
-Rosemarie O'Riorden                roriorden@redhat.com
+Rosemarie O'Riorden                rosemarie@redhat.com
 Roni Bar Yanai                     roniba@mellanox.com
 Russell Bryant                     russell@ovn.org
 RYAN D. MOATS                      rmoats@us.ibm.com
