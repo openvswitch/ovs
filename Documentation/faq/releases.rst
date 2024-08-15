@@ -32,7 +32,7 @@ Q: What does it mean for an Open vSwitch release to be LTS (long-term support)?
     If a significant bug is identified in an LTS release, we will provide an
     updated release that includes the fix.  Releases that are not LTS may not
     be fixed and may just be supplanted by the next major release.  The current
-    LTS release is 2.17.x.
+    LTS release is 3.3.x.
 
     For more information on the Open vSwitch release process, refer to
     :doc:`/internals/release-process`.
