@@ -6,11 +6,11 @@ Synopsis
 ========
 
 ``ovs-appctl``
-[``--target=``<target> | ``-t`` <target>]
-[``--timeout=``<secs> | ``-T`` <secs>]
-[``--format=``<format> | ``-f`` <format>]
+[``--target=``\ *target* | ``-t`` *target*]
+[``--timeout=``\ *secs* | ``-T`` *secs*]
+[``--format=``\ *format* | ``-f`` *format*]
 [``--pretty``]
-<command> [<arg>...]
+*command* [*arg* ``...``]
 
 ``ovs-appctl --help``
 
@@ -33,11 +33,11 @@ command and prints the daemon's response on standard output.
 
 In normal use only a single option is accepted:
 
-* ``-t`` <target> or ``--target`` <target>
+* ``-t`` *target* or ``--target=``\ *target*
 
   Tells ``ovs-appctl`` which daemon to contact.
 
-  If <target> begins with ``/`` it must name a Unix domain socket on
+  If *target* begins with ``/`` it must name a Unix domain socket on
   which an Open vSwitch daemon is listening for control channel
   connections.  By default, each daemon listens on a Unix domain socket
   in the rundir (e.g. ``/run``) named ``<program>.<pid>.ctl``, where
@@ -47,33 +47,33 @@ In normal use only a single option is accepted:
 
   Otherwise, ``ovs-appctl`` looks in the rundir for a pidfile, that is,
   a file whose contents are the process ID of a running process as a
-  decimal number, named ``<target>.pid``.  (The ``--pidfile`` option
+  decimal number, named *target*\ ``.pid``.  (The ``--pidfile`` option
   makes an Open vSwitch daemon create a pidfile.)  ``ovs-appctl`` reads
   the pidfile, then looks in the rundir for a Unix socket named
-  ``<target>.<pid>.ctl``, where <pid> is replaced by the process ID read
+  *target*\ ``.<pid>.ctl``, where <pid> is replaced by the process ID read
   from the pidfile, and uses that file as if it had been specified
   directly as the target.
 
-  On Windows, <target> can be an absolute path to a file that contains a
+  On Windows, *target* can be an absolute path to a file that contains a
   localhost TCP port on which an Open vSwitch daemon is listening for
   control channel connections. By default, each daemon writes the TCP
   port on which it is listening for control connection into the file
-  ``<program>.ctl`` located inside the rundir. If <target> is not an
+  ``<program>.ctl`` located inside the rundir. If *target* is not an
   absolute path, ``ovs-appctl`` looks in the rundir for a file named
-  ``<target>.ctl``.  The default target is ``ovs-vswitchd``.
+  *target*\ ``.ctl``.  The default *target* is ``ovs-vswitchd``.
 
-* ``-T <secs>`` or ``--timeout=<secs>``
+* ``-T`` *secs* or ``--timeout=``\ *secs*
 
-  By default, or with a <secs> of ``0``, ``ovs-appctl`` waits forever to
+  By default, or with a *secs* of ``0``, ``ovs-appctl`` waits forever to
   connect to the daemon and receive a response.  This option limits
-  runtime to approximately <secs> seconds.  If the timeout expires,
+  runtime to approximately *secs* seconds.  If the timeout expires,
   ``ovs-appctl`` exits with a ``SIGALRM`` signal.
 
-* ``-f <format>`` or ``--format=<format>``
+* ``-f`` *format* or ``--format=``\ *format*
 
   Tells ``ovs-appctl`` which output format to use.  By default, or with a
-  <format> of ``text``, ``ovs-appctl`` will print plain-text for humans.
-  When <format> is ``json``, ``ovs-appctl`` will return a JSON document.
+  *format* of ``text``, ``ovs-appctl`` will print plain-text for humans.
+  When *format* is ``json``, ``ovs-appctl`` will return a JSON document.
   When ``json`` is requested, but a command has not implemented JSON
   output, the plain-text output will be wrapped in a provisional JSON
   document with the following structure::
@@ -158,10 +158,10 @@ and adjusting log levels:
 
   Lists logging pattern used for each destination.
 
-* ``vlog/set`` [<spec>]
+* ``vlog/set`` [*spec*]
 
-  Sets logging levels.  Without any <spec>, sets the log level for
-  every module and destination to ``dbg``.  Otherwise, <spec> is a
+  Sets logging levels.  Without any *spec*, sets the log level for
+  every module and destination to ``dbg``.  Otherwise, *spec* is a
   list of words separated by spaces or commas or colons, up to one from
   each category below:
 
@@ -173,7 +173,7 @@ and adjusting log levels:
     change to only to the system log, to the console, or to a file,
     respectively.
 
-    On Windows platform, ``syslog`` is only useful if <target> was
+    On Windows platform, ``syslog`` is only useful if *target* was
     started with the ``--syslog-target`` option (it has no effect
     otherwise).
 
@@ -182,20 +182,20 @@ and adjusting log levels:
     will be logged, and messages of lower severity will be filtered out.
     ``off`` filters out all messages.
 
-  Case is not significant within <spec>.
+  Case is not significant within *spec*.
 
   Regardless of the log levels set for ``file``, logging to a file
   will not take place unless the target application was invoked with the
   ``--log-file`` option.
 
   For compatibility with older versions of OVS, ``any`` is accepted
-  within <spec> but it has no effect.
+  within *spec* but it has no effect.
 
-* ``vlog/set PATTERN:<destination>:<pattern>``
+* ``vlog/set PATTERN:``\ *destination*:*pattern*
 
-  Sets the log pattern for <destination> to <pattern>.  Each time a
-  message is logged to <destination>, <pattern> determines the
-  message's formatting.  Most characters in <pattern> are copied
+  Sets the log pattern for *destination* to *pattern*.  Each time a
+  message is logged to *destination*, *pattern* determines the
+  message's formatting.  Most characters in *pattern* are copied
   literally to the log, but special escapes beginning with ``%`` are
   expanded as follows:
 
@@ -214,13 +214,13 @@ and adjusting log levels:
 
   * ``%d``
 
-    The current date and time in ISO 8601 format (YYYY-MM-DD HH:MM:SS).
+    The current date and time in ISO 8601 format (``YYYY-MM-DD HH:MM:SS``).
 
-  * ``%d{<format>}``
+  * ``%d{``\ *format*\ ``}``
 
-    The current date and time in the specified <format>, which takes
-    the same format as the <template> argument to ``strftime(3)``.  As
-    an extension, any ``#`` characters in <format> will be replaced by
+    The current date and time in the specified *format*, which takes
+    the same format as the ``template`` argument to ``strftime(3)``.  As
+    an extension, any ``#`` characters in *format* will be replaced by
     fractional seconds, e.g. use ``%H:%M:%S.###`` for the time to the
     nearest millisecond.  Sub-second times are only approximate and
     currently decimal places after the third will always be reported
@@ -228,14 +228,14 @@ and adjusting log levels:
 
   * ``%D``
 
-    The current UTC date and time in ISO 8601 format (YYYY-MM-DD
-    HH:MM:SS).
+    The current UTC date and time in ISO 8601 format
+    (``YYYY-MM-DD HH:MM:SS``).
 
-  * ``%D{<format>}``
+  * ``%D{``\ *format*\ ``}``
 
-    The current UTC date and time in the specified <format>, which
-    takes the same format as the <template> argument to
-    ``strftime``(3).  Supports the same extension for sub-second
+    The current UTC date and time in the specified *format*, which
+    takes the same format as the ``template`` argument to
+    ``strftime(3)``.  Supports the same extension for sub-second
     resolution as ``%d{...}``.
 
   * ``%E``
@@ -299,22 +299,23 @@ and adjusting log levels:
     Pad the field to the field width with ``0`` characters.  Padding
     with spaces is the default.
 
-  * <width>
+  * *width*
 
     A number specifies the minimum field width.  If the escape expands
-    to fewer characters than <width> then it is padded to fill the
-    field width.  (A field wider than <width> is not truncated to
+    to fewer characters than *width* then it is padded to fill the
+    field width.  (A field wider than *width* is not truncated to
     fit.)
 
-  The default pattern for console and file output is ``%D{%Y-%m-%dT
-  %H:%M:%SZ}|%05N|%c|%p|%m``; for syslog output, ``%05N|%c|%p|%m``.
+  The default pattern for console and file output is
+  ``%D{%Y-%m-%dT %H:%M:%SZ}|%05N|%c|%p|%m``; for syslog output,
+  ``%05N|%c|%p|%m``.
 
   Daemons written in Python (e.g. ``ovs-monitor-ipsec``) do not allow
   control over the log pattern.
 
-* ``vlog/set FACILITY:<facility>``
+* ``vlog/set FACILITY:``\ *facility*
 
-  Sets the RFC5424 facility of the log message. <facility> can be one
+  Sets the RFC5424 facility of the log message. *facility* can be one
   of ``kern``, ``user``, ``mail``, ``daemon``, ``auth``, ``syslog``,
   ``lpr``, ``news``, ``uucp``, ``clock``, ``ftp``, ``ntp``, ``audit``,
   ``alert``, ``clock2``, ``local0``, ``local1``, ``local2``,
