@@ -1142,10 +1142,17 @@ static inline void
 dp_packet_ip_set_header_csum(struct dp_packet *p)
 {
     struct ip_header *ip = dp_packet_l3(p);
+    size_t l3_size = dp_packet_l3_size(p);
+    size_t ip_len;
 
     ovs_assert(ip);
-    ip->ip_csum = 0;
-    ip->ip_csum = csum(ip, sizeof *ip);
+
+    ip_len = IP_IHL(ip->ip_ihl_ver) * 4;
+
+    if (OVS_LIKELY(ip_len >= IP_HEADER_LEN && ip_len < l3_size)) {
+        ip->ip_csum = 0;
+        ip->ip_csum = csum(ip, ip_len);
+    }
 }
 
 /* Returns 'true' if the packet 'p' has good integrity and the
