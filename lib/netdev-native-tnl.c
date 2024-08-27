@@ -254,7 +254,7 @@ dp_packet_tnl_ol_process(struct dp_packet *packet,
 
             if (IP_VER(ip->ip_ihl_ver) == 4) {
                 dp_packet_hwol_set_tx_ipv4(packet);
-                dp_packet_hwol_tx_ip_csum(packet);
+                dp_packet_hwol_set_tx_ip_csum(packet);
             } else if (IP_VER(ip->ip_ihl_ver) == 6) {
                 dp_packet_hwol_set_tx_ipv6(packet);
             }
