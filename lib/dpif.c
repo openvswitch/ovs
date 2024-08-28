@@ -1810,7 +1810,7 @@ log_flow_message(const struct dpif *dpif, int error,
         ds_put_cstr(&ds, ", ");
         dpif_flow_stats_format(stats, &ds);
     }
-    if (actions || actions_len) {
+    if (actions) {
         ds_put_cstr(&ds, ", actions:");
         format_odp_actions(&ds, actions, actions_len, NULL);
     }
