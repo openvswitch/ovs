@@ -1056,7 +1056,7 @@ format_odp_set_nsh(struct ds *ds, const struct nlattr *attr)
         enum ovs_nsh_key_attr type = nl_attr_type(a);
         size_t len = nl_attr_get_size(a);
 
-        if (type >= OVS_NSH_KEY_ATTR_MAX) {
+        if (type > OVS_NSH_KEY_ATTR_MAX) {
             return;
         }
 
