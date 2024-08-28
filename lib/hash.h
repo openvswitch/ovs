@@ -193,7 +193,7 @@ hash_finish32(uint64_t hash, uint32_t final, uint32_t semifinal)
     /* The finishing multiplier 0x805204f3 has been experimentally
      * derived to pass the testsuite hash tests. */
     hash = _mm_crc32_u32(hash, semifinal);
-    hash = _mm_crc32_u32(hash, final) * 0x805204f3;
+    hash = _mm_crc32_u32(hash, final) * 0x805204f3ULL;
     return hash ^ ((uint32_t) hash >> 16); /* Increase entropy in LSBs. */
 }
 
