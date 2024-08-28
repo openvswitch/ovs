@@ -84,6 +84,7 @@ struct stopwatch_packet {
 static struct shash stopwatches = SHASH_INITIALIZER(&stopwatches);
 static struct ovs_mutex stopwatches_lock = OVS_MUTEX_INITIALIZER;
 static pthread_cond_t stopwatches_sync = PTHREAD_COND_INITIALIZER;
+static bool stopwatches_sync_requested = false;
 
 static struct latch stopwatch_latch;
 static struct guarded_list stopwatch_commands;
@@ -439,6 +440,7 @@ stopwatch_thread(void *ign OVS_UNUSED)
                 stopwatch_end_sample_protected(pkt);
                 break;
             case OP_SYNC:
+                stopwatches_sync_requested = true;
                 xpthread_cond_signal(&stopwatches_sync);
                 break;
             case OP_RESET:
@@ -547,6 +549,9 @@ stopwatch_sync(void)
     struct stopwatch_packet *pkt = stopwatch_packet_create(OP_SYNC);
     ovs_mutex_lock(&stopwatches_lock);
     stopwatch_packet_write(pkt);
-    ovs_mutex_cond_wait(&stopwatches_sync, &stopwatches_lock);
+    while (!stopwatches_sync_requested) {
+        ovs_mutex_cond_wait(&stopwatches_sync, &stopwatches_lock);
+    }
+    stopwatches_sync_requested = false;
     ovs_mutex_unlock(&stopwatches_lock);
 }
