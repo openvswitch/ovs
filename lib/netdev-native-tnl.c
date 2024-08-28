@@ -990,7 +990,6 @@ struct dp_packet *
 netdev_srv6_pop_header(struct dp_packet *packet)
 {
     const struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(packet);
-    size_t size = dp_packet_l3_size(packet) - IPV6_HEADER_LEN;
     struct pkt_metadata *md = &packet->md;
     struct flow_tnl *tnl = &md->tunnel;
     const struct ip6_rt_hdr *rt_hdr;
@@ -998,11 +997,18 @@ netdev_srv6_pop_header(struct dp_packet *packet)
     const void *data = nh + 1;
     uint8_t nw_frag = 0;
     unsigned int hlen;
+    size_t size;
 
     /*
      * Verifies that the routing header is present in the IPv6
      * extension headers and that its type is SRv6.
      */
+    size = dp_packet_l3_size(packet);
+    if (size < IPV6_HEADER_LEN) {
+        goto err;
+    }
+    size -= IPV6_HEADER_LEN;
+
     if (!parse_ipv6_ext_hdrs(&data, &size, &nw_proto, &nw_frag,
                              NULL, &rt_hdr)) {
         goto err;
