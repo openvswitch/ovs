@@ -396,7 +396,9 @@ vlog_set_log_file__(char *new_log_file_name)
                   && old_stat.st_ino == new_stat.st_ino));
     ovs_mutex_unlock(&log_file_mutex);
     if (same_file) {
-        close(new_log_fd);
+        if (new_log_fd >= 0) {
+            close(new_log_fd);
+        }
         free(new_log_file_name);
         return 0;
     }
