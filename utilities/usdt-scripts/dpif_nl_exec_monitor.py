@@ -468,9 +468,11 @@ def get_ovs_action_attr_str(attr):
                        "OVS_ACTION_ATTR_CLONE",
                        "OVS_ACTION_ATTR_CHECK_PKT_LEN",
                        "OVS_ACTION_ATTR_ADD_MPLS",
+                       "OVS_ACTION_ATTR_DEC_TTL",
+                       "OVS_ACTION_ATTR_DROP",
+                       "OVS_ACTION_ATTR_PSAMPLE",
                        "OVS_ACTION_ATTR_TUNNEL_PUSH",
                        "OVS_ACTION_ATTR_TUNNEL_POP",
-                       "OVS_ACTION_ATTR_DROP",
                        "OVS_ACTION_ATTR_LB_OUTPUT"]
     if attr < 0 or attr >= len(ovs_action_attr):
         return "<UNKNOWN:{}>".format(attr)
