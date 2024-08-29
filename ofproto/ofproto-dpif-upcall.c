@@ -57,6 +57,7 @@ COVERAGE_DEFINE(dumped_inconsistent_flow);
 COVERAGE_DEFINE(dumped_new_flow);
 COVERAGE_DEFINE(handler_duplicate_upcall);
 COVERAGE_DEFINE(revalidate_missed_dp_flow);
+COVERAGE_DEFINE(revalidate_missing_dp_flow);
 COVERAGE_DEFINE(ukey_dp_change);
 COVERAGE_DEFINE(ukey_invalid_stat_reset);
 COVERAGE_DEFINE(ukey_replace_contention);
@@ -284,6 +285,7 @@ enum flow_del_reason {
     FDR_TOO_EXPENSIVE,      /* Too expensive to revalidate. */
     FDR_UPDATE_FAIL,        /* Datapath update failed. */
     FDR_XLATION_ERROR,      /* Flow translation error. */
+    FDR_FLOW_MISSING_DP,    /* Flow is missing from the datapath. */
 };
 
 /* 'udpif_key's are responsible for tracking the little bit of state udpif
@@ -318,6 +320,7 @@ struct udpif_key {
     uint64_t dump_seq OVS_GUARDED;            /* Tracks udpif->dump_seq. */
     uint64_t reval_seq OVS_GUARDED;           /* Tracks udpif->reval_seq. */
     enum ukey_state state OVS_GUARDED;        /* Tracks ukey lifetime. */
+    uint32_t missed_dumps OVS_GUARDED;        /* Missed consecutive dumps. */
 
     /* 'state' debug information. */
     unsigned int state_thread OVS_GUARDED;    /* Thread that transitions. */
@@ -3040,6 +3043,21 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
                     result = revalidate_ukey(udpif, ukey, &stats, &odp_actions,
                                              reval_seq, &recircs, &del_reason);
                 }
+
+                if (ukey->dump_seq != dump_seq) {
+                    ukey->missed_dumps++;
+                    if (ukey->missed_dumps >= 4) {
+                        /* If the flow was not dumped for 4 revalidator rounds,
+                         * we can assume the datapath flow no longer exists
+                         * and the ukey should be deleted. */
+                        COVERAGE_INC(revalidate_missing_dp_flow);
+                        del_reason = FDR_FLOW_MISSING_DP;
+                        result = UKEY_DELETE;
+                    }
+                } else {
+                    ukey->missed_dumps = 0;
+                }
+
                 if (result != UKEY_KEEP) {
                     /* Clears 'recircs' if filled by revalidate_ukey(). */
                     reval_op_init(&ops[n_ops++], result, udpif, ukey, &recircs,

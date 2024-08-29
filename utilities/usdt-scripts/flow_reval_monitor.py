@@ -255,6 +255,7 @@ FdrReasons = IntEnum(
         "FDR_TOO_EXPENSIVE",
         "FDR_UPDATE_FAIL",
         "FDR_XLATION_ERROR",
+        "FDR_FLOW_MISSING_DP"
     ],
     start=0,
 )
@@ -270,7 +271,8 @@ FdrReasonStrings = {
     FdrReasons.FDR_PURGE: "User requested flow deletion",
     FdrReasons.FDR_TOO_EXPENSIVE: "Too expensive to revalidate",
     FdrReasons.FDR_UPDATE_FAIL: "Datapath update failed",
-    FdrReasons.FDR_XLATION_ERROR: "Flow translation error"
+    FdrReasons.FDR_XLATION_ERROR: "Flow translation error",
+    FdrReasons.FDR_FLOW_MISSING_DP: "Flow is missing from the datapath"
 }
 
 
