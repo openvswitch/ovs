@@ -19,16 +19,19 @@
 # dpif_nl_exec_monitor.py uses the dpif_netlink_operate__:op_flow_execute USDT
 # probe to receive all DPIF_OP_EXECUTE operations that are queued for
 # transmission over the netlink socket. It will do some basic decoding, and if
-# requested a packet dump.
+# requested a packet dump. Note that there are also options to obtain
+# additional information for the DPIF_OP_FLOW_* operations.
 #
 # Here is an example:
 #
-#   # ./dpif_nl_exec_monitor.py --packet-decode decode
+#   # ./dpif_op_nl_monitor.py --packet-decode decode --trace-exec-op
 #   Display DPIF_OP_EXECUTE operations being queued for transmission...
 #   TIME               CPU  COMM             PID        NL_SIZE
-#   3124.516679897     1    ovs-vswitchd     8219       180
+#   Display DPIF operations being queued for transmission onto the netlink...
+#   TIME               CPU  COMM             PID        NL_SIZE    DPIF_...
+#   2162030.641541513  5    handler4         2951007    164        DPIF_...
 #      nlmsghdr  : len = 0, type = 36, flags = 1, seq = 0, pid = 0
-#      genlmsghdr: cmd = 3, version = 1, reserver = 0
+#      genlmsghdr: cmd = DPIF_OP_EXECUTE, version = 1, reserved = 0
 #      ovs_header: dp_ifindex = 21
 #        > Decode OVS_PACKET_ATTR_* TLVs:
 #        nla_len 46, nla_type OVS_PACKET_ATTR_PACKET[1], data: 00 00 00...
@@ -75,31 +78,9 @@
 #                seq       = 0xc
 #
 # The example above dumps the full netlink and packet decode. However options
-# exist to disable this. Here is the full list of supported options:
+# exist to disable this. For a complete list of options, please use the
+# '--help' or '-h' argument.
 #
-# usage: dpif_nl_exec_monitor.py [-h] [--buffer-page-count NUMBER] [-D [DEBUG]]
-#                                [-d {none,hex,decode}] [-n {none,hex,nlraw}]
-#                                [-p VSWITCHD_PID] [-s [64-2048]]
-#                                [-w PCAP_FILE]
-#
-# optional arguments:
-#   -h, --help            show this help message and exit
-#   --buffer-page-count NUMBER
-#                         Number of BPF ring buffer pages, default 1024
-#   -D [DEBUG], --debug [DEBUG]
-#                         Enable eBPF debugging
-#   -d {none,hex,decode}, --packet-decode {none,hex,decode}
-#                         Display packet content in selected mode, default none
-#   -n {none,hex,nlraw}, --nlmsg-decode {none,hex,nlraw}
-#                         Display netlink message content in selected mode,
-#                         default nlraw
-#   -p VSWITCHD_PID, --pid VSWITCHD_PID
-#                         ovs-vswitch's PID
-#   -s [64-2048], --nlmsg-size [64-2048]
-#                         Set maximum netlink message size to capture, default
-#                         512
-#   -w PCAP_FILE, --pcap PCAP_FILE
-#                         Write upcall packets to specified pcap file
 
 from bcc import BPF, USDT, USDTException
 from os.path import exists
@@ -142,11 +123,9 @@ struct ofpbuf {
 BPF_RINGBUF_OUTPUT(events, <BUFFER_PAGE_CNT>);
 BPF_TABLE("percpu_array", uint32_t, uint64_t, dropcnt, 1);
 
-int trace__op_flow_execute(struct pt_regs *ctx) {
-    struct ofpbuf nlbuf;
+static int trace_event(struct ofpbuf *nlbuf)
+{
     uint32_t size;
-
-    bpf_usdt_readarg_p(5, ctx, &nlbuf, sizeof(nlbuf));
 
     struct event_t *event = events.ringbuf_reserve(sizeof(struct event_t));
     if (!event) {
@@ -163,17 +142,53 @@ int trace__op_flow_execute(struct pt_regs *ctx) {
     event->pid = bpf_get_current_pid_tgid();
     bpf_get_current_comm(&event->comm, sizeof(event->comm));
 
-    event->nl_size = nlbuf.size;
+    event->nl_size = nlbuf->size;
     if (event->nl_size > MAX_NLMSG)
         size = MAX_NLMSG;
     else
         size = event->nl_size;
 
-    bpf_probe_read(&event->nl_msg, size, nlbuf.data);
+    bpf_probe_read(&event->nl_msg, size, nlbuf->data);
 
     events.ringbuf_submit(event, 0);
     return 0;
+}
+
+#if <ENABLE_OP_EXECUTE>
+int trace__op_execute(struct pt_regs *ctx) {
+    struct ofpbuf nlbuf;
+
+    bpf_usdt_readarg_p(5, ctx, &nlbuf, sizeof(nlbuf));
+    return trace_event(&nlbuf);
 };
+#endif
+
+#if <ENABLE_OP_FLOW_PUT>
+int trace__op_flow_put(struct pt_regs *ctx) {
+    struct ofpbuf nlbuf;
+
+    bpf_usdt_readarg_p(4, ctx, &nlbuf, sizeof(nlbuf));
+    return trace_event(&nlbuf);
+};
+#endif
+
+#if <ENABLE_OP_FLOW_DEL>
+int trace__op_flow_del(struct pt_regs *ctx) {
+    struct ofpbuf nlbuf;
+
+    bpf_usdt_readarg_p(4, ctx, &nlbuf, sizeof(nlbuf));
+    return trace_event(&nlbuf);
+};
+#endif
+
+#if <ENABLE_OP_FLOW_GET>
+int trace__op_flow_get(struct pt_regs *ctx) {
+    struct ofpbuf nlbuf;
+
+    bpf_usdt_readarg_p(4, ctx, &nlbuf, sizeof(nlbuf));
+    return trace_event(&nlbuf);
+};
+#endif
 """
 
 
@@ -182,21 +197,24 @@ int trace__op_flow_execute(struct pt_regs *ctx) {
 #
 def print_event(ctx, data, size):
     event = b["events"].event(data)
-    print("{:<18.9f} {:<4} {:<16} {:<10} {:<10}".
-          format(event.ts / 1000000000,
-                 event.cpu,
-                 event.comm.decode("utf-8"),
-                 event.pid,
-                 event.nl_size))
 
-    #
-    # Dumping the netlink message data if requested.
-    #
     if event.nl_size < options.nlmsg_size:
         nl_size = event.nl_size
     else:
         nl_size = options.nlmsg_size
 
+    print("{:<18.9f} {:<4} {:<16} {:<10} {:<10} {}".
+          format(event.ts / 1000000000,
+                 event.cpu,
+                 event.comm.decode("utf-8"),
+                 event.pid,
+                 event.nl_size,
+                 get_ovs_dpif_op_str(get_cmd_type_from_nlm(
+                     bytes(event.nl_msg)[:nl_size]))))
+
+    #
+    # Dumping the netlink message data if requested.
+    #
     if options.nlmsg_decode == "hex":
         #
         # Abuse scapy's hex dump to dump flow key
@@ -307,6 +325,19 @@ def decode_nlm_tlvs(tlvs, header=None, indent=4, dump=True,
 
 
 #
+# get_cmd_type_from_nlm()
+#
+def get_cmd_type_from_nlm(nlm):
+    # The netlink message consists of at least a 'struct nlmsghdr' (16-bytes)
+    # followed by a 'struct genlmsghdr'. The first byte of the genlmsghdr
+    # structure contains the command. Which is what we will extract here.
+    if len(nlm) < 17:
+        return -1
+
+    return nlm[16]
+
+
+#
 # decode_nlm()
 #
 def decode_nlm(msg, indent=4, dump=True):
@@ -325,9 +356,11 @@ def decode_nlm(msg, indent=4, dump=True):
     #
     # Decode 'struct genlmsghdr'
     #
+    cmd, version, reserved = struct.unpack("=BBH", msg[:4])
+
     if dump:
-        print("{}genlmsghdr: cmd = {}, version = {}, reserver = {}".format(
-            " " * indent, *struct.unpack("=BBH", msg[:4])))
+        print("{}genlmsghdr: cmd = {}, version = {}, reserved = {}".format(
+            " " * indent, get_ovs_dpif_op_str(cmd), version, reserved))
 
     msg = msg[4:]
 
@@ -343,40 +376,92 @@ def decode_nlm(msg, indent=4, dump=True):
     #
     # Decode TLVs
     #
-    nl_attr_tree = {
-        "OVS_PACKET_ATTR_KEY": {
-            "header": "> Decode OVS_KEY_ATTR_* TLVs:",
-            "indent": 4,
-            "attr_str_func": get_ovs_key_attr_str,
-            "decode_tree": None,
-        },
-        "OVS_PACKET_ATTR_ACTIONS": {
-            "header": "> Decode OVS_ACTION_ATTR_* TLVs:",
-            "indent": 4,
-            "attr_str_func": get_ovs_action_attr_str,
-            "decode_tree": {
-                "OVS_ACTION_ATTR_SET": {
-                    "header": "> Decode OVS_KEY_ATTR_* TLVs:",
-                    "indent": 4,
-                    "attr_str_func": get_ovs_key_attr_str,
-                    "decode_tree": {
-                        "OVS_KEY_ATTR_TUNNEL": {
-                            "header": "> Decode OVS_TUNNEL_KEY_ATTR_* TLVs:",
-                            "indent": 4,
-                            "attr_str_func": get_ovs_tunnel_key_attr_str,
-                            "decode_tree": None,
-                        },
+    nl_key_attr = {
+        "header": "> Decode OVS_KEY_ATTR_* TLVs:",
+        "indent": 4,
+        "attr_str_func": get_ovs_key_attr_str,
+        "decode_tree": {
+            "OVS_KEY_ATTR_ENCAP": {
+                "header": "> Decode OVS_KEY_ATTR_* TLVs:",
+                "indent": 4,
+                "attr_str_func": get_ovs_key_attr_str,
+                "decode_tree": {
+                    "OVS_KEY_ATTR_ENCAP": {
+                        "header": "> Decode OVS_KEY_ATTR_* TLVs:",
+                        "indent": 4,
+                        "attr_str_func": get_ovs_key_attr_str,
+                        "decode_tree": None,
+                    },
+                },
+            },
+        }
+    }
+
+    nl_action_attr = {
+        "header": "> Decode OVS_ACTION_ATTR_* TLVs:",
+        "indent": 4,
+        "attr_str_func": get_ovs_action_attr_str,
+        "decode_tree": {
+            "OVS_ACTION_ATTR_SET": {
+                "header": "> Decode OVS_KEY_ATTR_* TLVs:",
+                "indent": 4,
+                "attr_str_func": get_ovs_key_attr_str,
+                "decode_tree": {
+                    "OVS_KEY_ATTR_TUNNEL": {
+                        "header": "> Decode OVS_TUNNEL_KEY_ATTR_* TLVs:",
+                        "indent": 4,
+                        "attr_str_func": get_ovs_tunnel_key_attr_str,
+                        "decode_tree": None,
                     },
                 },
             },
         },
     }
 
-    result = decode_nlm_tlvs(msg, indent=indent + 2, dump=dump,
-                             header="> Decode OVS_PACKET_ATTR_* TLVs:",
-                             attr_to_str_func=get_ovs_pkt_attr_str,
-                             decode_tree=nl_attr_tree)
+    nl_attr_tree_exec = {
+        "OVS_PACKET_ATTR_KEY": nl_key_attr,
+        "OVS_PACKET_ATTR_ACTIONS": nl_action_attr,
+    }
+
+    nl_attr_tree_put = {
+        "OVS_FLOW_ATTR_KEY": nl_key_attr,
+        "OVS_FLOW_ATTR_MASK": nl_key_attr,
+        "OVS_FLOW_ATTR_ACTIONS": nl_action_attr,
+    }
+
+    if get_ovs_dpif_op_str(cmd) == "DPIF_OP_EXECUTE":
+        result = decode_nlm_tlvs(msg, indent=indent + 2, dump=dump,
+                                 header="> Decode OVS_PACKET_ATTR_* TLVs:",
+                                 attr_to_str_func=get_ovs_pkt_attr_str,
+                                 decode_tree=nl_attr_tree_exec)
+    else:
+        result = decode_nlm_tlvs(msg, indent=indent + 2, dump=dump,
+                                 header="> Decode OVS_FLOW_ATTR_* TLVs:",
+                                 attr_to_str_func=get_ovs_flow_attr_str,
+                                 decode_tree=nl_attr_tree_put)
     return result
+
+
+#
+# get_ovs_flow_attr_str()
+#
+def get_ovs_flow_attr_str(attr):
+    ovs_flow_attr = ["OVS_FLOW_ATTR_UNSPEC",
+                     "OVS_FLOW_ATTR_KEY",
+                     "OVS_FLOW_ATTR_ACTIONS",
+                     "OVS_FLOW_ATTR_STATS",
+                     "OVS_FLOW_ATTR_TCP_FLAGS",
+                     "OVS_FLOW_ATTR_USED",
+                     "OVS_FLOW_ATTR_CLEAR",
+                     "OVS_FLOW_ATTR_MASK",
+                     "OVS_FLOW_ATTR_PROBE",
+                     "OVS_FLOW_ATTR_UFID",
+                     "OVS_FLOW_ATTR_UFID_FLAGS",
+                     "OVS_FLOW_ATTR_PAD"]
+    if attr < 0 or attr >= len(ovs_flow_attr):
+        return "<UNKNOWN:{}>".format(attr)
+
+    return ovs_flow_attr[attr]
 
 
 #
@@ -508,6 +593,22 @@ def get_ovs_tunnel_key_attr_str(attr):
 
 
 #
+# get_ovs_dpif_op_str()
+#
+def get_ovs_dpif_op_str(op):
+    ovs_dpif_ops = ["DPIF_OP_UNSPEC",
+                    "DPIF_OP_FLOW_PUT",
+                    "DPIF_OP_FLOW_DEL",
+                    "DPIF_OP_EXECUTE",
+                    "DPIF_OP_FLOW_GET"]
+
+    if op < 0 or op >= len(ovs_dpif_ops):
+        return "<UNKNOWN:{}>".format(op)
+
+    return ovs_dpif_ops[op]
+
+
+#
 # buffer_size_type()
 #
 def buffer_size_type(astr, min=64, max=2048):
@@ -566,11 +667,32 @@ def main():
                         help="Set maximum netlink message size to capture, "
                         "default 512", type=buffer_size_type, default=512,
                         metavar="[64-2048]")
+    parser.add_argument("--trace-del-op",
+                        help="Monitor DPIF_OP_FLOW_DEL messages",
+                        action="store_true")
+    parser.add_argument("--trace-exec-op",
+                        help="Monitor DPIF_OP_EXECUTE messages",
+                        action="store_true")
+    parser.add_argument("--trace-get-op",
+                        help="Monitor DPIF_OP_FLOW_GET messages",
+                        action="store_true")
+    parser.add_argument("--trace-put-op",
+                        help="Monitor DPIF_OP_FLOW_PUT messages",
+                        action="store_true")
     parser.add_argument("-w", "--pcap", metavar="PCAP_FILE",
-                        help="Write upcall packets to specified pcap file",
+                        help="Write execute packets to specified pcap file",
                         type=str, default=None)
 
     options = parser.parse_args()
+
+    #
+    # Verify arguments.
+    #
+    if (not options.trace_del_op and not options.trace_exec_op
+       and not options.trace_get_op and not options.trace_put_op):
+        print("ERROR: At least on of the '--trace-*-op' arguments should be "
+              "specified!")
+        sys.exit(-1)
 
     #
     # Find the PID of the ovs-vswitchd daemon if not specified.
@@ -605,14 +727,23 @@ def main():
     #
     u = USDT(pid=int(options.pid))
     try:
-        u.enable_probe(probe="dpif_netlink_operate__:op_flow_execute",
-                       fn_name="trace__op_flow_execute")
+        if options.trace_exec_op:
+            u.enable_probe(probe="dpif_netlink_operate__:op_flow_execute",
+                           fn_name="trace__op_execute")
+        if options.trace_put_op:
+            u.enable_probe(probe="dpif_netlink_operate__:op_flow_put",
+                           fn_name="trace__op_flow_put")
+        if options.trace_del_op:
+            u.enable_probe(probe="dpif_netlink_operate__:op_flow_del",
+                           fn_name="trace__op_flow_del")
+        if options.trace_get_op:
+            u.enable_probe(probe="dpif_netlink_operate__:op_flow_get",
+                           fn_name="trace__op_flow_get")
     except USDTException as e:
-        print("ERROR: {}"
-              "ovs-vswitchd!".format(
-                  (re.sub("^", " " * 7, str(e), flags=re.MULTILINE)).strip().
-                  replace("--with-dtrace or --enable-dtrace",
-                          "--enable-usdt-probes")))
+        print("ERROR: {}".format(
+            (re.sub("^", " " * 7, str(e), flags=re.MULTILINE)).strip().
+            replace("--with-dtrace or --enable-dtrace",
+                    "--enable-usdt-probes")))
         sys.exit(-1)
 
     #
@@ -627,15 +758,24 @@ def main():
     source = source.replace("<BUFFER_PAGE_CNT>",
                             str(options.buffer_page_count))
 
+    source = source.replace("<ENABLE_OP_FLOW_DEL>",
+                            "1" if options.trace_del_op else "0")
+    source = source.replace("<ENABLE_OP_EXECUTE>",
+                            "1" if options.trace_exec_op else "0")
+    source = source.replace("<ENABLE_OP_FLOW_GET>",
+                            "1" if options.trace_get_op else "0")
+    source = source.replace("<ENABLE_OP_FLOW_PUT>",
+                            "1" if options.trace_put_op else "0")
+
     b = BPF(text=source, usdt_contexts=[u], debug=options.debug)
 
     #
     # Print header
     #
-    print("Display DPIF_OP_EXECUTE operations being queued for transmission "
-          "onto the netlink socket.")
-    print("{:<18} {:<4} {:<16} {:<10} {:<10}".format(
-        "TIME", "CPU", "COMM", "PID", "NL_SIZE"))
+    print("Display DPIF operations being queued for transmission onto the "
+          "netlink socket.")
+    print("{:<18} {:<4} {:<16} {:<10} {:<10} {}".format(
+        "TIME", "CPU", "COMM", "PID", "NL_SIZE", "DPIF_OPERATION"))
 
     #
     # Dump out all events

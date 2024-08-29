@@ -239,7 +239,7 @@ DPIF_OP_FLOW_DEL operation as part of the dpif ``operate()`` callback.
 
 **Script references**:
 
-- *None*
+- ``utilities/usdt-scripts/dpif_op_nl_monitor.py``
 
 
 dpif_netlink_operate\_\_:op_flow_execute
@@ -260,7 +260,7 @@ DPIF_OP_FLOW_EXECUTE operation as part of the dpif ``operate()`` callback.
 
 **Script references**:
 
-- ``utilities/usdt-scripts/dpif_nl_exec_monitor.py``
+- ``utilities/usdt-scripts/dpif_op_nl_monitor.py``
 - ``utilities/usdt-scripts/upcall_cost.py``
 
 
@@ -281,7 +281,7 @@ DPIF_OP_FLOW_GET operation as part of the dpif ``operate()`` callback.
 
 **Script references**:
 
-- *None*
+- ``utilities/usdt-scripts/dpif_op_nl_monitor.py``
 
 
 dpif_netlink_operate\_\_:op_flow_put
@@ -301,6 +301,7 @@ DPIF_OP_FLOW_PUT operation as part of the dpif ``operate()`` callback.
 
 **Script references**:
 
+- ``utilities/usdt-scripts/dpif_op_nl_monitor.py``
 - ``utilities/usdt-scripts/upcall_cost.py``
 
 
