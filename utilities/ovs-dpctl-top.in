@@ -389,10 +389,10 @@ def args_get():
 # Code to parse a single line in dump-flow
 ###
 # key(values)
-FIELDS_CMPND = re.compile("([\w]+)\((.+)\)")
+FIELDS_CMPND = re.compile(r"([\w]+)\((.+)\)")
 # key:value
-FIELDS_CMPND_ELEMENT = re.compile("([\w:]+)=([/\.\w:]+)")
-FIELDS_ELEMENT = re.compile("([\w]+):([-\.\w]+)")
+FIELDS_CMPND_ELEMENT = re.compile(r"([\w:]+)=([/\.\w:]+)")
+FIELDS_ELEMENT = re.compile(r"([\w]+):([-\.\w]+)")
 
 
 def flow_line_iter(line):
