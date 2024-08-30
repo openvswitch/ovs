@@ -1007,7 +1007,7 @@ class FlowDB:
     def decay(self, decayTimeInSeconds):
         """ Decay content. """
         now = datetime.datetime.now()
-        for (key, value) in self._flows.items():
+        for (key, value) in list(self._flows.items()):
             (stats_dict, updateTime) = value
             delta = now - updateTime
 
