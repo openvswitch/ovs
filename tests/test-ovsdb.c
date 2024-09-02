@@ -2998,6 +2998,29 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     printf("%03d: After trying to delete a deleted element\n", step++);
     dump_simple2(idl, myRow, step++);
 
+    myTxn = ovsdb_idl_txn_create(idl);
+    myRow = idltest_simple2_insert(myTxn);
+    idltest_simple2_update_smap_setkey(myRow, "key3", "myList3");
+    idltest_simple2_set_name(myRow, "String2");
+    idltest_simple2_delete(myRow);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After Create element, update smap and Delete element\n",
+           step++);
+    dump_simple2(idl, myRow, step++);
+
+    myTxn = ovsdb_idl_txn_create(idl);
+    myRow = idltest_simple2_first(idl);
+    idltest_simple2_update_smap_setkey(myRow, "key4", "myList4");
+    idltest_simple2_set_name(myRow, "String3");
+    idltest_simple2_delete(myRow);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After update smap and Delete element\n", step++);
+    dump_simple2(idl, myRow, step++);
+
     ovsdb_idl_destroy(idl);
     printf("%03d: End test\n", step);
 }
@@ -3096,6 +3119,21 @@ do_idl_partial_update_set_column(struct ovs_cmdl_context *ctx)
     ovsdb_idl_get_initial_snapshot(idl);
     printf("%03d: After add to other table + set of strong ref\n", step++);
     dump_simple3(idl, myRow, step++);
+
+    /* create row, insert key, delete row */
+    myTxn = ovsdb_idl_txn_create(idl);
+    myRow = idltest_simple3_insert(myTxn);
+    uuid_from_string(&uuid_to_add, "12345678-dd3f-4616-ab6a-83a490bb0991");
+    idltest_simple3_update_uset_addvalue(myRow, uuid_to_add);
+    idltest_simple3_set_name(myRow, "String2");
+    idltest_simple3_delete(myRow);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After Create element, update set and Delete element\n",
+           step++);
+    dump_simple3(idl, myRow, step++);
+
     ovsdb_idl_destroy(idl);
     printf("%03d: End test\n", step);
 }

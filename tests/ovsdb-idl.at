@@ -1859,7 +1859,10 @@ OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN([map, simple2 idl-partial-update-map-c
 007: name=String2 smap=[[key2 : value2]] imap=[[3 : myids2]]
 008: After trying to delete a deleted element
 009: name=String2 smap=[[key2 : value2]] imap=[[3 : myids2]]
-010: End test
+010: After Create element, update smap and Delete element
+011: name=String2 smap=[[key2 : value2]] imap=[[3 : myids2]]
+012: After update smap and Delete element
+014: End test
 ]])
 
 OVSDB_CHECK_IDL_PY([partial-map idl],
@@ -1922,7 +1925,9 @@ OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN([set, simple3 idl-partial-update-set-c
 009: table simple3: name=String2 uset=[<0>,<1>,<4>] uref=[] uuid=<2>
 010: After add to other table + set of strong ref
 011: table simple3: name=String2 uset=[<0>,<1>,<4>] uref=[<5>] uuid=<2>
-012: End test
+012: After Create element, update set and Delete element
+013: table simple3: name=String2 uset=[<0>,<1>,<4>] uref=[<5>] uuid=<2>
+014: End test
 ]])
 
 OVSDB_CHECK_IDL_PY([partial-set idl],

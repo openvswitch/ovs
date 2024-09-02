@@ -3762,6 +3762,8 @@ ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
     ovsdb_idl_remove_from_indexes(row_);
     if (!row->old_datum) {
         ovsdb_idl_row_unparse(row);
+        ovsdb_idl_destroy_all_map_op_lists(row);
+        ovsdb_idl_destroy_all_set_op_lists(row);
         ovsdb_idl_row_clear_new(row);
         ovs_assert(!row->prereqs);
         hmap_remove(&row->table->rows, &row->hmap_node);
