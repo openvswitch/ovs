@@ -105,7 +105,8 @@ parse_keys(bool wc_keys)
         ds_init(&out);
         if (wc_keys) {
             odp_flow_format(odp_key.data, odp_key.size,
-                            odp_mask.data, odp_mask.size, NULL, &out, false);
+                            odp_mask.data, odp_mask.size, NULL, &out, false,
+                            false);
         } else {
             odp_flow_key_format(odp_key.data, odp_key.size, &out);
         }
@@ -219,7 +220,8 @@ parse_filter(char *filter_parse)
         /* Convert odp_key to string. */
         ds_init(&out);
         odp_flow_format(odp_key.data, odp_key.size,
-                        odp_mask.data, odp_mask.size, NULL, &out, false);
+                        odp_mask.data, odp_mask.size, NULL, &out, false,
+                        false);
         puts(ds_cstr(&out));
         ds_destroy(&out);
 

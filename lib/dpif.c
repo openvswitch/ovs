@@ -1805,7 +1805,7 @@ log_flow_message(const struct dpif *dpif, int error,
         odp_format_ufid(ufid, &ds);
         ds_put_cstr(&ds, " ");
     }
-    odp_flow_format(key, key_len, mask, mask_len, NULL, &ds, true);
+    odp_flow_format(key, key_len, mask, mask_len, NULL, &ds, true, true);
     if (stats) {
         ds_put_cstr(&ds, ", ");
         dpif_flow_stats_format(stats, &ds);
@@ -1906,7 +1906,7 @@ log_execute_message(const struct dpif *dpif,
         }
         ds_put_format(&ds, " on packet %s", packet);
         ds_put_format(&ds, " with metadata ");
-        odp_flow_format(md.data, md.size, NULL, 0, NULL, &ds, true);
+        odp_flow_format(md.data, md.size, NULL, 0, NULL, &ds, true, false);
         ds_put_format(&ds, " mtu %d", execute->mtu);
         vlog(module, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
         ds_destroy(&ds);

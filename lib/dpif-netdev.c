@@ -3039,7 +3039,7 @@ log_netdev_flow_change(const struct dp_netdev_flow *flow,
     ds_put_cstr(&ds, " ");
     odp_flow_format(key_buf.data, key_buf.size,
                     mask_buf.data, mask_buf.size,
-                    NULL, &ds, false);
+                    NULL, &ds, false, true);
     if (old_actions) {
         ds_put_cstr(&ds, ", old_actions:");
         format_odp_actions(&ds, old_actions->actions, old_actions->size,
@@ -3859,7 +3859,7 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 
                 ds_init(&s);
                 odp_flow_format(key, key_len, mask_key, mask_key_len, NULL, &s,
-                                true);
+                                true, true);
                 VLOG_ERR("internal error parsing flow mask %s (%s)",
                 ds_cstr(&s), odp_key_fitness_to_string(fitness));
                 ds_destroy(&s);
@@ -3888,7 +3888,7 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
                 struct ds s;
 
                 ds_init(&s);
-                odp_flow_format(key, key_len, NULL, 0, NULL, &s, true);
+                odp_flow_format(key, key_len, NULL, 0, NULL, &s, true, false);
                 VLOG_ERR("internal error parsing flow key %s", ds_cstr(&s));
                 ds_destroy(&s);
             }

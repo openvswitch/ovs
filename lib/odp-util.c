@@ -4269,7 +4269,7 @@ mask_empty(const struct nlattr *ma)
 static void
 format_odp_key_attr__(const struct nlattr *a, const struct nlattr *ma,
                       const struct hmap *portno_names, struct ds *ds,
-                      bool verbose)
+                      bool verbose, bool skip_no_mask)
 {
     enum ovs_key_attr attr = nl_attr_type(a);
     char namebuf[OVS_KEY_ATTR_BUFSIZE];
@@ -4285,10 +4285,10 @@ format_odp_key_attr__(const struct nlattr *a, const struct nlattr *ma,
         if (ma && nl_attr_get_size(ma) && nl_attr_get_size(a)) {
             odp_flow_format(nl_attr_get(a), nl_attr_get_size(a),
                             nl_attr_get(ma), nl_attr_get_size(ma), NULL, ds,
-                            verbose);
+                            verbose, skip_no_mask);
         } else if (nl_attr_get_size(a)) {
             odp_flow_format(nl_attr_get(a), nl_attr_get_size(a), NULL, 0, NULL,
-                            ds, verbose);
+                            ds, verbose, skip_no_mask);
         }
         break;
 
@@ -4596,7 +4596,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
 {
     if (check_attr_len(ds, a, ma, ovs_flow_key_attr_lens,
                         OVS_KEY_ATTR_MAX, false)) {
-        format_odp_key_attr__(a, ma, portno_names, ds, verbose);
+        format_odp_key_attr__(a, ma, portno_names, ds, verbose, false);
     }
 }
 
@@ -4710,13 +4710,16 @@ odp_format_ufid(const ovs_u128 *ufid, struct ds *ds)
 }
 
 /* Appends to 'ds' a string representation of the 'key_len' bytes of
- * OVS_KEY_ATTR_* attributes in 'key'. If non-null, additionally formats the
- * 'mask_len' bytes of 'mask' which apply to 'key'. If 'portno_names' is
- * non-null, translates odp port number to its name. */
+ * OVS_KEY_ATTR_* attributes in 'key'.  If non-null, additionally formats the
+ * 'mask_len' bytes of 'mask' which apply to 'key'.  If 'portno_names' is
+ * non-null, translates odp port number to its name.  If 'skip_no_mask' is set
+ * to true, OVS_KEY_ATTR_* entries without a mask will not be printed, even
+ * when verbose mode is 'true'. */
 void
 odp_flow_format(const struct nlattr *key, size_t key_len,
                 const struct nlattr *mask, size_t mask_len,
-                const struct hmap *portno_names, struct ds *ds, bool verbose)
+                const struct hmap *portno_names, struct ds *ds, bool verbose,
+                bool skip_no_mask)
 {
     if (key_len) {
         const struct nlattr *a;
@@ -4734,7 +4737,8 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
                                                         attr_type)
                                        : NULL);
             if (!check_attr_len(ds, a, ma, ovs_flow_key_attr_lens,
-                                OVS_KEY_ATTR_MAX, false)) {
+                                OVS_KEY_ATTR_MAX, false)
+                || (skip_no_mask && !ma)) {
                 continue;
             }
 
@@ -4765,7 +4769,8 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
                 if (!first_field) {
                     ds_put_char(ds, ',');
                 }
-                format_odp_key_attr__(a, ma, portno_names, ds, verbose);
+                format_odp_key_attr__(a, ma, portno_names, ds, verbose,
+                                      skip_no_mask);
                 first_field = false;
             } else if (attr_type == OVS_KEY_ATTR_ETHERNET
                        && !has_packet_type_key) {
@@ -4836,7 +4841,7 @@ void
 odp_flow_key_format(const struct nlattr *key,
                     size_t key_len, struct ds *ds)
 {
-    odp_flow_format(key, key_len, NULL, 0, NULL, ds, true);
+    odp_flow_format(key, key_len, NULL, 0, NULL, ds, true, false);
 }
 
 static bool
@@ -7747,7 +7752,7 @@ parse_key_and_mask_to_match(const struct nlattr *key, size_t key_len,
             struct ds s;
 
             ds_init(&s);
-            odp_flow_format(key, key_len, NULL, 0, NULL, &s, true);
+            odp_flow_format(key, key_len, NULL, 0, NULL, &s, true, false);
             VLOG_ERR("internal error parsing flow key %s (%s)",
                      ds_cstr(&s), odp_key_fitness_to_string(fitness));
             ds_destroy(&s);
@@ -7767,7 +7772,7 @@ parse_key_and_mask_to_match(const struct nlattr *key, size_t key_len,
 
             ds_init(&s);
             odp_flow_format(key, key_len, mask, mask_len, NULL, &s,
-                            true);
+                            true, true);
             VLOG_ERR("internal error parsing flow mask %s (%s)",
                      ds_cstr(&s), odp_key_fitness_to_string(fitness));
             ds_destroy(&s);

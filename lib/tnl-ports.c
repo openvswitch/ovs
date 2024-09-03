@@ -347,7 +347,7 @@ tnl_port_show_v(struct ds *ds)
         mask_len = buf.size;
 
         /* build string. */
-        odp_flow_format(key, key_len, mask, mask_len, NULL, ds, false);
+        odp_flow_format(key, key_len, mask, mask_len, NULL, ds, false, false);
         ds_put_format(ds, "\n");
     }
 }

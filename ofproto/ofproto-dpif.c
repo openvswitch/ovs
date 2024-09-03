@@ -6874,7 +6874,7 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
             ds_put_cstr(&ds, " ");
         }
         odp_flow_format(f.key, f.key_len, f.mask, f.mask_len,
-                        portno_names, &ds, verbosity);
+                        portno_names, &ds, verbosity, false);
         ds_put_cstr(&ds, ", ");
         dpif_flow_stats_format(&f.stats, &ds);
         ds_put_cstr(&ds, ", actions:");

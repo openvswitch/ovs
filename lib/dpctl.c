@@ -877,7 +877,7 @@ format_dpif_flow(struct ds *ds, const struct dpif_flow *f, struct hmap *ports,
         ds_put_cstr(ds, ", ");
     }
     odp_flow_format(f->key, f->key_len, f->mask, f->mask_len, ports, ds,
-                    dpctl_p->verbosity);
+                    dpctl_p->verbosity, false);
     ds_put_cstr(ds, ", ");
 
     dpif_flow_stats_format(&f->stats, ds);
@@ -2883,7 +2883,7 @@ dpctl_normalize_actions(int argc, const char *argv[],
 
     ds_clear(&s);
     odp_flow_format(keybuf.data, keybuf.size, NULL, 0, NULL,
-                    &s, dpctl_p->verbosity);
+                    &s, dpctl_p->verbosity, false);
     dpctl_print(dpctl_p, "input flow: %s\n", ds_cstr(&s));
 
     error = odp_flow_key_to_flow(keybuf.data, keybuf.size, &flow, &error_s);
