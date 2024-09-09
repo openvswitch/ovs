@@ -942,9 +942,9 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd,
                                         ? "(enabled) " : "(disabled)");
             ds_put_format(reply, "  pmd usage: ");
             if (total_pmd_cycles) {
-                ds_put_format(reply, "%2"PRIu64"",
-                              rxq_proc_cycles * 100 / total_pmd_cycles);
-                ds_put_cstr(reply, " %");
+                ds_put_format(reply, "%2.0f %%",
+                              (double) (rxq_proc_cycles * 100) /
+                              total_pmd_cycles);
             } else {
                 ds_put_format(reply, "%s", "NOT AVAIL");
             }
@@ -959,8 +959,10 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd,
                 if (total_rxq_proc_cycles < busy_pmd_cycles) {
                     overhead_cycles = busy_pmd_cycles - total_rxq_proc_cycles;
                 }
-                ds_put_format(reply, "%2"PRIu64" %%",
-                              overhead_cycles * 100 / total_pmd_cycles);
+
+                ds_put_format(reply, "%2.0f %%",
+                              (double) (overhead_cycles * 100) /
+                              total_pmd_cycles);
             } else {
                 ds_put_cstr(reply, "NOT AVAIL");
             }
