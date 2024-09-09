@@ -757,6 +757,73 @@ Datapath actions: drop
 OVS_VSWITCHD_STOP()
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - active bond member survives restart])
+dnl Create bond0 with members p1, p2 and p3. Initially, set p2 as active.
+dnl Restart ovs-vswitchd. Check that p2 is still active.
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 p3 bond_mode=active-backup -- \
+   set interface p1 type=dummy ofport_request=1 -- \
+   set interface p2 type=dummy ofport_request=2 -- \
+   set interface p3 type=dummy ofport_request=3 --])
+AT_CHECK([ovs-appctl bond/set-active-member bond0 p2], [0], [ignore])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [dnl
+---- bond0 ----
+bond_mode: active-backup
+bond may use recirculation: no, <del>
+bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: off
+lacp_fallback_ab: false
+active-backup primary: <none>
+<active member mac del>
+
+member p1: enabled
+  may_enable: true
+
+member p2: enabled
+  active member
+  may_enable: true
+
+member p3: enabled
+  may_enable: true
+])
+
+dnl Restart ovs-vswitchd with an empty ovs-vswitchd log file.
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+mv ovs-vswitchd.log ovs-vswitchd_1.log
+AT_CHECK([ovs-vswitchd --enable-dummy --disable-system --disable-system-route --detach \
+         --no-chdir --pidfile --log-file -vfile:rconn:dbg -vvconn -vofproto_dpif -vunixctl],
+         [0], [], [stderr])
+
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [dnl
+---- bond0 ----
+bond_mode: active-backup
+bond may use recirculation: no, <del>
+bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: off
+lacp_fallback_ab: false
+active-backup primary: <none>
+<active member mac del>
+
+member p1: enabled
+  may_enable: true
+
+member p2: enabled
+  active member
+  may_enable: true
+
+member p3: enabled
+  may_enable: true
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - bond - allow duplicated frames])
 dnl Receiving of duplicated multicast frames should be allowed with 'all_members_active'.
 OVS_VSWITCHD_START([dnl
