@@ -246,7 +246,7 @@ bond_create(const struct bond_settings *s, struct ofproto_dpif *ofproto)
     ovs_refcount_init(&bond->ref_cnt);
     hmap_init(&bond->pr_rule_ops);
 
-    bond->active_member_mac = eth_addr_zero;
+    bond->active_member_mac = s->active_member_mac;
     bond->active_member_changed = false;
     bond->primary = NULL;
 
