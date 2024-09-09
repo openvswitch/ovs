@@ -407,7 +407,9 @@ mcast_snooping_add_group(struct mcast_snooping *ms,
         uint32_t hash = mcast_table_hash(ms, addr, vlan);
 
         if (hmap_count(&ms->table) >= ms->max_entries) {
-            group_get_lru(ms, &grp);
+            if (!group_get_lru(ms, &grp)) {
+                return false;
+            }
             mcast_snooping_flush_group(ms, grp);
         }
 
