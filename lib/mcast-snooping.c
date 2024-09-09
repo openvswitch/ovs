@@ -653,7 +653,7 @@ mrouter_get_lru(const struct mcast_snooping *ms,
     OVS_REQ_RDLOCK(ms->rwlock)
 {
     if (!ovs_list_is_empty(&ms->mrouter_lru)) {
-        *m = mcast_mrouter_from_lru_node(ms->mrouter_lru.next);
+        *m = mcast_mrouter_from_lru_node(ovs_list_front(&ms->mrouter_lru));
         return true;
     } else {
         *m = NULL;
@@ -726,7 +726,7 @@ mcast_snooping_port_get(const struct ovs_list *list,
                         struct mcast_port_bundle **f)
 {
     if (!ovs_list_is_empty(list)) {
-        *f = mcast_port_from_list_node(list->next);
+        *f = mcast_port_from_list_node(ovs_list_front(list));
         return true;
     } else {
         *f = NULL;
