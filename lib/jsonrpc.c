@@ -120,7 +120,8 @@ jsonrpc_run(struct jsonrpc *rpc)
 
     stream_run(rpc->stream);
     while (!ovs_list_is_empty(&rpc->output)) {
-        struct ofpbuf *buf = ofpbuf_from_list(rpc->output.next);
+        struct ovs_list *head = ovs_list_front(&rpc->output);
+        struct ofpbuf *buf = ofpbuf_from_list(head);
         int retval;
 
         retval = stream_send(rpc->stream, buf->data, buf->size);
@@ -128,7 +129,7 @@ jsonrpc_run(struct jsonrpc *rpc)
             rpc->backlog -= retval;
             ofpbuf_pull(buf, retval);
             if (!buf->size) {
-                ovs_list_remove(&buf->list_node);
+                ovs_list_remove(head);
                 rpc->output_count--;
                 ofpbuf_delete(buf);
             }
