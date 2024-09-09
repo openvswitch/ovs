@@ -69,8 +69,6 @@ COVERAGE_DEFINE(netdev_received);
 COVERAGE_DEFINE(netdev_sent);
 COVERAGE_DEFINE(netdev_add_router);
 COVERAGE_DEFINE(netdev_get_stats);
-COVERAGE_DEFINE(netdev_vxlan_tso_drops);
-COVERAGE_DEFINE(netdev_geneve_tso_drops);
 COVERAGE_DEFINE(netdev_push_header_drops);
 COVERAGE_DEFINE(netdev_soft_seg_good);
 COVERAGE_DEFINE(netdev_soft_seg_drops);
@@ -910,28 +908,30 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
     struct dp_packet *packet;
     int error;
 
-    if (userspace_tso_enabled() &&
-        !(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
-        DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-            if (dp_packet_hwol_is_tso(packet)) {
-                if (dp_packet_hwol_is_tunnel_vxlan(packet)
-                    && !(netdev_flags & NETDEV_TX_VXLAN_TNL_TSO)) {
-                        VLOG_WARN_RL(&rl, "%s: No VXLAN TSO support",
-                                     netdev_get_name(netdev));
-                        COVERAGE_INC(netdev_vxlan_tso_drops);
-                        dp_packet_delete_batch(batch, true);
-                        return false;
+    if (userspace_tso_enabled()) {
+        if (!(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
+            DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+                if (dp_packet_hwol_is_tso(packet)) {
+                    return netdev_send_tso(netdev, qid, batch, concurrent_txq);
                 }
-
-                if (dp_packet_hwol_is_tunnel_geneve(packet)
-                    && !(netdev_flags & NETDEV_TX_GENEVE_TNL_TSO)) {
-                        VLOG_WARN_RL(&rl, "%s: No GENEVE TSO support",
-                                     netdev_get_name(netdev));
-                        COVERAGE_INC(netdev_geneve_tso_drops);
-                        dp_packet_delete_batch(batch, true);
-                        return false;
+            }
+        } else if (!(netdev_flags & (NETDEV_TX_VXLAN_TNL_TSO |
+                                     NETDEV_TX_GENEVE_TNL_TSO))) {
+            DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+                if (dp_packet_hwol_is_tso(packet) &&
+                    (dp_packet_hwol_is_tunnel_vxlan(packet) ||
+                     dp_packet_hwol_is_tunnel_geneve(packet))) {
+                    return netdev_send_tso(netdev, qid, batch, concurrent_txq);
                 }
-                return netdev_send_tso(netdev, qid, batch, concurrent_txq);
+            }
+        } else if (!(netdev_flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM)) {
+            DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+                if (dp_packet_hwol_is_tso(packet) &&
+                    (dp_packet_hwol_is_tunnel_vxlan(packet) ||
+                     dp_packet_hwol_is_tunnel_geneve(packet)) &&
+                    dp_packet_hwol_is_outer_udp_cksum(packet)) {
+                    return netdev_send_tso(netdev, qid, batch, concurrent_txq);
+                }
             }
         }
     }

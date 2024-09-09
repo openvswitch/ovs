@@ -47,6 +47,8 @@ dp_packet_gso_seg_new(const struct dp_packet *p, size_t hdr_len,
     seg->l2_5_ofs = p->l2_5_ofs;
     seg->l3_ofs = p->l3_ofs;
     seg->l4_ofs = p->l4_ofs;
+    seg->inner_l3_ofs = p->inner_l3_ofs;
+    seg->inner_l4_ofs = p->inner_l4_ofs;
 
     /* The protocol headers remain the same, so preserve hash and mark. */
     *dp_packet_rss_ptr(seg) = *dp_packet_rss_ptr(p);
@@ -71,7 +73,12 @@ dp_packet_gso_nr_segs(struct dp_packet *p)
     const char *data_tail;
     const char *data_pos;
 
-    data_pos = dp_packet_get_tcp_payload(p);
+    if (dp_packet_hwol_is_tunnel_vxlan(p) ||
+        dp_packet_hwol_is_tunnel_geneve(p)) {
+        data_pos = dp_packet_get_inner_tcp_payload(p);
+    } else {
+        data_pos = dp_packet_get_tcp_payload(p);
+    }
     data_tail = (char *) dp_packet_tail(p) - dp_packet_l2_pad_size(p);
 
     return DIV_ROUND_UP(data_tail - data_pos, segsz);
@@ -89,14 +96,16 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     struct dp_packet_batch *curr_batch = *batches;
     struct tcp_header *tcp_hdr;
-    struct ip_header *ip_hdr;
+    uint16_t inner_ip_id = 0;
+    uint16_t outer_ip_id = 0;
     struct dp_packet *seg;
     uint16_t tcp_offset;
     uint16_t tso_segsz;
     uint32_t tcp_seq;
-    uint16_t ip_id;
+    bool outer_ipv4;
     int hdr_len;
     int seg_len;
+    bool tnl;
 
     tso_segsz = dp_packet_get_tso_segsz(p);
     if (!tso_segsz) {
@@ -105,20 +114,37 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
         return false;
     }
 
-    tcp_hdr = dp_packet_l4(p);
-    tcp_offset = TCP_OFFSET(tcp_hdr->tcp_ctl);
-    tcp_seq = ntohl(get_16aligned_be32(&tcp_hdr->tcp_seq));
-    hdr_len = ((char *) dp_packet_l4(p) - (char *) dp_packet_eth(p))
-              + tcp_offset * 4;
-    ip_id = 0;
-    if (dp_packet_hwol_is_ipv4(p)) {
-        ip_hdr = dp_packet_l3(p);
-        ip_id = ntohs(ip_hdr->ip_id);
+    if (dp_packet_hwol_is_tunnel_vxlan(p) ||
+        dp_packet_hwol_is_tunnel_geneve(p)) {
+        outer_ipv4 = dp_packet_hwol_is_outer_ipv4(p);
+        tcp_hdr = dp_packet_inner_l4(p);
+        tnl = true;
+
+        if (outer_ipv4) {
+            outer_ip_id = ntohs(((struct ip_header *) dp_packet_l3(p))->ip_id);
+        }
+        if (dp_packet_hwol_is_ipv4(p)) {
+            struct ip_header *ip_hdr = dp_packet_inner_l3(p);
+            inner_ip_id = ntohs(ip_hdr->ip_id);
+        }
+    } else {
+        outer_ipv4 = dp_packet_hwol_is_ipv4(p);
+        tcp_hdr = dp_packet_l4(p);
+        tnl = false;
+
+        if (outer_ipv4) {
+            struct ip_header *ip_hdr = dp_packet_l3(p);
+            outer_ip_id = ntohs(ip_hdr->ip_id);
+        }
     }
 
+    tcp_offset = TCP_OFFSET(tcp_hdr->tcp_ctl);
+    tcp_seq = ntohl(get_16aligned_be32(&tcp_hdr->tcp_seq));
+    hdr_len = ((char *) tcp_hdr - (char *) dp_packet_eth(p))
+              + tcp_offset * 4;
     const char *data_tail = (char *) dp_packet_tail(p)
                             - dp_packet_l2_pad_size(p);
-    const char *data_pos = dp_packet_get_tcp_payload(p);
+    const char *data_pos = (char *) tcp_hdr + tcp_offset * 4;
     int n_segs = dp_packet_gso_nr_segs(p);
 
     for (int i = 0; i < n_segs; i++) {
@@ -130,14 +156,36 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
         seg = dp_packet_gso_seg_new(p, hdr_len, data_pos, seg_len);
         data_pos += seg_len;
 
+        if (tnl) {
+            /* Update tunnel UDP header length. */
+            struct udp_header *tnl_hdr;
+
+            tnl_hdr = dp_packet_l4(seg);
+            tnl_hdr->udp_len = htons(dp_packet_l4_size(seg));
+
+            /* Update tunnel inner L3 header. */
+            if (dp_packet_hwol_is_ipv4(seg)) {
+                struct ip_header *ip_hdr = dp_packet_inner_l3(seg);
+                ip_hdr->ip_tot_len = htons(dp_packet_inner_l3_size(seg));
+                ip_hdr->ip_id = htons(inner_ip_id);
+                ip_hdr->ip_csum = 0;
+                inner_ip_id++;
+            } else {
+                struct ovs_16aligned_ip6_hdr *ip6_hdr;
+
+                ip6_hdr = dp_packet_inner_l3(seg);
+                ip6_hdr->ip6_ctlun.ip6_un1.ip6_un1_plen
+                    = htons(dp_packet_inner_l3_size(seg) - sizeof *ip6_hdr);
+            }
+        }
+
         /* Update L3 header. */
-        if (dp_packet_hwol_is_ipv4(seg)) {
-            ip_hdr = dp_packet_l3(seg);
-            ip_hdr->ip_tot_len = htons(sizeof *ip_hdr +
-                                       dp_packet_l4_size(seg));
-            ip_hdr->ip_id = htons(ip_id);
+        if (outer_ipv4) {
+            struct ip_header *ip_hdr = dp_packet_l3(seg);
+            ip_hdr->ip_tot_len = htons(dp_packet_l3_size(seg));
+            ip_hdr->ip_id = htons(outer_ip_id);
             ip_hdr->ip_csum = 0;
-            ip_id++;
+            outer_ip_id++;
         } else {
             struct ovs_16aligned_ip6_hdr *ip6_hdr = dp_packet_l3(seg);
 
@@ -146,7 +194,11 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
         }
 
         /* Update L4 header. */
-        tcp_hdr = dp_packet_l4(seg);
+        if (tnl) {
+            tcp_hdr = dp_packet_inner_l4(seg);
+        } else {
+            tcp_hdr = dp_packet_l4(seg);
+        }
         put_16aligned_be32(&tcp_hdr->tcp_seq, htonl(tcp_seq));
         tcp_seq += seg_len;
         if (OVS_LIKELY(i < (n_segs - 1))) {

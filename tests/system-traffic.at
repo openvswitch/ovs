@@ -351,6 +351,98 @@ OVS_WAIT_UNTIL([diff -q payload.bin udp_data])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - tcp over vxlan tunnel with software fallback])
+AT_SKIP_IF([test $HAVE_NC = no])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+OVS_CHECK_VXLAN()
+
+dnl This test is only valid with tso. If the kernel segments the packets, the
+dnl packet lengths in the final test will be different.
+m4_ifndef([CHECK_SYSTEM_TSO], [AT_SKIP_IF(:)])
+
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-underlay])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Test the case where one side has all checksum and TSO offload disabled.
+AT_CHECK([ethtool -K ovs-p0 tso off], [0], [ignore], [ignore])
+AT_CHECK([ethtool -K ovs-p0 sg off], [0], [ignore], [ignore])
+
+dnl Reinitialize.
+AT_CHECK([ovs-vsctl del-port ovs-p0])
+AT_CHECK([ovs-vsctl add-port br-underlay ovs-p0])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([vxlan], [br0], [at_vxlan0], [172.31.1.1], [10.1.1.100/24])
+ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100],
+                  [10.1.1.1/24], [id 0 dstport 4789])
+
+dnl Set MTU for tunnel to generate 1500 byte packets.
+AT_CHECK([ip link set dev br0 mtu 1400])
+
+dnl First, check the underlay.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING],
+              [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Check that the tunnel is up.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING],
+              [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Start tcpdump to capture the encapsulated packets.
+OVS_DAEMONIZE([tcpdump -i ovs-p0 -w p0.pcap], [tcpdump.pid])
+
+dnl Wait until the pcap is written, which happens after the interface
+dnl is opened by tcpdump.
+OVS_WAIT_UNTIL([test -e p0.pcap])
+
+dnl Initialize the listener before it is needed.
+NETNS_DAEMONIZE([at_ns0], [nc -l 10.1.1.1 1234 > data2], [nc.pid])
+
+dnl Verify that ncat is ready.
+OVS_WAIT_UNTIL([NS_EXEC([at_ns0], [netstat -ln | grep :1234])])
+
+dnl Large TCP transfer aimed towards ovs-p0, which has TSO disabled.
+AT_CHECK([dd if=/dev/urandom of=payload.bin bs=60000 count=1 2> /dev/null])
+AT_CHECK([nc $NC_EOF_OPT 10.1.1.1 1234 < payload.bin])
+
+dnl Wait until transfer completes before checking.
+OVS_WAIT_WHILE([kill -0 $(cat nc.pid)])
+AT_CHECK([diff -q payload.bin data2], [0])
+OVS_WAIT_WHILE([test $(stat -c %s p0.pcap) -le 68000 ])
+
+dnl Stop OVS and tcpdump and verify the results.
+AT_CHECK([kill -15 $(cat tcpdump.pid)])
+OVS_WAIT_WHILE([kill -0 $(cat tcpdump.pid)])
+
+dnl The exact number of packets sent will vary, but we check that the largest
+dnl segments have the correct lengths and certain other fields.
+AT_CHECK([test $(ovs-pcap p0.pcap | grep -Ec dnl
+"^.{24}0800"dnl Ethernet
+"450005aa....4000..11....ac1f0164ac1f0101"dnl IP(len=1450, DF, UDP, 172.31.1.100->172.31.1.1)
+"....12b505960000"dnl UDP(len=1430, dport=4789)
+"0800000000000000"dnl VXLAN(gpid=0, vni=0)
+".{24}0800"dnl Ethernet
+"45000578....4000..06....0a0101640a010101"dnl IP(len=1400, DF, TCP, 10.1.1.100->10.1.1.1)
+"....04d2............................0000"dnl TCP(dport=1234
+) -ge 20])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - ping vlan over vxlan tunnel])
 OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_VXLAN()
