@@ -1363,8 +1363,6 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
                   "net/ice, net/i40e or net/iavf port.",
                   netdev_get_name(&dev->up));
         info.tx_offload_capa &= ~RTE_ETH_TX_OFFLOAD_OUTER_UDP_CKSUM;
-        info.tx_offload_capa &= ~RTE_ETH_TX_OFFLOAD_VXLAN_TNL_TSO;
-        info.tx_offload_capa &= ~RTE_ETH_TX_OFFLOAD_GENEVE_TNL_TSO;
     }
 
     if (info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM) {
