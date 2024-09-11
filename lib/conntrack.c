@@ -1443,18 +1443,25 @@ conntrack_get_sweep_interval(struct conntrack *ct)
 }
 
 static size_t
-ct_sweep(struct conntrack *ct, struct rculist *list, long long now)
+ct_sweep(struct conntrack *ct, struct rculist *list, long long now,
+         size_t *cleaned_count)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct conn *conn;
+    size_t cleaned = 0;
     size_t count = 0;
 
     RCULIST_FOR_EACH (conn, node, list) {
         if (conn_expired(conn, now)) {
             conn_clean(ct, conn);
+            cleaned++;
         }
 
         count++;
+    }
+
+    if (cleaned_count) {
+        *cleaned_count = cleaned;
     }
 
     return count;
@@ -1469,22 +1476,27 @@ conntrack_clean(struct conntrack *ct, long long now)
     long long next_wakeup = now + conntrack_get_sweep_interval(ct);
     unsigned int n_conn_limit, i;
     size_t clean_end, count = 0;
+    size_t total_cleaned = 0;
 
     atomic_read_relaxed(&ct->n_conn_limit, &n_conn_limit);
     clean_end = n_conn_limit / 64;
 
     for (i = ct->next_sweep; i < N_EXP_LISTS; i++) {
+        size_t cleaned;
+
         if (count > clean_end) {
             next_wakeup = 0;
             break;
         }
 
-        count += ct_sweep(ct, &ct->exp_lists[i], now);
+        count += ct_sweep(ct, &ct->exp_lists[i], now, &cleaned);
+        total_cleaned += cleaned;
     }
 
     ct->next_sweep = (i < N_EXP_LISTS) ? i : 0;
 
-    VLOG_DBG("conntrack cleanup %"PRIuSIZE" entries in %lld msec", count,
+    VLOG_DBG("conntrack cleaned %"PRIuSIZE" entries out of %"PRIuSIZE
+             " entries in %lld msec", total_cleaned, count,
              time_msec() - now);
 
     return next_wakeup;
