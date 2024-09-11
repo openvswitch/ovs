@@ -11933,3 +11933,48 @@ AT_CHECK([test 1 = `ovs-ofctl parse-pcap p2-tx.pcap | wc -l`])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - Cleanup missing datapath flows])
+
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+m4_define([ICMP_PKT], [m4_join([,],
+    [eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800)],
+    [ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no)],
+    [icmp(type=8,code=0)])])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 'actions=normal' ])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'ICMP_PKT'])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows --names | strip_used | strip_stats | dnl
+          strip_duration | strip_dp_hash | sort], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(p1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:br0,p2
+])
+
+dnl Make sure the ukey exists.
+AT_CHECK([ovs-appctl upcall/show | grep '(keys' | awk '{print $3}' | \
+            grep -q '1)'], [0])
+
+dnl Delete all datapath flows, and make sure they are gone.
+AT_CHECK([ovs-appctl dpctl/del-flows])
+AT_CHECK([ovs-appctl dpctl/dump-flows --names ], [0], [])
+
+dnl Move forward in time and make sure we have at least 4 * 500ms.
+AT_CHECK([ovs-appctl time/warp 3000 300], [0], [ignore])
+
+dnl Make sure no more ukeys exists.
+AT_CHECK([ovs-appctl upcall/show | grep '(keys' | awk '{print $3}' | \
+            grep -qv '0)'], [1])
+
+dnl Verify coverage counter was hit.
+AT_CHECK([ovs-appctl coverage/read-counter revalidate_missing_dp_flow], [0],
+         [dnl
+1
+])
+
+OVS_VSWITCHD_STOP(["/failed to flow_del (No such file or directory)/d"])
+AT_CLEANUP

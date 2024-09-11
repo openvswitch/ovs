@@ -164,6 +164,11 @@ strip_recirc() {
         s/recirc_id=[[x0-9]]*/recirc_id=<recirc>/
         s/recirc([[x0-9]]*)/recirc(<recirc>)/'
 }
+
+# Strips dp_hash from output.
+strip_dp_hash() {
+    sed 's/dp_hash([[0-9a-fx/]]*),//'
+}
 m4_divert_pop([PREPARE_TESTS])
 
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
