@@ -919,24 +919,19 @@ netdev_offload_dpdk_flow_create(struct netdev *netdev,
         if (!VLOG_DROP_DBG(&rl)) {
             dump_flow(&s, &s_extra, attr, flow_patterns, flow_actions);
             extra_str = ds_cstr(&s_extra);
-            VLOG_DBG_RL(&rl, "%s: rte_flow 0x%"PRIxPTR" %s  flow create %d %s",
-                        netdev_get_name(netdev), (intptr_t) flow, extra_str,
-                        netdev_dpdk_get_port_id(netdev), ds_cstr(&s));
+            VLOG_DBG("%s: rte_flow creation succeeded: rte_flow 0x%"PRIxPTR" "
+                     "%s  flow create %d %s", netdev_get_name(netdev),
+                     (intptr_t) flow, extra_str,
+                     netdev_dpdk_get_port_id(netdev), ds_cstr(&s));
         }
     } else {
-        enum vlog_level level = VLL_WARN;
-
-        if (error->type == RTE_FLOW_ERROR_TYPE_ACTION) {
-            level = VLL_DBG;
-        }
-        VLOG_RL(&rl, level, "%s: rte_flow creation failed: %d (%s).",
-                netdev_get_name(netdev), error->type, error->message);
-        if (!vlog_should_drop(&this_module, level, &rl)) {
+        if (!VLOG_DROP_DBG(&rl)) {
             dump_flow(&s, &s_extra, attr, flow_patterns, flow_actions);
             extra_str = ds_cstr(&s_extra);
-            VLOG_RL(&rl, level, "%s: Failed flow: %s  flow create %d %s",
-                    netdev_get_name(netdev), extra_str,
-                    netdev_dpdk_get_port_id(netdev), ds_cstr(&s));
+            VLOG_DBG("%s: rte_flow creation failed [%d (%s)]: "
+                     "%s  flow create %d %s", netdev_get_name(netdev),
+                     error->type, error->message, extra_str,
+                     netdev_dpdk_get_port_id(netdev), ds_cstr(&s));
         }
     }
     ds_destroy(&s);
