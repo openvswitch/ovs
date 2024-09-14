@@ -1355,12 +1355,13 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
 
     if (!strcmp(info.driver_name, "net_ice")
         || !strcmp(info.driver_name, "net_i40e")
-        || !strcmp(info.driver_name, "net_iavf")) {
+        || !strcmp(info.driver_name, "net_iavf")
+        || !strcmp(info.driver_name, "net_txgbe")) {
         /* FIXME: Driver advertises the capability but doesn't seem
          * to actually support it correctly.  Can remove this once
          * the driver is fixed on DPDK side. */
         VLOG_INFO("%s: disabled Tx outer udp checksum offloads for a "
-                  "net/ice, net/i40e or net/iavf port.",
+                  "net/ice, net/i40e, net/iavf or net/txgbe port.",
                   netdev_get_name(&dev->up));
         info.tx_offload_capa &= ~RTE_ETH_TX_OFFLOAD_OUTER_UDP_CKSUM;
         info.tx_offload_capa &= ~RTE_ETH_TX_OFFLOAD_VXLAN_TNL_TSO;
