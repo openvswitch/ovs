@@ -388,6 +388,32 @@ jobs:
     - name: build
       run:  ./.ci/linux-build.sh
 
+  build-oss-fuzz:
+    name: build oss-fuzz fuzzers
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout OVS
+      uses: actions/checkout@v4
+
+    - name: Checkout oss-fuzz
+      uses: actions/checkout@v4
+      with:
+        repository: google/oss-fuzz
+        path: oss-fuzz
+
+    - name: Build oss-fuzz image
+      run: |
+        cd oss-fuzz
+        python infra/helper.py build_image openvswitch --no-pull
+
+    - name: Build oss-fuzz fuzzers
+      run: |
+        cd oss-fuzz
+        python infra/helper.py build_fuzzers --sanitizer address \
+          --engine afl --architecture x86_64 openvswitch $GITHUB_WORKSPACE
+
   build-osx:
     env:
       CC:    clang
