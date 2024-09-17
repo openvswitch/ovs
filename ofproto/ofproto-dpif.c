@@ -3667,6 +3667,16 @@ mirror_set__(struct ofproto *ofproto_, void *aux,
                        s->n_dsts, s->src_vlans,
                        bundle_lookup(ofproto, s->out_bundle),
                        s->snaplen, s->out_vlan);
+
+    if (!error) {
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    } else if (error == ECANCELED) {
+        /* The user requested a change that is identical to the current state,
+         * the reconfiguration is canceled, but don't log an error message
+         * about that. */
+        error = 0;
+    }
+
     free(srcs);
     free(dsts);
     return error;
