@@ -265,7 +265,7 @@ mirror_set(struct mbridge *mbridge, void *aux, const char *name,
     {
         hmapx_destroy(&srcs_map);
         hmapx_destroy(&dsts_map);
-        return 0;
+        return ECANCELED;
     }
 
     /* XXX: Not sure if these need to be thread safe. */
