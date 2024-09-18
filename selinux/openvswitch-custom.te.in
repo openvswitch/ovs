@@ -49,8 +49,8 @@ require {
         class fifo_file { getattr read write append ioctl lock open };
         class filesystem getattr;
         class lnk_file { read open };
-        class netlink_audit_socket { create nlmsg_relay audit_write read write };
-        class netlink_netfilter_socket { create nlmsg_relay audit_write read write };
+        class netlink_audit_socket { create nlmsg_relay read write };
+        class netlink_netfilter_socket { create read write };
 @begin_dpdk@
         class netlink_rdma_socket { setopt bind create };
 @end_dpdk@
@@ -79,8 +79,8 @@ domtrans_pattern(openvswitch_t, openvswitch_load_module_exec_t, openvswitch_load
 
 #============= openvswitch_t ==============
 allow openvswitch_t self:capability { dac_override audit_write net_broadcast net_raw };
-allow openvswitch_t self:netlink_audit_socket { create nlmsg_relay audit_write read write };
-allow openvswitch_t self:netlink_netfilter_socket { create nlmsg_relay audit_write read write };
+allow openvswitch_t self:netlink_audit_socket { create nlmsg_relay read write };
+allow openvswitch_t self:netlink_netfilter_socket { create read write };
 @begin_dpdk@
 allow openvswitch_t self:netlink_rdma_socket { setopt bind create };
 @end_dpdk@
