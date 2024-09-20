@@ -244,6 +244,7 @@ Jiri Benc                          jbenc@redhat.com
 Joe Perches                        joe@perches.com
 Joe Stringer                       joe@ovn.org
 Jon Kohler                         jon@nutanix.com
+Jonathan Davies                    jonathan.davies@nutanix.com
 Jonathan Vestin                    jonavest@kau.se
 Jorge Arturo Sauma Vargas          jorge.sauma@hpe.com
 Jun Gu                             jun.gu@easystack.cn
