@@ -1238,6 +1238,60 @@ bucket3 >= 500
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - select group with dp_hash and equal weights])
+
+OVS_VSWITCHD_START
+add_of_ports br0 1 10
+
+AT_CHECK([ovs-appctl vlog/set ofproto_dpif:file:dbg vconn:file:info])
+
+AT_DATA([stddev.awk], [
+  {
+    # $1 (target) is a mean value, because all weights are the same.
+    # $2 (hits) is an actual number of hashes assigned to this bucket.
+    n_hashes += $2
+    n_buckets++
+    sum_sq_diff += ($2 - $1) * ($2 - $1)
+  }
+  END {
+    mean = n_hashes / n_buckets
+    stddev = sqrt(sum_sq_diff / n_buckets)
+    stddevp = stddev * 100 / mean
+
+    print "hashes:", n_hashes, "buckets:", n_buckets
+    print "mean:", mean, "stddev:", stddev, "(", stddevp, "% )"
+
+    # Make sure that standard deviation of load between buckets is below 12.5%.
+    # Note: it's not a strict requirement, but a good number that passes tests.
+    if (stddevp <= 12.5) { print "PASS" }
+    else { print "FAIL" }
+  }
+])
+
+m4_define([CHECK_DISTRIBUTION], [
+  AT_CHECK([tail -n $1 ovs-vswitchd.log | grep 'ofproto_dpif|DBG|.*Bucket' \
+                | sed 's/.*target=\([[0-9\.]]*\) hits=\([[0-9]]*\)/\1 \2/' \
+                | awk -f stddev.awk], [0], [stdout])
+  AT_CHECK([grep -q "buckets: $2" stdout])
+  AT_CHECK([grep -q 'PASS' stdout])
+])
+
+m4_define([OF_GROUP], [group_id=$1,type=select,selection_method=dp_hash])
+m4_define([OFG_BUCKET], [bucket=weight=$1,output:10])
+
+dnl Test load distribution in groups with up to 64 equally weighted buckets.
+m4_define([OFG_BUCKETS], [OFG_BUCKET(100)])
+m4_for([id], [1], [64], [1], [
+  get_log_next_line_num
+  AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 \
+                "OF_GROUP(id),OFG_BUCKETS()"])
+  CHECK_DISTRIBUTION([+$LINENUM], [id])
+  m4_append([OFG_BUCKETS], [,OFG_BUCKET(100)])
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - select group with explicit dp_hash selection method])
 
 OVS_VSWITCHD_START
