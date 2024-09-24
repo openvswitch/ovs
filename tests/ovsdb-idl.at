@@ -2811,7 +2811,7 @@ OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link2],
 
 m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_C],
   [AT_SETUP([$1 - C])
-   AT_KEYWORDS([idl persistent uuid insert])
+   AT_KEYWORDS([ovsdb server idl persistent uuid insert])
    OVSDB_START_IDLTEST([], ["$abs_srcdir/idltest.ovsschema"])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $2],
             [0], [stdout], [stderr])
@@ -2823,7 +2823,7 @@ m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_C],
 
 m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_PY],
   [AT_SETUP([$1 - Python3])
-   AT_KEYWORDS([idl python persistent uuid insert])
+   AT_KEYWORDS([ovsdb server idl python persistent uuid insert])
    OVSDB_START_IDLTEST([], ["$abs_srcdir/idltest.ovsschema"])
    AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
             [0], [stdout], [stderr])

@@ -1420,6 +1420,7 @@ ovsdb_check_online_conversion cluster
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server combines updates on backlogged connections])
+AT_KEYWORDS([ovsdb server])
 on_exit 'kill `cat *.pid`'
 
 # The maximum socket receive buffer size is important for this test, which
@@ -1518,6 +1519,7 @@ OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server transaction history size])
+AT_KEYWORDS([ovsdb server transaction])
 on_exit 'kill `cat *.pid`'
 
 dnl Start an ovsdb-server with the clustered vswitchd schema.
