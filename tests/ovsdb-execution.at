@@ -137,7 +137,7 @@ m4_divert_pop([PREPARE_TESTS])
 #
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_EXECUTION_RO],
-  [AT_SETUP([$1])
+  [AT_SETUP([ovsdb - $1])
    AT_KEYWORDS([ovsdb execute execution positive $5])
    AT_CHECK([test-ovsdb execute-readonly "`$2`" m4_foreach([txn], [$3],
                                          [ 'txn'])], [0], [stdout], [])
@@ -175,7 +175,7 @@ OVSDB_CHECK_EXECUTION_RO([allow select on read only DB],
 #
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_EXECUTION],
-  [AT_SETUP([$1])
+  [AT_SETUP([ovsdb - $1])
    AT_KEYWORDS([ovsdb execute execution positive $5])
    AT_CHECK([test-ovsdb execute "`$2`" m4_foreach([txn], [$3], [ 'txn'])],
      [0], [stdout], [])

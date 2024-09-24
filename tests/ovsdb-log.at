@@ -1,6 +1,6 @@
 AT_BANNER([OVSDB -- logging])
 
-AT_SETUP([create empty, reread])
+AT_SETUP([ovsdb-log - create empty, reread])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([log])
 AT_CHECK(
@@ -15,7 +15,7 @@ file: read: end of log
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write one, reread])
+AT_SETUP([ovsdb-log - write one, reread])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
@@ -32,7 +32,7 @@ file: read: end of log
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([check that create fails if file exists])
+AT_SETUP([ovsdb-log - check that create fails if file exists])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
@@ -57,7 +57,7 @@ file: read: {"x":1}
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write one, reread])
+AT_SETUP([ovsdb-log - write one, reread])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
@@ -78,7 +78,7 @@ file: read: end of log
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write one, replace, commit])
+AT_SETUP([ovsdb-log - write one, replace, commit])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 for option in '' --no-rename-open-files; do
@@ -115,7 +115,7 @@ done
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write one, replace, abort])
+AT_SETUP([ovsdb-log - write one, replace, abort])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 for option in '' --no-rename-open-files; do
@@ -152,7 +152,7 @@ done
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write one, reread - alternative magic])
+AT_SETUP([ovsdb-log - write one, reread - alternative magic])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 # Sometimes you just need more magic:
@@ -179,7 +179,7 @@ AT_CHECK(
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write one, reread, append])
+AT_SETUP([ovsdb-log - write one, reread, append])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
@@ -209,7 +209,7 @@ file: read: end of log
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write, reread one, overwrite])
+AT_SETUP([ovsdb-log - write, reread one, overwrite])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
@@ -235,7 +235,7 @@ file: read: end of log
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write, add corrupted data, read])
+AT_SETUP([ovsdb-log - write, add corrupted data, read])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
@@ -257,7 +257,7 @@ file: read failed: syntax error: file: parse error at offset 186 in header line 
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write, add corrupted data, read, overwrite])
+AT_SETUP([ovsdb-log - write, add corrupted data, read, overwrite])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
@@ -289,7 +289,7 @@ file: read: end of log
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write, corrupt some data, read, overwrite])
+AT_SETUP([ovsdb-log - write, corrupt some data, read, overwrite])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
@@ -322,7 +322,7 @@ file: read: end of log
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write, truncate file, read, overwrite])
+AT_SETUP([ovsdb-log - write, truncate file, read, overwrite])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
@@ -355,7 +355,7 @@ file: read: end of log
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
-AT_SETUP([write bad JSON, read, overwrite])
+AT_SETUP([ovsdb-log - write bad JSON, read, overwrite])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(

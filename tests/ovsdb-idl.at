@@ -87,7 +87,7 @@ m4_define([OVSDB_CLUSTER_START_IDLTEST],
 #
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_IDL_C],
-  [AT_SETUP([$1 - C])
+  [AT_SETUP([ovsdb-idl - $1 - C])
    AT_KEYWORDS([ovsdb server idl positive $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -101,7 +101,7 @@ m4_define([OVSDB_CHECK_IDL_C],
 
 # same as OVSDB_CHECK_IDL but uses OVSDB_IDL_WRITE_CHANGED_ONLY.
 m4_define([OVSDB_CHECK_IDL_WRITE_CHANGED_ONLY_C],
-  [AT_SETUP([$1 - write-changed-only - C])
+  [AT_SETUP([ovsdb-idl - $1 - write-changed-only - C])
    AT_KEYWORDS([ovsdb server idl positive $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -115,7 +115,7 @@ m4_define([OVSDB_CHECK_IDL_WRITE_CHANGED_ONLY_C],
 
 # same as OVSDB_CHECK_IDL but uses tcp.
 m4_define([OVSDB_CHECK_IDL_TCP_C],
-  [AT_SETUP([$1 - C - tcp])
+  [AT_SETUP([ovsdb-idl - $1 - C - tcp])
    AT_KEYWORDS([ovsdb server idl positive tcp socket $5])
    OVSDB_START_IDLTEST(["ptcp:0:127.0.0.1"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
@@ -131,7 +131,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_C],
 
 # same as OVSDB_CHECK_IDL but uses tcp6.
 m4_define([OVSDB_CHECK_IDL_TCP6_C],
-  [AT_SETUP([$1 - C - tcp6])
+  [AT_SETUP([ovsdb-idl - $1 - C - tcp6])
    AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive tcp6 socket $5])
@@ -149,7 +149,7 @@ m4_define([OVSDB_CHECK_IDL_TCP6_C],
 
 # same as OVSDB_CHECK_IDL but uses the Python IDL implementation.
 m4_define([OVSDB_CHECK_IDL_PY],
-  [AT_SETUP([$1 - Python3])
+  [AT_SETUP([ovsdb-idl - $1 - Python3])
    AT_KEYWORDS([ovsdb server idl positive Python $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -162,7 +162,7 @@ m4_define([OVSDB_CHECK_IDL_PY],
    AT_CLEANUP])
 
 m4_define([OVSDB_CHECK_IDL_REGISTER_COLUMNS_PY],
-  [AT_SETUP([$1 - Python3 - register_columns])
+  [AT_SETUP([ovsdb-idl - $1 - Python3 - register_columns])
    AT_KEYWORDS([ovsdb server idl positive Python register_columns $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -185,7 +185,7 @@ m4_define([OVSDB_CHECK_IDL_REGISTER_COLUMNS_PY],
 
 # same as OVSDB_CHECK_IDL but uses the Python IDL implementation with tcp
 m4_define([OVSDB_CHECK_IDL_TCP_PY],
-  [AT_SETUP([$1 - Python3 - tcp])
+  [AT_SETUP([ovsdb-idl - $1 - Python3 - tcp])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
    OVSDB_START_IDLTEST(["ptcp:0:127.0.0.1"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
@@ -202,7 +202,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_PY],
 # same as OVSDB_CHECK_IDL but uses the Python IDL implementation with tcp
 # with multiple remotes with only one remote reachable
 m4_define([OVSDB_CHECK_IDL_TCP_MULTIPLE_REMOTES_PY],
-  [AT_SETUP([$1 - Python3 (multiple remotes) - tcp])
+  [AT_SETUP([ovsdb-idl - $1 - Python3 (multiple remotes) - tcp])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
    OVSDB_START_IDLTEST(["ptcp:0:127.0.0.1"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
@@ -220,7 +220,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_MULTIPLE_REMOTES_PY],
 
 # same as OVSDB_CHECK_IDL but uses the Python IDL implementation with tcp6
 m4_define([OVSDB_CHECK_IDL_TCP6_PY],
-  [AT_SETUP([$1 - Python3 - tcp6])
+  [AT_SETUP([ovsdb-idl $1 - Python3 - tcp6])
    AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
@@ -238,7 +238,7 @@ m4_define([OVSDB_CHECK_IDL_TCP6_PY],
    AT_CLEANUP])
 
 m4_define([OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PY],
-  [AT_SETUP([$1 - Python3 - tcp6])
+  [AT_SETUP([ovsdb-idl - $1 - Python3 - tcp6])
    AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
@@ -258,7 +258,7 @@ m4_define([OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PY],
 
 # same as OVSDB_CHECK_IDL but uses the Python IDL implementation with SSL
 m4_define([OVSDB_CHECK_IDL_SSL_PY],
-  [AT_SETUP([$1 - Python3 - SSL])
+  [AT_SETUP([ovsdb-idl - $1 - Python3 - SSL])
    AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
    $PYTHON3 -c "import ssl"
    SSL_PRESENT=$?
@@ -308,7 +308,7 @@ m4_define([OVSDB_CHECK_IDL],
 
 # This test uses the Python IDL implementation with passive tcp
 m4_define([OVSDB_CHECK_IDL_PASSIVE_TCP_PY],
-  [AT_SETUP([$1 - Python3 - ptcp])
+  [AT_SETUP([ovsdb-idl - $1 - Python3 - ptcp])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
    # find free TCP port
    OVSDB_START_IDLTEST(["ptcp:0:127.0.0.1"])
@@ -495,7 +495,7 @@ OVSDB_CHECK_IDL([simple idl, writing via IDL with unicode],
 ]])
 
 m4_define([OVSDB_CHECK_IDL_PY_WITH_EXPOUT],
-  [AT_SETUP([$1 - Python3])
+  [AT_SETUP([ovsdb-idl - $1 - Python3])
    AT_KEYWORDS([ovsdb server idl positive Python $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -1032,7 +1032,7 @@ OVSDB_CHECK_IDL_PY([row-from-json idl, whats this],
 003: done
 ]])
 
-AT_SETUP([idl handling of missing tables and columns - C])
+AT_SETUP([ovsdb-idl - handling of missing tables and columns - C])
 AT_KEYWORDS([ovsdb server idl positive])
 
 # idltest2.ovsschema is the same as idltest.ovsschema, except that
@@ -1110,7 +1110,7 @@ OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
 m4_define([OVSDB_CHECK_IDL_FETCH_COLUMNS_PY],
-  [AT_SETUP([$1 - Python3 - fetch])
+  [AT_SETUP([ovsdb-idl - $1 - Python3 - fetch])
    AT_KEYWORDS([ovsdb server idl positive Python increment fetch $6])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -1154,7 +1154,7 @@ OVSDB_CHECK_IDL_FETCH_COLUMNS([simple idl, initially populated],
 ]])
 
 m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_C],
-  [AT_SETUP([$1 - C])
+  [AT_SETUP([ovsdb-idl - $1 - C])
    AT_KEYWORDS([ovsdb server idl monitor $4])
    OVSDB_START_IDLTEST
    AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor-cond])
@@ -1167,7 +1167,7 @@ m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_C],
    AT_CLEANUP])
 
 m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_PY],
-  [AT_SETUP([$1 - Python3])
+  [AT_SETUP([ovsdb-idl - $1 - Python3])
    AT_KEYWORDS([ovsdb server idl Python monitor $4])
    OVSDB_START_IDLTEST
    AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor-cond])
@@ -1261,7 +1261,7 @@ OVSDB_CHECK_IDL_WO_MONITOR_COND([simple idl disable monitor-cond],
 ]])
 
 m4_define([OVSDB_CHECK_IDL_TRACK_C],
-  [AT_SETUP([$1 - C])
+  [AT_SETUP([ovsdb-idl - $1 - C])
    AT_KEYWORDS([ovsdb server idl tracking positive $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -1274,7 +1274,7 @@ m4_define([OVSDB_CHECK_IDL_TRACK_C],
    AT_CLEANUP])
 
 m4_define([OVSDB_CHECK_IDL_TRACK_WRITE_CHANGED_ONLY_C],
-  [AT_SETUP([$1 - write-changed-only - C])
+  [AT_SETUP([ovsdb-idl - $1 - write-changed-only - C])
    AT_KEYWORDS([ovsdb server idl tracking positive $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -1854,7 +1854,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 ]])
 
 m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN],
-  [AT_SETUP([$1 - C])
+  [AT_SETUP([ovsdb-idl - $1 - C])
    AT_KEYWORDS([ovsdb server idl partial update map column positive $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -1918,7 +1918,7 @@ OVSDB_CHECK_IDL_PY([partial-map update set refmap idl],
 ]])
 
 m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN],
-  [AT_SETUP([$1 - C])
+  [AT_SETUP([ovsdb-idl - $1 - C])
    AT_KEYWORDS([ovsdb server idl partial update set column positive $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -2139,7 +2139,7 @@ OVSDB_CHECK_IDL_NOTIFY([indexed idl, modification and removal notify],
 # Then, some at_checks are used to verify the correctness of the corresponding index as well as the existence
 # of all the rows involved in the test.
 m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_SINGLE_COLUMN_C],
-  [AT_SETUP([$1 - C])
+  [AT_SETUP([ovsdb-idl - $1 - C])
    AT_KEYWORDS([ovsdb server idl compound_index_single_column compound_index positive $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -2286,7 +2286,7 @@ OVSDB_CHECK_IDL_COMPOUND_INDEX_SINGLE_COLUMN_C([Compound_index, single column te
 # Then, some at_checks are used to verify the correctness of the corresponding index as well as the existence
 # of all the rows involved in the test.
 m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_DOUBLE_COLUMN_C],
-  [AT_SETUP([$1 - C])
+  [AT_SETUP([ovsdb-idl - $1 - C])
    AT_KEYWORDS([ovsdb server idl compound_index_double_column compound_index positive $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -2425,7 +2425,7 @@ OVSDB_CHECK_IDL_COMPOUND_INDEX_DOUBLE_COLUMN_C([Compound_index, double column te
 ])
 
 m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_WITH_REF],
-  [AT_SETUP([$1 - C])
+  [AT_SETUP([ovsdb-idl - $1 - C])
    AT_KEYWORDS([ovsdb server idl compound_index compound_index_with_ref positive $5])
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
@@ -2451,7 +2451,7 @@ OVSDB_CHECK_IDL_COMPOUND_INDEX_WITH_REF([set, simple3 idl-compound-index-with-re
 ]])
 
 m4_define([CHECK_STREAM_OPEN_BLOCK],
-  [AT_SETUP([Check stream open block - $1 - $3])
+  [AT_SETUP([ovsdb-idl - Check stream open block - $1 - $3])
    AT_SKIP_IF([test "$3" = "tcp6" && test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test "$3" = "tcp6" && test "$HAVE_IPV6" = "no"])
    AT_SKIP_IF([test "$3" = "ssl6" && test "$IS_WIN32" = "yes"])
@@ -2512,7 +2512,7 @@ m4_define([OVSDB_CLUSTER_CHECK_MONITOR_COND_SINCE_TXN_IDS],
 # same as OVSDB_CHECK_IDL but uses Python IDL implementation with tcp
 # with multiple remotes to assert the idl connects to the leader of the Raft cluster
 m4_define([OVSDB_CHECK_IDL_LEADER_ONLY_PY],
-  [AT_SETUP([$1 - Python3 (leader only)])
+  [AT_SETUP([ovsdb-idl - $1 - Python3 (leader only)])
    AT_SKIP_IF([test "$IS_ARM64" = "yes"])
    AT_KEYWORDS([ovsdb server idl Python leader_only with tcp socket])
    m4_define([LPBK],[127.0.0.1])
@@ -2555,7 +2555,7 @@ OVSDB_CHECK_IDL_LEADER_ONLY_PY([Check Python IDL reconnects to leader], 3, ['rem
 # If LOG_FILTER is provided, checks that the contents of LOG_FILTER
 # are not matched by grep in the test-ovsdb logs.
 m4_define([OVSDB_CHECK_CLUSTER_IDL_C],
-  [AT_SETUP([$1 - C - tcp])
+  [AT_SETUP([ovsdb-idl - $1 - C - tcp])
    AT_KEYWORDS([ovsdb server idl tcp $6])
    m4_define([LPBK],[127.0.0.1])
    OVSDB_CLUSTER_START_IDLTEST([$2], ["ptcp:0:"LPBK])
@@ -2576,7 +2576,7 @@ m4_define([OVSDB_CHECK_CLUSTER_IDL_C],
 
 # Same as OVSDB_CHECK_CLUSTER_IDL_C but uses the Python IDL implementation.
 m4_define([OVSDB_CHECK_CLUSTER_IDL_PY],
-  [AT_SETUP([$1 - Python3 - tcp])
+  [AT_SETUP([ovsdb-idl - $1 - Python3 - tcp])
    AT_KEYWORDS([ovsdb server idl tcp $6])
    m4_define([LPBK],[127.0.0.1])
    OVSDB_CLUSTER_START_IDLTEST([$2], ["ptcp:0:"LPBK])
@@ -2810,7 +2810,7 @@ OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link2],
 ]])
 
 m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_C],
-  [AT_SETUP([$1 - C])
+  [AT_SETUP([ovsdb-idl - $1 - C])
    AT_KEYWORDS([ovsdb server idl persistent uuid insert])
    OVSDB_START_IDLTEST([], ["$abs_srcdir/idltest.ovsschema"])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $2],
@@ -2822,7 +2822,7 @@ m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_C],
    AT_CLEANUP])
 
 m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_PY],
-  [AT_SETUP([$1 - Python3])
+  [AT_SETUP([ovsdb-idl - $1 - Python3])
    AT_KEYWORDS([ovsdb server idl python persistent uuid insert])
    OVSDB_START_IDLTEST([], ["$abs_srcdir/idltest.ovsschema"])
    AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
@@ -2896,7 +2896,7 @@ OVSDB_CHECK_IDL_PY([simple idl, python, add_op],
 
 
 m4_define([OVSDB_CHECK_IDL_CHANGE_AWARE],
-  [AT_SETUP([simple idl, database change aware, online conversion - $1])
+  [AT_SETUP([ovsdb-idl - simple idl, database change aware, online conversion - $1])
    AT_KEYWORDS([ovsdb server idl db_change_aware conversion $1])
 
    m4_if([$1], [clustered],
