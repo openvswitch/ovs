@@ -74,6 +74,7 @@ ovs_flowviz = \
 	python/ovs/flowviz/odp/tree.py \
 	python/ovs/flowviz/ofp/__init__.py \
 	python/ovs/flowviz/ofp/cli.py \
+	python/ovs/flowviz/ofp/logic.py \
 	python/ovs/flowviz/ofp/html.py \
 	python/ovs/flowviz/ovs-flowviz \
 	python/ovs/flowviz/process.py
