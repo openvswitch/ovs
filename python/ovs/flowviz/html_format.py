@@ -98,6 +98,14 @@ class HTMLBuffer(FlowBuffer):
             kv.meta.vstring, style.color if style else "", href
         )
 
+    def append_value_omitted(self, kv):
+        """Append an omitted value.
+        Args:
+            kv (KeyValue): the KeyValue instance to append
+        """
+        dots = "." * len(kv.meta.vstring)
+        return self._append(dots, "", "")
+
     def append_extra(self, extra, style):
         """Append extra string.
         Args:
@@ -125,14 +133,15 @@ class HTMLFormatter(FlowFormatter):
             self._style_from_opts(opts, "html", HTMLStyle) or FlowStyle()
         )
 
-    def format_flow(self, buf, flow, highlighted=None):
+    def format_flow(self, buf, flow, highlighted=None, omitted=None):
         """Formats the flow into the provided buffer as a html object.
 
         Args:
             buf (FlowBuffer): the flow buffer to append to
             flow (ovs_dbg.OFPFlow): the flow to format
             highlighted (list): Optional; list of KeyValues to highlight
+            omitted (list): Optional; list of KeyValues to omit
         """
         return super(HTMLFormatter, self).format_flow(
-            buf, flow, self.style, highlighted
+            buf, flow, self.style, highlighted, omitted
         )
