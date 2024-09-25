@@ -211,6 +211,7 @@ class ODPFlow(Flow):
             "used": decode_time,
             "flags": decode_default,
             "dp": decode_default,
+            "offloaded": decode_default,
         }
 
     @staticmethod
