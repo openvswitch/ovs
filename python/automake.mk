@@ -67,8 +67,11 @@ ovs_flowviz = \
 	python/ovs/flowviz/__init__.py \
 	python/ovs/flowviz/main.py \
 	python/ovs/flowviz/odp/__init__.py \
+	python/ovs/flowviz/odp/cli.py \
 	python/ovs/flowviz/ofp/__init__.py \
-	python/ovs/flowviz/ovs-flowviz
+	python/ovs/flowviz/ofp/cli.py \
+	python/ovs/flowviz/ovs-flowviz \
+	python/ovs/flowviz/process.py
 
 
 # These python files are used at build time but not runtime,
