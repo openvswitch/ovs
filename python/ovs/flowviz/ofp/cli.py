@@ -15,6 +15,7 @@
 import click
 
 from ovs.flowviz.main import maincli
+from ovs.flowviz.ofp.html import HTMLProcessor
 from ovs.flowviz.process import (
     ConsoleProcessor,
     JSONOpenFlowProcessor,
@@ -56,3 +57,12 @@ def console(opts, heat_map):
     )
     proc.process()
     proc.print()
+
+
+@openflow.command()
+@click.pass_obj
+def html(opts):
+    """Print the flows in an linked HTML list arranged by tables."""
+    processor = HTMLProcessor(opts)
+    processor.process()
+    print(processor.html())
