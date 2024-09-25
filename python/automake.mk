@@ -65,6 +65,8 @@ ovs_pytests = \
 
 ovs_flowviz = \
 	python/ovs/flowviz/__init__.py \
+	python/ovs/flowviz/console.py \
+	python/ovs/flowviz/format.py \
 	python/ovs/flowviz/main.py \
 	python/ovs/flowviz/odp/__init__.py \
 	python/ovs/flowviz/odp/cli.py \

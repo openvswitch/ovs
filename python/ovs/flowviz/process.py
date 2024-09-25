@@ -20,6 +20,14 @@ from ovs.flow.decoders import FlowEncoder
 from ovs.flow.odp import ODPFlow
 from ovs.flow.ofp import OFPFlow
 
+from ovs.flowviz.console import (
+    ConsoleFormatter,
+    default_highlight,
+    file_header,
+    heat_pallete,
+)
+from ovs.flowviz.format import FlowStyle
+
 
 class FileProcessor(object):
     """Base class for file-based Flow processing. It is able to create flows
@@ -253,3 +261,84 @@ class JSONDatapathProcessor(FileProcessor):
             return json.dumps(
                 thread_data(next(iter(self.data.values()))), **opts
             )
+
+
+class ConsoleProcessor(FileProcessor):
+    """A generic Console Processor that prints flows into the console"""
+
+    def __init__(self, opts, flow_type, heat_map=[]):
+        super().__init__(opts, flow_type)
+        self.heat_map = heat_map
+        self.console = ConsoleFormatter(opts)
+        if not self.console.style and self.opts.get("highlight"):
+            # Add some style to highlights or else they won't be seen.
+            self.console.style = FlowStyle()
+            self.console.style.set_default_value_style(
+                default_highlight(), True
+            )
+            self.console.style.set_default_key_style(default_highlight(), True)
+
+        self.flows = dict()  # Dict of flow-lists, one per file and thread.
+        self.min_max = dict()  # Used for heat-map calculation.
+        self.curr_file = None
+        self.flows_list = None
+
+    def _init_list(self):
+        self.flows_list = list()
+        if len(self.heat_map) > 0:
+            self.min = [-1] * len(self.heat_map)
+            self.max = [0] * len(self.heat_map)
+
+    def _save_list(self, name):
+        if self.flows_list:
+            self.flows[name] = self.flows_list
+            self.flows_list = None
+            if len(self.heat_map) > 0:
+                self.min_max[name] = (self.min, self.max)
+
+    def start_file(self, name, filename):
+        self._init_list()
+        self.curr_file = name
+
+    def start_thread(self, name):
+        if not self.flows_list:
+            self._init_list()
+
+    def stop_thread(self, name):
+        full_name = self.curr_file + f" ({name})"
+        self._save_list(full_name)
+
+    def stop_file(self, name, filename):
+        self._save_list(name)
+
+    def process_flow(self, flow, name):
+        # Running calculation of min and max values for all the fields that
+        # take place in the heatmap.
+        for i, field in enumerate(self.heat_map):
+            val = flow.info.get(field)
+            if self.min[i] == -1 or val < self.min[i]:
+                self.min[i] = val
+            if val > self.max[i]:
+                self.max[i] = val
+
+        self.flows_list.append(flow)
+
+    def print(self):
+        for name, flows in self.flows.items():
+            self.console.console.print("\n")
+            self.console.console.print(file_header(name))
+
+            if len(self.heat_map) > 0 and len(self.flows) > 0:
+                for i, field in enumerate(self.heat_map):
+                    (min_val, max_val) = self.min_max[name][i]
+                    self.console.style.set_value_style(
+                        field, heat_pallete(min_val, max_val)
+                    )
+
+            for flow in flows:
+                high = None
+                if self.opts.get("highlight"):
+                    result = self.opts.get("highlight").evaluate(flow)
+                    if result:
+                        high = result.kv
+                self.console.print_flow(flow, high)

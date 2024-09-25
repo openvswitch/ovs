@@ -15,7 +15,10 @@
 import click
 
 from ovs.flowviz.main import maincli
-from ovs.flowviz.process import JSONDatapathProcessor
+from ovs.flowviz.process import (
+    ConsoleProcessor,
+    JSONDatapathProcessor,
+)
 
 
 @maincli.group(subcommand_metavar="FORMAT")
@@ -32,3 +35,22 @@ def json(opts):
     proc = JSONDatapathProcessor(opts)
     proc.process()
     print(proc.json_string())
+
+
+@datapath.command()
+@click.option(
+    "-h",
+    "--heat-map",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Create heat-map with packet and byte counters",
+)
+@click.pass_obj
+def console(opts, heat_map):
+    """Print the flows in the console with some style."""
+    proc = ConsoleProcessor(
+        opts, "odp", heat_map=["packets", "bytes"] if heat_map else []
+    )
+    proc.process()
+    proc.print()
