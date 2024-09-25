@@ -18,7 +18,7 @@ import click
 
 from ovs.flowviz.main import maincli
 from ovs.flowviz.ofp.html import HTMLProcessor
-from ovs.flowviz.ofp.logic import LogicFlowProcessor
+from ovs.flowviz.ofp.logic import CookieProcessor, LogicFlowProcessor
 from ovs.flowviz.process import (
     ConsoleProcessor,
     JSONOpenFlowProcessor,
@@ -170,6 +170,61 @@ def logic(
     processor = LogicFlowProcessor(opts, cookie_flag, heat_map)
     processor.process()
     processor.print(show_flows)
+
+
+@openflow.command()
+@click.option(
+    "-d",
+    "--ovn-detrace",
+    "ovn_detrace_flag",
+    is_flag=True,
+    show_default=True,
+    help="Use ovn-detrace to extract cookie information",
+)
+@click.option(
+    "--ovn-detrace-path",
+    default="/usr/bin",
+    type=click.Path(),
+    help="Use an alternative path to where ovn_detrace.py is located. "
+    "Instead of using this option you can just set PYTHONPATH accordingly",
+    show_default=True,
+    callback=ovn_detrace_callback,
+)
+@click.option(
+    "--ovnnb-db",
+    default=os.getenv("OVN_NB_DB") or "unix:/var/run/ovn/ovnnb_db.sock",
+    help="Specify the OVN NB database string (implies -d). "
+    "If the OVN_NB_DB environment variable is set, it's used as default. "
+    "Otherwise, the default is unix:/var/run/ovn/ovnnb_db.sock",
+    callback=ovn_detrace_callback,
+)
+@click.option(
+    "--ovnsb-db",
+    default=os.getenv("OVN_SB_DB") or "unix:/var/run/ovn/ovnsb_db.sock",
+    help="Specify the OVN NB database string (implies -d). "
+    "If the OVN_NB_DB environment variable is set, it's used as default. "
+    "Otherwise, the default is unix:/var/run/ovn/ovnnb_db.sock",
+    callback=ovn_detrace_callback,
+)
+@click.option(
+    "-o",
+    "--ovn-filter",
+    help="Specify a filter to be run on ovn-detrace information (implied -d). "
+    "Format: python regular expression "
+    "(see https://docs.python.org/3/library/re.html)",
+    callback=ovn_detrace_callback,
+)
+@click.pass_obj
+def cookie(
+    opts, ovn_detrace_flag, ovn_detrace_path, ovnnb_db, ovnsb_db, ovn_filter
+):
+    """Print the flow tables sorted by cookie."""
+    if ovn_detrace_flag:
+        opts["ovn_detrace_flag"] = True
+
+    processor = CookieProcessor(opts)
+    processor.process()
+    processor.print()
 
 
 @openflow.command()

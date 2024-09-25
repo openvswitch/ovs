@@ -301,3 +301,64 @@ cookie_style_gen = hash_pallete(
     saturation=[0.5],
     value=[0.5 + x / 10 * (0.85 - 0.5) for x in range(0, 10)],
 )
+
+
+class CookieProcessor(FileProcessor):
+    """Processor that sorts flows into cookies and tables."""
+
+    def __init__(self, opts):
+        super().__init__(opts, "ofp")
+        self.data = dict()
+        self.ovn_detrace = (
+            OVNDetrace(opts) if opts.get("ovn_detrace_flag") else None
+        )
+
+    def start_file(self, name, filename):
+        self.cookies = dict()
+
+    def stop_file(self, name, filename):
+        self.data[name] = self.cookies
+
+    def process_flow(self, flow, name):
+        """Sort the flows by table and logical flow."""
+        cookie = flow.info.get("cookie") or 0
+        if not self.cookies.get(cookie):
+            self.cookies[cookie] = dict()
+
+        table = flow.info.get("table") or 0
+        if not self.cookies[cookie].get(table):
+            self.cookies[cookie][table] = list()
+        self.cookies[cookie][table].append(flow)
+
+    def print(self):
+        ofconsole = ConsoleFormatter(opts=self.opts)
+        console = ofconsole.console
+        for name, cookies in self.data.items():
+            console.print("\n")
+            console.print(file_header(name))
+            tree = Tree("Ofproto Cookie Tree")
+
+            for cookie, tables in cookies.items():
+                ovn_info = None
+                if self.ovn_detrace:
+                    ovn_info = self.ovn_detrace.get_ovn_info(cookie)
+                    if self.opts.get("ovn_filter"):
+                        ovn_regexp = re.compile(self.opts.get("ovn_filter"))
+                        if not ovn_regexp.search(ovn_info):
+                            continue
+
+                cookie_tree = tree.add("** Cookie {} **".format(hex(cookie)))
+                if ovn_info:
+                    ovn = cookie_tree.add("OVN Info")
+                    for part in ovn_info.split("\n"):
+                        if part.strip():
+                            ovn.add(part.strip())
+
+                tables_tree = cookie_tree.add("Tables")
+                for table, flows in tables.items():
+                    table_tree = tables_tree.add("* Table {} * ".format(table))
+                    for flow in flows:
+                        buf = ConsoleBuffer(Text())
+                        ofconsole.format_flow(buf, flow)
+                        table_tree.add(buf.text)
+            console.print(tree)
