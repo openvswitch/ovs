@@ -112,6 +112,8 @@ html_static_path = ['_static']
 # Define the canonical URL for our domain configured on Read the Docs.
 html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
 
+option_emphasise_placeholders = True
+
 # Tell Jinja2 templates the build is running on Read the Docs.
 html_context = {}
 if os.environ.get("READTHEDOCS", "") == "True":
@@ -128,6 +130,8 @@ _man_pages = [
      u'utility for configuring running Open vSwitch daemons'),
     ('ovs-ctl.8',
      u'OVS startup helper script'),
+    ('ovs-flowviz.8',
+     u'utility for visualizing OpenFlow and datapath flows'),
     ('ovs-l3ping.8',
      u'check network deployment for L3 tunneling problems'),
     ('ovs-parse-backtrace.8',

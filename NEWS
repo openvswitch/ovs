@@ -5,6 +5,10 @@ Post-v3.4.0
        that does not have a specific value defined, rather than being
        treated as a global value, aligning the behavior with that of
        the kernel datapath.
+   - Python:
+     * Added tool called "ovs-flowviz" capable of parsing OpenFlow
+       and datapath flow dumps and displaying them in several different
+       formats.
 
 
 v3.4.0 - 15 Aug 2024

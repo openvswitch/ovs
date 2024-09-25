@@ -500,6 +500,7 @@ fi
 %{_mandir}/man8/ovs-ctl.8*
 %{_mandir}/man8/ovs-dpctl.8*
 %{_mandir}/man8/ovs-dpctl-top.8*
+%{_mandir}/man8/ovs-flowviz.8*
 %{_mandir}/man8/ovs-kmod-ctl.8*
 %{_mandir}/man8/ovs-ofctl.8*
 %{_mandir}/man8/ovs-pki.8*

@@ -58,3 +58,4 @@ OVS
    userspace-checksum-offloading
    userspace-tx-steering
    usdt-probes
+   flow-visualization

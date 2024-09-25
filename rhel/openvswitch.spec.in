@@ -223,6 +223,7 @@ exit 0
 /usr/share/man/man8/ovs-ctl.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-dpctl-top.8.gz
+/usr/share/man/man8/ovs-flowviz.8.gz
 /usr/share/man/man8/ovs-kmod-ctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-parse-backtrace.8.gz
