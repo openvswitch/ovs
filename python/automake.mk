@@ -63,6 +63,14 @@ ovs_pytests = \
 	python/ovs/tests/test_odp.py \
 	python/ovs/tests/test_ofp.py
 
+ovs_flowviz = \
+	python/ovs/flowviz/__init__.py \
+	python/ovs/flowviz/main.py \
+	python/ovs/flowviz/odp/__init__.py \
+	python/ovs/flowviz/ofp/__init__.py \
+	python/ovs/flowviz/ovs-flowviz
+
+
 # These python files are used at build time but not runtime,
 # so they are not installed.
 EXTRA_DIST += \
@@ -80,10 +88,11 @@ EXTRA_DIST += \
 # C extension support.
 EXTRA_DIST += python/ovs/_json.c
 
-PYFILES = $(ovs_pyfiles) python/ovs/dirs.py python/setup.py $(ovstest_pyfiles) $(ovs_pytests)
+PYFILES = $(ovs_pyfiles) python/ovs/dirs.py python/setup.py $(ovstest_pyfiles) $(ovs_pytests) \
+	$(ovs_flowviz)
 
 EXTRA_DIST += $(PYFILES)
-PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
+PYCOV_CLEAN_FILES += $($(filter %.py, PYFILES):.py=.py,cover) python/ovs/flowviz/ovs-flowviz,cover
 
 FLAKE8_PYFILES += \
 	$(filter-out python/ovs/compat/% python/ovs/dirs.py python/setup.py,$(PYFILES)) \
@@ -94,7 +103,7 @@ FLAKE8_PYFILES += \
 	python/ovs/dirs.py.template \
 	python/setup.py.template
 
-nobase_pkgdata_DATA = $(ovs_pyfiles) $(ovstest_pyfiles)
+nobase_pkgdata_DATA = $(ovs_pyfiles) $(ovstest_pyfiles) $(ovs_flowviz)
 ovs-install-data-local:
 	$(MKDIR_P) python/ovs
 	sed \
