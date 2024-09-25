@@ -15,6 +15,8 @@
 import click
 
 from ovs.flowviz.main import maincli
+
+from ovs.flowviz.odp.graph import GraphProcessor
 from ovs.flowviz.odp.html import HTMLTreeProcessor
 from ovs.flowviz.odp.tree import ConsoleTreeProcessor
 from ovs.flowviz.process import (
@@ -84,3 +86,24 @@ def html(opts):
     processor = HTMLTreeProcessor(opts)
     processor.process()
     processor.print()
+
+
+@datapath.command()
+@click.option(
+    "-h",
+    "--html",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Output an html file containing the graph",
+)
+@click.pass_obj
+def graph(opts, html):
+    """Print the flows in a graphviz (.dot) format showing the relationship
+    of recirc_ids."""
+    if len(opts.get("filename")) > 1:
+        raise click.BadParameter("Graph format only supports one input file")
+
+    processor = GraphProcessor(opts)
+    processor.process()
+    processor.print(html)
