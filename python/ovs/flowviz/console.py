@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import colorsys
+import itertools
+import zlib
 
 from rich.console import Console
 from rich.color import Color
@@ -79,6 +81,14 @@ class ConsoleBuffer(FlowBuffer):
         """
         return self._append(kv.meta.vstring, style)
 
+    def append_value_omitted(self, kv):
+        """Append an omitted value.
+        Args:
+            kv (KeyValue): the KeyValue instance to append
+        """
+        dots = "." * len(kv.meta.vstring)
+        return self._append(dots, None)
+
     def append_extra(self, extra, style):
         """Append extra string.
         Args:
@@ -107,20 +117,21 @@ class ConsoleFormatter(FlowFormatter):
     def style_from_opts(self, opts):
         return self._style_from_opts(opts, "console", Style)
 
-    def print_flow(self, flow, highlighted=None):
+    def print_flow(self, flow, highlighted=None, omitted=None):
         """Prints a flow to the console.
 
         Args:
             flow (ovs_dbg.OFPFlow): the flow to print
             style (dict): Optional; style dictionary to use
             highlighted (list): Optional; list of KeyValues to highlight
+            omitted (list): Optional; list of KeyValues to omit
         """
 
         buf = ConsoleBuffer(Text())
-        self.format_flow(buf, flow, highlighted)
-        self.console.print(buf.text)
+        self.format_flow(buf, flow, highlighted, omitted)
+        self.console.print(buf.text, soft_wrap=True)
 
-    def format_flow(self, buf, flow, highlighted=None):
+    def format_flow(self, buf, flow, highlighted=None, omitted=None):
         """Formats the flow into the provided buffer as a rich.Text.
 
         Args:
@@ -128,9 +139,10 @@ class ConsoleFormatter(FlowFormatter):
             flow (ovs_dbg.OFPFlow): the flow to format
             style (FlowStyle): Optional; style object to use
             highlighted (list): Optional; list of KeyValues to highlight
+            omitted (list): Optional; list of KeyValues to omit
         """
         return super(ConsoleFormatter, self).format_flow(
-            buf, flow, self.style, highlighted
+            buf, flow, self.style, highlighted, omitted
         )
 
 
@@ -155,6 +167,25 @@ def heat_pallete(min_value, max_value):
         return Style(color=Color.from_rgb(r * 255, g * 255, b * 255))
 
     return heat
+
+
+def hash_pallete(hue, saturation, value):
+    """Generates a color pallete with the cartesian product
+    of the hsv values provided and returns a callable that assigns a color for
+    each value hash
+    """
+    HSV_tuples = itertools.product(hue, saturation, value)
+    RGB_tuples = map(lambda x: colorsys.hsv_to_rgb(*x), HSV_tuples)
+    styles = [
+        Style(color=Color.from_rgb(r * 255, g * 255, b * 255))
+        for r, g, b in RGB_tuples
+    ]
+
+    def get_style(string):
+        hash_val = zlib.crc32(bytes(str(string), "utf-8"))
+        return styles[hash_val % len(styles)]
+
+    return get_style
 
 
 def default_highlight():

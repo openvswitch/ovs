@@ -67,6 +67,15 @@ class KeyValue(object):
     def __repr__(self):
         return "{}('{}')".format(self.__class__.__name__, self)
 
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.key == other.key and self.value == other.value
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 
 class KVDecoders(object):
     """KVDecoders class is used by KVParser to select how to decode the value

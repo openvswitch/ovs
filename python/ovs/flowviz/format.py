@@ -225,7 +225,8 @@ class FlowFormatter:
 
         return FlowStyle({k: style_constructor(**v) for k, v in style.items()})
 
-    def format_flow(self, buf, flow, style_obj=None, highlighted=None):
+    def format_flow(self, buf, flow, style_obj=None, highlighted=None,
+                    omitted=None):
         """Formats the flow into the provided buffer.
 
         Args:
@@ -233,25 +234,41 @@ class FlowFormatter:
             flow (ovs_dbg.OFPFlow): the flow to format
             style_obj (FlowStyle): Optional; style to use
             highlighted (list): Optional; list of KeyValues to highlight
+            omitted (list): Optional; dict of keys to omit indexed by section
+                name.
         """
         last_printed_pos = 0
+        first = True
 
-        if style_obj:
+        if style_obj or omitted:
             style_obj = style_obj or FlowStyle()
             for section in sorted(flow.sections, key=lambda x: x.pos):
-                buf.append_extra(
-                    flow.orig[last_printed_pos : section.pos],
-                    style=style_obj.get("default"),
-                )
+                section_omitted = (omitted or {}).get(section.name)
+                if isinstance(section_omitted, str) and \
+                   section_omitted == "all":
+                    last_printed_pos += section.pos + len(section.string)
+                    continue
+
+                # Do not print leading extra strings (e.g: spaces and commas)
+                # if it's the first section that gets printed.
+                if not first:
+                    buf.append_extra(
+                        flow.orig[last_printed_pos : section.pos],
+                        style=style_obj.get("default"),
+                    )
+
                 self.format_kv_list(
-                    buf, section.data, section.string, style_obj, highlighted
+                    buf, section.data, section.string, style_obj, highlighted,
+                    section_omitted
                 )
                 last_printed_pos = section.pos + len(section.string)
+                first = False
         else:
             # Don't pay the cost of formatting each section one by one.
             buf.append_extra(flow.orig.strip(), None)
 
-    def format_kv_list(self, buf, kv_list, full_str, style_obj, highlighted):
+    def format_kv_list(self, buf, kv_list, full_str, style_obj, highlighted,
+                      omitted=None):
         """Format a KeyValue List.
 
         Args:
@@ -260,10 +277,14 @@ class FlowFormatter:
             full_str (str): the full string containing all k-v
             style_obj (FlowStyle): a FlowStyle object to use
             highlighted (list): Optional; list of KeyValues to highlight
+            highlighted (list): Optional; list of KeyValues to highlight
+            omitted (list): Optional; list of keys to omit
         """
         for i, kv in enumerate(kv_list):
+            key_omitted = kv.key in omitted if omitted else False
             written = self.format_kv(
-                buf, kv, style_obj=style_obj, highlighted=highlighted
+                buf, kv, style_obj=style_obj, highlighted=highlighted,
+                omitted=key_omitted
             )
 
             end = (
@@ -277,7 +298,7 @@ class FlowFormatter:
                 style=style_obj.get("default"),
             )
 
-    def format_kv(self, buf, kv, style_obj, highlighted=None):
+    def format_kv(self, buf, kv, style_obj, highlighted=None, omitted=False):
         """Format a KeyValue
 
         A formatted keyvalue has the following parts:
@@ -288,6 +309,7 @@ class FlowFormatter:
             kv (KeyValue): The KeyValue to print
             style_obj (FlowStyle): The style object to use
             highlighted (list): Optional; list of KeyValues to highlight
+            omitted(boolean): Whether the value shall be omitted.
 
         Returns the number of printed characters.
         """
@@ -308,9 +330,14 @@ class FlowFormatter:
             buf.append_delim(kv, style_obj.get_delim_style(is_highlighted))
             ret += len(kv.meta.delim)
 
-        value_style = style_obj.get_value_style(kv, is_highlighted)
-        buf.append_value(kv, value_style)  # format value
-        ret += len(kv.meta.vstring)
+        if omitted:
+            buf.append_value_omitted(kv)
+            ret += len(kv.meta.vstring)
+
+        else:
+            value_style = style_obj.get_value_style(kv, is_highlighted)
+            buf.append_value(kv, value_style)  # format value
+            ret += len(kv.meta.vstring)
 
         if kv.meta.end_delim:
             buf.append_end_delim(kv, style_obj.get_delim_style(is_highlighted))
@@ -359,6 +386,13 @@ class FlowBuffer:
         Args:
             kv (KeyValue): the KeyValue instance to append
             style (Any): the style to use
+        """
+        raise NotImplementedError
+
+    def append_value_omitted(self, kv):
+        """Append an omitted value.
+        Args:
+            kv (KeyValue): the KeyValue instance to append
         """
         raise NotImplementedError
 

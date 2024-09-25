@@ -15,6 +15,7 @@
 import click
 
 from ovs.flowviz.main import maincli
+from ovs.flowviz.odp.tree import ConsoleTreeProcessor
 from ovs.flowviz.process import (
     ConsoleProcessor,
     JSONDatapathProcessor,
@@ -54,3 +55,22 @@ def console(opts, heat_map):
     )
     proc.process()
     proc.print()
+
+
+@datapath.command()
+@click.option(
+    "-h",
+    "--heat-map",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Create heat-map with packet and byte counters",
+)
+@click.pass_obj
+def tree(opts, heat_map):
+    """Print the flows in a tree based on the 'recirc_id'."""
+    processor = ConsoleTreeProcessor(
+        opts, heat_map=["packets", "bytes"] if heat_map else []
+    )
+    processor.process()
+    processor.print()
