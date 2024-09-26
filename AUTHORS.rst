@@ -447,6 +447,7 @@ Steve Ruan                         ruansx@cn.ibm.com
 Stuart Cardall                     developer@it-offshore.co.uk
 Sugesh Chandran                    sugesh.chandran@intel.com
 SUGYO Kazushi                      sugyo.org@gmail.com
+Sunyang Wu                         sunyang.wu@jaguarmicro.com
 Surya Rudra                        rudrasurya.r@altencalsoftlabs.com
 Tadaaki Nagao                      nagao@stratosphere.co.jp
 Tao Liu                            thomas.liu@ucloud.cn
