@@ -23,7 +23,7 @@ cd ..
 #     https://github.com/pypa/pip/issues/10655
 pip3 install --disable-pip-version-check --user wheel
 pip3 install --disable-pip-version-check --user \
-    flake8 netaddr pyparsing sarif-tools>=3.0.1 sphinx setuptools
+    flake8 netaddr pyparsing sarif-tools==2.0.0 sphinx setuptools
 
 # Install python test dependencies
 pip3 install -r python/test_requirements.txt
