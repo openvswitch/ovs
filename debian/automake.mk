@@ -98,10 +98,12 @@ if DPDK_NETDEV
 update_deb_control = \
 	$(AM_V_GEN) sed -e 's/^\# DPDK_NETDEV //' \
 		< $(srcdir)/debian/control.in > debian/control
+DEB_BUILD_OPTIONS ?= nocheck parallel=`nproc`
 else
 update_deb_control = \
 	$(AM_V_GEN) grep -v '^\# DPDK_NETDEV' \
 		< $(srcdir)/debian/control.in > debian/control
+DEB_BUILD_OPTIONS ?= nocheck parallel=`nproc` nodpdk
 endif
 
 debian/control: $(srcdir)/debian/control.in Makefile
@@ -123,10 +125,5 @@ debian-deb: debian
 	$(update_deb_copyright)
 	$(update_deb_control)
 	$(AM_V_GEN) fakeroot debian/rules clean
-if DPDK_NETDEV
-	$(AM_V_GEN) DEB_BUILD_OPTIONS="nocheck parallel=`nproc`" \
+	$(AM_V_GEN) DEB_BUILD_OPTIONS="$(DEB_BUILD_OPTIONS)" \
 		fakeroot debian/rules binary
-else
-	$(AM_V_GEN) DEB_BUILD_OPTIONS="nocheck parallel=`nproc` nodpdk" \
-		fakeroot debian/rules binary
-endif
