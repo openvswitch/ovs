@@ -2169,8 +2169,8 @@ dpctl_ct_set_limits(int argc, const char *argv[],
     struct ovs_list zone_limits = OVS_LIST_INITIALIZER(&zone_limits);
     int i =  dp_arg_exists(argc, argv) ? 2 : 1;
     struct ds ds = DS_EMPTY_INITIALIZER;
+    unsigned long long default_limit;
     struct dpif *dpif = NULL;
-    uint32_t default_limit;
     int error;
 
     if (i >= argc) {
@@ -2186,7 +2186,8 @@ dpctl_ct_set_limits(int argc, const char *argv[],
 
     /* Parse default limit */
     if (!strncmp(argv[i], "default=", 8)) {
-        if (ovs_scan(argv[i], "default=%"SCNu32, &default_limit)) {
+        if (str_to_ullong(argv[i] + 8, 10, &default_limit) &&
+            default_limit <= UINT32_MAX) {
             ct_dpif_push_zone_limit(&zone_limits, OVS_ZONE_LIMIT_DEFAULT_ZONE,
                                     default_limit, 0);
             i++;

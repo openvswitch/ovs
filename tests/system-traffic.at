@@ -5692,11 +5692,53 @@ priority=100,in_port=2,udp,action=ct(zone=3,commit),1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+dnl Test values out of range for the default limit.
+dnl Try to set a negative value.
+AT_CHECK([ovs-appctl dpctl/ct-set-limits default=-1], [2], [ignore], [dnl
+ovs-vswitchd: invalid default limit (Invalid argument)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+dnl Try to set UINT32_MAX.
+AT_CHECK([ovs-appctl dpctl/ct-set-limits default=4294967296], [2], [ignore], [dnl
+ovs-vswitchd: invalid default limit (Invalid argument)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+dnl Same range checks for zones.
+AT_CHECK([ovs-appctl dpctl/ct-set-limits zone=1,limit=-1], [2], [ignore], [dnl
+ovs-vswitchd: failed to parse field limit (Invalid argument)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-set-limits zone=1,limit=4294967296], [2], [ignore], [dnl
+ovs-vswitchd: failed to parse field limit (Invalid argument)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+dnl Double check no limits have been applied.
+AT_CHECK([ovs-appctl dpctl/ct-get-limits], [],[dnl
+default limit=0
+])
+
 m4_define([UDP_PKT], [m4_join([,],
   [eth_src=50:54:00:00:00:0$1,eth_dst=50:54:00:00:00:0$2,dl_type=0x0800],
   [nw_src=10.1.1.$1,nw_dst=10.1.1.$2],
   [nw_proto=17,nw_ttl=64,nw_frag=no],
   [udp_src=1,udp_dst=$3])])
+
+AT_CHECK([ovs-appctl dpctl/ct-set-limits zone=1,limit=0])
+pkt=$(ovs-ofctl compose-packet --bare "UDP_PKT([1], [2], [2])")
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=${pkt} actions=resubmit(,0)"])
+
+dnl Double check the zl entry exists but no connection was added.
+AT_CHECK([ovs-appctl dpctl/ct-get-limits], [],[dnl
+default limit=0
+zone=1,limit=0,count=0
+])
+
+dnl Remove limit for zone=1.
+AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=1])
 
 AT_CHECK([ovs-appctl dpctl/ct-set-limits default=3])
 AT_CHECK([ovs-appctl dpctl/ct-get-limits], [],[dnl
