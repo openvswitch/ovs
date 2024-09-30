@@ -50,6 +50,7 @@ COVERAGE_DEFINE(conntrack_full);
 COVERAGE_DEFINE(conntrack_l3csum_err);
 COVERAGE_DEFINE(conntrack_l4csum_err);
 COVERAGE_DEFINE(conntrack_lookup_natted_miss);
+COVERAGE_DEFINE(conntrack_zone_full);
 
 struct conn_lookup_ctx {
     struct conn_key key;
@@ -918,6 +919,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
         struct zone_limit *zl = zone_limit_lookup_or_default(ct,
                                                              ctx->key.zone);
         if (zl && atomic_count_get(&zl->czl.count) >= zl->czl.limit) {
+            COVERAGE_INC(conntrack_zone_full);
             return nc;
         }
 
