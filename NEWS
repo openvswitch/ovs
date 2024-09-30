@@ -1,5 +1,10 @@
 Post-v3.4.0
 --------------------
+   - Userspace datapath:
+     * The default zone limit, if set, is now inherited by any zone
+       that does not have a specific value defined, rather than being
+       treated as a global value, aligning the behavior with that of
+       the kernel datapath.
 
 
 v3.4.0 - 15 Aug 2024

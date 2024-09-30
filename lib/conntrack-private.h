@@ -198,10 +198,11 @@ enum ct_ephemeral_range {
 #define FOR_EACH_PORT_IN_RANGE(curr, min, max) \
     FOR_EACH_PORT_IN_RANGE__(curr, min, max, OVS_JOIN(idx, __COUNTER__))
 
+#define ZONE_LIMIT_CONN_DEFAULT -1
 
 struct conntrack_zone_limit {
     int32_t zone;
-    atomic_uint32_t limit;
+    atomic_int64_t limit;
     atomic_count count;
     uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
 };
@@ -212,6 +213,9 @@ struct conntrack {
     struct rculist exp_lists[N_EXP_LISTS] OVS_GUARDED;
     struct cmap zone_limits OVS_GUARDED;
     struct cmap timeout_policies OVS_GUARDED;
+    uint32_t zone_limit_seq OVS_GUARDED; /* Used to disambiguate zone limit
+                                          * counts. */
+    atomic_uint32_t default_zone_limit;
 
     uint32_t hash_basis; /* Salt for hashing a connection key. */
     pthread_t clean_thread; /* Periodically cleans up connection tracker. */
@@ -234,7 +238,6 @@ struct conntrack {
                                                      * control context.  */
 
     struct ipf *ipf; /* Fragmentation handling context. */
-    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
     atomic_bool tcp_seq_chk; /* Check TCP sequence numbers. */
     atomic_uint32_t sweep_ms; /* Next sweep interval. */
 };
