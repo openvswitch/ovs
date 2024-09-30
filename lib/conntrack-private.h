@@ -201,7 +201,7 @@ enum ct_ephemeral_range {
 
 struct conntrack_zone_limit {
     int32_t zone;
-    uint32_t limit;
+    atomic_uint32_t limit;
     atomic_count count;
     uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
 };

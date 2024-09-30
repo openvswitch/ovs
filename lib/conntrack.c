@@ -341,7 +341,7 @@ zone_limit_get(struct conntrack *ct, int32_t zone)
     struct zone_limit *zl = zone_limit_lookup_or_default(ct, zone);
     if (zl) {
         czl.zone = zl->czl.zone;
-        czl.limit = zl->czl.limit;
+        atomic_read_relaxed(&zl->czl.limit, &czl.limit);
         czl.count = atomic_count_get(&zl->czl.count);
     }
     return czl;
@@ -358,8 +358,9 @@ zone_limit_create(struct conntrack *ct, int32_t zone, uint32_t limit)
     }
 
     if (zone >= DEFAULT_ZONE && zone <= MAX_ZONE) {
-        zl = xzalloc(sizeof *zl);
-        zl->czl.limit = limit;
+        zl = xmalloc(sizeof *zl);
+        atomic_init(&zl->czl.limit, limit);
+        atomic_count_init(&zl->czl.count, 0);
         zl->czl.zone = zone;
         zl->czl.zone_limit_seq = ct->zone_limit_seq++;
         uint32_t hash = zone_key_hash(zone, ct->hash_basis);
@@ -376,7 +377,7 @@ zone_limit_update(struct conntrack *ct, int32_t zone, uint32_t limit)
     int err = 0;
     struct zone_limit *zl = zone_limit_lookup(ct, zone);
     if (zl) {
-        zl->czl.limit = limit;
+        atomic_store_relaxed(&zl->czl.limit, limit);
         VLOG_INFO("Changed zone limit of %u for zone %d", limit, zone);
     } else {
         ovs_mutex_lock(&ct->ct_lock);
@@ -916,12 +917,16 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
     }
 
     if (commit) {
+        uint32_t czl_limit;
         struct conn_key_node *fwd_key_node, *rev_key_node;
         struct zone_limit *zl = zone_limit_lookup_or_default(ct,
                                                              ctx->key.zone);
-        if (zl && atomic_count_get(&zl->czl.count) >= zl->czl.limit) {
-            COVERAGE_INC(conntrack_zone_full);
-            return nc;
+        if (zl) {
+            atomic_read_relaxed(&zl->czl.limit, &czl_limit);
+            if (atomic_count_get(&zl->czl.count) >= czl_limit) {
+                COVERAGE_INC(conntrack_zone_full);
+                return nc;
+            }
         }
 
         unsigned int n_conn_limit;
