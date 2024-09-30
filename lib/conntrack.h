@@ -115,11 +115,10 @@ struct conntrack_dump {
     uint16_t current_zone;
 };
 
-struct conntrack_zone_limit {
+struct conntrack_zone_info {
     int32_t zone;
     uint32_t limit;
-    atomic_count count;
-    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
+    unsigned int count;
 };
 
 struct timeout_policy {
@@ -161,8 +160,8 @@ int conntrack_set_sweep_interval(struct conntrack *ct, uint32_t ms);
 uint32_t conntrack_get_sweep_interval(struct conntrack *ct);
 bool conntrack_get_tcp_seq_chk(struct conntrack *ct);
 struct ipf *conntrack_ipf_ctx(struct conntrack *ct);
-struct conntrack_zone_limit zone_limit_get(struct conntrack *ct,
-                                           int32_t zone);
+struct conntrack_zone_info zone_limit_get(struct conntrack *ct,
+                                          int32_t zone);
 int zone_limit_update(struct conntrack *ct, int32_t zone, uint32_t limit);
 int zone_limit_delete(struct conntrack *ct, int32_t zone);
 

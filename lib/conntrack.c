@@ -330,18 +330,19 @@ zone_limit_lookup_or_default(struct conntrack *ct, int32_t zone)
     return zl ? zl : zone_limit_lookup(ct, DEFAULT_ZONE);
 }
 
-struct conntrack_zone_limit
+struct conntrack_zone_info
 zone_limit_get(struct conntrack *ct, int32_t zone)
 {
-    struct conntrack_zone_limit czl = {
+    struct conntrack_zone_info czl = {
         .zone = DEFAULT_ZONE,
         .limit = 0,
-        .count = ATOMIC_COUNT_INIT(0),
-        .zone_limit_seq = 0,
+        .count = 0,
     };
     struct zone_limit *zl = zone_limit_lookup_or_default(ct, zone);
     if (zl) {
-        czl = zl->czl;
+        czl.zone = zl->czl.zone;
+        czl.limit = zl->czl.limit;
+        czl.count = atomic_count_get(&zl->czl.count);
     }
     return czl;
 }

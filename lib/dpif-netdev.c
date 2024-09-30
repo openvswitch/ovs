@@ -9732,7 +9732,7 @@ dpif_netdev_ct_get_limits(struct dpif *dpif,
                            struct ovs_list *zone_limits_reply)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct conntrack_zone_limit czl;
+    struct conntrack_zone_info czl;
 
     if (!ovs_list_is_empty(zone_limits_request)) {
         struct ct_dpif_zone_limit *zone_limit;
@@ -9741,7 +9741,7 @@ dpif_netdev_ct_get_limits(struct dpif *dpif,
             if (czl.zone == zone_limit->zone || czl.zone == DEFAULT_ZONE) {
                 ct_dpif_push_zone_limit(zone_limits_reply, zone_limit->zone,
                                         czl.limit,
-                                        atomic_count_get(&czl.count));
+                                        czl.count);
             } else {
                 return EINVAL;
             }
@@ -9757,7 +9757,7 @@ dpif_netdev_ct_get_limits(struct dpif *dpif,
             czl = zone_limit_get(dp->conntrack, z);
             if (czl.zone == z) {
                 ct_dpif_push_zone_limit(zone_limits_reply, z, czl.limit,
-                                        atomic_count_get(&czl.count));
+                                        czl.count);
             }
         }
     }

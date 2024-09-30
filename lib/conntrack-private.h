@@ -198,6 +198,14 @@ enum ct_ephemeral_range {
 #define FOR_EACH_PORT_IN_RANGE(curr, min, max) \
     FOR_EACH_PORT_IN_RANGE__(curr, min, max, OVS_JOIN(idx, __COUNTER__))
 
+
+struct conntrack_zone_limit {
+    int32_t zone;
+    uint32_t limit;
+    atomic_count count;
+    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
+};
+
 struct conntrack {
     struct ovs_mutex ct_lock; /* Protects the following fields. */
     struct cmap conns[UINT16_MAX + 1] OVS_GUARDED;
