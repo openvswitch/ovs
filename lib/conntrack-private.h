@@ -199,11 +199,12 @@ enum ct_ephemeral_range {
     FOR_EACH_PORT_IN_RANGE__(curr, min, max, OVS_JOIN(idx, __COUNTER__))
 
 struct conntrack {
-    struct ovs_mutex ct_lock; /* Protects 2 following fields. */
+    struct ovs_mutex ct_lock; /* Protects the following fields. */
     struct cmap conns[UINT16_MAX + 1] OVS_GUARDED;
-    struct rculist exp_lists[N_EXP_LISTS];
+    struct rculist exp_lists[N_EXP_LISTS] OVS_GUARDED;
     struct cmap zone_limits OVS_GUARDED;
     struct cmap timeout_policies OVS_GUARDED;
+
     uint32_t hash_basis; /* Salt for hashing a connection key. */
     pthread_t clean_thread; /* Periodically cleans up connection tracker. */
     struct latch clean_thread_exit; /* To destroy the 'clean_thread'. */
