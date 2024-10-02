@@ -609,3 +609,24 @@ try_checkpatch \
     "--skip-committer-signoff"
 
 AT_CLEANUP
+
+AT_SETUP([checkpatch - AUTHORS.rst existence])
+
+try_checkpatch \
+   "Author: A <a@a.com>
+    Commit: A <a@a.com>
+    Subject: netdev: Subject.
+
+    Signed-off-by: A <a@a.com>" \
+    ""
+
+try_checkpatch \
+   "Author: A <a@a.com>
+    Commit: A <a@a.com>
+    Subject: netdev: Subject.
+
+    Signed-off-by: A <a@a.com>" \
+    "WARNING: Author 'A <a@a.com>' is not in the AUTHORS.rst file!" \
+    "-a"
+
+AT_CLEANUP
