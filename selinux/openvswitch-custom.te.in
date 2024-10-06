@@ -52,7 +52,7 @@ require {
         class netlink_audit_socket { create nlmsg_relay read write };
         class netlink_netfilter_socket { create read write };
 @begin_dpdk@
-        class netlink_rdma_socket { setopt bind create };
+        class netlink_rdma_socket { setopt getattr getopt bind create };
 @end_dpdk@
         class netlink_socket { setopt getopt create connect getattr write read };
         class sock_file { write };
@@ -82,7 +82,7 @@ allow openvswitch_t self:capability { dac_override audit_write net_broadcast net
 allow openvswitch_t self:netlink_audit_socket { create nlmsg_relay read write };
 allow openvswitch_t self:netlink_netfilter_socket { create read write };
 @begin_dpdk@
-allow openvswitch_t self:netlink_rdma_socket { setopt bind create };
+allow openvswitch_t self:netlink_rdma_socket { setopt getattr getopt bind create };
 @end_dpdk@
 allow openvswitch_t self:netlink_socket { setopt getopt create connect getattr write read };
 
