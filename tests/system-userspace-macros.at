@@ -357,3 +357,19 @@ m4_define([OVS_CHECK_BAREUDP],
 [
     AT_SKIP_IF([:])
 ])
+
+# CHECK_EXTERNAL_CT()
+#
+# The userspace datapath does not support external ct.
+m4_define([CHECK_EXTERNAL_CT],
+[
+    AT_SKIP_IF([:])
+])
+
+# ADD_EXTERNAL_CT()
+#
+# The userspace datapath does not support external ct.
+m4_define([ADD_EXTERNAL_CT],
+[
+    AT_SKIP_IF([:])
+])

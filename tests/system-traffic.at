@@ -1098,6 +1098,7 @@ OVS_TRAFFIC_VSWITCHD_STOP(["/Invalid Geneve tunnel metadata on bridge br0 while 
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over gre tunnel by simulated packets])
+AT_SKIP_IF([test $HAVE_IPTABLES = no])
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1144,6 +1145,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over erspan v1 tunnel by simulated packets])
+AT_SKIP_IF([test $HAVE_IPTABLES = no])
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -5401,10 +5403,12 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - multiple zones, local])
+CHECK_EXTERNAL_CT()
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_LOCAL_STACK()
 OVS_TRAFFIC_VSWITCHD_START()
 
+ADD_EXTERNAL_CT([br0])
 ADD_NAMESPACES(at_ns0)
 
 AT_CHECK([ip addr add dev br0 "10.1.1.1/24"])
@@ -5450,10 +5454,12 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - multi-stage pipeline, local])
+CHECK_EXTERNAL_CT()
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_LOCAL_STACK()
 OVS_TRAFFIC_VSWITCHD_START()
 
+ADD_EXTERNAL_CT([br0])
 ADD_NAMESPACES(at_ns0)
 
 AT_CHECK([ip addr add dev br0 "10.1.1.1/24"])
@@ -8331,6 +8337,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - can match and clear ct_state from outside OVS])
+CHECK_EXTERNAL_CT()
 CHECK_CONNTRACK_LOCAL_STACK()
 OVS_CHECK_GENEVE()
 
@@ -8341,6 +8348,7 @@ AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 AT_CHECK([ovs-ofctl add-flow br-underlay "priority=100,ct_state=+trk,actions=ct_clear,resubmit(,0)"])
 AT_CHECK([ovs-ofctl add-flow br-underlay "priority=10,actions=normal"])
 
+ADD_EXTERNAL_CT([br0])
 ADD_NAMESPACES(at_ns0)
 
 dnl Set up underlay link from host into the namespace using veth pair.

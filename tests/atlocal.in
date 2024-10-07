@@ -185,6 +185,9 @@ find_command lftp
 # Set HAVE_ETHTOOL
 find_command ethtool
 
+# Set HAVE_IPTABLES
+find_command iptables
+
 CURL_OPT="-g -v --max-time 1 --retry 2 --retry-delay 1 --connect-timeout 1"
 
 # Determine whether "diff" supports "normal" diffs.  (busybox diff does not.)
