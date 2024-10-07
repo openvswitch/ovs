@@ -267,3 +267,24 @@ m4_define([OVS_CHECK_BAREUDP],
     AT_SKIP_IF([! ip link add dev ovs_bareudp0 type bareudp dstport 6635 ethertype mpls_uc 2>&1 >/dev/null])
     AT_CHECK([ip link del dev ovs_bareudp0])
 ])
+
+# CHECK_EXTERNAL_CT()
+#
+# Checks if packets can be tracked outside OvS.
+m4_define([CHECK_EXTERNAL_CT],
+[
+    dnl Kernel config (CONFIG_NETFILTER_XT_TARGET_CT)
+    dnl and user space extensions need to be present.
+    AT_SKIP_IF([test $HAVE_IPTABLES = no])
+    AT_SKIP_IF([! iptables -t raw -I OUTPUT 1 -j CT])
+    AT_CHECK([iptables -t raw -D OUTPUT 1])
+])
+
+# ADD_EXTERNAL_CT()
+#
+# Let conntrack start tracking the packets outside OvS.
+m4_define([ADD_EXTERNAL_CT],
+[
+    AT_CHECK([iptables -t raw -I OUTPUT 1 -o $1 -j CT])
+    on_exit 'iptables -t raw -D OUTPUT 1'
+])
