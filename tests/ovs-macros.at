@@ -365,4 +365,4 @@ dnl to reject input traffic from bridges such as br-underlay.
 dnl Add a rule to always accept the traffic.
 m4_define([IPTABLES_ACCEPT],
   [AT_CHECK([iptables -I INPUT 1 -i $1 -j ACCEPT])
-   on_exit 'iptables -D INPUT 1 -i $1'])
+   on_exit 'iptables -D INPUT 1'])
