@@ -18,6 +18,7 @@ import email
 import getopt
 import os
 import re
+import subprocess
 import sys
 
 RETURN_CHECK_INITIAL_STATE = 0
@@ -851,13 +852,14 @@ def run_subject_checks(subject, spellcheck=False):
 
 
 def get_top_directory():
-    with os.popen('git rev-parse --show-toplevel') as pipe:
-        path = pipe.read()
+    result = subprocess.run('git rev-parse --show-toplevel',
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, shell=True)
 
-    if path:
-        return path.strip()
+    if result and result.returncode == 0:
+        return result.stdout.decode('utf-8').strip()
 
-    return "."
+    return os.getenv('OVS_SRC_DIR', '.')
 
 
 def update_missing_authors(diffed_line):
