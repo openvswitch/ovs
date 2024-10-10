@@ -29,11 +29,13 @@ Subject: Patch this is.
     fi
 
     if test -s expout; then
-        AT_CHECK([$PYTHON3 $top_srcdir/utilities/checkpatch.py $3 -q test.patch],
+        AT_CHECK([OVS_SRC_DIR=$top_srcdir $PYTHON3 \
+                    $top_srcdir/utilities/checkpatch.py $3 -q test.patch],
                  [1], [stdout])
         AT_CHECK([sed '/^Lines checked:/,$d' stdout], [0], [expout])
     else
-        AT_CHECK([$PYTHON3 $top_srcdir/utilities/checkpatch.py $3 -q test.patch])
+        AT_CHECK([OVS_SRC_DIR=$top_srcdir $PYTHON3 \
+                    $top_srcdir/utilities/checkpatch.py $3 -q test.patch])
     fi
 }
 
