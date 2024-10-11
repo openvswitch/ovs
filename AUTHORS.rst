@@ -262,7 +262,7 @@ Kentaro Ebisawa                    ebiken.g@gmail.com
 Keshav Gupta                       keshav.gupta@ericsson.com
 Kevin Lo                           kevlo@FreeBSD.org
 Kevin Sprague                      ksprague0711@gmail.com
-Kevin Traynor                      kevin.traynor@intel.com
+Kevin Traynor                      ktraynor@redhat.com
 Khem Raj                           raj.khem@gmail.com
 Kmindg G                           kmindg@gmail.com
 Kris Murphy                        kriskend@linux.vnet.ibm.com
