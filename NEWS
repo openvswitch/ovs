@@ -9,6 +9,8 @@ Post-v3.4.0
      * Added tool called "ovs-flowviz" capable of parsing OpenFlow
        and datapath flow dumps and displaying them in several different
        formats.
+   - DPDK:
+     * OVS validated with DPDK 23.11.2.
 
 
 v3.4.0 - 15 Aug 2024
