@@ -7,6 +7,8 @@ Post-v3.4.0
        the kernel datapath.
    - Linux TC offload:
      * Add support for matching tunnel flags if the kernel supports it.
+     * Add support for the "Don't Fragment" (DF) flag in the encap action,
+       if the kernel supports it.
    - Python:
      * Added tool called "ovs-flowviz" capable of parsing OpenFlow
        and datapath flow dumps and displaying them in several different

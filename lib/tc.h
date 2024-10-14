@@ -228,6 +228,7 @@ struct tc_action_encap {
     uint8_t tos;
     uint8_t ttl;
     uint8_t no_csum;
+    bool dont_fragment;
     struct {
         ovs_be32 ipv4_src;
         ovs_be32 ipv4_dst;

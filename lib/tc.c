@@ -1229,6 +1229,7 @@ static const struct nl_policy tunnel_key_policy[] = {
     [TCA_TUNNEL_KEY_ENC_TTL] = { .type = NL_A_U8, .optional = true, },
     [TCA_TUNNEL_KEY_ENC_OPTS] = { .type = NL_A_NESTED, .optional = true, },
     [TCA_TUNNEL_KEY_NO_CSUM] = { .type = NL_A_U8, .optional = true, },
+    [TCA_TUNNEL_KEY_NO_FRAG] = { .type = NL_A_FLAG, .optional = true, },
 };
 
 static int
@@ -1394,6 +1395,7 @@ nl_parse_act_tunnel_key(struct nlattr *options, struct tc_flower *flower)
         struct nlattr *ttl = tun_attrs[TCA_TUNNEL_KEY_ENC_TTL];
         struct nlattr *tun_opt = tun_attrs[TCA_TUNNEL_KEY_ENC_OPTS];
         struct nlattr *no_csum = tun_attrs[TCA_TUNNEL_KEY_NO_CSUM];
+        struct nlattr *no_frag = tun_attrs[TCA_TUNNEL_KEY_NO_FRAG];
 
         action = &flower->actions[flower->action_count++];
         action->type = TC_ACT_ENCAP;
@@ -1411,6 +1413,7 @@ nl_parse_act_tunnel_key(struct nlattr *options, struct tc_flower *flower)
         action->encap.tos = tos ? nl_attr_get_u8(tos) : 0;
         action->encap.ttl = ttl ? nl_attr_get_u8(ttl) : 0;
         action->encap.no_csum = no_csum ? nl_attr_get_u8(no_csum) : 0;
+        action->encap.dont_fragment = no_frag ? true : false;
 
         err = nl_parse_act_tunnel_opts(tun_opt, action);
         if (err) {
@@ -2746,6 +2749,9 @@ nl_msg_put_act_tunnel_key_set(struct ofpbuf *request,
         if (encap->tp_dst) {
             nl_msg_put_be16(request, TCA_TUNNEL_KEY_ENC_DST_PORT,
                             encap->tp_dst);
+        }
+        if (encap->dont_fragment) {
+            nl_msg_put_flag(request, TCA_TUNNEL_KEY_NO_FRAG);
         }
         nl_msg_put_act_tunnel_vxlan_opts(request, encap);
         nl_msg_put_act_tunnel_geneve_option(request, &encap->data);

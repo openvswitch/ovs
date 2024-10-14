@@ -193,10 +193,10 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
 
   AC_COMPILE_IFELSE([
     AC_LANG_PROGRAM([#include <linux/tc_act/tc_tunnel_key.h>], [
-        int x = TCA_TUNNEL_KEY_ENC_OPTS_VXLAN;
+        int x = TCA_TUNNEL_KEY_NO_FRAG;
     ])],
-    [AC_DEFINE([HAVE_TCA_TUNNEL_KEY_ENC_OPTS_VXLAN], [1],
-               [Define to 1 if TCA_TUNNEL_KEY_ENC_OPTS_VXLAN is available.])])
+    [AC_DEFINE([HAVE_TCA_TUNNEL_KEY_NO_FRAG], [1],
+               [Define to 1 if TCA_TUNNEL_KEY_NO_FRAG is available.])])
 
   AC_COMPILE_IFELSE([
     AC_LANG_PROGRAM([#include <linux/tc_act/tc_pedit.h>], [

@@ -919,6 +919,9 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
             if (!action->encap.no_csum) {
                 nl_msg_put_flag(buf, OVS_TUNNEL_KEY_ATTR_CSUM);
             }
+            if (action->encap.dont_fragment) {
+                nl_msg_put_flag(buf, OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT);
+            }
             ret = parse_tc_flower_vxlan_tun_opts(action, buf);
             if (ret) {
                 return ret;
@@ -1641,11 +1644,14 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT: {
-            /* XXX: This is wrong!  We're ignoring the DF flag configuration
-             * requested by the user.  However, TC for now has no way to pass
-             * that flag and it is set by default, meaning tunnel offloading
-             * will not work if 'options:df_default=false' is not set.
-             * Keeping incorrect behavior for now. */
+            if (enc_flags_support) {
+                action->encap.dont_fragment = true;
+            } else {
+                /* For kernels not supporting the DF flag, we ignoring the
+                 * configuration requested by the user.  This to keep the old,
+                 * incorrect behaviour, and allow tunnels to be offloaded by
+                 * TC with these kernels. */
+            }
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_CSUM: {

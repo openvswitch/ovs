@@ -1,7 +1,7 @@
 #ifndef __LINUX_TC_ACT_TC_TUNNEL_KEY_WRAPPER_H
 #define __LINUX_TC_ACT_TC_TUNNEL_KEY_WRAPPER_H 1
 
-#if defined(__KERNEL__) || defined(HAVE_TCA_TUNNEL_KEY_ENC_OPTS_VXLAN)
+#if defined(__KERNEL__) || defined(HAVE_TCA_TUNNEL_KEY_NO_FRAG)
 #include_next <linux/tc_act/tc_tunnel_key.h>
 #else
 
@@ -42,6 +42,7 @@ enum {
                                      */
 	TCA_TUNNEL_KEY_ENC_TOS,		    /* u8 */
 	TCA_TUNNEL_KEY_ENC_TTL,		    /* u8 */
+	TCA_TUNNEL_KEY_NO_FRAG,		    /* flag */
 	__TCA_TUNNEL_KEY_MAX,
 };
 
