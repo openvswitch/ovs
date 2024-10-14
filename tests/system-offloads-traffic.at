@@ -933,3 +933,62 @@ OVS_WAIT_UNTIL([grep -q "Datapath does not support explicit drop action" ovs-vsw
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([offload - Tunnel offloading with flags])
+AT_SKIP_IF([test $HAVE_NC = no])
+OVS_CHECK_VXLAN()
+
+OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . \
+                                    other_config:hw-offload=true])
+AT_SKIP_IF([! grep -q "probe tc: enc flags are supported." ovs-vswitchd.log])
+
+ADD_BR([br-underlay])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl Linux device inside the namespace.
+ADD_OVS_TUNNEL([vxlan], [br0], [at_vxlan0], [172.31.1.1], [10.1.1.100/24])
+ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100],
+                  [10.1.1.1/24], [id 0 dstport 4789])
+
+dnl First, check the underlay.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING],
+              [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Check the overlay, with some icmp traffic.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING],
+              [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+# Check for a set tunnel action with df flag set.
+AT_CHECK([ovs-appctl dpctl/dump-flows type=tc,offloaded], [], [stdout])
+AT_CHECK(
+  [grep -q -F "set(tunnel(dst=172.31.1.1,ttl=64,tp_dst=4789,flags(df)))" \
+   stdout])
+AT_CHECK(
+  [grep -q -F "tunnel(tun_id=0x0,src=172.31.1.1,dst=172.31.1.100,tp_dst=4789,flags(-df+csum+key))" \
+   stdout])
+
+# Now verify the none df, and forced csum case.
+AT_CHECK([ovs-vsctl set int at_vxlan0 options:df_default=false \
+          options:csum=true])
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl dpctl/dump-flows type=tc,offloaded ], [], [stdout])
+AT_CHECK(
+  [grep -q -F "set(tunnel(dst=172.31.1.1,ttl=64,tp_dst=4789,flags(csum)))" \
+   stdout])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
