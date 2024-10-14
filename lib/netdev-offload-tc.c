@@ -738,6 +738,36 @@ flower_tun_opt_to_match(struct match *match, struct tc_flower *flower)
 }
 
 static void
+flower_tun_enc_flags_to_match(struct match *match, struct tc_flower *flower)
+{
+    uint32_t tc_flags = flower->key.tunnel.tc_enc_flags;
+    uint32_t tc_mask = flower->mask.tunnel.tc_enc_flags;
+    uint16_t *m_flags = &match->flow.tunnel.flags;
+    uint16_t *m_mask = &match->wc.masks.tunnel.flags;
+
+    if (tc_mask & TCA_FLOWER_KEY_FLAGS_TUNNEL_OAM) {
+        if (tc_flags & TCA_FLOWER_KEY_FLAGS_TUNNEL_OAM) {
+            *m_flags |= FLOW_TNL_F_OAM;
+        }
+        *m_mask |= FLOW_TNL_F_OAM;
+    }
+
+    if (tc_mask & TCA_FLOWER_KEY_FLAGS_TUNNEL_DONT_FRAGMENT) {
+        if (tc_flags & TCA_FLOWER_KEY_FLAGS_TUNNEL_DONT_FRAGMENT) {
+            *m_flags |= FLOW_TNL_F_DONT_FRAGMENT;
+        }
+        *m_mask |= FLOW_TNL_F_DONT_FRAGMENT;
+    }
+
+    if (tc_mask & TCA_FLOWER_KEY_FLAGS_TUNNEL_CSUM) {
+        if (tc_flags & TCA_FLOWER_KEY_FLAGS_TUNNEL_CSUM) {
+            *m_flags |= FLOW_TNL_F_CSUM;
+        }
+        *m_mask |= FLOW_TNL_F_CSUM;
+    }
+}
+
+static void
 parse_tc_flower_to_stats(struct tc_flower *flower,
                          struct dpif_flow_stats *stats)
 {
@@ -1271,6 +1301,9 @@ parse_tc_flower_to_match(const struct netdev *netdev,
             match_set_tun_gbp_flags_masked(match,
                                            flower->key.tunnel.gbp.flags,
                                            flower->mask.tunnel.gbp.flags);
+        }
+        if (flower->mask.tunnel.tc_enc_flags) {
+            flower_tun_enc_flags_to_match(match, flower);
         }
 
         if (!strcmp(netdev_get_type(netdev), "geneve")) {
@@ -2293,12 +2326,41 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         memset(&tnl_mask->gbp_flags, 0, sizeof tnl_mask->gbp_flags);
         tnl_mask->flags &= ~FLOW_TNL_F_KEY;
 
-        /* XXX: This is wrong!  We're ignoring DF and CSUM flags configuration
-         * requested by the user.  However, TC for now has no way to pass
-         * these flags in a flower key and their masks are set by default,
-         * meaning tunnel offloading will not work at all if not cleared.
-         * Keeping incorrect behavior for now. */
-        tnl_mask->flags &= ~(FLOW_TNL_F_DONT_FRAGMENT | FLOW_TNL_F_CSUM);
+        if (enc_flags_support) {
+            if (tnl_mask->flags & FLOW_TNL_F_OAM) {
+                if (tnl->flags & FLOW_TNL_F_OAM) {
+                    flower.key.tunnel.tc_enc_flags |=
+                        TCA_FLOWER_KEY_FLAGS_TUNNEL_OAM;
+                }
+                flower.mask.tunnel.tc_enc_flags |=
+                    TCA_FLOWER_KEY_FLAGS_TUNNEL_OAM;
+                tnl_mask->flags &= ~FLOW_TNL_F_OAM;
+            }
+            if (tnl_mask->flags & FLOW_TNL_F_DONT_FRAGMENT) {
+                if (tnl->flags & FLOW_TNL_F_DONT_FRAGMENT) {
+                    flower.key.tunnel.tc_enc_flags |=
+                        TCA_FLOWER_KEY_FLAGS_TUNNEL_DONT_FRAGMENT;
+                }
+                flower.mask.tunnel.tc_enc_flags |=
+                    TCA_FLOWER_KEY_FLAGS_TUNNEL_DONT_FRAGMENT;
+                tnl_mask->flags &= ~FLOW_TNL_F_DONT_FRAGMENT;
+            }
+            if (tnl_mask->flags & FLOW_TNL_F_CSUM) {
+                if (tnl->flags & FLOW_TNL_F_CSUM) {
+                    flower.key.tunnel.tc_enc_flags |=
+                        TCA_FLOWER_KEY_FLAGS_TUNNEL_CSUM;
+                }
+                flower.mask.tunnel.tc_enc_flags |=
+                    TCA_FLOWER_KEY_FLAGS_TUNNEL_CSUM;
+                tnl_mask->flags &= ~FLOW_TNL_F_CSUM;
+            }
+        } else {
+            /* For kernels not supporting the encapsulation flags we're
+             * ignoring DF and CSUM flags configuration requested by the user.
+             * This to keep the old, incorrect behaviour, and allow tunnels to
+             * be offloaded by TC with these kernels. */
+            tnl_mask->flags &= ~(FLOW_TNL_F_DONT_FRAGMENT | FLOW_TNL_F_CSUM);
+        }
 
         if (!strcmp(netdev_get_type(netdev), "geneve")) {
             err = flower_match_to_tun_opt(&flower, tnl, tnl_mask);
