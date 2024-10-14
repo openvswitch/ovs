@@ -313,7 +313,7 @@ zone_limit_get_limit(struct conntrack *ct, struct conntrack_zone_limit *czl)
 
     if (limit == ZONE_LIMIT_CONN_DEFAULT) {
         atomic_read_relaxed(&ct->default_zone_limit, &limit);
-        limit = limit ? : -1;
+        limit = limit ? limit : -1;
     }
 
     return limit;
