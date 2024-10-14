@@ -53,6 +53,7 @@ static bool multi_mask_per_prio = false;
 static bool block_support = false;
 static uint16_t ct_state_support;
 static bool vxlan_gbp_support = false;
+static bool enc_flags_support = false;
 
 struct netlink_field {
     int offset;
@@ -407,7 +408,7 @@ get_next_available_prio(ovs_be16 protocol)
 
     /* last_prio can overflow if there will be many different kinds of
      * flows which shouldn't happen organically. */
-    if (last_prio == UINT16_MAX) {
+    if (last_prio == TC_MAX_PRIORITY) {
         return TC_RESERVED_PRIORITY_NONE;
     }
 
@@ -2863,6 +2864,49 @@ out:
     tc_add_del_qdisc(ifindex, false, block_id, TC_INGRESS);
 }
 
+static void
+probe_enc_flags_support(int ifindex)
+{
+    struct tc_flower flower;
+    struct tcf_id id;
+    int block_id = 0;
+    int prio = TC_RESERVED_PRIORITY_FEATURE_PROBE;
+    int error;
+
+    error = tc_add_del_qdisc(ifindex, true, block_id, TC_INGRESS);
+    if (error) {
+        return;
+    }
+
+    memset(&flower, 0, sizeof flower);
+    flower.tc_policy = TC_POLICY_SKIP_HW;
+    flower.key.eth_type = htons(ETH_P_IP);
+    flower.mask.eth_type = OVS_BE16_MAX;
+    flower.tunnel = true;
+    flower.mask.tunnel.id = OVS_BE64_MAX;
+    flower.mask.tunnel.ipv4.ipv4_src = OVS_BE32_MAX;
+    flower.mask.tunnel.ipv4.ipv4_dst = OVS_BE32_MAX;
+    flower.mask.tunnel.tp_dst = OVS_BE16_MAX;
+    flower.mask.tunnel.tc_enc_flags = TCA_FLOWER_KEY_FLAGS_TUNNEL_CRIT_OPT;
+    flower.key.tunnel.ipv4.ipv4_src = htonl(0x01010101);
+    flower.key.tunnel.ipv4.ipv4_dst = htonl(0x01010102);
+    flower.key.tunnel.tp_dst = htons(46354);
+    flower.key.tunnel.tc_enc_flags = TCA_FLOWER_KEY_FLAGS_TUNNEL_CRIT_OPT;
+
+    id = tc_make_tcf_id(ifindex, block_id, prio, TC_INGRESS);
+    error = tc_replace_flower(&id, &flower);
+    if (error) {
+        goto out;
+    }
+
+    tc_del_flower_filter(&id);
+
+    enc_flags_support = true;
+    VLOG_INFO("probe tc: enc flags are supported.");
+out:
+    tc_add_del_qdisc(ifindex, false, block_id, TC_INGRESS);
+}
+
 static int
 tc_get_policer_action_ids(struct hmap *map)
 {
@@ -2991,6 +3035,7 @@ netdev_tc_init_flow_api(struct netdev *netdev)
         probe_multi_mask_per_prio(ifindex);
         probe_ct_state_support(ifindex);
         probe_vxlan_gbp_support(ifindex);
+        probe_enc_flags_support(ifindex);
 
         ovs_mutex_lock(&meter_police_ids_mutex);
         meter_police_ids = id_pool_create(METER_POLICE_IDS_BASE,

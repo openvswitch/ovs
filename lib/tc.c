@@ -454,6 +454,9 @@ static const struct nl_policy tca_flower_policy[] = {
     [TCA_FLOWER_KEY_ENC_OPTS] = { .type = NL_A_NESTED, .optional = true, },
     [TCA_FLOWER_KEY_ENC_OPTS_MASK] = { .type = NL_A_NESTED,
                                        .optional = true, },
+    [TCA_FLOWER_KEY_ENC_FLAGS] = { .type = NL_A_BE32, .optional = true, },
+    [TCA_FLOWER_KEY_ENC_FLAGS_MASK] = { .type = NL_A_BE32,
+                                        .optional = true, },
     [TCA_FLOWER_KEY_CT_STATE] = { .type = NL_A_U16, .optional = true, },
     [TCA_FLOWER_KEY_CT_STATE_MASK] = { .type = NL_A_U16, .optional = true, },
     [TCA_FLOWER_KEY_CT_ZONE] = { .type = NL_A_U16, .optional = true, },
@@ -863,6 +866,13 @@ nl_parse_flower_tunnel(struct nlattr **attrs, struct tc_flower *flower)
     if (!is_all_zeros(&flower->mask.tunnel, sizeof flower->mask.tunnel) ||
         !is_all_zeros(&flower->key.tunnel, sizeof flower->key.tunnel)) {
         flower->tunnel = true;
+    }
+
+    if (attrs[TCA_FLOWER_KEY_ENC_FLAGS_MASK]) {
+        flower->key.tunnel.tc_enc_flags = ntohl(
+            nl_attr_get_be32(attrs[TCA_FLOWER_KEY_ENC_FLAGS]));
+        flower->mask.tunnel.tc_enc_flags = ntohl(
+            nl_attr_get_be32(attrs[TCA_FLOWER_KEY_ENC_FLAGS_MASK]));
     }
 
     if (attrs[TCA_FLOWER_KEY_ENC_OPTS] &&
@@ -3611,6 +3621,7 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
     struct in6_addr *ipv6_src = &flower->key.tunnel.ipv6.ipv6_src;
     struct in6_addr *ipv6_dst = &flower->key.tunnel.ipv6.ipv6_dst;
     ovs_be32 id = be64_to_be32(flower->key.tunnel.id);
+    ovs_be32 enc_flags = htonl(flower->key.tunnel.tc_enc_flags);
     ovs_be16 tp_src = flower->key.tunnel.tp_src;
     ovs_be16 tp_dst = flower->key.tunnel.tp_dst;
     uint8_t tos = flower->key.tunnel.tos;
@@ -3618,6 +3629,7 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
     uint8_t tos_mask = flower->mask.tunnel.tos;
     uint8_t ttl_mask = flower->mask.tunnel.ttl;
     ovs_be64 id_mask = flower->mask.tunnel.id;
+    ovs_be32 enc_flags_mask = htonl(flower->mask.tunnel.tc_enc_flags);
     ovs_be16 tp_src_mask = flower->mask.tunnel.tp_src;
     ovs_be16 tp_dst_mask = flower->mask.tunnel.tp_dst;
 
@@ -3654,6 +3666,11 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
         nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_UDP_DST_PORT, tp_dst);
         nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_UDP_DST_PORT_MASK,
                         tp_dst_mask);
+    }
+    if (enc_flags_mask) {
+        nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_FLAGS, enc_flags);
+        nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_FLAGS_MASK,
+                        enc_flags_mask);
     }
     if (id_mask) {
         nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_KEY_ID, id);
@@ -3961,6 +3978,7 @@ tc_replace_flower(struct tcf_id *id, struct tc_flower *flower)
         struct ofpbuf b = ofpbuf_const_initializer(reply->data, reply->size);
         struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
         struct tcmsg *tc = ofpbuf_try_pull(&b, sizeof *tc);
+        bool is_probe = id->prio == TC_RESERVED_PRIORITY_FEATURE_PROBE;
 
         if (!nlmsg || !tc) {
             COVERAGE_INC(tc_netlink_malformed_reply);
@@ -3980,9 +3998,14 @@ tc_replace_flower(struct tcf_id *id, struct tc_flower *flower)
                                              false);
 
             if (ret || !cmp_tc_flower_match_action(flower, &flower_out)) {
-                VLOG_WARN_RL(&error_rl, "Kernel flower acknowledgment does "
-                             "not match request!  Set dpif_netlink to dbg to "
-                             "see which rule caused this error.");
+                if (is_probe) {
+                    error = EINVAL;
+                } else {
+                    VLOG_WARN_RL(&error_rl, "Kernel flower acknowledgment "
+                                            "does not match request!  Set "
+                                            "dpif_netlink to dbg to see "
+                                            "which rule caused this error.");
+                }
             }
         }
         ofpbuf_delete(reply);

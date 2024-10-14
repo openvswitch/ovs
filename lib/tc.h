@@ -52,9 +52,16 @@ enum tc_flower_reserved_prio {
     TC_RESERVED_PRIORITY_IPV4,
     TC_RESERVED_PRIORITY_IPV6,
     TC_RESERVED_PRIORITY_VLAN,
-    __TC_RESERVED_PRIORITY_MAX
+    __TC_RESERVED_PRIORITY_MAX,
+
+    TC_MAX_PRIORITY = UINT16_MAX - 1,
+    /* This priority is reserved solely for probing purposes.
+     * Since it's not used in actual traffic flows, we assign it a high value
+     * to avoid impacting vendor specific hardware offload implementations. */
+    TC_RESERVED_PRIORITY_FEATURE_PROBE
 };
-#define TC_RESERVED_PRIORITY_MAX (__TC_RESERVED_PRIORITY_MAX -1)
+#define TC_RESERVED_PRIORITY_MAX (__TC_RESERVED_PRIORITY_MAX - 1)
+
 
 enum tc_qdisc_hook {
     TC_INGRESS,
@@ -125,6 +132,7 @@ struct tc_flower_tunnel {
     uint8_t ttl;
     ovs_be16 tp_src;
     ovs_be16 tp_dst;
+    uint32_t tc_enc_flags;
     struct tc_tunnel_gbp gbp;
     ovs_be64 id;
     struct tun_metadata metadata;

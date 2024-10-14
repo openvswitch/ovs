@@ -1,7 +1,7 @@
 #ifndef __LINUX_PKT_CLS_WRAPPER_H
 #define __LINUX_PKT_CLS_WRAPPER_H 1
 
-#if defined(__KERNEL__) || defined(HAVE_TCA_ACT_FLAGS_SKIP_HW)
+#if defined(__KERNEL__) || defined(HAVE_TCA_FLOWER_KEY_ENC_FLAGS_MASK)
 #include_next <linux/pkt_cls.h>
 #else
 
@@ -252,6 +252,28 @@ enum {
 	TCA_FLOWER_KEY_CT_LABELS,	/* u128 */
 	TCA_FLOWER_KEY_CT_LABELS_MASK,	/* u128 */
 
+	TCA_FLOWER_KEY_MPLS_OPTS,
+
+	TCA_FLOWER_KEY_HASH,		/* u32 */
+	TCA_FLOWER_KEY_HASH_MASK,	/* u32 */
+
+	TCA_FLOWER_KEY_NUM_OF_VLANS,    /* u8 */
+
+	TCA_FLOWER_KEY_PPPOE_SID,	/* be16 */
+	TCA_FLOWER_KEY_PPP_PROTO,	/* be16 */
+
+	TCA_FLOWER_KEY_L2TPV3_SID,	/* be32 */
+
+	TCA_FLOWER_L2_MISS,		/* u8 */
+
+	TCA_FLOWER_KEY_CFM,		/* nested */
+
+	TCA_FLOWER_KEY_SPI,		/* be32 */
+	TCA_FLOWER_KEY_SPI_MASK,	/* be32 */
+
+	TCA_FLOWER_KEY_ENC_FLAGS,	/* be32 */
+	TCA_FLOWER_KEY_ENC_FLAGS_MASK,	/* be32 */
+
 	__TCA_FLOWER_MAX,
 };
 
@@ -306,6 +328,10 @@ enum {
 enum {
 	TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT = (1 << 0),
 	TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST = (1 << 1),
+	TCA_FLOWER_KEY_FLAGS_TUNNEL_CSUM = (1 << 2),
+	TCA_FLOWER_KEY_FLAGS_TUNNEL_DONT_FRAGMENT = (1 << 3),
+	TCA_FLOWER_KEY_FLAGS_TUNNEL_OAM = (1 << 4),
+	TCA_FLOWER_KEY_FLAGS_TUNNEL_CRIT_OPT = (1 << 5),
 };
 
 /* Match-all classifier */
