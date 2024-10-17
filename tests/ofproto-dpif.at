@@ -5568,6 +5568,33 @@ AT_CHECK_UNQUOTED([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - mirroring, metadata modification])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+AT_CHECK([ovs-vsctl set Bridge br0 mirrors=@m -- \
+            --id=@p3 get Port p3 -- \
+            --id=@m create Mirror name=mymirror select_all=true output_port=@p3],
+         [0], [ignore])
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=load:0x00->NXM_OF_IN_PORT[[]],output:2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Metadata modified, duplicate packet shouldn't be delivered to mirror.
+m4_define([ICMP_FLOW], [m4_join([,],
+  [in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800)],
+  [ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no)],
+  [icmp(type=8,code=0)])])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "ICMP_FLOW"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 3,2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - mirroring, OFPP_NONE ingress port])
 AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
