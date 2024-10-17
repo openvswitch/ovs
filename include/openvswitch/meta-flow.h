@@ -2308,6 +2308,7 @@ void mf_set_flow_value_masked(const struct mf_field *,
                               const union mf_value *mask,
                               struct flow *);
 bool mf_is_tun_metadata(const struct mf_field *);
+bool mf_is_any_metadata(const struct mf_field *);
 bool mf_is_frozen_metadata(const struct mf_field *);
 bool mf_is_pipeline_field(const struct mf_field *);
 bool mf_is_set(const struct mf_field *, const struct flow *);
