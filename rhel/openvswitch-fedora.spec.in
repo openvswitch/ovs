@@ -118,7 +118,14 @@ Summary: Open vSwitch python3 bindings
 License: ASL 2.0
 BuildArch: noarch
 Requires: python3
-Suggests: python3-netaddr python3-pyparsing python3-unbound
+
+# DNS resolution support in Python IDL.
+Suggests: python3-unbound
+# Dependencies of ovs.flow library.
+Suggests: python3-netaddr python3-pyparsing
+# Dependencies of ovs-flowviz.
+Suggests: python3-click python3-graphviz python3-rich
+
 %{?python_provide:%python_provide python3-openvswitch = %{version}-%{release}}
 
 %description -n python3-openvswitch

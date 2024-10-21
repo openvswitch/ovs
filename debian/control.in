@@ -285,8 +285,11 @@ Depends:
  ${python3:Depends},
  ${shlibs:Depends},
 Suggests:
+ python3-click,
+ python3-graphviz,
  python3-netaddr,
  python3-pyparsing,
+ python3-rich,
  python3-unbound,
 Description: Python 3 bindings for Open vSwitch
  Open vSwitch is a production quality, multilayer, software-based,
