@@ -252,6 +252,9 @@ install -d -m 0755 $RPM_BUILD_ROOT%{python3_sitelib}
 cp -a $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/* \
    $RPM_BUILD_ROOT%{python3_sitelib}
 
+mv $RPM_BUILD_ROOT%{python3_sitelib}/ovs/flowviz/ovs-flowviz \
+   $RPM_BUILD_ROOT/%{_bindir}/ovs-flowviz
+
 rm -rf $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/
 
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/openvswitch
@@ -405,6 +408,8 @@ fi
 %{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
 
 %files -n python3-openvswitch
+%{_bindir}/ovs-flowviz
+%{_mandir}/man8/ovs-flowviz.8*
 %{python3_sitelib}/ovs
 
 %files test
@@ -507,7 +512,6 @@ fi
 %{_mandir}/man8/ovs-ctl.8*
 %{_mandir}/man8/ovs-dpctl.8*
 %{_mandir}/man8/ovs-dpctl-top.8*
-%{_mandir}/man8/ovs-flowviz.8*
 %{_mandir}/man8/ovs-kmod-ctl.8*
 %{_mandir}/man8/ovs-ofctl.8*
 %{_mandir}/man8/ovs-pki.8*

@@ -58,6 +58,7 @@ EXTRA_DIST += \
 	debian/ovs-systemd-reload \
 	debian/patches/ovs-ctl-ipsec.patch \
 	debian/patches/series \
+	debian/python3-openvswitch.install \
 	debian/rules \
 	debian/source/format \
 	debian/source/lintian-overrides \
