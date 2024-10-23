@@ -8226,6 +8226,9 @@ ofproto_flow_mod_init(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
     ofm->n_conjs = 0;
     ofm->table_id = fm->table_id;
 
+    /* Initialize flag used by ofproto_dpif_xcache_execute(). */
+    ofm->learn_adds_rule = false;
+
     bool check_buffer_id = false;
 
     switch (ofm->command) {
