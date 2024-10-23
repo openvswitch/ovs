@@ -2543,7 +2543,8 @@ mf_set(const struct mf_field *mf,
         break;
 
     case MFF_IP_FRAG:
-        match_set_nw_frag_masked(match, value->u8, mask->u8);
+        match_set_nw_frag_masked(match, value->u8,
+                                 mask->u8 & FLOW_NW_FRAG_MASK);
         break;
 
     case MFF_ARP_SPA:

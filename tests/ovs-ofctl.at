@@ -3086,6 +3086,51 @@ AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sed '/OFPST_FLO
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ovs-ofctl replace-flows with fragments])
+OVS_VSWITCHD_START
+
+AT_DATA([frag_flows.txt], [dnl
+ ip,nw_frag=first actions=drop
+ ip,nw_frag=later actions=drop
+ ip,nw_frag=no actions=NORMAL
+ ip,nw_frag=not_later actions=NORMAL
+ ip,nw_frag=yes actions=LOCAL
+])
+AT_DATA([replace_flows.txt], [dnl
+ ip,nw_frag=first actions=NORMAL
+ ip,nw_frag=later actions=LOCAL
+ ip,nw_frag=no actions=drop
+ ip,nw_frag=not_later actions=drop
+ ip,nw_frag=yes actions=drop
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br0 frag_flows.txt])
+on_exit 'ovs-ofctl -O OpenFlow13 dump-flows br0'
+
+dnl Check that flow replacement works.
+AT_CHECK([ovs-ofctl -vvconn:console:dbg -O OpenFlow13 \
+            replace-flows br0 replace_flows.txt 2>&1 | grep FLOW_MOD \
+            | sed 's/.*\(OFPT_FLOW_MOD.*\)/\1/' | strip_xids | sort], [0], [dnl
+OFPT_FLOW_MOD (OF1.3): ADD ip,nw_frag=first actions=NORMAL
+OFPT_FLOW_MOD (OF1.3): ADD ip,nw_frag=later actions=LOCAL
+OFPT_FLOW_MOD (OF1.3): ADD ip,nw_frag=no actions=drop
+OFPT_FLOW_MOD (OF1.3): ADD ip,nw_frag=not_later actions=drop
+OFPT_FLOW_MOD (OF1.3): ADD ip,nw_frag=yes actions=drop
+])
+
+dnl Check that replacement to the same set doesn't cause flow modifications.
+AT_CHECK([ovs-ofctl -vvconn:console:dbg -O OpenFlow13 \
+            replace-flows br0 replace_flows.txt 2>&1 | grep FLOW_MOD \
+            | sed 's/.*\(OFPT_FLOW_MOD.*\)/\1/' | strip_xids | sort], [0], [])
+
+dnl Compare the flow dump against the expected set.
+cat replace_flows.txt > expout
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 \
+            | ofctl_strip | sed '/OFPST_FLOW/d' | sort], [0], [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ovs-ofctl replace-flows with --bundle])
 OVS_VSWITCHD_START
 
