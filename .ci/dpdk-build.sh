@@ -40,7 +40,7 @@ function build_dpdk()
     # any DPDK driver.
     # check-dpdk unit tests requires testpmd and some net/ driver.
     DPDK_OPTS="$DPDK_OPTS -Denable_apps=test-pmd"
-    enable_drivers="net/null,net/af_xdp,net/tap,net/virtio,net/pcap"
+    enable_drivers="net/null,net/af_xdp,net/tap,net/virtio"
     DPDK_OPTS="$DPDK_OPTS -Denable_drivers=$enable_drivers"
     # OVS depends on the vhost library (and its dependencies).
     # net/tap depends on the gso library.

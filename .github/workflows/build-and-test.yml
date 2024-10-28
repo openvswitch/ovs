@@ -8,7 +8,7 @@ env:
 jobs:
   build-dpdk:
     env:
-      dependencies: gcc libbpf-dev libnuma-dev libpcap-dev ninja-build pkgconf
+      dependencies: gcc libbpf-dev libnuma-dev ninja-build pkgconf
       CC: gcc
       DPDK_GIT: https://dpdk.org/git/dpdk-stable
       DPDK_VER: 23.11.2
@@ -79,8 +79,7 @@ jobs:
     env:
       dependencies: |
         automake libtool gcc bc libjemalloc2 libjemalloc-dev libssl-dev \
-        llvm-dev libnuma-dev libpcap-dev selinux-policy-dev libbpf-dev \
-        lftp libreswan
+        llvm-dev libnuma-dev selinux-policy-dev libbpf-dev lftp libreswan
       CC:          ${{ matrix.compiler }}
       DPDK:        ${{ matrix.dpdk }}
       DPDK_SHARED: ${{ matrix.dpdk_shared }}
@@ -271,8 +270,8 @@ jobs:
     needs: build-dpdk
     env:
       dependencies: |
-        automake bc clang-tools libbpf-dev libnuma-dev libpcap-dev \
-        libunbound-dev libunwind-dev libssl-dev libtool llvm-dev
+        automake bc clang-tools libbpf-dev libnuma-dev libunbound-dev \
+        libunwind-dev libssl-dev libtool llvm-dev
       CC:   clang
       DPDK: dpdk
       CLANG_ANALYZE: true
