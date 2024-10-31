@@ -7,6 +7,9 @@ env:
 
 jobs:
   build-dpdk:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04]
     env:
       dependencies: gcc libnuma-dev ninja-build
       CC: gcc
@@ -15,7 +18,7 @@ jobs:
     name: dpdk gcc
     outputs:
       dpdk_key: ${{ steps.gen_dpdk_key.outputs.key }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
 
     steps:
@@ -34,6 +37,7 @@ jobs:
       # and a way we're building DPDK stays the same.
       run:  |
         grep -irE 'RTE_|DPDK|meson|ninja' .ci/dpdk-* > dpdk-ci-signature
+        cat .ci/dpdk-* >> dpdk-ci-signature
         grep -rwE 'DPDK_GIT|DPDK_VER' .github/ >> dpdk-ci-signature
         if [ "${DPDK_VER##refs/*/}" != "${DPDK_VER}" ]; then
             git ls-remote --heads $DPDK_GIT $DPDK_VER >> dpdk-ci-signature
@@ -79,7 +83,7 @@ jobs:
     env:
       dependencies: |
         automake libtool gcc bc libjemalloc2 libjemalloc-dev libssl-dev \
-        llvm-dev libnuma-dev libpcap-dev selinux-policy-dev libbpf-dev
+        llvm-dev libnuma-dev libpcap-dev selinux-policy-dev libxdp-dev
       ASAN:        ${{ matrix.asan }}
       UBSAN:       ${{ matrix.ubsan }}
       CC:          ${{ matrix.compiler }}
@@ -92,7 +96,7 @@ jobs:
       TESTSUITE:   ${{ matrix.testsuite }}
 
     name: linux ${{ join(matrix.*, ' ') }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     strategy:
@@ -269,7 +273,7 @@ jobs:
       DPDK:        ${{ matrix.dpdk }}
 
     name: linux deb ${{ matrix.dpdk }} dpdk
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     strategy:
