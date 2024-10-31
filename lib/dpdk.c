@@ -323,7 +323,6 @@ dpdk_init__(const struct smap *ovs_other_config)
     if (log_stream == NULL) {
         VLOG_ERR("Can't redirect DPDK log: %s.", ovs_strerror(errno));
     } else {
-        setbuf(log_stream, NULL);
         rte_openlog_stream(log_stream);
     }
 
