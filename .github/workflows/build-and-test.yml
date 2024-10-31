@@ -7,15 +7,18 @@ env:
 
 jobs:
   build-dpdk:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04]
     env:
-      dependencies: gcc libbpf-dev libnuma-dev ninja-build pkgconf
+      dependencies: gcc libnuma-dev libxdp-dev ninja-build pkgconf
       CC: gcc
       DPDK_GIT: https://dpdk.org/git/dpdk-stable
       DPDK_VER: 23.11.2
     name: dpdk gcc
     outputs:
       dpdk_key: ${{ steps.gen_dpdk_key.outputs.key }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
 
     steps:
@@ -33,7 +36,8 @@ jobs:
       # This also allows us to use cache from any branch as long as version
       # and a way we're building DPDK stays the same.
       run:  |
-        cat .ci/dpdk-* > dpdk-ci-signature
+        echo ${{ matrix.runner }} > dpdk-ci-signature
+        cat .ci/dpdk-* >> dpdk-ci-signature
         grep -rwE 'DPDK_GIT|DPDK_VER' .github/ >> dpdk-ci-signature
         if [ "${DPDK_VER##refs/*/}" != "${DPDK_VER}" ]; then
             git ls-remote --heads $DPDK_GIT $DPDK_VER >> dpdk-ci-signature
@@ -79,7 +83,7 @@ jobs:
     env:
       dependencies: |
         automake libtool gcc bc libjemalloc2 libjemalloc-dev libssl-dev \
-        llvm-dev libnuma-dev selinux-policy-dev libbpf-dev lftp libreswan
+        llvm-dev libnuma-dev selinux-policy-dev libxdp-dev lftp libreswan
       CC:          ${{ matrix.compiler }}
       DPDK:        ${{ matrix.dpdk }}
       DPDK_SHARED: ${{ matrix.dpdk_shared }}
@@ -92,7 +96,7 @@ jobs:
       TEST_RANGE:  ${{ matrix.test_range }}
 
     name: linux ${{ join(matrix.*, ' ') }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     strategy:
@@ -270,13 +274,13 @@ jobs:
     needs: build-dpdk
     env:
       dependencies: |
-        automake bc clang-tools libbpf-dev libnuma-dev libunbound-dev \
-        libunwind-dev libssl-dev libtool llvm-dev
+        automake bc clang-tools libnuma-dev libunbound-dev libunwind-dev \
+        libssl-dev libtool libxdp-dev llvm-dev
       CC:   clang
       DPDK: dpdk
       CLANG_ANALYZE: true
     name: clang-analyze
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
@@ -381,7 +385,7 @@ jobs:
 
   build-oss-fuzz:
     name: build oss-fuzz fuzzers
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
@@ -449,7 +453,7 @@ jobs:
       DPDK:        ${{ matrix.dpdk }}
 
     name: linux deb ${{ matrix.dpdk }} dpdk
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     strategy:
