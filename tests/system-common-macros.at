@@ -2,10 +2,7 @@
 #
 # Delete namespaces from the running OS
 m4_define([DEL_NAMESPACES],
-   [m4_foreach([ns], [$@],
-               [ip netns del ns
-])
-   ]
+   [m4_foreach([ns], [$@], [echo removing namespace ns; ip netns del ns])]
 )
 
 # ADD_NAMESPACES(ns [, ns ... ])
@@ -72,7 +69,7 @@ m4_define([ADD_INT],
 #
 m4_define([ADD_VETH],
     [ AT_CHECK([ip link add $1 type veth peer name ovs-$1 || return 77])
-      on_exit 'ip link del ovs-$1'
+      on_exit 'echo removing interface ovs-$1; ip link del ovs-$1'
       CONFIGURE_VETH_OFFLOADS([$1])
       AT_CHECK([ip link set $1 netns $2])
       AT_CHECK([ip link set dev ovs-$1 up])
