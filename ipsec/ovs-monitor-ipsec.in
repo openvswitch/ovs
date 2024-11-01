@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from string import Template
 
 import ovs.daemon
@@ -82,6 +83,7 @@ vlog = ovs.vlog.Vlog("ovs-monitor-ipsec")
 exiting = False
 monitor = None
 xfrm = None
+RECONCILIATION_INTERVAL = 15  # seconds
 
 
 def run_command(args, description=None):
@@ -294,6 +296,9 @@ conn prevent_unencrypted_vxlan
             (conns[ifname])[tunnel_name[0]] = line
 
         return conns
+
+    def need_to_reconcile(self, monitor):
+        return False
 
     def config_init(self):
         self.conf_file = open(self.IPSEC_CONF, "w")
@@ -511,6 +516,7 @@ conn prevent_unencrypted_vxlan
         self.IPSEC_D = "sql:" + libreswan_root_prefix + ipsec_d
         self.IPSEC_CTL = libreswan_root_prefix + ipsec_ctl
         self.conf_file = None
+        self.last_refresh = time.time()
         self.secrets_file = None
         vlog.dbg("Using: " + self.IPSEC)
         vlog.dbg("Configuration file: " + self.IPSEC_CONF)
@@ -622,51 +628,50 @@ conn prevent_unencrypted_vxlan
                                        "--config", self.IPSEC_CONF,
                                        "--rereadsecrets"],
                     "re-read secrets")
-        tunnels = set(monitor.tunnels.keys())
 
-        # Delete old connections
-        conns_dict = self.get_active_conns()
-        for ifname, conns in conns_dict.items():
-            tunnel = monitor.tunnels.get(ifname)
+        loaded_conns = self.get_loaded_conns()
+        active_conns = self.get_active_conns()
 
-            for conn in conns:
-                # IPsec "connection" names must start with Interface name
-                if not conn.startswith(ifname):
-                    vlog.err("%s does not start with %s" % (conn, ifname))
-                    continue
+        all_names = set(monitor.tunnels.keys()) | \
+                    set(loaded_conns.keys()) | \
+                    set(active_conns.keys())
 
-                # version number should be the first integer after
-                # interface name in IPsec "connection"
-                try:
-                    ver = int(re.findall(r'\d+', conn[len(ifname):])[0])
-                except ValueError:
-                    vlog.err("%s does not contain version number")
-                    continue
-                except IndexError:
-                    vlog.err("%s does not contain version number")
-                    continue
+        for name in all_names:
+            desired = set(self.get_conn_names(monitor, name))
+            loaded = set(loaded_conns.get(name, dict()).keys())
+            active = set(active_conns.get(name, dict()).keys())
 
-                if not tunnel or tunnel.version != ver:
-                    vlog.info("%s is outdated %u" % (conn, ver))
-                    run_command(self.IPSEC_AUTO +
-                                ["--ctlsocket", self.IPSEC_CTL,
-                                 "--config", self.IPSEC_CONF,
-                                 "--delete", conn], "delete %s" % conn)
-                elif ifname in tunnels:
-                    tunnels.remove(ifname)
+            # Remove all the loaded or active but not desired connections.
+            for conn in loaded | active:
+                if conn not in desired:
+                    self._delete_ipsec_connection(conn, "is outdated")
+                    loaded.discard(conn)
+                    active.discard(conn)
 
-        # Activate new connections
-        for name in tunnels:
-            ver = monitor.tunnels[name].version
+            # If not all desired are loaded, remove all the loaded and
+            # active for this tunnel and re-load only the desired ones.
+            # Need to do that, because connections for the same tunnel
+            # may share SAs.  If one is loaded and the other is not,
+            # it means the second one failed, so the shared SA may be in
+            # a broken state.
+            if desired != loaded:
+                for conn in loaded | active:
+                    self._delete_ipsec_connection(conn, "is half-loaded")
+                    loaded.discard(conn)
+                    active.discard(conn)
 
-            if monitor.tunnels[name].conf["tunnel_type"] == "gre":
-                conn = "%s-%s" % (name, ver)
-                self._start_ipsec_connection(conn)
+                for conn in desired:
+                    vlog.info("Starting ipsec connection %s" % conn)
+                    self._start_ipsec_connection(conn, "start")
             else:
-                conn_in = "%s-in-%s" % (name, ver)
-                conn_out = "%s-out-%s" % (name, ver)
-                self._start_ipsec_connection(conn_in)
-                self._start_ipsec_connection(conn_out)
+                # Ask pluto to bring UP connections that are loaded,
+                # but not active for some reason.
+                #
+                # desired == loaded and desired >= loaded + active,
+                # so loaded >= active
+                for conn in loaded - active:
+                    vlog.info("Bringing up ipsec connection %s" % conn)
+                    self._start_ipsec_connection(conn, "up")
 
         # Update shunt policy if changed
         if monitor.conf_in_use["skb_mark"] != monitor.conf["skb_mark"]:
@@ -713,23 +718,27 @@ conn prevent_unencrypted_vxlan
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_vxlan"])
             monitor.conf_in_use["skb_mark"] = monitor.conf["skb_mark"]
+        self.last_refresh = time.time()
+        vlog.info("Refreshing is done.")
 
-    def get_active_conns(self):
+    def get_conns_from_status(self, pattern):
         """This function parses output from 'ipsec status' command.
         It returns dictionary where <key> is interface name (as in OVSDB)
         and <value> is another dictionary.  This another dictionary
         uses LibreSwan connection name as <key> and more detailed
-        sample line from the parsed outpus as <value>. """
+        sample line from the parsed outpus as <value>. 'pattern' should
+        be a regular expression that parses out the connection name.
+        Only the lines that match the pattern will be parsed. """
 
         conns = {}
         ret, pout, perr = run_command([self.IPSEC, 'status',
                                       '--ctlsocket', self.IPSEC_CTL],
-                                      "get active connections")
+                                      "get ipsec status")
         if ret:
             return conns
 
         for line in pout.splitlines():
-            m = re.search(r"#\d+: .*\"(.*)\".*", line)
+            m = re.search(pattern, line)
             if not m:
                 continue
 
@@ -748,25 +757,76 @@ conn prevent_unencrypted_vxlan
 
         return conns
 
-    def _start_ipsec_connection(self, conn):
-        # In a corner case, LibreSwan daemon restarts for some reason and
-        # the "ipsec auto --start" command is lost. Just retry to make sure
-        # the command is received by LibreSwan.
-        while True:
-            ret, pout, perr = run_command(self.IPSEC_AUTO +
-                                          ["--config", self.IPSEC_CONF,
-                                          "--ctlsocket", self.IPSEC_CTL,
-                                          "--start",
-                                          "--asynchronous", conn],
-                                          "start %s" % conn)
-            if not re.match(r".*Connection refused.*", perr) and \
-                    not re.match(r".*need --listen.*", pout):
-                break
+    def get_active_conns(self):
+        return self.get_conns_from_status(r"#\d+: .*\"(.*)\".*")
+
+    def get_loaded_conns(self):
+        return self.get_conns_from_status(r"\"(.*)\": \d+.*(===|\.\.\.).*")
+
+    def get_conn_names(self, monitor, ifname):
+        conns = []
+        if ifname not in monitor.tunnels:
+            return conns
+
+        tunnel = monitor.tunnels.get(ifname)
+        ver = tunnel.version
+
+        if tunnel.conf["tunnel_type"] == "gre":
+            conns.append("%s-%s" % (ifname, ver))
+        else:
+            conns.append("%s-in-%s" % (ifname, ver))
+            conns.append("%s-out-%s" % (ifname, ver))
+
+        return conns
+
+    def need_to_reconcile(self, monitor):
+        if time.time() - self.last_refresh < RECONCILIATION_INTERVAL:
+            return False
+
+        conns_dict = self.get_active_conns()
+        for ifname, tunnel in monitor.tunnels.items():
+            if ifname not in conns_dict:
+                vlog.info("Connection for port %s is not active, "
+                          "need to reconcile" % ifname)
+                return True
+
+            existing_conns = conns_dict.get(ifname)
+            desired_conns = self.get_conn_names(monitor, ifname)
+
+            if set(existing_conns.keys()) != set(desired_conns):
+                vlog.info("Active connections for port %s %s do not match "
+                          "desired %s, need to reconcile"
+                          % (ifname, list(existing_conns.keys()),
+                             desired_conns))
+                return True
+
+        return False
+
+    def _delete_ipsec_connection(self, conn, reason):
+        vlog.info("%s %s, removing" % (conn, reason))
+        run_command(self.IPSEC_AUTO +
+                    ["--ctlsocket", self.IPSEC_CTL,
+                     "--config", self.IPSEC_CONF,
+                     "--delete", conn], "delete %s" % conn)
+
+    def _start_ipsec_connection(self, conn, action):
+        ret, pout, perr = run_command(self.IPSEC_AUTO +
+                                      ["--config", self.IPSEC_CONF,
+                                      "--ctlsocket", self.IPSEC_CTL,
+                                      "--" + action,
+                                      "--asynchronous", conn],
+                                      "%s %s" % (action, conn))
 
         if re.match(r".*[F|f]ailed to initiate connection.*", pout):
             vlog.err('Failed to initiate connection through'
                     ' Interface %s.\n' % (conn.split('-')[0]))
             vlog.err("stdout: %s" % pout)
+            ret = 1
+
+        if ret:
+            # We don't know in which state the connection was left on
+            # failure.  Try to clean it up.
+            self._delete_ipsec_connection(conn, "--%s failed" % action)
 
     def _nss_clear_database(self):
         """Remove all OVS IPsec related state from the NSS database"""
@@ -1192,7 +1252,7 @@ class IPsecMonitor(object):
                 self.ike_helper.clear_tunnel_state(self.tunnels[name])
             del self.tunnels[name]
 
-        if needs_refresh:
+        if needs_refresh or self.ike_helper.need_to_reconcile(self):
             self.ike_helper.refresh(self)
 
     def _get_cn_from_cert(self, cert):
@@ -1365,6 +1425,7 @@ def main():
         poller = ovs.poller.Poller()
         unixctl_server.wait(poller)
         idl.wait(poller)
+        poller.timer_wait(RECONCILIATION_INTERVAL * 1000)
         poller.block()
 
     unixctl_server.close()
