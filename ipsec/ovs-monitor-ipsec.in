@@ -84,6 +84,28 @@ monitor = None
 xfrm = None
 
 
+def run_command(args, description=None):
+    """ This function runs the process args[0] with args[1:] arguments
+    and returns a tuple: return-code, stdout, stderr. """
+
+    if not description:
+        description = "run %s command" % args[0]
+
+    vlog.dbg("Running %s" % args)
+    proc = subprocess.Popen(args, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    pout, perr = proc.communicate()
+
+    if proc.returncode or perr:
+        vlog.warn("Failed to %s; exit code: %d"
+                  % (description, proc.returncode))
+        vlog.warn("cmdline: %s" % proc.args)
+        vlog.warn("stderr: %s" % perr)
+        vlog.warn("stdout: %s" % pout)
+
+    return proc.returncode, pout.decode(), perr.decode()
+
+
 class XFRM(object):
     """This class is a simple wrapper around ip-xfrm (8) command line
     utility.  We are using this class only for informational purposes
@@ -99,13 +121,14 @@ class XFRM(object):
         where <key> is destination IPv4 address and <value> is SELECTOR of
         the IPsec policy."""
         policies = {}
-        proc = subprocess.Popen([self.IP, 'xfrm', 'policy'],
-                                stdout=subprocess.PIPE)
-        while True:
-            line = proc.stdout.readline().strip().decode()
-            if line == '':
-                break
-            a = line.split(" ")
+
+        ret, pout, perr = run_command([self.IP, 'xfrm', 'policy'],
+                                      "get XFRM policies")
+        if ret:
+            return policies
+
+        for line in pout.splitlines():
+            a = line.strip().split(" ")
             if len(a) >= 4 and a[0] == "src" and a[2] == "dst":
                 dst = (a[3].split("/"))[0]
                 if dst not in policies:
@@ -122,13 +145,14 @@ class XFRM(object):
         in a dictionary where <key> is destination IPv4 address and <value>
         is SELECTOR."""
         securities = {}
-        proc = subprocess.Popen([self.IP, 'xfrm', 'state'],
-                                stdout=subprocess.PIPE)
-        while True:
-            line = proc.stdout.readline().strip().decode()
-            if line == '':
-                break
-            a = line.split(" ")
+
+        ret, pout, perr = run_command([self.IP, 'xfrm', 'state'],
+                                      "get XFRM state")
+        if ret:
+            return securities
+
+        for line in pout.splitlines():
+            a = line.strip().split(" ")
             if len(a) >= 4 and a[0] == "sel" \
                     and a[1] == "src" and a[3] == "dst":
                 remote_ip = a[4].rstrip().split("/")[0]
@@ -242,7 +266,7 @@ conn prevent_unencrypted_vxlan
         f.close()
 
         vlog.info("Restarting StrongSwan")
-        subprocess.call([self.IPSEC, "restart"])
+        run_command([self.IPSEC, "restart"], "restart StrongSwan")
 
     def get_active_conns(self):
         """This function parses output from 'ipsec status' command.
@@ -252,13 +276,13 @@ conn prevent_unencrypted_vxlan
         sample line from the parsed outpus as <value>. """
 
         conns = {}
-        proc = subprocess.Popen([self.IPSEC, 'status'], stdout=subprocess.PIPE)
+        ret, pout, perr = run_command([self.IPSEC, 'status'],
+                                      "get active connections")
+        if ret:
+            return conns
 
-        while True:
-            line = proc.stdout.readline().strip().decode()
-            if line == '':
-                break
-            tunnel_name = line.split(":")
+        for line in pout.splitlines():
+            tunnel_name = line.strip().split(":")
             if len(tunnel_name) < 2:
                 continue
             m = re.match(r"(.*)(-in-\d+|-out-\d+|-\d+).*", tunnel_name[0])
@@ -341,15 +365,11 @@ conn prevent_unencrypted_vxlan
         Once strongSwan vici bindings will be distributed with major
         Linux distributions this function could be simplified."""
         vlog.info("Refreshing StrongSwan configuration")
-        proc = subprocess.Popen([self.IPSEC, "update"],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE)
-        outs, errs = proc.communicate()
-        if proc.returncode != 0:
-            vlog.err("StrongSwan failed to update configuration:\n"
-                           "%s \n %s" % (str(outs), str(errs)))
 
-        subprocess.call([self.IPSEC, "rereadsecrets"])
+        run_command([self.IPSEC, "update"],
+                    "update StrongSwan's configuration")
+        run_command([self.IPSEC, "rereadsecrets"], "re-read secrets")
+
         # "ipsec update" command does not remove those tunnels that were
         # updated or that disappeared from the ipsec.conf file.  So, we have
         # to manually remove them by calling "ipsec stroke down-nb <tunnel>"
@@ -382,7 +402,8 @@ conn prevent_unencrypted_vxlan
 
                 if not tunnel or tunnel.version != ver:
                     vlog.info("%s is outdated %u" % (conn, ver))
-                    subprocess.call([self.IPSEC, "stroke", "down-nb", conn])
+                    run_command([self.IPSEC, "stroke", "down-nb", conn],
+                                "stroke the outdated %s" % conn)
 
 
 class LibreSwanHelper(object):
@@ -459,13 +480,11 @@ conn prevent_unencrypted_vxlan
     def __init__(self, libreswan_root_prefix, args):
         # Collect version infromation
         self.IPSEC = libreswan_root_prefix + "/usr/sbin/ipsec"
-        proc = subprocess.Popen([self.IPSEC, "--version"],
-                                stdout=subprocess.PIPE,
-                                encoding="latin1")
-        pout, perr = proc.communicate()
 
-        v = re.match("^Libreswan (.*)$", pout)
+        ret, pout, perr = run_command([self.IPSEC, "--version"],
+                                      "get Libreswan's version")
         try:
+            v = re.match("^Libreswan v?(.*)$", pout.strip())
             version = int(v.group(1).split(".")[0])
         except:
             version = 0
@@ -507,7 +526,7 @@ conn prevent_unencrypted_vxlan
         f.close()
 
         vlog.info("Restarting LibreSwan")
-        subprocess.call([self.IPSEC, "restart"])
+        run_command([self.IPSEC, "restart"], "restart Libreswan")
 
     def config_init(self):
         self.conf_file = open(self.IPSEC_CONF, "w")
@@ -593,8 +612,9 @@ conn prevent_unencrypted_vxlan
 
     def refresh(self, monitor):
         vlog.info("Refreshing LibreSwan configuration")
-        subprocess.call([self.IPSEC, "auto", "--ctlsocket", self.IPSEC_CTL,
-                        "--config", self.IPSEC_CONF, "--rereadsecrets"])
+        run_command([self.IPSEC, "auto", "--ctlsocket", self.IPSEC_CTL,
+                     "--config", self.IPSEC_CONF, "--rereadsecrets"],
+                     "re-read secrets")
         tunnels = set(monitor.tunnels.keys())
 
         # Delete old connections
@@ -621,9 +641,10 @@ conn prevent_unencrypted_vxlan
 
                 if not tunnel or tunnel.version != ver:
                     vlog.info("%s is outdated %u" % (conn, ver))
-                    subprocess.call([self.IPSEC, "auto", "--ctlsocket",
-                                    self.IPSEC_CTL, "--config",
-                                    self.IPSEC_CONF, "--delete", conn])
+                    run_command([self.IPSEC, "auto",
+                                 "--ctlsocket", self.IPSEC_CTL,
+                                 "--config", self.IPSEC_CONF,
+                                 "--delete", conn], "delete %s" % conn)
                 elif ifname in tunnels:
                     tunnels.remove(ifname)
 
@@ -643,43 +664,43 @@ conn prevent_unencrypted_vxlan
         # Update shunt policy if changed
         if monitor.conf_in_use["skb_mark"] != monitor.conf["skb_mark"]:
             if monitor.conf["skb_mark"]:
-                subprocess.call([self.IPSEC, "auto",
+                run_command([self.IPSEC, "auto",
                             "--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_gre"])
-                subprocess.call([self.IPSEC, "auto",
+                run_command([self.IPSEC, "auto",
                             "--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_geneve"])
-                subprocess.call([self.IPSEC, "auto",
+                run_command([self.IPSEC, "auto",
                             "--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_stt"])
-                subprocess.call([self.IPSEC, "auto",
+                run_command([self.IPSEC, "auto",
                             "--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_vxlan"])
             else:
-                subprocess.call([self.IPSEC, "auto",
+                run_command([self.IPSEC, "auto",
                             "--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_gre"])
-                subprocess.call([self.IPSEC, "auto",
+                run_command([self.IPSEC, "auto",
                             "--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_geneve"])
-                subprocess.call([self.IPSEC, "auto",
+                run_command([self.IPSEC, "auto",
                             "--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_stt"])
-                subprocess.call([self.IPSEC, "auto",
+                run_command([self.IPSEC, "auto",
                             "--config", self.IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
@@ -694,14 +715,13 @@ conn prevent_unencrypted_vxlan
         sample line from the parsed outpus as <value>. """
 
         conns = {}
-        proc = subprocess.Popen([self.IPSEC, 'status', '--ctlsocket',
-                                self.IPSEC_CTL], stdout=subprocess.PIPE)
+        ret, pout, perr = run_command([self.IPSEC, 'status',
+                                      '--ctlsocket', self.IPSEC_CTL],
+                                      "get active connections")
+        if ret:
+            return conns
 
-        while True:
-            line = proc.stdout.readline().strip().decode()
-            if line == '':
-                break
-
+        for line in pout.splitlines():
             m = re.search(r"#\d+: \"(.*)\".*", line)
             if not m:
                 continue
@@ -726,15 +746,12 @@ conn prevent_unencrypted_vxlan
         # the "ipsec auto --start" command is lost. Just retry to make sure
         # the command is received by LibreSwan.
         while True:
-            proc = subprocess.Popen([self.IPSEC, "auto",
-                                    "--config", self.IPSEC_CONF,
-                                    "--ctlsocket", self.IPSEC_CTL,
-                                    "--start",
-                                    "--asynchronous", conn],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            perr = str(proc.stderr.read())
-            pout = str(proc.stdout.read())
+            ret, pout, perr = run_command([self.IPSEC, "auto",
+                                          "--config", self.IPSEC_CONF,
+                                          "--ctlsocket", self.IPSEC_CTL,
+                                          "--start",
+                                          "--asynchronous", conn],
+                                          "start %s" % conn)
             if not re.match(r".*Connection refused.*", perr) and \
                     not re.match(r".*need --listen.*", pout):
                 break
@@ -742,101 +759,59 @@ conn prevent_unencrypted_vxlan
         if re.match(r".*[F|f]ailed to initiate connection.*", pout):
             vlog.err('Failed to initiate connection through'
                     ' Interface %s.\n' % (conn.split('-')[0]))
-            vlog.err(pout)
+            vlog.err("stdout: %s" % pout)
 
     def _nss_clear_database(self):
         """Remove all OVS IPsec related state from the NSS database"""
-        try:
-            proc = subprocess.Popen(['certutil', '-L', '-d',
-                                    self.IPSEC_D],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    universal_newlines=True)
-            lines = proc.stdout.readlines()
+        ret, pout, perr = run_command(['certutil', '-L', '-d', self.IPSEC_D],
+                                      "clear NSS database")
+        if ret:
+            return
 
-            for line in lines:
-                s = line.strip().split()
-                if len(s) < 1:
-                    continue
-                name = s[0]
-                if name.startswith(self.CERT_PREFIX):
-                    self._nss_delete_cert(name)
-                elif name.startswith(self.CERTKEY_PREFIX):
-                    self._nss_delete_cert_and_key(name)
-
-        except Exception as e:
-            vlog.err("Failed to clear NSS database.\n" + str(e))
+        for line in pout.splitlines():
+            s = line.strip().split()
+            if len(s) < 1:
+                continue
+            name = s[0]
+            if name.startswith(self.CERT_PREFIX):
+                self._nss_delete_cert(name)
+            elif name.startswith(self.CERTKEY_PREFIX):
+                self._nss_delete_cert_and_key(name)
 
     def _nss_import_cert(self, cert, name, cert_type):
         """Cert_type is 'CT,,' for the CA certificate and 'P,P,P' for the
         normal certificate."""
-        try:
-            proc = subprocess.Popen(['certutil', '-A', '-a', '-i', cert,
-                                    '-d', self.IPSEC_D, '-n',
-                                    name, '-t', cert_type],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            proc.wait()
-            if proc.returncode:
-                raise Exception(proc.stderr.read())
-        except Exception as e:
-            vlog.err("Failed to import certificate into NSS.\n" + str(e))
+        run_command(['certutil', '-A', '-a', '-i', cert, '-d', self.IPSEC_D,
+                     '-n', name, '-t', cert_type],
+                    "import certificate %s into NSS" % name)
 
     def _nss_delete_cert(self, name):
-        try:
-            proc = subprocess.Popen(['certutil', '-D', '-d',
-                                    self.IPSEC_D, '-n', name],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            proc.wait()
-            if proc.returncode:
-                raise Exception(proc.stderr.read())
-        except Exception as e:
-            vlog.err("Failed to delete certificate from NSS.\n" + str(e))
+        run_command(['certutil', '-D', '-d', self.IPSEC_D, '-n', name],
+                    "delete certificate %s from NSS" % name)
 
     def _nss_import_cert_and_key(self, cert, key, name):
-        try:
-            # Avoid deleting other files
-            path = os.path.abspath('/tmp/%s.p12' % name)
-            if not path.startswith('/tmp/'):
-                raise Exception("Illegal certificate name!")
+        # Avoid deleting other files
+        path = os.path.abspath('/tmp/%s.p12' % name)
+        if not path.startswith('/tmp/'):
+            vlog.err("Illegal certificate name '%s'!" % name)
+            return
 
-            # Create p12 file from pem files
-            proc = subprocess.Popen(['openssl', 'pkcs12', '-export',
-                                    '-in', cert, '-inkey', key, '-out',
-                                    path, '-name', name, '-passout', 'pass:'],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            proc.wait()
-            if proc.returncode:
-                raise Exception(proc.stderr.read())
+        if run_command(['openssl', 'pkcs12', '-export',
+                       '-in', cert, '-inkey', key,
+                       '-out', path, '-name', name,
+                       '-passout', 'pass:'],
+                       "create p12 file from pem files")[0]:
+            return
 
-            # Load p12 file to the database
-            proc = subprocess.Popen(['pk12util', '-i', path, '-d',
-                                    self.IPSEC_D, '-W', ''],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            proc.wait()
-            if proc.returncode:
-                raise Exception(proc.stderr.read())
-
-        except Exception as e:
-            vlog.err("Import cert and key failed.\n" + str(e))
+        # Load p12 file to the database
+        run_command(['pk12util', '-i', path, '-d', self.IPSEC_D, '-W', ''],
+                    "load p12 file to the NSS database")
         os.remove(path)
 
     def _nss_delete_cert_and_key(self, name):
-        try:
-            # Delete certificate and private key
-            proc = subprocess.Popen(['certutil', '-F', '-d',
-                                    self.IPSEC_D, '-n', name],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            proc.wait()
-            if proc.returncode:
-                raise Exception(proc.stderr.read())
-
-        except Exception as e:
-            vlog.err("Delete cert and key failed.\n" + str(e))
+        # Delete certificate and private key
+        run_command(['certutil', '-F', '-d', self.IPSEC_D, '-n', name],
+                    "delete certificate and private key for %s" % name)
 
 
 class IPsecTunnel(object):
@@ -1214,19 +1189,15 @@ class IPsecMonitor(object):
             self.ike_helper.refresh(self)
 
     def _get_cn_from_cert(self, cert):
-        try:
-            proc = subprocess.Popen(['openssl', 'x509', '-noout', '-subject',
-                                    '-nameopt', 'RFC2253', '-in', cert],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            proc.wait()
-            if proc.returncode:
-                raise Exception(proc.stderr.read())
-            m = re.search(r"CN=(.+?),", proc.stdout.readline().decode())
-            if not m:
-                raise Exception("No CN in the certificate subject.")
-        except Exception as e:
-            vlog.warn(str(e))
+        ret, pout, perr = run_command(['openssl', 'x509', '-noout', '-subject',
+                                       '-nameopt', 'RFC2253', '-in', cert],
+                                       "get certificate %s options" % cert)
+        if ret:
+            return None
+
+        m = re.search(r"CN=(.+?),", pout.strip())
+        if not m:
+            vlog.warn("No CN in the certificate subject (%s)." % cert)
             return None
 
         return m.group(1)
