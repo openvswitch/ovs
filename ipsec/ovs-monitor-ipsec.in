@@ -83,6 +83,7 @@ vlog = ovs.vlog.Vlog("ovs-monitor-ipsec")
 exiting = False
 monitor = None
 xfrm = None
+command_timeout = None
 RECONCILIATION_INTERVAL = 15  # seconds
 TIMEOUT_EXPIRED = 137  # Exit code for a SIGKILL (128 + 9).
 
@@ -98,10 +99,11 @@ def run_command(args, description=None):
     proc = subprocess.Popen(args, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
     try:
-        pout, perr = proc.communicate(timeout=120)
+        pout, perr = proc.communicate(timeout=command_timeout)
         ret = proc.returncode
     except subprocess.TimeoutExpired:
-        vlog.warn("Timed out after 120 seconds trying to %s." % description)
+        vlog.warn("Timed out after %s seconds trying to %s."
+                  % (command_timeout, description))
         pout, perr = b'', b''
         # Just kill the process here.  We can't afford waiting for it,
         # as it may be stuck and may not actually be terminated.
@@ -1380,6 +1382,10 @@ def main():
     parser.add_argument("--ipsec-ctl", metavar="IPSEC-CTL",
                         help="Use DIR/IPSEC-CTL as location for "
                         " pluto ctl socket (libreswan only).")
+    parser.add_argument("--command-timeout", metavar="TIMEOUT",
+                        type=int, default=120,
+                        help="Timeout for external commands called by the "
+                        "ovs-monitor-ipsec daemon, e.g. ipsec --start.")
 
     ovs.vlog.add_args(parser)
     ovs.daemon.add_args(parser)
@@ -1389,11 +1395,13 @@ def main():
 
     global monitor
     global xfrm
+    global command_timeout
 
     root_prefix = args.root_prefix if args.root_prefix else ""
     xfrm = XFRM(root_prefix)
     monitor = IPsecMonitor(root_prefix, args.ike_daemon,
                            not args.no_restart_ike_daemon, args)
+    command_timeout = args.command_timeout
 
     remote = args.database
     schema_helper = ovs.db.idl.SchemaHelper()
