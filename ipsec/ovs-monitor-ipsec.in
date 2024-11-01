@@ -84,6 +84,7 @@ exiting = False
 monitor = None
 xfrm = None
 RECONCILIATION_INTERVAL = 15  # seconds
+TIMEOUT_EXPIRED = 137  # Exit code for a SIGKILL (128 + 9).
 
 
 def run_command(args, description=None):
@@ -96,7 +97,16 @@ def run_command(args, description=None):
     vlog.dbg("Running %s" % args)
     proc = subprocess.Popen(args, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
-    pout, perr = proc.communicate()
+    try:
+        pout, perr = proc.communicate(timeout=120)
+        ret = proc.returncode
+    except subprocess.TimeoutExpired:
+        vlog.warn("Timed out after 120 seconds trying to %s." % description)
+        pout, perr = b'', b''
+        # Just kill the process here.  We can't afford waiting for it,
+        # as it may be stuck and may not actually be terminated.
+        proc.kill()
+        ret = TIMEOUT_EXPIRED
 
     if proc.returncode or perr:
         vlog.warn("Failed to %s; exit code: %d"
@@ -105,7 +115,7 @@ def run_command(args, description=None):
         vlog.warn("stderr: %s" % perr)
         vlog.warn("stdout: %s" % pout)
 
-    return proc.returncode, pout.decode(), perr.decode()
+    return ret, pout.decode(), perr.decode()
 
 
 class XFRM(object):
