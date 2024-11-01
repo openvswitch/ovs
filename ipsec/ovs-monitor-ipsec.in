@@ -729,7 +729,7 @@ conn prevent_unencrypted_vxlan
             return conns
 
         for line in pout.splitlines():
-            m = re.search(r"#\d+: \"(.*)\".*", line)
+            m = re.search(r"#\d+: .*\"(.*)\".*", line)
             if not m:
                 continue
 
