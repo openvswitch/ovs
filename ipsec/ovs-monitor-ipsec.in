@@ -682,8 +682,16 @@ conn prevent_unencrypted_vxlan
                     active.discard(conn)
 
                 for conn in desired:
-                    vlog.info("Starting ipsec connection %s" % conn)
-                    self._start_ipsec_connection(conn, "start")
+                    # Start (add + up) outgoing connections and only add
+                    # incoming ones.  If the other side will not initiate
+                    # the connection and it will not become active, we'll
+                    # bring it up during the next refresh.
+                    if re.match(r".*-in-\d+$", conn):
+                        vlog.info("Adding ipsec connection %s" % conn)
+                        self._start_ipsec_connection(conn, "add")
+                    else:
+                        vlog.info("Starting ipsec connection %s" % conn)
+                        self._start_ipsec_connection(conn, "start")
             else:
                 # Ask pluto to bring UP connections that are loaded,
                 # but not active for some reason.
@@ -834,11 +842,12 @@ conn prevent_unencrypted_vxlan
                      "--delete", conn], "delete %s" % conn)
 
     def _start_ipsec_connection(self, conn, action):
+        asynchronous = [] if action == "add" else ["--asynchronous"]
         ret, pout, perr = run_command(self.IPSEC_AUTO +
                                       ["--config", self.IPSEC_CONF,
                                       "--ctlsocket", self.IPSEC_CTL,
                                       "--" + action,
-                                      "--asynchronous", conn],
+                                      *asynchronous, conn],
                                       "%s %s" % (action, conn))
 
         if re.match(r".*[F|f]ailed to initiate connection.*", pout):
