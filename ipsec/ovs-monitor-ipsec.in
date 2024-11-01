@@ -510,6 +510,7 @@ conn prevent_unencrypted_vxlan
         self.IPSEC_D = "sql:" + libreswan_root_prefix + ipsec_d
         self.IPSEC_CTL = libreswan_root_prefix + ipsec_ctl
         self.conf_file = None
+        self.conns_not_active = set()
         self.last_refresh = time.time()
         self.secrets_file = None
         vlog.dbg("Using: " + self.IPSEC)
@@ -634,6 +635,14 @@ conn prevent_unencrypted_vxlan
             loaded = set(loaded_conns.get(name, dict()).keys())
             active = set(active_conns.get(name, dict()).keys())
 
+            # Untrack connections that became active.
+            self.conns_not_active.difference_update(active)
+            # Remove connections that didn't become active after --start
+            # and another explicit --up.
+            for conn in self.conns_not_active & loaded:
+                self._delete_ipsec_connection(conn, "is defunct")
+                loaded.remove(conn)
+
             # Remove all the loaded or active but not desired connections.
             for conn in loaded | active:
                 if conn not in desired:
@@ -664,6 +673,8 @@ conn prevent_unencrypted_vxlan
                 # so loaded >= active
                 for conn in loaded - active:
                     vlog.info("Bringing up ipsec connection %s" % conn)
+                    # On failure to --up it will be removed from the set.
+                    self.conns_not_active.add(conn)
                     self._start_ipsec_connection(conn, "up")
 
         # Update shunt policy if changed
@@ -797,6 +808,7 @@ conn prevent_unencrypted_vxlan
 
     def _delete_ipsec_connection(self, conn, reason):
         vlog.info("%s %s, removing" % (conn, reason))
+        self.conns_not_active.discard(conn)
         run_command([self.IPSEC, "auto",
                      "--ctlsocket", self.IPSEC_CTL,
                      "--config", self.IPSEC_CONF,
