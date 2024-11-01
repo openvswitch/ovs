@@ -8,6 +8,18 @@ m4_define([IPSEC_SETUP_UNDERLAY],
       dnl Set up the underlay switch
       AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])])
 
+m4_define([START_PLUTO], [
+  rm -f $ovs_base/$1/pluto.pid
+  mkdir -p $ovs_base/$1/ipsec.d
+  touch $ovs_base/$1/ipsec.conf
+  touch $ovs_base/$1/secrets
+  ipsec initnss --nssdir $ovs_base/$1/ipsec.d
+  NS_CHECK_EXEC([$1], [ipsec pluto --config $ovs_base/$1/ipsec.conf \
+        --ipsecdir $ovs_base/$1 --nssdir $ovs_base/$1/ipsec.d \
+        --logfile $ovs_base/$1/pluto.log --secretsfile $ovs_base/$1/secrets \
+        --rundir $ovs_base/$1], [0], [], [stderr])
+])
+
 dnl IPSEC_ADD_NODE([namespace], [device], [address], [peer address]))
 dnl
 dnl Creates a dummy host that acts as an IPsec endpoint. Creates host in
@@ -45,15 +57,8 @@ m4_define([IPSEC_ADD_NODE],
   on_exit "kill_ovs_vswitchd `cat $ovs_base/$1/vswitchd.pid`"
 
   dnl Start pluto
-  mkdir -p $ovs_base/$1/ipsec.d
-  touch $ovs_base/$1/ipsec.conf
-  touch $ovs_base/$1/secrets
-  ipsec initnss --nssdir $ovs_base/$1/ipsec.d
-  NS_CHECK_EXEC([$1], [ipsec pluto --config $ovs_base/$1/ipsec.conf \
-        --ipsecdir $ovs_base/$1 --nssdir $ovs_base/$1/ipsec.d \
-        --logfile $ovs_base/$1/pluto.log --secretsfile $ovs_base/$1/secrets \
-        --rundir $ovs_base/$1], [0], [], [stderr])
-  on_exit "kill `cat $ovs_base/$1/pluto.pid`"
+  START_PLUTO([$1])
+  on_exit 'kill $(cat $ovs_base/$1/pluto.pid)'
 
   dnl Start ovs-monitor-ipsec
   NS_CHECK_EXEC([$1], [ovs-monitor-ipsec unix:${OVS_RUNDIR}/$1/db.sock\
@@ -110,16 +115,18 @@ m4_define([CHECK_LIBRESWAN],
 dnl IPSEC_STATUS_LOADED([])
 dnl
 dnl Get number of loaded connections from ipsec status
-m4_define([IPSEC_STATUS_LOADED], [ipsec --rundir $ovs_base/$1 status | \
+m4_define([IPSEC_STATUS_LOADED], [
+           ipsec --rundir $ovs_base/$1 status | \
            grep "Total IPsec connections" | \
-           sed 's/[[0-9]]* *Total IPsec connections: loaded \([[0-2]]\), active \([[0-2]]\).*/\1/m'])
+           sed 's/[[0-9]]* *Total IPsec connections: loaded \([[0-9]]*\), active \([[0-9]]*\).*/\1/m'])
 
 dnl IPSEC_STATUS_ACTIVE([])
 dnl
 dnl Get number of active connections from ipsec status
-m4_define([IPSEC_STATUS_ACTIVE], [ipsec --rundir $ovs_base/$1 status | \
+m4_define([IPSEC_STATUS_ACTIVE], [
+           ipsec --rundir $ovs_base/$1 status | \
            grep "Total IPsec connections" | \
-           sed 's/[[0-9]]* *Total IPsec connections: loaded \([[0-2]]\), active \([[0-2]]\).*/\2/m'])
+           sed 's/[[0-9]]* *Total IPsec connections: loaded \([[0-9]]*\), active \([[0-9]]*\).*/\2/m'])
 
 dnl CHECK_ESP_TRAFFIC()
 dnl
@@ -398,6 +405,111 @@ dnl Set up IPsec tunnel on 'right' host
 IPSEC_ADD_TUNNEL_RIGHT([geneve],
                        [options:remote_ip=fd01::101 options:psk=swordfish])
 CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan NxN geneve tunnels + reconciliation])
+AT_KEYWORDS([ipsec libreswan scale reconciliation])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+m4_define([NODES], [20])
+
+dnl Set up fake hosts.
+m4_for([id], [1], NODES, [1], [
+  IPSEC_ADD_NODE([node-id], [p-id], 10.1.1.id, 10.1.1.254)
+  AT_CHECK([ovs-pki -b -d ${ovs_base} -l ${ovs_base}/ovs-pki.log \
+                req -u node-id], [0], [stdout])
+  AT_CHECK([ovs-pki -b -d ${ovs_base} -l ${ovs_base}/ovs-pki.log \
+                self-sign node-id], [0], [stdout])
+  AT_CHECK(OVS_VSCTL([node-id], set Open_vSwitch . \
+      other_config:certificate=${ovs_base}/node-id-cert.pem \
+      other_config:private_key=${ovs_base}/node-id-privkey.pem),
+      [0], [ignore], [ignore])
+  on_exit "ipsec --rundir $ovs_base/node-id status > $ovs_base/node-id/status"
+])
+
+dnl Create a full mesh of tunnels.
+m4_for([LEFT], [1], NODES, [1], [
+  m4_for([RIGHT], [1], NODES, [1], [
+    if test LEFT -ne RIGHT; then
+      AT_CHECK(OVS_VSCTL(node-LEFT, add-port br-ipsec tun-RIGHT \
+        -- set Interface tun-RIGHT type=geneve options:remote_ip=10.1.1.RIGHT \
+           options:remote_cert=${ovs_base}/node-RIGHT-cert.pem),
+        [0], [ignore], [ignore])
+    fi
+])])
+
+m4_define([WAIT_FOR_LOADED_CONNS], [
+  m4_for([id], [1], NODES, [1], [
+    echo "================== node-id ========================="
+    iterations=0
+    loaded=0
+    dnl Using a custom loop instead of OVS_WAIT_UNTIL, because it may take
+    dnl much longer than a default timeout.  The default retransmit timeout
+    dnl for pluto is 60 seconds.  Also, we need to make sure pluto didn't
+    dnl crash in the process and revive it if it did, unfortunately.
+    while true; do
+      date
+      AT_CHECK([ipsec --rundir $ovs_base/node-id status 2>&1 \
+                    | grep -E "whack|Total"], [ignore], [stdout])
+      if grep -E 'is Pluto running?|refused' stdout; then
+        echo "node-id: Pluto died, restarting..."
+        START_PLUTO([node-id])
+      else
+        loaded=$(IPSEC_STATUS_LOADED(node-id))
+      fi
+      if test "$loaded" -ne $(( (NODES - 1) * 2 )); then
+        sleep 3
+      else
+        break
+      fi
+      let iterations=$iterations+1
+      AT_CHECK([test $iterations -lt 100])
+    done
+  ])
+])
+
+dnl Wait for all the connections to be loaded to pluto.  Not waiting for
+dnl them to become active, because if pluto is down on one of the nodes,
+dnl some connections may not become active until we revive it.  Some
+dnl connections may also never become active due to bugs in libreswan 4.x.
+WAIT_FOR_LOADED_CONNS()
+
+AT_CHECK([ipsec auto --help], [ignore], [ignore], [stderr])
+auto=auto
+if test -s stderr; then
+    auto=
+fi
+
+dnl Remove connections for two tunnels.  One fully and one partially.
+AT_CHECK([ipsec $auto --ctlsocket $ovs_base/node-1/pluto.ctl \
+                      --config $ovs_base/node-1/ipsec.conf \
+                      --delete tun-5-out-1], [0], [stdout])
+AT_CHECK([ipsec $auto --ctlsocket $ovs_base/node-1/pluto.ctl \
+                      --config $ovs_base/node-1/ipsec.conf \
+                      --delete tun-2-in-1], [0], [stdout])
+AT_CHECK([ipsec $auto --ctlsocket $ovs_base/node-1/pluto.ctl \
+                      --config $ovs_base/node-1/ipsec.conf \
+                      --delete tun-2-out-1], [0], [stdout])
+
+dnl Wait for the monitor to notice the missing connections.
+OVS_WAIT_UNTIL([grep -q 'tun-2.*need to reconcile' \
+                    $ovs_base/node-1/ovs-monitor-ipsec.log])
+
+dnl Wait for all the connections to be loaded back.
+WAIT_FOR_LOADED_CONNS()
+
+dnl These are not necessary, but nice to have in the test log in
+dnl order to spot pluto failures during the test.
+grep -E 'Timed out|outdated|half-loaded|defunct' \
+            $ovs_base/node-*/ovs-monitor-ipsec.log
+grep -E 'ABORT|ERROR' $ovs_base/node-*/pluto.log
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
