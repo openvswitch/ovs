@@ -71,7 +71,9 @@ m4_define([IPSEC_ADD_NODE],
   on_exit "kill `cat $ovs_base/$1/ovs-monitor-ipsec.pid`"
 
   dnl Set up OVS bridge
-  NS_EXEC([$1], [ovs-vsctl --db unix:$ovs_base/$1/db.sock add-br br-ipsec])]
+  NS_CHECK_EXEC([$1],
+    [ovs-vsctl --db unix:$ovs_base/$1/db.sock add-br br-ipsec \
+               -- set-controller br-ipsec punix:$ovs_base/br-ipsec.$1.mgmt])]
 )
 m4_define([IPSEC_ADD_NODE_LEFT], [IPSEC_ADD_NODE(left, p0, $1, $2)])
 m4_define([IPSEC_ADD_NODE_RIGHT], [IPSEC_ADD_NODE(right, p1, $1, $2)])
@@ -429,7 +431,8 @@ m4_for([id], [1], NODES, [1], [
                 self-sign node-id], [0], [stdout])
   AT_CHECK(OVS_VSCTL([node-id], set Open_vSwitch . \
       other_config:certificate=${ovs_base}/node-id-cert.pem \
-      other_config:private_key=${ovs_base}/node-id-privkey.pem),
+      other_config:private_key=${ovs_base}/node-id-privkey.pem \
+      -- set bridge br-ipsec other-config:hwaddr=f2:ff:00:00:00:id),
       [0], [ignore], [ignore])
   on_exit "ipsec --rundir $ovs_base/node-id status > $ovs_base/node-id/status"
 ])
@@ -445,11 +448,18 @@ m4_for([LEFT], [1], NODES, [1], [
     fi
 ])])
 
+dnl These are not necessary, but nice to have in the test log in
+dnl order to spot pluto failures during the test.
+on_exit "grep -E 'Timed out|outdated|half-loaded|defunct' \
+            $ovs_base/node-*/ovs-monitor-ipsec.log"
+on_exit "grep -E 'ABORT|ERROR' $ovs_base/node-*/pluto.log"
+
 m4_define([WAIT_FOR_LOADED_CONNS], [
   m4_for([id], [1], NODES, [1], [
     echo "================== node-id ========================="
     iterations=0
     loaded=0
+    active=0
     dnl Using a custom loop instead of OVS_WAIT_UNTIL, because it may take
     dnl much longer than a default timeout.  The default retransmit timeout
     dnl for pluto is 60 seconds.  Also, we need to make sure pluto didn't
@@ -463,8 +473,11 @@ m4_define([WAIT_FOR_LOADED_CONNS], [
         START_PLUTO([node-id])
       else
         loaded=$(IPSEC_STATUS_LOADED(node-id))
+        m4_if([$1], [active],
+              [active=$(IPSEC_STATUS_ACTIVE(node-id))], [active=$loaded])
       fi
-      if test "$loaded" -ne $(( (NODES - 1) * 2 )); then
+      if test "$loaded" -ne "$(( (NODES - 1) * 2 ))" -o \
+              "$loaded" -ne "$active"; then
         sleep 3
       else
         break
@@ -505,11 +518,66 @@ OVS_WAIT_UNTIL([grep -q 'tun-2.*need to reconcile' \
 dnl Wait for all the connections to be loaded back.
 WAIT_FOR_LOADED_CONNS()
 
-dnl These are not necessary, but nice to have in the test log in
-dnl order to spot pluto failures during the test.
-grep -E 'Timed out|outdated|half-loaded|defunct' \
-            $ovs_base/node-*/ovs-monitor-ipsec.log
-grep -E 'ABORT|ERROR' $ovs_base/node-*/pluto.log
+dnl Next section will check connectivity between all the nodes.
+dnl Different versions of Libreswan 4.x have issues where connections
+dnl are not being correctly established or never become active in a
+dnl way that can not be mitigated from ovs-monitor-ipsec or the test.
+dnl So, only checking connectivity for Libreswan 3- or 5+.
+dnl Skipping in the middle of the test, so test can still fail while
+dnl testing with Libreswan 4, if the first half fails.
+AT_SKIP_IF([ipsec --version 2>&1 | grep -q 'Libreswan 4\.'])
+
+dnl Turn off IPv6 and add static ARP entries for all namespaces to avoid
+dnl any broadcast / multicast traffic that would otherwise be multiplied
+dnl by each node creating a traffic storm.  Add specific OpenFlow rules
+dnl to forward traffic to exact destinations without any MAC learning.
+m4_for([LEFT], [1], NODES, [1], [
+  NS_CHECK_EXEC([node-LEFT], [sysctl -w net.ipv6.conf.all.disable_ipv6=1],
+                [0], [ignore])
+  AT_CHECK([ovs-ofctl del-flows unix:$ovs_base/br-ipsec.node-LEFT.mgmt])
+  AT_CHECK([ovs-ofctl add-flow unix:$ovs_base/br-ipsec.node-LEFT.mgmt \
+                  "dl_dst=f2:ff:00:00:00:LEFT actions=LOCAL"])
+  m4_for([RIGHT], [1], NODES, [1], [
+    if test LEFT -ne RIGHT; then
+      NS_CHECK_EXEC([node-LEFT],
+        [ip neigh add 192.0.0.RIGHT lladdr f2:ff:00:00:00:RIGHT dev br-ipsec])
+      AT_CHECK([ovs-ofctl add-flow unix:$ovs_base/br-ipsec.node-LEFT.mgmt \
+                  "dl_dst=f2:ff:00:00:00:RIGHT actions=tun-RIGHT"])
+    fi
+  ])
+])
+
+dnl Bring up and add IP addresses for br-ipsec interface.
+m4_for([id], [1], NODES, [1], [
+  echo "================== node-id ========================="
+  NS_CHECK_EXEC([node-id], [ip addr add 192.0.0.id/24 dev br-ipsec])
+  NS_CHECK_EXEC([node-id], [ip link set dev br-ipsec up])
+])
+
+dnl Wait for all the connections to be loaded and active.  In case one of
+dnl the pluto processes crashed some of the connections may never become
+dnl active.  But we did run this loop with a pluto reviving logic twice
+dnl already, so the chances for pluto to be down here are much lower.
+WAIT_FOR_LOADED_CONNS([active])
+
+dnl Check the full mesh ping.
+m4_for([LEFT], [1], NODES, [1], [
+  m4_for([RIGHT], [1], NODES, [1], [
+    if test LEFT -ne RIGHT; then
+      echo "====== ping: node-LEFT --> node-RIGHT =========="
+      dnl Ping without checking in case connection will recover after the
+      dnl first packet.
+      NS_CHECK_EXEC([node-LEFT],
+                    [ping -q -c 1 -W 2 192.0.0.RIGHT | FORMAT_PING],
+                    [ignore], [stdout])
+      dnl Now check.  If this one fails, there is no actual connectivity.
+      NS_CHECK_EXEC([node-LEFT],
+                    [ping -q -c 3 -i 0.1 -W 2 192.0.0.RIGHT | FORMAT_PING],
+                    [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+    fi
+])])
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
