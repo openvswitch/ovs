@@ -268,6 +268,37 @@ m4_define([OVS_CHECK_BAREUDP],
     AT_CHECK([ip link del dev ovs_bareudp0])
 ])
 
+# IPTABLES_CHECK_EXTERNAL_CT()
+#
+# Checks if packets can be tracked outside OvS.
+# iptables variant of this macro
+m4_define([IPTABLES_CHECK_EXTERNAL_CT],
+[
+    dnl Kernel config (CONFIG_NETFILTER_XT_TARGET_CT)
+    dnl and user space extensions need to be present.
+    AT_SKIP_IF([! iptables -t raw -I OUTPUT 1 -j CT])
+    AT_CHECK([iptables -t raw -D OUTPUT 1])
+])
+
+# NFT_CHECK_EXTERNAL_CT()
+#
+# Checks if packets can be tracked outside OvS.
+# nft variant of this macro
+m4_define([NFT_CHECK_EXTERNAL_CT],
+[
+    dnl Kernel config (CONFIG_NETFILTER_XT_TARGET_CT)
+    dnl and user space extensions need to be present.
+    AT_SKIP_IF([! nft -c -f - << EOF
+                table ip raw {
+                    chain output-ovs-testsuite {
+                        type filter hook output priority raw;
+                        ct state new
+                    }
+                }
+EOF
+               ])
+])
+
 # CHECK_EXTERNAL_CT()
 #
 # Checks if packets can be tracked outside OvS.
@@ -275,16 +306,55 @@ m4_define([CHECK_EXTERNAL_CT],
 [
     dnl Kernel config (CONFIG_NETFILTER_XT_TARGET_CT)
     dnl and user space extensions need to be present.
-    AT_SKIP_IF([test $HAVE_IPTABLES = no])
-    AT_SKIP_IF([! iptables -t raw -I OUTPUT 1 -j CT])
-    AT_CHECK([iptables -t raw -D OUTPUT 1])
+    if test $HAVE_NFT = yes; then
+         NFT_CHECK_EXTERNAL_CT()
+    elif test $HAVE_IPTABLES = yes; then
+         IPTABLES_CHECK_EXTERNAL_CT()
+    else
+         AT_SKIP_IF([true])
+    fi
+])
+
+# IPTABLES_ADD_EXTERNAL_CT()
+#
+# Let conntrack start tracking the packets outside OvS.
+# iptables variant of this macro
+m4_define([IPTABLES_ADD_EXTERNAL_CT],
+[
+    AT_CHECK([iptables -t raw -I OUTPUT 1 -o $1 -j CT])
+    on_exit 'iptables -t raw -D OUTPUT 1'
+])
+
+# NFT_ADD_EXTERNAL_CT()
+#
+# Let conntrack start tracking the packets outside OvS.
+# nft variant of this macro
+m4_define([NFT_ADD_EXTERNAL_CT],
+[
+    if ! nft list table ip raw > /dev/null 2>1; then
+        on_exit 'nft "delete table ip raw"'
+    fi
+
+    AT_CHECK([nft -f - << EOF
+                  table ip raw {
+                      chain output-ovs-testsuite {
+                          type filter hook output priority raw;
+                          oifname "$1" ct state new
+                      }
+                  }
+EOF
+               ])
+    on_exit 'nft "delete chain ip raw output-ovs-testsuite"'
 ])
 
 # ADD_EXTERNAL_CT()
 #
-# Let conntrack start tracking the packets outside OvS.
+# Checks if packets can be tracked outside OvS.
 m4_define([ADD_EXTERNAL_CT],
 [
-    AT_CHECK([iptables -t raw -I OUTPUT 1 -o $1 -j CT])
-    on_exit 'iptables -t raw -D OUTPUT 1'
+    if test $HAVE_NFT = yes; then
+        NFT_ADD_EXTERNAL_CT([$1])
+    else
+        IPTABLES_ADD_EXTERNAL_CT([$1])
+    fi
 ])
