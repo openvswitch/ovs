@@ -360,9 +360,31 @@ m4_ifndef([AT_FAIL_IF],
     [AT_CHECK([($1) \
     && exit 99 || exit 0], [0], [ignore], [ignore])])])
 
-dnl Certain Linux distributions, like CentOS, have default iptable rules
-dnl to reject input traffic from bridges such as br-underlay.
 dnl Add a rule to always accept the traffic.
 m4_define([IPTABLES_ACCEPT],
   [AT_CHECK([iptables -I INPUT 1 -i $1 -j ACCEPT])
    on_exit 'iptables -D INPUT 1'])
+
+dnl Certain Linux distributions, like CentOS, have default iptable rules
+dnl to reject input traffic from bridges such as br-underlay.
+dnl This implies the existence of a ip filter INPUT chain.
+dnl If that chain exists then add a rule to it to always accept all traffic.
+m4_define([NFT_ACCEPT],
+  [if nft list chain ip filter INPUT > /dev/null 2>1; then
+     AT_CHECK([nft -ae \
+               "insert rule ip filter INPUT iifname \"$1\" counter accept"],
+               [0], [stdout-nolog])
+     dnl Extract handle, which is used to delete the rule
+     AT_CHECK([sed -n 's/.*handle //; T; p' < stdout], [0], [stdout])
+     on_exit "nft \"delete rule ip filter INPUT handle $(cat stdout)\""
+   fi])
+
+dnl Certain Linux distributions, like CentOS, have default iptable rules
+dnl to reject input traffic from bridges such as br-underlay.
+dnl Add a rule to always accept the traffic.
+m4_define([XT_ACCEPT],
+  [if test $HAVE_NFT = yes; then
+       NFT_ACCEPT([$1])
+   else
+       IPTABLES_ACCEPT([$1])
+   fi])

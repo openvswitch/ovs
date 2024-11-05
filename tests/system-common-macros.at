@@ -397,3 +397,7 @@ m4_define([OVS_CHECK_CT_CLEAR],
 # OVS_CHECK_GITHUB_ACTION
 m4_define([OVS_CHECK_GITHUB_ACTION],
     [AT_SKIP_IF([test "$GITHUB_ACTIONS" = "true"])])
+
+# OVS_CHECK_XT()
+m4_define([OVS_CHECK_XT],
+    [AT_SKIP_IF([test $HAVE_IPTABLES = no && test $HAVE_NFT = no])])

@@ -1098,7 +1098,7 @@ OVS_TRAFFIC_VSWITCHD_STOP(["/Invalid Geneve tunnel metadata on bridge br0 while 
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over gre tunnel by simulated packets])
-AT_SKIP_IF([test $HAVE_IPTABLES = no])
+OVS_CHECK_XT()
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1118,7 +1118,7 @@ AT_CHECK([ip link set dev br-underlay up])
 dnl Set up tunnel endpoints on OVS outside the namespace.
 ADD_OVS_TUNNEL([gre], [br0], [at_gre0], [172.31.1.1], [10.1.1.100/24])
 
-IPTABLES_ACCEPT([br-underlay])
+XT_ACCEPT([br-underlay])
 
 NETNS_DAEMONIZE([at_ns0], [tcpdump -n -i p0 dst host 172.31.1.1 -l > p0.pcap 2>/dev/null], [tcpdump.pid])
 sleep 1
