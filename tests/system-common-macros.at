@@ -405,3 +405,7 @@ m4_define([OVS_CHECK_DROP_ACTION],
 # OVS_CHECK_PSAMPLE()
 m4_define([OVS_CHECK_PSAMPLE],
     [AT_SKIP_IF([! grep -q "Datapath supports psample action" ovs-vswitchd.log])])
+
+# OVS_CHECK_XT()
+m4_define([OVS_CHECK_XT],
+    [AT_SKIP_IF([test $HAVE_IPTABLES = no && test $HAVE_NFT = no])])
