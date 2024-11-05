@@ -812,6 +812,7 @@ OVS_CHECK_VXLAN()
 
 OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
 AT_SKIP_IF([! grep -q "probe tc: vxlan gbp is supported." ovs-vswitchd.log])
+AT_SKIP_IF([test $HAVE_NFT = no -a $HAVE_IPTABLES = no])
 ADD_BR([br-underlay])
 
 AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
@@ -832,8 +833,32 @@ AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 
 ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100], [10.1.1.1/24],
                   [id 0 dstport 4789 gbp])
-NS_CHECK_EXEC([at_ns0], [iptables -I OUTPUT -p ip -j MARK --set-mark 512 2>/dev/null], [0])
-NS_CHECK_EXEC([at_ns0], [iptables -I INPUT -m mark --mark 512 -j ACCEPT 2>/dev/null], [0], [ignore])
+
+if test $HAVE_NFT = yes; then
+    NS_CHECK_EXEC([at_ns0], [nft -f - << EOF
+                  table ip filter {
+                    chain OUTPUT {
+                        type filter hook output priority filter; policy accept;
+                        counter meta mark set 512
+                    }
+                  }
+
+                  table ip filter {
+                    chain INPUT {
+                        type filter hook input priority filter; policy accept;
+                        mark 512 counter accept;
+                    }
+                  }
+EOF
+                  ])
+else
+    NS_CHECK_EXEC([at_ns0],
+                  [iptables -I OUTPUT -p ip -j MARK --set-mark 512 2>/dev/null],
+                  [0])
+    NS_CHECK_EXEC([at_ns0],
+                  [iptables -I INPUT -m mark --mark 512 -j ACCEPT 2>/dev/null],
+                  [0], [ignore])
+fi
 
 dnl First, check the underlay.
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
