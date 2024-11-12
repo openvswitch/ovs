@@ -266,6 +266,33 @@ m4_define([NETNS_DAEMONIZE],
    ]
 )
 
+# OVS_GET_HTTP([url], [optional_curl_arguments])
+#
+# Do a HTTP get; we are currently using the curl command.
+#
+m4_define([OVS_GET_HTTP],
+    [curl $1 --retry 3 --max-time 1 --retry-connrefused -v $2]
+)
+
+# OVS_GET_FTP([url], [optional_curl_arguments])
+#
+# Do a passive FTP get; we are currently using the curl command.
+#
+m4_define([OVS_GET_FTP],
+    [curl ftp://$1 --retry 3 --max-time 1 --retry-connrefused --disable-epsv
+         -v $2]
+)
+
+# OVS_GET_FTP_ACTIVE([url], [optional_curl_arguments])
+#
+# Do an active FTP get; we are currently using the curl command.
+#
+m4_define([OVS_GET_FTP_ACTIVE],
+    [curl ftp://$1 --retry 3 --max-time 1 --retry-connrefused -v \
+        --ftp-port - --disable-eprt $2
+    ]
+)
+
 # OVS_CHECK_FIREWALL()
 #
 # Check if firewalld is active, skip the test if it is on.
