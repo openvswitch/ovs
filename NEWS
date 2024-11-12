@@ -25,6 +25,8 @@ Post-v3.4.0
        formats.
    - DPDK:
      * OVS validated with DPDK 23.11.2.
+     * Add hardware offload support for matching ICMPv6 protocol
+       (experimental).
    - Tunnels:
      * LISP and STT tunnel port types are deprecated and will be removed in
        the next release.

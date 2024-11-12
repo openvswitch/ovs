@@ -495,6 +495,23 @@ dump_flow_pattern(struct ds *s,
                               icmp_mask->hdr.icmp_code, 0);
         }
         ds_put_cstr(s, "/ ");
+    } else if (item->type == RTE_FLOW_ITEM_TYPE_ICMP6) {
+        const struct rte_flow_item_icmp6 *icmp6_spec = item->spec;
+        const struct rte_flow_item_icmp6 *icmp6_mask = item->mask;
+
+        ds_put_cstr(s, "icmpv6 ");
+        if (icmp6_spec) {
+            if (!icmp6_mask) {
+                icmp6_mask = &rte_flow_item_icmp6_mask;
+            }
+            DUMP_PATTERN_ITEM(icmp6_mask->type, false, "type",
+                              "%"PRIu8, icmp6_spec->type,
+                              icmp6_mask->type, 0);
+            DUMP_PATTERN_ITEM(icmp6_mask->code, false, "code",
+                              "%"PRIu8, icmp6_spec->code,
+                              icmp6_mask->code, 0);
+        }
+        ds_put_cstr(s, "/ ");
     } else if (item->type == RTE_FLOW_ITEM_TYPE_TCP) {
         const struct rte_flow_item_tcp *tcp_spec = item->spec;
         const struct rte_flow_item_tcp *tcp_mask = item->mask;
@@ -1608,6 +1625,7 @@ parse_flow_match(struct netdev *netdev,
 
     if (proto != IPPROTO_ICMP && proto != IPPROTO_UDP  &&
         proto != IPPROTO_SCTP && proto != IPPROTO_TCP  &&
+        proto != IPPROTO_ICMPV6 &&
         (match->wc.masks.tp_src ||
          match->wc.masks.tp_dst ||
          match->wc.masks.tcp_flags)) {
@@ -1684,6 +1702,22 @@ parse_flow_match(struct netdev *netdev,
         consumed_masks->tp_dst = 0;
 
         add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_ICMP, spec, mask, NULL);
+    } else if (proto == IPPROTO_ICMPV6) {
+        struct rte_flow_item_icmp6 *spec, *mask;
+
+        spec = xzalloc(sizeof *spec);
+        mask = xzalloc(sizeof *mask);
+
+        spec->type = (uint8_t) ntohs(match->flow.tp_src);
+        spec->code = (uint8_t) ntohs(match->flow.tp_dst);
+
+        mask->type = (uint8_t) ntohs(match->wc.masks.tp_src);
+        mask->code = (uint8_t) ntohs(match->wc.masks.tp_dst);
+
+        consumed_masks->tp_src = 0;
+        consumed_masks->tp_dst = 0;
+
+        add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_ICMP6, spec, mask, NULL);
     }
 
     add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_END, NULL, NULL, NULL);
