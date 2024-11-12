@@ -3551,7 +3551,7 @@ dnl traffic can't be identified, because the initial request wasn't committed.
 dnl For the first pair of ports, this means that the connection fails.
 OVS_START_L7([at_ns1], [http])
 OVS_START_L7([at_ns3], [http])
-NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log], [4])
+NS_CHECK_EXEC([at_ns0], OVS_GET_HTTP([10.1.1.2]), [28], [ignore], [ignore])
 
 dnl For the second pair, we allow packets from invalid connections, so it works.
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 --retry-connrefused -v -o wget1.log])
@@ -3598,7 +3598,7 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns2], OVS_GET_HTTP([10.1.1.4]), [28], [ignore], [ignore])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
 tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>)
@@ -3645,7 +3645,7 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns2], OVS_GET_HTTP([10.1.1.4]), [28], [ignore], [ignore])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
 tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),zone=4098,protoinfo=(state=<cleared>)
@@ -3928,7 +3928,7 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns2], OVS_GET_HTTP([10.1.1.4]), [28], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
 tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),mark=2,protoinfo=(state=<cleared>)
 ])
@@ -4009,7 +4009,7 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns2], OVS_GET_HTTP([10.1.1.4]), [28], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
 tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),mark=2,protoinfo=(state=<cleared>)
 ])
@@ -4052,7 +4052,7 @@ NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns2], OVS_GET_HTTP([10.1.1.4]), [28], [ignore], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -4158,7 +4158,7 @@ AT_CHECK([ovs-ofctl --bundle add-flows br0 flows1.txt])
 
 dnl TCP traffic from ns0 to ns1 should fail.
 OVS_START_L7([at_ns1], [http])
-NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log], [4])
+NS_CHECK_EXEC([at_ns0], OVS_GET_HTTP([10.1.1.2]), [28], [ignore], [ignore])
 
 dnl Send UDP packet on port 1 twice.
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
@@ -5465,7 +5465,7 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 
 dnl HTTP requests from ns1->ns0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns1], [wget 10.1.1.1 -t 3 -T 1 --retry-connrefused -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns1], OVS_GET_HTTP([10.1.1.1]), [28], [ignore], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -5507,7 +5507,7 @@ tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc
 
 dnl HTTP requests from ns1->ns0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns1], [wget http://[[fc00::1]] -t 3 -T 1 --retry-connrefused -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns1], OVS_GET_HTTP([http://[[fc00::1]]]), [28], [ignore], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -5984,7 +5984,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON3 $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2], [-o index.html]), [0], [ignore], [ignore])
 
 AT_CHECK([find -name index.html], [0], [dnl
 ./index.html
@@ -6051,12 +6051,12 @@ OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns1], [wget ftp://10.1.1.1 --no-passive-ftp  -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns1], OVS_GET_FTP_ACTIVE([10.1.1.1]), [28], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
 ])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC[at_ns0], (OVS_GET_FTP_ACTIVE([10.1.1.2]), [0], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 ])
@@ -6067,12 +6067,12 @@ AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns1], [wget ftp://10.1.1.1 --no-passive-ftp  -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns1], OVS_GET_FTP_ACTIVE([10.1.1.1]), [28], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
 ])
 
 dnl Active FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0-1.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2]), [0], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
@@ -6081,7 +6081,7 @@ tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 dnl Passive FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0-2.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([10.1.1.2]), [0], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 ])
@@ -6091,7 +6091,7 @@ AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows3.txt])
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 dnl FTP control requests from p0->p1 should work fine, but helper will not be assigned.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0-3.log], [4])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2]), [28], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
@@ -6157,12 +6157,12 @@ OVS_START_L7([at_ns1], [ftp], [11111])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns1], [wget ftp://10.1.1.1:11111 --no-passive-ftp  -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns1], OVS_GET_FTP_ACTIVE([10.1.1.1:11111]), [28], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
 ])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2:11111 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2:11111]), [0], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 ])
@@ -6173,12 +6173,12 @@ AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns1], [wget ftp://10.1.1.1:11111 --no-passive-ftp  -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns1], OVS_GET_FTP_ACTIVE([10.1.1.1:11111]), [28], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
 ])
 
 dnl Active FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2:11111 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0-1.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2:11111]), [0], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
@@ -6187,7 +6187,7 @@ tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 dnl Passive FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2:11111 -t 3 -T 1 --retry-connrefused -v -o wget0-2.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([10.1.1.2:11111]), [0], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 ])
@@ -6197,7 +6197,7 @@ AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows3.txt])
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 dnl FTP control requests from p0->p1 should work fine, but helper will not be assigned.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2:11111 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0-3.log], [4])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2:11111]), [28], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
@@ -6232,7 +6232,7 @@ AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows.txt])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2]), [0], [ignore], [ignore])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
@@ -6293,7 +6293,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([[[fc00::2]]], [--ipv6]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -6352,7 +6352,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP passive requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([[[fc00::2]]]), [--ipv6]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -6402,12 +6402,12 @@ OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns1], [wget ftp://10.1.1.1 --no-passive-ftp  -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns1], OVS_GET_FTP_ACTIVE([10.1.1.1]), [28], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
 ])
 
 dnl Active FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2]), [0], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>),helper=ftp
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>),helper=ftp
@@ -6418,7 +6418,7 @@ tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 dnl Passive FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([10.1.1.2]), [0], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>),helper=ftp
@@ -6739,7 +6739,7 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | uniq], [0], [d
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
-NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 1 -T 1 --retry-connrefused -v -o wget0.log], [4])
+NS_CHECK_EXEC([at_ns0], OVS_GET_HTTP([10.1.1.2]), [28], [ignore], [ignore])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | uniq], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
@@ -7519,7 +7519,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([10.1.1.2]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -7579,7 +7579,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.240 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([10.1.1.2]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -7639,7 +7639,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.100.1 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.200 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([10.1.1.200]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.200)], [0], [dnl
@@ -7699,7 +7699,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.240 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -7759,7 +7759,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.120.240 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.120.240]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.120.240)], [0], [dnl
@@ -7809,7 +7809,7 @@ NS_CHECK_EXEC([at_ns0], [wget http://[[fc00::2]] -t 3 -T 1 --retry-connrefused -
 dnl HTTP requests from ns1->ns0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
 OVS_START_L7([at_ns0], [http6])
-NS_CHECK_EXEC([at_ns1], [wget http://[[fc00::1]] -t 3 -T 1 -v -o wget1.log], [4])
+NS_CHECK_EXEC([at_ns1], OVS_GET_HTTP([http://[[fc00::1]]]), [28], [ignore], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -7998,7 +7998,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([[[fc00::2]]], [--ipv6]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -8059,7 +8059,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([[[fc00::2]]], [--ipv6]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -8119,7 +8119,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON3 $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([[[fc00::2]]], [--ipv6]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
