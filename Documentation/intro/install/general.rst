@@ -150,9 +150,6 @@ The datapath tests for userspace and Linux datapaths also rely upon:
 - pyftpdlib. Version 1.2.0 is known to work. Earlier versions should
   also work.
 
-- GNU wget. Version 1.16 is known to work. Earlier versions should also
-  work.
-
 - netcat. Several common implementations are known to work.
 
 - curl. Version 7.47.0 is known to work. Earlier versions should also work.

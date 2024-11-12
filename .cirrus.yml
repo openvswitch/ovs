@@ -8,7 +8,7 @@ freebsd_build_task:
     memory: 4G
 
   env:
-    DEPENDENCIES: automake libtool gmake gcc wget openssl python3
+    DEPENDENCIES: automake libtool gmake gcc openssl python3
     PY_DEPS:      sphinx|netaddr|pyparsing
     matrix:
       COMPILER: gcc
