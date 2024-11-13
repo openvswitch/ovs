@@ -253,6 +253,10 @@ priority=0,actions=NORMAL
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
+dnl We need to wait until the new flows are actually in the datapath to avoid
+dnl intermittent loss of first ping packet.
+AT_CHECK([ovs-appctl revalidator/wait])
+
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::3 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
