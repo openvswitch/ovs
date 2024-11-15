@@ -1244,6 +1244,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over ip6erspan v1 tunnel by simulated packets])
+OVS_CHECK_XT()
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1267,11 +1268,7 @@ ADD_OVS_TUNNEL6([ip6erspan], [br0], [at_erspan0], [fc00:100::1], [10.1.1.100/24]
 
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 2 fc00:100::100])
 
-dnl Certain Linux distributions, like CentOS, have default iptable rules
-dnl to reject input traffic from br-underlay. Here we add a rule to walk
-dnl around it.
-ip6tables -I INPUT 1 -i br-underlay -j ACCEPT
-on_exit 'ip6tables -D INPUT 1'
+XT6_ACCEPT([br-underlay])
 
 NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host fc00:100::1 -l > p0.pcap 2>/dev/null], [tcpdump.pid])
 sleep 1
@@ -1299,6 +1296,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over ip6erspan v2 tunnel by simulated packets])
+OVS_CHECK_XT()
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1322,11 +1320,7 @@ ADD_OVS_TUNNEL6([ip6erspan], [br0], [at_erspan0], [fc00:100::1], [10.1.1.100/24]
 
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 2 fc00:100::100])
 
-dnl Certain Linux distributions, like CentOS, have default iptable rules
-dnl to reject input traffic from br-underlay. Here we add a rule to walk
-dnl around it.
-ip6tables -I INPUT 1 -i br-underlay -j ACCEPT
-on_exit 'ip6tables -D INPUT 1'
+XT6_ACCEPT([br-underlay])
 
 NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host fc00:100::1 -l > p0.pcap 2>/dev/null], [tcpdump.pid])
 sleep 1
