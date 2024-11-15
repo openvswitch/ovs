@@ -6995,12 +6995,6 @@ dnl Checks the implementation of conntrack with FTP ALGs in combination with
 dnl NAT, using the provided flow table.
 m4_define([CHECK_FTP_NAT],
    [AT_SETUP([conntrack - FTP $1])
-    m4_if(m4_index([$1], [orig tuple]), -1, [], [
-      dnl XXX: 6.8.0-1014-azure #16~22.04.1-Ubuntu kernel in GitHub Actions
-      dnl contains a known conntrack bug, but doesn't have a fix for it:
-      dnl   a23ac973f67f ("openvswitch: get related ct labels from its master
-      dnl                  if it is not confirmed")
-      OVS_CHECK_GITHUB_ACTION()])
     AT_SKIP_IF([test $HAVE_FTP = no])
     AT_SKIP_IF([test $HAVE_LFTP = no])
     CHECK_CONNTRACK()
