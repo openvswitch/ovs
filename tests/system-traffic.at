@@ -1237,7 +1237,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over erspan v1 tunnel by simulated packets])
-AT_SKIP_IF([test $HAVE_IPTABLES = no])
+OVS_CHECK_XT()
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1258,7 +1258,7 @@ dnl Set up tunnel endpoints on OVS outside the namespace and emulate a native
 dnl linux device inside the namespace.
 ADD_OVS_TUNNEL([erspan], [br0], [at_erspan0], [172.31.1.1], [10.1.1.100/24], [options:key=1 options:erspan_ver=1 options:erspan_idx=7])
 
-IPTABLES_ACCEPT([br-underlay])
+XT_ACCEPT([br-underlay])
 
 NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap 2>/dev/null], [tcpdump.pid])
 sleep 1
@@ -1286,6 +1286,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over erspan v2 tunnel by simulated packets])
+OVS_CHECK_XT()
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1306,11 +1307,7 @@ dnl Set up tunnel endpoints on OVS outside the namespace and simulate a native
 dnl linux device inside the namespace.
 ADD_OVS_TUNNEL([erspan], [br0], [at_erspan0], [172.31.1.1], [10.1.1.100/24], [options:key=1 options:erspan_ver=2 options:erspan_dir=1 options:erspan_hwid=0x7])
 
-dnl Certain Linux distributions, like CentOS, have default iptable rules
-dnl to reject input traffic from br-underlay. Here we add a rule to walk
-dnl around it.
-iptables -I INPUT 1 -i br-underlay -j ACCEPT
-on_exit 'iptables -D INPUT 1'
+XT_ACCEPT([br-underlay])
 
 NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap 2>/dev/null], [tcpdump.pid])
 sleep 1
