@@ -170,7 +170,7 @@
  * value of the "prefix" key is a comma separated list of field names.
  *
  * There is a maximum number of fields that can be enabled for any one
- * flow table.  Currently this limit is 3.
+ * flow table.  Currently this limit is 4.
  *
  *
  * Partitioning (Lookup Time and Wildcard Optimization)
@@ -328,7 +328,7 @@ struct cls_trie {
 
 enum {
     CLS_MAX_INDICES = 3,   /* Maximum number of lookup indices per subtable. */
-    CLS_MAX_TRIES = 3      /* Maximum number of prefix trees per classifier. */
+    CLS_MAX_TRIES = 4,     /* Maximum number of prefix trees per classifier. */
 };
 
 /* A flow classifier. */

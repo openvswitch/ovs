@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "8.5.0",
- "cksum": "4040946650 27557",
+ "version": "8.5.1",
+ "cksum": "1754428673 27557",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -385,7 +385,7 @@
        "groups": {
          "type": {"key": "string", "min": 0, "max": "unlimited"}},
        "prefixes": {
-         "type": {"key": "string", "min": 0, "max": 3}},
+         "type": {"key": "string", "min": 0, "max": 4}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}}}},
