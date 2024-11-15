@@ -361,30 +361,48 @@ m4_ifndef([AT_FAIL_IF],
     && exit 99 || exit 0], [0], [ignore], [ignore])])])
 
 dnl Add a rule to always accept the traffic.
+dnl The first argument to this macro should be the command to run:
+dnl iptables or ip6tables
+dnl The second argument to this macro should be the interface name (netdev)
 m4_define([IPTABLES_ACCEPT],
-  [AT_CHECK([iptables -I INPUT 1 -i $1 -j ACCEPT])
-   on_exit 'iptables -D INPUT 1'])
+  [AT_CHECK([$1 -I INPUT 1 -i $2 -j ACCEPT])
+   on_exit '$1 -D INPUT 1'])
 
 dnl Certain Linux distributions, like CentOS, have default iptable rules
 dnl to reject input traffic from bridges such as br-underlay.
-dnl This implies the existence of a ip filter INPUT chain.
-dnl If that chain exists then add a rule to it to always accept all traffic.
+dnl This implies the existence of a ip filter INPUT chain for IPv4 or an
+dnl ip6 filter INPUT chain for IPv6.  If that chain exists then add a rule
+dnl to it to always accept all traffic.
+dnl The first argument to this macro should be the filter chain: ip or ipv6
+dnl The second argument to this macro should be the interface name (netdev)
 m4_define([NFT_ACCEPT],
-  [if nft list chain ip filter INPUT > /dev/null 2>1; then
+  [if nft list chain $1 filter INPUT > /dev/null 2>1; then
      AT_CHECK([nft -ae \
-               "insert rule ip filter INPUT iifname \"$1\" counter accept"],
+               "insert rule $1 filter INPUT iifname \"$2\" counter accept"],
                [0], [stdout-nolog])
      dnl Extract handle, which is used to delete the rule
      AT_CHECK([sed -n 's/.*handle //; T; p' < stdout], [0], [stdout])
-     on_exit "nft \"delete rule ip filter INPUT handle $(cat stdout)\""
+     on_exit "nft \"delete rule $1 filter INPUT handle $(cat stdout)\""
    fi])
 
 dnl Certain Linux distributions, like CentOS, have default iptable rules
 dnl to reject input traffic from bridges such as br-underlay.
 dnl Add a rule to always accept the traffic.
+dnl IPv4 variant of this macro.
 m4_define([XT_ACCEPT],
   [if test $HAVE_NFT = yes; then
-       NFT_ACCEPT([$1])
+       NFT_ACCEPT([ip], [$1])
    else
-       IPTABLES_ACCEPT([$1])
+       IPTABLES_ACCEPT([iptables], [$1])
+   fi])
+
+dnl Certain Linux distributions, like CentOS, have default iptable rules
+dnl to reject input traffic from bridges such as br-underlay.
+dnl Add a rule to always accept the traffic.
+dnl IPv6 variant of this macro.
+m4_define([XT6_ACCEPT],
+  [if test $HAVE_NFT = yes; then
+       NFT_ACCEPT([ip6], [$1])
+   else
+       IPTABLES_ACCEPT([ip6tables], [$1])
    fi])
