@@ -1,5 +1,6 @@
-v3.3.3 - xx xxx xxxx
+v3.3.3 - 15 Nov 2024
 --------------------
+   - Bug fixes
    - DPDK:
      * OVS validated with DPDK 23.11.2.
 
