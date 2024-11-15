@@ -165,9 +165,8 @@
  * separate tries for subsets of rules separated by metadata fields.
  *
  * Prefix tracking is configured via OVSDB "Flow_Table" table,
- * "fieldspec" column.  "fieldspec" is a string map where a "prefix"
- * key tells which fields should be used for prefix tracking.  The
- * value of the "prefix" key is a comma separated list of field names.
+ * "prefixes" column.  "prefixes" is a string set where each element
+ * is a name of a field that should be used for prefix tracking.
  *
  * There is a maximum number of fields that can be enabled for any one
  * flow table.  Currently this limit is 4.
