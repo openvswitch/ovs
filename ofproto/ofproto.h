@@ -562,7 +562,7 @@ struct ofproto_table_settings {
     enum mf_field_id prefix_fields[CLS_MAX_TRIES];
 };
 
-extern const enum mf_field_id default_prefix_fields[2];
+extern const enum mf_field_id default_prefix_fields[4];
 BUILD_ASSERT_DECL(ARRAY_SIZE(default_prefix_fields) <= CLS_MAX_TRIES);
 
 int ofproto_get_n_tables(const struct ofproto *);

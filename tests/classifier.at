@@ -217,6 +217,71 @@ Datapath actions: 3
 OVS_VSWITCHD_STOP(["/'prefixes' with incompatible field: ipv6_label/d"])
 AT_CLEANUP
 
+AT_SETUP([flow classifier - prefix lookup defaults])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 priority=16,tcp,nw_src=10.2.0.0/16,nw_dst=10.1.0.0/255.255.0.0,action=output(3)
+table=0 in_port=1 priority=33,tcp,nw_src=10.2.2.14,nw_dst=10.1.2.15,tp_dst=80,action=drop
+table=0 in_port=1 priority=33,tcp,nw_src=10.2.2.14,nw_dst=10.1.2.15,tp_dst=8080,action=output(2)
+table=0 in_port=1 priority=16,tcp,nw_src=192.168.0.0/15,nw_dst=192.168.0.0/255.255.0.0,action=output(3)
+table=0 in_port=1 priority=0,ip,action=drop
+table=0 in_port=1 priority=16,tcp6,ipv6_src=aaaa:bbbb:c:d:e:f::/96,ipv6_dst=aaaa:bbbb:c:d:a:f:0000:0000/96,action=output(3)
+table=0 in_port=1 priority=33,tcp6,ipv6_src=aaaa:bbbb:c:d:e:f:1:2,ipv6_dst=aaaa:bbbb:c:d:a:f:1:2,tp_dst=80,action=drop
+table=0 in_port=1 priority=33,tcp6,ipv6_src=aaaa:bbbb:c:d:e:f:1:2,ipv6_dst=aaaa:bbbb:c:d:a:f:1:2,tp_dst=8080,action=output(2)
+table=0 in_port=1 priority=16,tcp6,ipv6_src=cccc:dddd:a:b:c:c::/95,ipv6_dst=cccc:dddd:a:b:c:c::/95,action=output(3)
+table=0 in_port=1 priority=0,ip6,action=drop
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl nw_dst and nw_src should be on by default.
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+  'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,
+   nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,
+   tp_src=8,tp_dst=80'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,eth,tcp,in_port=1,nw_src=192.168.0.0/15,nw_dst=192.168.0.0/16,nw_frag=no
+Datapath actions: 3
+])
+
+dnl ipv6_dst and ipv6_src should also be on by default.
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+  'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x86dd,
+   ipv6_src=cccc:dddd:a:b:c:d:7:8,ipv6_dst=cccc:dddd:a:b:c:d:7:9,
+   nw_proto=6,nw_tos=0,nw_ttl=128,
+   tp_src=8,tp_dst=80'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,eth,tcp6,in_port=1,ipv6_src=cccc:dddd:a:b:c:c::/95,ipv6_dst=cccc:dddd:a:b:c:c::/95,nw_frag=no
+Datapath actions: 3
+])
+
+dnl Turn optimizations off and check that we fall back to exact match.
+AT_CHECK([ovs-vsctl set Bridge br0 flow_tables:0=@N1 -- \
+            --id=@N1 create Flow_Table name=t0], [0], [ignore])
+AT_CHECK([ovs-vsctl set Flow_Table t0 prefixes=none])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+  'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,
+   nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,
+   tp_src=8,tp_dst=80'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,eth,tcp,in_port=1,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_frag=no
+Datapath actions: 3
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+  'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x86dd,
+   ipv6_src=cccc:dddd:a:b:c:d:7:8,ipv6_dst=cccc:dddd:a:b:c:d:7:9,
+   nw_proto=6,nw_tos=0,nw_ttl=128,
+   tp_src=8,tp_dst=80'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,eth,tcp6,in_port=1,ipv6_src=cccc:dddd:a:b:c:d:7:8,ipv6_dst=cccc:dddd:a:b:c:d:7:9,nw_frag=no
+Datapath actions: 3
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([flow classifier - ipv6 ND dependency])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2

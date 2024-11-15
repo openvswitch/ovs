@@ -6,8 +6,10 @@ Post-v3.4.0
       $ ovs-vsctl set Bridge br0 flow_tables:123=@N -- \
           --id=@N create Flow_Table \
                     name=table123 prefixes=nw_dst,nw_src,ipv6_dst,ipv6_src
+   - Address prefix tracking is now enabled by default for both IPv4 and IPv6
+     address fields: nw_dst, nw_src, ipv6_dst and ipv6_src.
      This allows to significantly reduce amount of datapath flows generated
-     from mixed IPv4+IPv6 flow tables, if configured.
+     from mixed IPv4+IPv6 flow tables.
    - Userspace datapath:
      * The default zone limit, if set, is now inherited by any zone
        that does not have a specific value defined, rather than being

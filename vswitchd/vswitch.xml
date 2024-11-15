@@ -4865,9 +4865,9 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         </p>
 
         <p>
-          By default, the <code>prefixes=ip_dst,ip_src</code> are used
-          on each flow table.  This instructs the flow classifier to
-          track the IP destination and source addresses used by the
+          By default, the <code>prefixes=ip_dst,ip_src,ipv6_dst,ipv6_src</code>
+          are used on each flow table.  This instructs the flow classifier to
+          track the IPv4 and IPv6 destination and source addresses used by the
           rules in this specific flow table.
         </p>
 
@@ -4890,7 +4890,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
 
           <dt><code>ovs-vsctl set Flow_Table table0 prefixes=ip_dst,ip_src</code></dt>
           <dd>
-            Enables prefix tracking for IP source and destination
+            Enables prefix tracking for IPv4 source and destination
             address fields.
           </dd>
         </dl>

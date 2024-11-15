@@ -79,8 +79,8 @@ COVERAGE_DEFINE(ofproto_update_port);
 
 /* Default fields to use for prefix tries in each flow table, unless something
  * else is configured. */
-const enum mf_field_id default_prefix_fields[2] =
-    { MFF_IPV4_DST, MFF_IPV4_SRC };
+const enum mf_field_id default_prefix_fields[4] =
+    { MFF_IPV4_DST, MFF_IPV4_SRC, MFF_IPV6_DST, MFF_IPV6_SRC };
 
 /* oftable. */
 static void oftable_init(struct oftable *);
