@@ -78,12 +78,66 @@ jobs:
       if: steps.dpdk_cache.outputs.cache-hit != 'true'
       run:  ./.ci/dpdk-build.sh
 
+  build-libreswan:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04]
+    env:
+      dependencies: build-essential fakeroot devscripts equivs
+      libreswan_ver: v5.1
+    name: libreswan
+    outputs:
+      libreswan_key: ${{ steps.gen_libreswan_key.outputs.key }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout Libreswan
+      uses: actions/checkout@v4
+      with:
+        repository: libreswan/libreswan
+        path: libreswan
+        ref: ${{ env.libreswan_ver }}
+
+    - name: generate cache key
+      id: gen_libreswan_key
+      run: echo 'key=libreswan-${{ env.libreswan_ver }}-${{ matrix.runner }}'
+                >> $GITHUB_OUTPUT
+
+    - name: cache
+      id: libreswan_cache
+      uses: actions/cache@v4
+      with:
+        path: libreswan-deb
+        key:  ${{ steps.gen_libreswan_key.outputs.key }}
+
+    - name: update APT cache
+      if: steps.libreswan_cache.outputs.cache-hit != 'true'
+      run: sudo apt update || true
+
+    - name: install common dependencies
+      if: steps.libreswan_cache.outputs.cache-hit != 'true'
+      run: sudo apt install -y ${{ env.dependencies }}
+
+    - name: install build dependencies
+      if: steps.libreswan_cache.outputs.cache-hit != 'true'
+      run: mk-build-deps --install --root-cmd sudo
+                         libreswan/packaging/debian/control
+
+    - name: build
+      if: steps.libreswan_cache.outputs.cache-hit != 'true'
+      run: cd libreswan && make deb
+
+    - name: move the package to cache
+      if: steps.libreswan_cache.outputs.cache-hit != 'true'
+      run: mkdir -p libreswan-deb && mv libreswan_*.deb ./libreswan-deb
+
   build-linux:
-    needs: build-dpdk
+    needs: [build-dpdk, build-libreswan]
     env:
       dependencies: |
         automake libtool gcc bc libjemalloc2 libjemalloc-dev libssl-dev \
-        llvm-dev libnuma-dev selinux-policy-dev libxdp-dev lftp libreswan
+        llvm-dev libnuma-dev selinux-policy-dev libxdp-dev lftp
       CC:          ${{ matrix.compiler }}
       DPDK:        ${{ matrix.dpdk }}
       DPDK_SHARED: ${{ matrix.dpdk_shared }}
@@ -225,17 +279,25 @@ jobs:
       with:
         python-version: ${{ env.python_default }}
 
-    - name: cache
+    - name: DPDK cache
       if:   matrix.dpdk != '' || matrix.dpdk_shared != ''
       uses: actions/cache@v4
       with:
         path: dpdk-dir
         key:  ${{ needs.build-dpdk.outputs.dpdk_key }}
 
+    - name: Libreswan cache
+      uses: actions/cache@v4
+      with:
+        path: libreswan-deb
+        key:  ${{ needs.build-libreswan.outputs.libreswan_key }}
+
     - name: update APT cache
       run:  sudo apt update || true
     - name: install common dependencies
       run:  sudo apt install -y ${{ env.dependencies }}
+    - name: install Libreswan
+      run:  sudo apt install -y ./libreswan-deb/libreswan_*.deb
     - name: install libunbound libunwind python3-unbound
       # GitHub Actions doesn't have 32-bit versions of these libraries.
       if:   matrix.m32 == ''
