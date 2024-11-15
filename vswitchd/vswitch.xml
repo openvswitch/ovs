@@ -4897,7 +4897,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
 
         <p>
           There is a maximum number of fields that can be enabled for any
-          one flow table.  Currently this limit is 3.
+          one flow table.  Currently this limit is 4.
         </p>
       </column>
     </group>

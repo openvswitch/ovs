@@ -1,5 +1,13 @@
 v3.4.2 - xx xxx xxxx
 --------------------
+   - The limit on the number of fields for address prefix tracking in flow
+     tables increased from 3 to 4.  For example, it is now possible to
+     specify both IPv4 and IPv6 address fields at the same time:
+      $ ovs-vsctl set Bridge br0 flow_tables:123=@N -- \
+          --id=@N create Flow_Table \
+                    name=table123 prefixes=nw_dst,nw_src,ipv6_dst,ipv6_src
+     This allows to significantly reduce amount of datapath flows generated
+     from mixed IPv4+IPv6 flow tables, if configured.
 
 v3.4.1 - 15 Nov 2024
 --------------------

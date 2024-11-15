@@ -180,8 +180,8 @@ Datapath actions: drop
 ])
 
 AT_CHECK([ovs-vsctl set Flow_Table t0 prefixes=ipv6_label], [0])
-AT_CHECK([ovs-vsctl set Flow_Table t0 prefixes=nw_dst,nw_src,tun_dst,tun_src], [1], [],
-[ovs-vsctl: nw_dst,nw_src,tun_dst,tun_src: 4 value(s) specified but the maximum number is 3
+AT_CHECK([ovs-vsctl set Flow_Table t0 prefixes=nw_dst,nw_src,tun_dst,tun_src,ipv6_src], [1], [],
+[ovs-vsctl: nw_dst,nw_src,tun_dst,tun_src,ipv6_src: 5 value(s) specified but the maximum number is 4
 ])
 AT_CHECK([ovs-vsctl set Flow_Table t0 prefixes=nw_dst,nw_dst], [1], [],
 [ovs-vsctl: nw_dst,nw_dst: set contains duplicate value
