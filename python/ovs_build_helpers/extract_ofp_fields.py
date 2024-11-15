@@ -290,11 +290,11 @@ def parse_field(mff, comment):
         fatal("%s: unknown access %s" % (mff, d["Access"]))
 
     f["OF1.0"] = d["OF1.0"]
-    if not d["OF1.0"] in (None, "exact match", "CIDR mask"):
+    if d["OF1.0"] not in (None, "exact match", "CIDR mask"):
         fatal("%s: unknown OF1.0 match type %s" % (mff, d["OF1.0"]))
 
     f["OF1.1"] = d["OF1.1"]
-    if not d["OF1.1"] in (None, "exact match", "bitwise mask"):
+    if d["OF1.1"] not in (None, "exact match", "bitwise mask"):
         fatal("%s: unknown OF1.1 match type %s" % (mff, d["OF1.1"]))
 
     f["OXM"] = parse_oxms(d["OXM"], "OXM", f["n_bytes"]) + parse_oxms(
