@@ -462,10 +462,12 @@ struct netdev_dpdk {
 
         /* If true, device was attached by rte_eth_dev_attach(). */
         bool attached;
-        /* If true, rte_eth_dev_start() was successfully called */
+        /* If true, rte_eth_dev_start() was successfully called. */
         bool started;
+        /* If true, this is a port representor. */
+        bool is_representor;
         struct eth_addr hwaddr;
-        /* 2 pad bytes here. */
+        /* 1 pad bytes here. */
         int mtu;
         int socket_id;
         int buf_size;
@@ -1319,6 +1321,8 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
 
     rte_eth_dev_info_get(dev->port_id, &info);
 
+    dev->is_representor = !!(*info.dev_flags & RTE_ETH_DEV_REPRESENTOR);
+
     if (strstr(info.driver_name, "vf") != NULL) {
         VLOG_INFO("Virtual function detected, HW_CRC_STRIP will be enabled");
         dev->hw_ol_features |= NETDEV_RX_HW_CRC_STRIP;
@@ -1956,16 +1960,6 @@ out:
     free(rte_xstats_names);
 }
 
-static bool
-dpdk_port_is_representor(struct netdev_dpdk *dev)
-    OVS_REQUIRES(dev->mutex)
-{
-    struct rte_eth_dev_info dev_info;
-
-    rte_eth_dev_info_get(dev->port_id, &dev_info);
-    return (*dev_info.dev_flags) & RTE_ETH_DEV_REPRESENTOR;
-}
-
 static int
 netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
 {
@@ -2003,7 +1997,7 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
     smap_add(args, "dpdk-lsc-interrupt",
              dev->lsc_interrupt_mode ? "true" : "false");
 
-    if (dpdk_port_is_representor(dev)) {
+    if (dev->is_representor) {
         smap_add_format(args, "dpdk-vf-mac", ETH_ADDR_FMT,
                         ETH_ADDR_ARGS(dev->requested_hwaddr));
     }
@@ -2374,7 +2368,7 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
     if (vf_mac) {
         struct eth_addr mac;
 
-        if (!dpdk_port_is_representor(dev)) {
+        if (!dev->is_representor) {
             VLOG_WARN("'%s' is trying to set the VF MAC '%s' "
                       "but 'options:dpdk-vf-mac' is only supported for "
                       "VF representors.",
@@ -4420,7 +4414,6 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     uint64_t rx_steer_flags;
     const char *bus_info;
     uint32_t link_speed;
-    uint32_t dev_flags;
     int n_rxq;
 
     if (!rte_eth_dev_is_valid_port(dev->port_id)) {
@@ -4431,7 +4424,6 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     ovs_mutex_lock(&dev->mutex);
     rte_eth_dev_info_get(dev->port_id, &dev_info);
     link_speed = dev->link.link_speed;
-    dev_flags = *dev_info.dev_flags;
     bus_info = rte_dev_bus_info(dev_info.device);
     rx_steer_flags = dev->rx_steer_flags;
     rx_steer_flows_num = dev->rx_steer_flows_num;
@@ -4480,7 +4472,7 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     smap_add(args, "link_speed",
              netdev_dpdk_link_speed_to_str__(link_speed));
 
-    if (dev_flags & RTE_ETH_DEV_REPRESENTOR) {
+    if (dev->is_representor) {
         smap_add_format(args, "dpdk-vf-mac", ETH_ADDR_FMT,
                         ETH_ADDR_ARGS(dev->hwaddr));
     }
