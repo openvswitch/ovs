@@ -1093,15 +1093,14 @@ netdev_dpdk_update_netdev_flags(struct netdev_dpdk *dev)
 }
 
 static int
-dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
+dpdk_eth_dev_port_config(struct netdev_dpdk *dev,
+                         const struct rte_eth_dev_info *info,
+                         int n_rxq, int n_txq)
 {
+    struct rte_eth_conf conf = port_conf;
+    uint16_t conf_mtu;
     int diag = 0;
     int i;
-    struct rte_eth_conf conf = port_conf;
-    struct rte_eth_dev_info info;
-    uint16_t conf_mtu;
-
-    rte_eth_dev_info_get(dev->port_id, &info);
 
     /* As of DPDK 17.11.1 a few PMDs require to explicitly enable
      * scatter to support jumbo RX.
@@ -1120,7 +1119,7 @@ dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
     }
 
     if (!(dev->hw_ol_features & NETDEV_RX_HW_CRC_STRIP)
-        && info.rx_offload_capa & RTE_ETH_RX_OFFLOAD_KEEP_CRC) {
+        && info->rx_offload_capa & RTE_ETH_RX_OFFLOAD_KEEP_CRC) {
         conf.rxmode.offloads |= RTE_ETH_RX_OFFLOAD_KEEP_CRC;
     }
 
@@ -1162,7 +1161,7 @@ dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
 
     /* Limit configured rss hash functions to only those supported
      * by the eth device. */
-    conf.rx_adv_conf.rss_conf.rss_hf &= info.flow_type_rss_offloads;
+    conf.rx_adv_conf.rss_conf.rss_hf &= info->flow_type_rss_offloads;
     if (conf.rx_adv_conf.rss_conf.rss_hf == 0) {
         conf.rxmode.mq_mode = RTE_ETH_MQ_RX_NONE;
     } else {
@@ -1429,7 +1428,7 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
     n_rxq = MIN(info.max_rx_queues, dev->up.n_rxq);
     n_txq = MIN(info.max_tx_queues, dev->up.n_txq);
 
-    diag = dpdk_eth_dev_port_config(dev, n_rxq, n_txq);
+    diag = dpdk_eth_dev_port_config(dev, &info, n_rxq, n_txq);
     if (diag) {
         VLOG_ERR("Interface %s(rxq:%d txq:%d lsc interrupt mode:%s) "
                  "configure error: %s",
