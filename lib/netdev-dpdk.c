@@ -1012,7 +1012,12 @@ check_link_status(struct netdev_dpdk *dev)
 {
     struct rte_eth_link link;
 
-    rte_eth_link_get_nowait(dev->port_id, &link);
+    if (rte_eth_link_get_nowait(dev->port_id, &link) < 0) {
+        VLOG_DBG_RL(&rl,
+                    "Failed to retrieve link status for port "DPDK_PORT_ID_FMT,
+                    dev->port_id);
+        return;
+    }
 
     if (dev->link.link_status != link.link_status) {
         netdev_change_seq_changed(&dev->up);
@@ -1319,7 +1324,12 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
         dpdk_eth_dev_init_rx_metadata(dev);
     }
 
-    rte_eth_dev_info_get(dev->port_id, &info);
+    diag = rte_eth_dev_info_get(dev->port_id, &info);
+    if (diag < 0) {
+        VLOG_ERR("Interface %s rte_eth_dev_info_get error: %s",
+                 dev->up.name, rte_strerror(-diag));
+        return -diag;
+    }
 
     dev->is_representor = !!(*info.dev_flags & RTE_ETH_DEV_REPRESENTOR);
 
@@ -1461,7 +1471,9 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
                  dev->port_id, ETH_ADDR_BYTES_ARGS(eth_addr.addr_bytes));
 
     memcpy(dev->hwaddr.ea, eth_addr.addr_bytes, ETH_ADDR_LEN);
-    rte_eth_link_get_nowait(dev->port_id, &dev->link);
+    if (rte_eth_link_get_nowait(dev->port_id, &dev->link) < 0) {
+        memset(&dev->link, 0, sizeof dev->link);
+    }
 
     mbp_priv = rte_mempool_get_priv(dev->dpdk_mp->mp);
     dev->buf_size = mbp_priv->mbuf_data_room_size - RTE_PKTMBUF_HEADROOM;
@@ -1745,6 +1757,7 @@ netdev_dpdk_destruct(struct netdev *netdev)
         bool dpdk_resources_still_used = false;
         struct rte_eth_dev_info dev_info;
         dpdk_port_t sibling_port_id;
+        int diag;
 
         /* Check if this netdev has siblings (i.e. shares DPDK resources) among
          * other OVS netdevs. */
@@ -1769,7 +1782,7 @@ netdev_dpdk_destruct(struct netdev *netdev)
         }
 
         /* Retrieve eth device data before closing it. */
-        rte_eth_dev_info_get(dev->port_id, &dev_info);
+        diag = rte_eth_dev_info_get(dev->port_id, &dev_info);
 
         /* Remove the eth device. */
         rte_eth_dev_close(dev->port_id);
@@ -1778,11 +1791,13 @@ netdev_dpdk_destruct(struct netdev *netdev)
          * Note: any remaining eth devices associated to this rte device are
          * closed by DPDK ethdev layer. */
         if (!dpdk_resources_still_used) {
-            int ret = rte_dev_remove(dev_info.device);
+            if (!diag) {
+                diag = rte_dev_remove(dev_info.device);
+            }
 
-            if (ret < 0) {
+            if (diag < 0) {
                 VLOG_ERR("Device '%s' can not be detached: %s.",
-                         dev->devargs, rte_strerror(-ret));
+                         dev->devargs, rte_strerror(-diag));
             } else {
                 /* Device was closed and detached. */
                 VLOG_INFO("Device '%s' has been removed and detached",
@@ -4043,14 +4058,20 @@ netdev_dpdk_get_speed(const struct netdev *netdev, uint32_t *current,
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_eth_dev_info dev_info;
     struct rte_eth_link link;
+    int diag;
 
     ovs_mutex_lock(&dev->mutex);
     link = dev->link;
-    rte_eth_dev_info_get(dev->port_id, &dev_info);
+    diag = rte_eth_dev_info_get(dev->port_id, &dev_info);
     ovs_mutex_unlock(&dev->mutex);
 
     *current = link.link_speed != RTE_ETH_SPEED_NUM_UNKNOWN
                ? link.link_speed : 0;
+
+    if (diag < 0) {
+        *max = 0;
+        goto out;
+    }
 
     if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_200G) {
         *max = RTE_ETH_SPEED_NUM_200G;
@@ -4084,6 +4105,7 @@ netdev_dpdk_get_speed(const struct netdev *netdev, uint32_t *current,
         *max = 0;
     }
 
+out:
     return 0;
 }
 
@@ -4412,9 +4434,9 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     struct rte_eth_dev_info dev_info;
     size_t rx_steer_flows_num;
     uint64_t rx_steer_flags;
-    const char *bus_info;
     uint32_t link_speed;
     int n_rxq;
+    int diag;
 
     if (!rte_eth_dev_is_valid_port(dev->port_id)) {
         return ENODEV;
@@ -4422,9 +4444,8 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
 
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
-    rte_eth_dev_info_get(dev->port_id, &dev_info);
+    diag = rte_eth_dev_info_get(dev->port_id, &dev_info);
     link_speed = dev->link.link_speed;
-    bus_info = rte_dev_bus_info(dev_info.device);
     rx_steer_flags = dev->rx_steer_flags;
     rx_steer_flows_num = dev->rx_steer_flows_num;
     n_rxq = netdev->n_rxq;
@@ -4434,16 +4455,20 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     smap_add_format(args, "port_no", DPDK_PORT_ID_FMT, dev->port_id);
     smap_add_format(args, "numa_id", "%d",
                            rte_eth_dev_socket_id(dev->port_id));
-    smap_add_format(args, "driver_name", "%s", dev_info.driver_name);
-    smap_add_format(args, "min_rx_bufsize", "%u", dev_info.min_rx_bufsize);
+    if (!diag) {
+        smap_add_format(args, "driver_name", "%s", dev_info.driver_name);
+        smap_add_format(args, "min_rx_bufsize", "%u", dev_info.min_rx_bufsize);
+    }
     smap_add_format(args, "max_rx_pktlen", "%u", dev->max_packet_len);
-    smap_add_format(args, "max_rx_queues", "%u", dev_info.max_rx_queues);
-    smap_add_format(args, "max_tx_queues", "%u", dev_info.max_tx_queues);
-    smap_add_format(args, "max_mac_addrs", "%u", dev_info.max_mac_addrs);
-    smap_add_format(args, "max_hash_mac_addrs", "%u",
-                           dev_info.max_hash_mac_addrs);
-    smap_add_format(args, "max_vfs", "%u", dev_info.max_vfs);
-    smap_add_format(args, "max_vmdq_pools", "%u", dev_info.max_vmdq_pools);
+    if (!diag) {
+        smap_add_format(args, "max_rx_queues", "%u", dev_info.max_rx_queues);
+        smap_add_format(args, "max_tx_queues", "%u", dev_info.max_tx_queues);
+        smap_add_format(args, "max_mac_addrs", "%u", dev_info.max_mac_addrs);
+        smap_add_format(args, "max_hash_mac_addrs", "%u",
+                        dev_info.max_hash_mac_addrs);
+        smap_add_format(args, "max_vfs", "%u", dev_info.max_vfs);
+        smap_add_format(args, "max_vmdq_pools", "%u", dev_info.max_vmdq_pools);
+    }
 
     smap_add_format(args, "n_rxq", "%d", netdev->n_rxq);
     smap_add_format(args, "n_txq", "%d", netdev->n_txq);
@@ -4458,11 +4483,14 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
 
     smap_add_format(args, "if_type", "%"PRIu32, IF_TYPE_ETHERNETCSMACD);
     smap_add_format(args, "if_descr", "%s %s", rte_version(),
-                                               dev_info.driver_name);
-    smap_add_format(args, "bus_info", "bus_name=%s%s%s",
-                    rte_bus_name(rte_dev_bus(dev_info.device)),
-                    bus_info != NULL ? ", " : "",
-                    bus_info != NULL ? bus_info : "");
+                    diag < 0 ? "<unknown>" : dev_info.driver_name);
+    if (!diag) {
+        const char *bus_info = rte_dev_bus_info(dev_info.device);
+        smap_add_format(args, "bus_info", "bus_name=%s%s%s",
+                        rte_bus_name(rte_dev_bus(dev_info.device)),
+                        bus_info != NULL ? ", " : "",
+                        bus_info != NULL ? bus_info : "");
+    }
 
     /* Not all link speeds are defined in the OpenFlow specs e.g. 25 Gbps.
      * In that case the speed will not be reported as part of the usual
@@ -4566,6 +4594,7 @@ netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
     dpdk_port_t port_id;
     bool used = false;
     char *response;
+    int diag;
 
     ovs_mutex_lock(&dpdk_mutex);
 
@@ -4601,9 +4630,9 @@ netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
     ds_destroy(&used_interfaces);
 
-    rte_eth_dev_info_get(port_id, &dev_info);
+    diag = rte_eth_dev_info_get(port_id, &dev_info);
     rte_eth_dev_close(port_id);
-    if (rte_dev_remove(dev_info.device) < 0) {
+    if (diag < 0 || rte_dev_remove(dev_info.device) < 0) {
         response = xasprintf("Device '%s' can not be detached", argv[1]);
         goto error;
     }
@@ -5946,7 +5975,12 @@ dpdk_rx_steer_rss_configure(struct netdev_dpdk *dev, int rss_n_rxq)
     struct rte_eth_dev_info info;
     int err;
 
-    rte_eth_dev_info_get(dev->port_id, &info);
+    err = rte_eth_dev_info_get(dev->port_id, &info);
+    if (err < 0) {
+        VLOG_WARN("%s: failed to query RSS info: %s",
+                  netdev_get_name(&dev->up), rte_strerror(-err));
+        goto error;
+    }
 
     if (info.reta_size % rss_n_rxq != 0 &&
         info.reta_size < RTE_ETH_RSS_RETA_SIZE_128) {
@@ -5992,6 +6026,7 @@ dpdk_rx_steer_rss_configure(struct netdev_dpdk *dev, int rss_n_rxq)
                   netdev_get_name(&dev->up), err);
     }
 
+error:
     return err;
 }
 
