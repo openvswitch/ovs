@@ -6158,6 +6158,9 @@ retry:
     }
 
     err = dpdk_eth_dev_init(dev);
+    if (err) {
+        goto out;
+    }
     netdev_dpdk_update_netdev_flags(dev);
 
     /* If both requested and actual hwaddr were previously
