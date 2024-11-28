@@ -206,7 +206,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     ctl_add_cmd_options(&options, &n_options, &allocated_options, OPT_LOCAL);
 
     for (;;) {
-        int idx;
+        int idx = INT_MAX;
         int c;
 
         c = getopt_long(argc, argv, short_options, options, &idx);
