@@ -1773,6 +1773,7 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     ukey->state_thread = ovsthread_id_self();
     ukey->state_where = OVS_SOURCE_LOCATOR;
     ukey->created = ukey->flow_time = time_msec();
+    ukey->missed_dumps = 0;
     memset(&ukey->stats, 0, sizeof ukey->stats);
     ukey->stats.used = used;
     ukey->dp_layer = NULL;
