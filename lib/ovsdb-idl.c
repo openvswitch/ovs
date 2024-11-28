@@ -720,7 +720,9 @@ ovsdb_idl_check_consistency(const struct ovsdb_idl *idl)
                 size_t n_columns = shash_count(&row->table->columns);
                 for (size_t j = 0; j < n_columns; j++) {
                     const struct ovsdb_type *type = &class->columns[j].type;
-                    const struct ovsdb_datum *datum = &row->new_datum[j];
+                    const struct ovsdb_datum *datum;
+
+                    datum = ovsdb_idl_read(row, &class->columns[j]);
                     add_row_references(&type->key,
                                        datum->keys, datum->n, &row->uuid,
                                        &dsts, &n_dsts, &allocated_dsts);
