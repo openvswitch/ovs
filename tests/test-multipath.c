@@ -63,6 +63,7 @@ test_multipath_main(int argc, char *argv[])
             struct flow flow;
 
             flow_random_hash_fields(&flow);
+            flow_wildcards_init_catchall(&wc);
 
             mp.max_link = n - 1;
             multipath_execute(&mp, &flow, &wc);
