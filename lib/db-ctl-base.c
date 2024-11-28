@@ -831,14 +831,10 @@ check_condition(const struct ovsdb_idl_table_class *table,
         } else {
             struct ovsdb_datum a;
 
+            ovsdb_datum_init_empty(&a);
             if (found) {
                 a.n = 1;
                 a.keys = &have_datum->values[idx];
-                a.values = NULL;
-            } else {
-                a.n = 0;
-                a.keys = NULL;
-                a.values = NULL;
             }
 
             retval = evaluate_relop(&a, &b, &type, operator);
@@ -1160,8 +1156,8 @@ list_record(const struct ovsdb_idl_row *row,
 
             atom.uuid = row->uuid;
 
+            ovsdb_datum_init_empty(&datum);
             datum.keys = &atom;
-            datum.values = NULL;
             datum.n = 1;
 
             cell->json = ovsdb_datum_to_json(&datum, &ovsdb_type_uuid);
