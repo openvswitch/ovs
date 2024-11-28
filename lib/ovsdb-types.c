@@ -145,6 +145,7 @@ ovsdb_base_type_init(struct ovsdb_base_type *base, enum ovsdb_atomic_type type)
     case OVSDB_TYPE_UUID:
         base->uuid.refTableName = NULL;
         base->uuid.refTable = NULL;
+        base->uuid.refType = OVSDB_REF_STRONG;
         break;
 
     case OVSDB_N_TYPES:
