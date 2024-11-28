@@ -114,8 +114,8 @@ stream_replay_open_wfd(struct stream *s, int open_result, const char *name)
     ovs_replay_unlock();
 
     if (ovs_replay_write(f, NULL, -open_result, true)) {
-        VLOG_ERR_RL(&rl, "%s: failed to write 'open' failure: %d",
-                    s->name, open_result);
+        VLOG_ERR_RL(&rl, "%s: failed to write 'open' result: %d",
+                    name, open_result);
     }
     if (open_result) {
         /* We recorded failure to open the stream. */
@@ -343,7 +343,7 @@ pstream_replay_open_wfd(struct pstream *ps, int listen_result,
 
     if (ovs_replay_write(f, NULL, -listen_result, true)) {
         VLOG_ERR_RL(&rl, "%s: failed to write 'listen' result: %d",
-                    ps->name, listen_result);
+                    name, listen_result);
     }
 
     if (listen_result) {

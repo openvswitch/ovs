@@ -216,7 +216,7 @@ int
 stream_open(const char *name, struct stream **streamp, uint8_t dscp)
 {
     const struct stream_class *class;
-    struct stream *stream;
+    struct stream *stream = NULL;
     char *suffix_copy;
     int error;
 
@@ -547,7 +547,7 @@ int
 pstream_open(const char *name, struct pstream **pstreamp, uint8_t dscp)
 {
     const struct pstream_class *class;
-    struct pstream *pstream;
+    struct pstream *pstream = NULL;
     char *suffix_copy;
     int error;
 
