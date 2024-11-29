@@ -669,6 +669,7 @@ netdev_bsd_rxq_drain(struct netdev_rxq *rxq_)
     struct ifreq ifr;
     struct netdev_rxq_bsd *rxq = netdev_rxq_bsd_cast(rxq_);
 
+    memset(&ifr, 0, sizeof ifr);
     strcpy(ifr.ifr_name, netdev_get_kernel_name(netdev_rxq_get_netdev(rxq_)));
     if (ioctl(rxq->fd, BIOCFLUSH, &ifr) == -1) {
         VLOG_DBG_RL(&rl, "%s: ioctl(BIOCFLUSH) failed: %s",
@@ -828,6 +829,7 @@ netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup)
     if (!(netdev->cache_valid & VALID_MTU)) {
         struct ifreq ifr;
 
+        memset(&ifr, 0, sizeof ifr);
         error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
                                     SIOCGIFMTU, "SIOCGIFMTU");
         if (!error) {
@@ -1440,6 +1442,8 @@ do_set_addr(struct netdev *netdev,
             struct in_addr addr)
 {
     struct ifreq ifr;
+
+    memset(&ifr, 0, sizeof ifr);
     make_in4_sockaddr(&ifr.ifr_addr, addr);
     return af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev), &ifr, ioctl_nr,
                                ioctl_name);
@@ -1547,6 +1551,7 @@ destroy_tap(int fd, const char *name)
     struct ifreq ifr;
 
     close(fd);
+    memset(&ifr, 0, sizeof ifr);
     strcpy(ifr.ifr_name, name);
     /* XXX What to do if this call fails? */
     af_inet_ioctl(SIOCIFDESTROY, &ifr);
@@ -1558,6 +1563,7 @@ get_flags(const struct netdev *netdev, int *flags)
     struct ifreq ifr;
     int error;
 
+    memset(&ifr, 0, sizeof ifr);
     error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev), &ifr,
                                 SIOCGIFFLAGS, "SIOCGIFFLAGS");
 
@@ -1571,6 +1577,7 @@ set_flags(const char *name, int flags)
 {
     struct ifreq ifr;
 
+    memset(&ifr, 0, sizeof ifr);
     ifr_set_flags(&ifr, flags);
 
     return af_inet_ifreq_ioctl(name, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
