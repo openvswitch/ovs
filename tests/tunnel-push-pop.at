@@ -774,6 +774,16 @@ dnl Sending again to exercise the non-miss upcall path.
 AT_CHECK([ovs-appctl netdev-dummy/receive int-br "${packet}4"])
 OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep -E "${encap}${packet}4" | wc -l` -ge 2])
 
+dnl Send two more packets at the same time to make sure they are distinct
+dnl memory buffers.
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br "${packet}4" "${packet}4"])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep -E "${encap}${packet}4" | wc -l` -ge 4])
+
+dnl Make sure all the packets are the same, i.e. have the same source port.
+AT_CHECK([ovs-pcap p0.pcap | sed 's/.$//' | sort | uniq \
+            | grep -E -c "${encap}${packet}"], [0], [1
+])
+
 dnl Output to tunnel from the controller.
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out int-br CONTROLLER "debug_slow,output:2" "${packet}5"])
 OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep -E "${encap}${packet}5" | wc -l` -ge 1])
