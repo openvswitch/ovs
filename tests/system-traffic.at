@@ -5499,7 +5499,7 @@ OVS_START_L7([at_ns0], [http6])
 OVS_START_L7([at_ns1], [http6])
 
 dnl HTTP requests from ns0->ns1 should work fine.
-NS_CHECK_EXEC([at_ns0], OVS_GET_HTTP([http://[[fc00::2]]]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_HTTP([[http://[[fc00::2]]]]), [0], [ignore], [ignore])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
 tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
@@ -5507,7 +5507,7 @@ tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc
 
 dnl HTTP requests from ns1->ns0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NS_CHECK_EXEC([at_ns1], OVS_GET_HTTP([http://[[fc00::1]]]), [28], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns1], OVS_GET_HTTP([[http://[[fc00::1]]]]), [28], [ignore], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -6056,7 +6056,7 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
 ])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC[at_ns0], (OVS_GET_FTP_ACTIVE([10.1.1.2]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2]), [0], [ignore], [ignore])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 ])
@@ -6293,7 +6293,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([[[fc00::2]]], [--ipv6]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([[[[fc00::2]]]], [--ipv6]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -6352,7 +6352,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP passive requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([[[fc00::2]]]), [--ipv6]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([[[[fc00::2]]]], [--ipv6]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -7804,12 +7804,12 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 dnl HTTP requests from ns0->ns1 should work fine.
 OVS_START_L7([at_ns1], [http6])
 
-NS_CHECK_EXEC([at_ns0], OVS_GET_HTTP([http://[[fc00::2]]]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_HTTP([[http://[[fc00::2]]]]), [0], [ignore], [ignore])
 
 dnl HTTP requests from ns1->ns0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
 OVS_START_L7([at_ns0], [http6])
-NS_CHECK_EXEC([at_ns1], OVS_GET_HTTP([http://[[fc00::1]]]), [28], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns1], OVS_GET_HTTP([[http://[[fc00::1]]]]), [28], [ignore], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -7848,7 +7848,7 @@ NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::240 | FORMAT_PING], [0]
 
 dnl Should work with the virtual IP address through NAT
 OVS_START_L7([at_ns1], [http6])
-NS_CHECK_EXEC([at_ns0], OVS_GET_HTTP([http://[[fc00::240]]]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_HTTP([[http://[[fc00::240]]]]), [0], [ignore], [ignore])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::1)], [0], [dnl
 icmpv6,orig=(src=fc00::1,dst=fc00::240,id=<cleared>,type=128,code=0),reply=(src=fc00::2,dst=fc00::1,id=<cleared>,type=129,code=0),zone=1
@@ -7998,7 +7998,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([[[fc00::2]]], [--ipv6]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([[[[fc00::2]]]], [--ipv6]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -8059,7 +8059,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([[[fc00::2]]], [--ipv6]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([[[[fc00::2]]]], [--ipv6]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -8119,7 +8119,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON3 $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([[[fc00::2]]], [--ipv6]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([[[[fc00::2]]]], [--ipv6]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
