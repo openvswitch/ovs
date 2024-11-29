@@ -61,6 +61,27 @@ static struct vlog_rate_limit err_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 uint16_t tnl_udp_port_min = 32768;
 uint16_t tnl_udp_port_max = 61000;
 
+ovs_be16
+netdev_tnl_get_src_port(struct dp_packet *packet)
+{
+    uint32_t hash;
+
+    if (OVS_LIKELY(dp_packet_rss_valid(packet))) {
+        hash = dp_packet_get_rss_hash(packet);
+    } else {
+        struct flow flow;
+
+        flow_extract(packet, &flow);
+        hash = flow_hash_5tuple(&flow, 0);
+
+        dp_packet_set_rss_hash(packet, hash);
+    }
+
+    hash = ((uint64_t) hash * (tnl_udp_port_max - tnl_udp_port_min)) >> 32;
+
+    return htons(hash + tnl_udp_port_min);
+}
+
 void *
 netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
                   unsigned int *hlen)
@@ -276,14 +297,18 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
     uint16_t l3_ofs = packet->l3_ofs;
     uint16_t l4_ofs = packet->l4_ofs;
     struct udp_header *udp;
+    ovs_be16 udp_src;
     int ip_tot_size;
+
+    /* We may need to re-calculate the hash and this has to be done before
+     * modifying the packet. */
+    udp_src = netdev_tnl_get_src_port(packet);
 
     dp_packet_tnl_ol_process(packet, data);
     udp = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
                                     &ip_tot_size, 0);
 
-    /* set udp src port */
-    udp->udp_src = netdev_tnl_get_src_port(packet);
+    udp->udp_src = udp_src;
     udp->udp_len = htons(ip_tot_size);
 
     if (udp->udp_csum) {
@@ -831,13 +856,18 @@ netdev_gtpu_push_header(const struct netdev *netdev,
     struct netdev_vport *dev = netdev_vport_cast(netdev);
     struct udp_header *udp;
     struct gtpuhdr *gtpuh;
+    ovs_be16 udp_src;
     int ip_tot_size;
     unsigned int payload_len;
+
+    /* We may need to re-calculate the hash and this has to be done before
+     * modifying the packet. */
+    udp_src = netdev_tnl_get_src_port(packet);
 
     payload_len = dp_packet_size(packet);
     udp = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
                                     &ip_tot_size, 0);
-    udp->udp_src = netdev_tnl_get_src_port(packet);
+    udp->udp_src = udp_src;
     udp->udp_len = htons(ip_tot_size);
     /* Postpone checksum to the egress netdev. */
     dp_packet_hwol_set_csum_udp(packet);
