@@ -1028,6 +1028,8 @@ netdev_linux_construct_tap(struct netdev *netdev_)
         ovsthread_once_done(&once);
     }
 
+    memset(&ifr, 0, sizeof ifr);
+
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
     if (tap_supports_vnet_hdr) {
         ifr.ifr_flags |= IFF_VNET_HDR;
@@ -1582,8 +1584,11 @@ netdev_linux_rxq_drain(struct netdev_rxq *rxq_)
     struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     if (rx->is_tap) {
         struct ifreq ifr;
-        int error = af_inet_ifreq_ioctl(netdev_rxq_get_name(rxq_), &ifr,
-                                        SIOCGIFTXQLEN, "SIOCGIFTXQLEN");
+        int error;
+
+        memset(&ifr, 0, sizeof ifr);
+        error = af_inet_ifreq_ioctl(netdev_rxq_get_name(rxq_), &ifr,
+                                    SIOCGIFTXQLEN, "SIOCGIFTXQLEN");
         if (error) {
             return error;
         }
@@ -1939,6 +1944,7 @@ netdev_linux_get_mtu__(struct netdev_linux *netdev, int *mtup)
         /* Fall back to ioctl if netlink fails */
         struct ifreq ifr;
 
+        memset(&ifr, 0, sizeof ifr);
         netdev->netdev_mtu_error = af_inet_ifreq_ioctl(
             netdev_get_name(&netdev->up), &ifr, SIOCGIFMTU, "SIOCGIFMTU");
         netdev->mtu = ifr.ifr_mtu;
@@ -2001,7 +2007,10 @@ netdev_linux_set_mtu(struct netdev *netdev_, int mtu)
         }
         netdev->cache_valid &= ~VALID_MTU;
     }
+
+    memset(&ifr, 0, sizeof ifr);
     ifr.ifr_mtu = mtu;
+
     error = af_inet_ifreq_ioctl(netdev_get_name(netdev_), &ifr,
                                 SIOCSIFMTU, "SIOCSIFMTU");
     if (!error || error == ENODEV) {
@@ -3570,6 +3579,7 @@ do_set_addr(struct netdev *netdev,
 {
     struct ifreq ifr;
 
+    memset(&ifr, 0, sizeof ifr);
     make_in4_sockaddr(&ifr.ifr_addr, addr);
     return af_inet_ifreq_ioctl(netdev_get_name(netdev), &ifr, ioctl_nr,
                                ioctl_name);
@@ -6767,6 +6777,7 @@ get_flags(const struct netdev *dev, unsigned int *flags)
     struct ifreq ifr;
     int error;
 
+    memset(&ifr, 0, sizeof ifr);
     *flags = 0;
     error = af_inet_ifreq_ioctl(dev->name, &ifr, SIOCGIFFLAGS, "SIOCGIFFLAGS");
     if (!error) {
@@ -6780,6 +6791,7 @@ set_flags(const char *name, unsigned int flags)
 {
     struct ifreq ifr;
 
+    memset(&ifr, 0, sizeof ifr);
     ifr.ifr_flags = flags;
     return af_inet_ifreq_ioctl(name, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
 }
@@ -6790,6 +6802,7 @@ linux_get_ifindex(const char *netdev_name)
     struct ifreq ifr;
     int error;
 
+    memset(&ifr, 0, sizeof ifr);
     ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     COVERAGE_INC(netdev_get_ifindex);
 
