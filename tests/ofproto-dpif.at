@@ -8658,7 +8658,7 @@ dnl Remove the flow which contains sample action.
 AT_CHECK([ovs-ofctl del-flows br0 in_port=3], [0], [ignore])
 AT_CHECK([ovs-vsctl destroy Flow_Sample_Collector_Set 1], [0], [ignore])
 
-OVS_VSWITCHD_STOP
+OVS_VSWITCHD_STOP(["/'stt' port type is deprecated/d"])
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - Flow IPFIX sanity check - from field])

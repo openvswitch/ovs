@@ -2844,20 +2844,33 @@
 
           <dt><code>stt</code></dt>
           <dd>
-            The Stateless TCP Tunnel (STT) is particularly useful when tunnel
-            endpoints are in end-systems, as it utilizes the capabilities of
-            standard network interface cards to improve performance.  STT utilizes
-            a TCP-like header inside the IP header. It is stateless, i.e., there is
-            no TCP connection state of any kind associated with the tunnel.  The
-            TCP-like header is used to leverage the capabilities of existing
-            network interface cards, but should not be interpreted as implying
-            any sort of connection state between endpoints.
-            Since the STT protocol does not engage in the usual TCP 3-way handshake,
-            so it will have difficulty traversing stateful firewalls.
-            The protocol is documented at
-            https://tools.ietf.org/html/draft-davie-stt
+            <p>
+              This port type is deprecated.
+            </p>
 
-            All traffic uses a default destination port of 7471.
+            <p>
+              The Stateless TCP Tunnel (STT) is particularly useful when tunnel
+              endpoints are in end-systems, as it utilizes the capabilities of
+              standard network interface cards to improve performance.
+              STT utilizes a TCP-like header inside the IP header.  It is
+              stateless, i.e., there is no TCP connection state of any kind
+              associated with the tunnel.  The TCP-like header is used to
+              leverage the capabilities of existing network interface cards,
+              but should not be interpreted as implying any sort of connection
+              state between endpoints.
+            </p>
+
+            <p>
+              Since the STT protocol does not engage in the usual TCP 3-way
+              handshake, so it will have difficulty traversing stateful
+              firewalls.
+            </p>
+
+            <p>
+              The protocol is documented at
+              <code>https://tools.ietf.org/html/draft-davie-stt</code>.
+              All traffic uses a default destination port of 7471.
+            </p>
           </dd>
 
           <dt><code>patch</code></dt>

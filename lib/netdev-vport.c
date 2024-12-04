@@ -229,6 +229,7 @@ netdev_vport_construct(struct netdev *netdev_)
         VLOG_WARN("%s: 'lisp' port type is deprecated.", name);
     } else if (!strcmp(type, "stt")) {
         tnl_cfg->dst_port = port ? htons(port) : htons(STT_DST_PORT);
+        VLOG_WARN("%s: 'stt' port type is deprecated.", name);
     } else if (!strcmp(type, "gtpu")) {
         tnl_cfg->dst_port = port ? htons(port) : htons(GTPU_DST_PORT);
     } else if (!strcmp(type, "bareudp")) {

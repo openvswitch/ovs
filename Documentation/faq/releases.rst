@@ -142,7 +142,7 @@ Q: Are all features available with all datapaths?
     Conntrack NAT6                  4.6            2.6          2.8      3.0
     Conntrack Helper Persist.       YES            YES          3.3      NO
     Tunnel - LISP (deprecated)      NO             2.11         NO       NO
-    Tunnel - STT                    NO             2.4          NO       YES
+    Tunnel - STT  (deprecated)      NO             2.4          NO       YES
     Tunnel - GRE                    3.11           1.0          2.4      YES
     Tunnel - VXLAN                  3.12           1.10         2.4      YES
     Tunnel - Geneve                 3.18           2.4          2.4      YES
