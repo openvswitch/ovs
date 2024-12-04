@@ -581,7 +581,11 @@ parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
 
     switch (command) {
     case -1:
+        /* This is a special case for requesting meters, which has no
+         * specific command assigned.  To avoid compiler warnings, set
+         * the command to UINT16_MAX. */
         fields = F_METER;
+        command = UINT16_MAX;
         break;
 
     case OFPMC13_ADD:
