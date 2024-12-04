@@ -2148,10 +2148,10 @@ oxm_bitmap_from_mf_bitmap(const struct mf_bitmap *fields,
                           enum ofp_version version)
 {
     uint64_t oxm_bitmap = 0;
-    int i;
+    enum mf_field_id id;
 
-    BITMAP_FOR_EACH_1 (i, MFF_N_IDS, fields->bm) {
-        uint64_t oxm = mf_oxm_header(i, version);
+    BITMAP_FOR_EACH_1 (id, MFF_N_IDS, fields->bm) {
+        uint64_t oxm = mf_oxm_header(id, version);
         uint32_t class = nxm_class(oxm);
         int field = nxm_field(oxm);
 

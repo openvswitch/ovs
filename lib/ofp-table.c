@@ -604,8 +604,8 @@ put_fields_property(struct ofpbuf *reply,
                     enum ofp13_table_feature_prop_type property,
                     enum ofp_version version)
 {
+    enum mf_field_id field;
     size_t start_ofs;
-    int field;
 
     start_ofs = ofpprop_start(reply, property);
     BITMAP_FOR_EACH_1 (field, MFF_N_IDS, fields->bm) {
