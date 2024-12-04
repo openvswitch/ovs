@@ -25,6 +25,9 @@ Post-v3.4.0
        formats.
    - DPDK:
      * OVS validated with DPDK 23.11.2.
+   - Tunnels:
+     * LISP tunnel port type is deprecated and will be removed in the next
+       release.
 
 
 v3.4.0 - 15 Aug 2024

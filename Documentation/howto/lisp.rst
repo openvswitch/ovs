@@ -25,6 +25,10 @@
 Using LISP tunneling
 ====================
 
+.. warning::
+
+   LISP tunnel port type is deprecated and will be removed in OVS 3.6.
+
 LISP is a layer 3 tunneling mechanism, meaning that encapsulated packets do not
 carry Ethernet headers, and ARP requests shouldn't be sent over the tunnel.
 Because of this, there are some additional steps required for setting up LISP

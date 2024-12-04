@@ -141,7 +141,7 @@ Q: Are all features available with all datapaths?
     Conntrack NAT                   4.6            2.6          2.8      YES
     Conntrack NAT6                  4.6            2.6          2.8      3.0
     Conntrack Helper Persist.       YES            YES          3.3      NO
-    Tunnel - LISP                   NO             2.11         NO       NO
+    Tunnel - LISP (deprecated)      NO             2.11         NO       NO
     Tunnel - STT                    NO             2.4          NO       YES
     Tunnel - GRE                    3.11           1.0          2.4      YES
     Tunnel - VXLAN                  3.12           1.10         2.4      YES
@@ -270,16 +270,10 @@ Q: I get an error like this when I configure Open vSwitch:
 Q: What features are not available in the Open vSwitch kernel datapath that
 ships as part of the upstream Linux kernel?
 
-    A: The kernel module in upstream Linux does not include support for LISP.
-    Work is in progress to add support for LISP to the upstream Linux version
-    of the Open vSwitch kernel module. For now, if you need this feature, use
-    the kernel module from the Open vSwitch distribution instead of the
-    upstream Linux kernel module.
-
-    Certain features require kernel support to function or to have reasonable
-    performance. If the ovs-vswitchd log file indicates that a feature is not
-    supported, consider upgrading to a newer upstream Linux release or using
-    the kernel module paired with the userspace distribution.
+    A: Certain features require kernel support to function or to have
+    reasonable performance.  If the ovs-vswitchd log file indicates that a
+    feature is not supported, consider upgrading to a newer upstream Linux
+    release or using the kernel module paired with the userspace distribution.
 
     Please note that as of Open vSwitch 3.0 the kernel module is no longer
     part of the Open vSwitch distribution.

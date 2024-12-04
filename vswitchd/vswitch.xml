@@ -2826,6 +2826,9 @@
           <dt><code>lisp</code></dt>
           <dd>
             <p>
+              This port type is deprecated.
+            </p>
+            <p>
               A layer 3 tunnel over the experimental, UDP-based Locator/ID
               Separation Protocol (RFC 6830).
             </p>
@@ -3095,6 +3098,10 @@
         <column name="options" key="packet_type"
                 type='{"type": "string", "enum": ["set",
                       ["legacy_l3", "ptap"]]}'>
+          <p>
+            LISP tunnel type is deprecated.
+          </p>
+
           <p>
             A LISP tunnel sends and receives only IPv4 and IPv6 packets.  This
             option controls what how the tunnel represents the packets that it

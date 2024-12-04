@@ -573,7 +573,7 @@ AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
     p1 1/4341: (lisp: remote_ip=1.1.1.1)
 ])
 
-OVS_VSWITCHD_STOP
+OVS_VSWITCHD_STOP(["/'lisp' port type is deprecated/d"])
 AT_CLEANUP
 
 AT_SETUP([tunnel - ERSPAN])

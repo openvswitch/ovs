@@ -226,6 +226,7 @@ netdev_vport_construct(struct netdev *netdev_)
         update_vxlan_global_cfg(netdev_, NULL, tnl_cfg);
     } else if (!strcmp(type, "lisp")) {
         tnl_cfg->dst_port = port ? htons(port) : htons(LISP_DST_PORT);
+        VLOG_WARN("%s: 'lisp' port type is deprecated.", name);
     } else if (!strcmp(type, "stt")) {
         tnl_cfg->dst_port = port ? htons(port) : htons(STT_DST_PORT);
     } else if (!strcmp(type, "gtpu")) {
