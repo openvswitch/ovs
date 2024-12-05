@@ -2525,6 +2525,98 @@ recirc_id(<recirc>),in_port(2),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(ty
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - Dump OF rules corresponding to UFID])
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p1, at_ns0, br0, "10.0.0.1/24")
+ADD_VETH(p2, at_ns1, br0, "10.0.0.2/24")
+
+AT_CHECK([ovs-vsctl -- set interface ovs-p1 ofport_request=1 \
+                    -- set interface ovs-p2 ofport_request=2])
+
+dnl Add some OpenFlow rules and groups.
+AT_DATA([groups.txt], [dnl
+group_id=1,type=select,selection_method=dp_hash,bucket=bucket_id:0,weight:100,actions=ct(commit,table=2)
+])
+AT_DATA([flows.txt], [dnl
+table=0,arp,actions=NORMAL
+table=0,priority=100,cookie=0x12345678,in_port=ovs-p1,ip,nw_dst=10.0.0.2,actions=resubmit(,1)
+table=0,priority=100,cookie=0xabcedf,in_port=ovs-p2,ip,nw_dst=10.0.0.1,actions=ct(table=3)
+table=1,priority=200,ip,actions=group:1
+table=2,ip,actions=ovs-p2
+table=3,ip,actions=ovs-p1
+])
+AT_CHECK([ovs-ofctl add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.1 -W 2 10.0.0.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl revalidator/wait])
+# Add an unrelated OF change to populate the xcache during the next reval run.
+AT_CHECK([ovs-ofctl add-flow br0 table=4,ip,action=drop])
+AT_CHECK([ovs-appctl revalidator/wait])
+
+AT_CHECK([ovs-appctl revalidator/pause])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [stdout])
+
+core=$(head -1 stdout | grep "flow-dump from pmd" | grep -o "[[-]]\?[[0-9]]\+$")
+if test -z $core; then
+    pmd_id=""
+else
+    pmd_id="pmd=$core"
+fi
+
+AT_CHECK([ovs-appctl dpctl/dump-flows --names | grep "ipv4" | strip_used | strip_stats | \
+          strip_duration | strip_dp_hash | strip_recirc | sed 's/:never/:0.0s/' | \
+          strip_ptype | strip_eth | sort], [0], [dnl
+recirc_id(<recirc>),in_port(ovs-p1),eth_type(0x0800),ipv4(dst=10.0.0.2,frag=no), packets:0, bytes:0, used:0.0s, actions:hash(l4(0)),recirc(<recirc>)
+recirc_id(<recirc>),in_port(ovs-p1),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:ct(commit),recirc(<recirc>)
+recirc_id(<recirc>),in_port(ovs-p1),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:ovs-p2
+recirc_id(<recirc>),in_port(ovs-p2),eth_type(0x0800),ipv4(dst=10.0.0.1,frag=no), packets:0, bytes:0, used:0.0s, actions:ct,recirc(<recirc>)
+recirc_id(<recirc>),in_port(ovs-p2),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:ovs-p1
+])
+
+ufid=$(ovs-appctl dpctl/dump-flows -m filter='recirc_id(0),in_port(ovs-p1),ipv4' | parse_ufid)
+AT_CHECK([ovs-appctl ofproto/detrace $ufid $pmd_id | ofctl_strip | \
+          sed -E 's/n_bytes=2(66|80),/n_bytes=294,/'], [0], [dnl
+cookie=0x12345678, n_packets=3, n_bytes=294, priority=100,ip,in_port=1,nw_dst=10.0.0.2,actions=resubmit(,1)
+table_id=1, n_packets=3, n_bytes=294, priority=200,ip,actions=group:1
+])
+
+ufid=$(ovs-appctl dpctl/dump-flows -m filter='in_port(ovs-p1),ipv4' | grep "ct(commit)" | parse_ufid)
+AT_CHECK([ovs-appctl ofproto/detrace $ufid $pmd_id | ofctl_strip | \
+          sed -E 's/n_bytes=2(66|80),/n_bytes=294,/'], [0], [dnl
+group_id=1,type=select,selection_method=dp_hash,bucket=bucket_id:0,weight:100,actions=ct(commit,table=2)
+])
+
+ufid=$(ovs-appctl dpctl/dump-flows -m filter='in_port(ovs-p1),ipv4' | grep "actions:ovs-p2" | parse_ufid)
+AT_CHECK([ovs-appctl ofproto/detrace $ufid $pmd_id | ofctl_strip | \
+          sed -E 's/n_bytes=2(66|80),/n_bytes=294,/'], [0], [dnl
+table_id=2, n_packets=3, n_bytes=294, ip,actions=output:2
+])
+
+ufid=$(ovs-appctl dpctl/dump-flows -m filter='recirc_id(0),in_port(ovs-p2),ipv4' | grep "ct," | parse_ufid)
+AT_CHECK([ovs-appctl ofproto/detrace $ufid $pmd_id | ofctl_strip | \
+          sed -E 's/n_bytes=2(66|80),/n_bytes=294,/'], [0], [dnl
+cookie=0xabcedf, n_packets=3, n_bytes=294, priority=100,ip,in_port=2,nw_dst=10.0.0.1,actions=ct(table=3)
+])
+
+ufid=$(ovs-appctl dpctl/dump-flows -m filter='in_port(ovs-p2),ipv4' | grep "actions:ovs-p1" | parse_ufid)
+AT_CHECK([ovs-appctl ofproto/detrace $ufid $pmd_id | ofctl_strip | \
+          sed -E 's/n_bytes=2(66|80),/n_bytes=294,/'], [0], [dnl
+table_id=3, n_packets=3, n_bytes=294, ip,actions=output:1
+])
+
+AT_CHECK([ovs-appctl revalidator/resume])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([MPLS])
 
 AT_SETUP([mpls - encap header dp-support])
