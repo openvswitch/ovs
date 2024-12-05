@@ -32,7 +32,7 @@ Synopsis
 [``-i`` [*alias*,]\ *file* | ``--input`` [*alias*,]\ *file*]
 [``-c`` *file* | ``--config`` *file*]
 [``-f`` *filter* | ``--filter`` *filter*]
-[``-h`` *filter* | ``--highlight`` *filter*]
+[``-l`` *filter* | ``--highlight`` *filter*]
 [``--style`` *style*]
 *flow-type* *format* [*args*...]
 
@@ -84,7 +84,7 @@ Options
 
    The filtering syntax is detailed in `Filtering Syntax`_.
 
-.. option:: -h <filter>, --highlight <filter>
+.. option:: -l <filter>, --highlight <filter>
 
    Highlight the flows that match the provided *filter* expression.
 
