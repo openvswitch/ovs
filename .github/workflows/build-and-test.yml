@@ -332,7 +332,7 @@ jobs:
         name: logs-linux-${{ join(matrix.*, '-') }}
         path: logs.tgz
 
-  build-clang-analyze:
+  build-clang-analyze-cache:
     needs: build-dpdk
     env:
       dependencies: |
@@ -341,7 +341,10 @@ jobs:
       CC:   clang
       DPDK: dpdk
       CLANG_ANALYZE: true
-    name: clang-analyze
+    name: clang-analyze-cache
+    outputs:
+      key: ${{ steps.cache_key.outputs.key }}
+      outcome: ${{ steps.build_base.outcome }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -412,6 +415,68 @@ jobs:
         key:  ${{ steps.cache_key.outputs.key }}
 
     - name: set up python
+      if: steps.clang_cache.outputs.cache-hit != 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.python_default }}
+
+    - name: get cached dpdk-dir
+      if: steps.clang_cache.outputs.cache-hit != 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: dpdk-dir
+        key:  ${{ needs.build-dpdk.outputs.dpdk_key }}
+
+    - name: update APT cache
+      if: steps.clang_cache.outputs.cache-hit != 'true'
+      run:  sudo apt update || true
+
+    - name: install common dependencies
+      if: steps.clang_cache.outputs.cache-hit != 'true'
+      run:  sudo apt install -y ${{ env.dependencies }}
+
+    - name: prepare
+      if: steps.clang_cache.outputs.cache-hit != 'true'
+      run:  ./.ci/linux-prepare.sh
+
+    - name: build base reference
+      id: build_base
+      if: steps.clang_cache.outputs.cache-hit != 'true'
+      continue-on-error: true
+      run:  ./.ci/linux-build.sh
+
+  build-clang-analyze:
+    needs: [build-dpdk, build-clang-analyze-cache]
+    if: >
+        needs.build-clang-analyze-cache.outputs.outcome == 'success' ||
+        needs.build-clang-analyze-cache.outputs.outcome == 'skipped'
+    env:
+      dependencies: |
+        automake bc clang-tools libnuma-dev libunbound-dev libunwind-dev \
+        libssl-dev libtool libxdp-dev llvm-dev
+      CC:   clang
+      DPDK: dpdk
+      CLANG_ANALYZE: true
+    name: clang-analyze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    - name: update PATH
+      run: |
+        echo "$HOME/bin"        >> $GITHUB_PATH
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: check for analyzer result cache
+      uses: actions/cache/restore@v4
+      with:
+        path: base-clang-analyzer-results
+        key:  ${{ needs.build-clang-analyze-cache.outputs.key }}
+
+    - name: set up python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.python_default }}
@@ -430,17 +495,6 @@ jobs:
 
     - name: prepare
       run:  ./.ci/linux-prepare.sh
-
-    - name: build base reference
-      if: steps.clang_cache.outputs.cache-hit != 'true'
-      run:  ./.ci/linux-build.sh
-
-    - name: save cache
-      uses: actions/cache/save@v4
-      if: steps.clang_cache.outputs.cache-hit != 'true'
-      with:
-        path: base-clang-analyzer-results
-        key:  ${{ steps.cache_key.outputs.key }}
 
     - name: build
       run:  ./.ci/linux-build.sh
