@@ -20,6 +20,7 @@ Post-v3.4.0
          - "TLSv1-TLSv1.2" to enable all protocols between TLSv1 and TLSv1.2.
          - "TLSv1.2+" to enable protocol TLSv1.2 and later.
        The value must be a list of protocols or exactly one protocol range.
+     * ovs-pki now generates 3072-bit keys by default.
    - Userspace datapath:
      * The default zone limit, if set, is now inherited by any zone
        that does not have a specific value defined, rather than being

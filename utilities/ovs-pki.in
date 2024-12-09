@@ -24,7 +24,7 @@ batch=no
 unique_name=no
 log='@LOGDIR@/ovs-pki.log'
 keytype=rsa
-bits=2048
+bits=3072
 
 # OS-specific compatibility routines
 case $(uname -s) in
@@ -171,7 +171,7 @@ Each TYPE above is a certificate type: 'switch' (default) or 'controller'.
 
 Options for 'init', 'req', and 'req+sign' only:
   -k, --key=rsa|dsa    Type of keys to use (default: rsa)
-  -B, --bits=NBITS     Number of bits in keys (default: 2048).  For DSA keys,
+  -B, --bits=NBITS     Number of bits in keys (default: $bits).  For DSA keys,
                          this has an effect only on 'init'.
   -D, --dsaparam=FILE  File with DSA parameters (DSA only)
                          (default: dsaparam.pem within PKI directory)
@@ -263,8 +263,8 @@ if test "$keytype" != rsa && test "$keytype" != dsa; then
     echo "$0: argument to -k or --key must be rsa or dsa" >&2
     exit 1
 fi
-if test "$bits" -lt 1024; then
-    echo "$0: argument to -B or --bits must be at least 1024" >&2
+if test "$bits" -lt 2048; then
+    echo "$0: argument to -B or --bits must be at least 2048" >&2
     exit 1
 fi
 if test -z "$dsaparam"; then
