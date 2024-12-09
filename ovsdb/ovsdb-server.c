@@ -67,7 +67,7 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_server);
 
-/* SSL configuration. */
+/* SSL/TLS configuration. */
 static char *private_key_file;
 static char *certificate_file;
 static char *ca_cert_file;
@@ -692,7 +692,7 @@ reconfigure_ovsdb_server(struct server_config *server_config)
     } else {
         error = reconfigure_ssl(server_config->all_dbs);
         if (error) {
-            VLOG_WARN("failed to configure SSL: %s", error);
+            VLOG_WARN("failed to configure SSL/TLS: %s", error);
             res = false;
         }
     }

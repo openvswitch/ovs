@@ -745,7 +745,7 @@ def do_idl(schema_file, remote, *commands):
 
     if remote.startswith("ssl:"):
         if len(commands) < 3:
-            sys.stderr.write("SSL connection requires private key, "
+            sys.stderr.write("SSL/TLS connection requires private key, "
                              "certificate for private key, and peer CA "
                              "certificate as arguments\n")
             sys.exit(1)
@@ -970,7 +970,7 @@ def do_idl_cluster(schema_file, remote, pid, *commands):
 
     if remote.startswith("ssl:"):
         if len(commands) < 3:
-            sys.stderr.write("SSL connection requires private key, "
+            sys.stderr.write("SSL/TLS connection requires private key, "
                              "certificate for private key, and peer CA "
                              "certificate as arguments\n")
             sys.exit(1)

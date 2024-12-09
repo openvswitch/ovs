@@ -280,10 +280,10 @@ AC_DEFUN([OVS_CHECK_OPENSSL],
 
 $SSL_PKG_ERRORS
 
-OpenFlow connections over SSL will not be supported.
+OpenFlow connections over SSL/TLS will not be supported.
 (You may use --disable-ssl to suppress this warning.)])
           else
-            AC_MSG_ERROR([Cannot find openssl (use --disable-ssl to configure without SSL support)])
+            AC_MSG_ERROR([Cannot find openssl (use --disable-ssl to configure without SSL/TLS support)])
           fi])
    else
        HAVE_OPENSSL=no

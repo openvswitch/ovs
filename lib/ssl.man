@@ -1,25 +1,26 @@
 .IP "\fB\-p\fR \fIprivkey.pem\fR"
 .IQ "\fB\-\-private\-key=\fIprivkey.pem\fR"
 Specifies a PEM file containing the private key used as \fB\*(PN\fR's
-identity for outgoing SSL connections.
+identity for outgoing SSL/TLS connections.
 .
 .IP "\fB\-c\fR \fIcert.pem\fR"
 .IQ "\fB\-\-certificate=\fIcert.pem\fR"
 Specifies a PEM file containing a certificate that certifies the
 private key specified on \fB\-p\fR or \fB\-\-private\-key\fR to be
 trustworthy.  The certificate must be signed by the certificate
-authority (CA) that the peer in SSL connections will use to verify it.
+authority (CA) that the peer in SSL/TLS connections will use to
+verify it.
 .
 .IP "\fB\-C\fR \fIcacert.pem\fR"
 .IQ "\fB\-\-ca\-cert=\fIcacert.pem\fR"
 Specifies a PEM file containing the CA certificate that \fB\*(PN\fR
-should use to verify certificates presented to it by SSL peers.  (This
-may be the same certificate that SSL peers use to verify the
+should use to verify certificates presented to it by SSL/TLS peers.
+(This may be the same certificate that SSL/TLS peers use to verify the
 certificate specified on \fB\-c\fR or \fB\-\-certificate\fR, or it may
 be a different one, depending on the PKI design in use.)
 .
 .IP "\fB\-C none\fR"
 .IQ "\fB\-\-ca\-cert=none\fR"
-Disables verification of certificates presented by SSL peers.  This
+Disables verification of certificates presented by SSL/TLS peers.  This
 introduces a security risk, because it means that certificates cannot
 be verified to be those of known trusted hosts.

@@ -64,7 +64,7 @@
       </column>
 
       <column name="ssl">
-        SSL used globally by the daemon.
+        SSL/TLS used globally by the daemon.
       </column>
 
       <column name="external_ids" key="system-id">
@@ -5487,14 +5487,14 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         <dl>
           <dt><code>ssl:<var>host</var></code>[<code>:<var>port</var></code>]</dt>
           <dd>
-            <p>The specified SSL <var>port</var> on the host at the
+            <p>The specified SSL/TLS <var>port</var> on the host at the
             given <var>host</var>, which can either be a DNS name (if built
             with unbound library) or an IP address.  The <ref table="Open_vSwitch"
             column="ssl"/> column in the <ref table="Open_vSwitch"/> table must
-            point to a valid SSL configuration when this form is used.</p>
+            point to a valid SSL/TLS configuration when this form is used.</p>
             <p>If <var>port</var> is not specified, it defaults to 6653.</p>
-            <p>SSL support is an optional feature that is not always built as
-            part of Open vSwitch.</p>
+            <p>SSL/TLS support is an optional feature that is not always built
+            as part of Open vSwitch.</p>
           </dd>
           <dt><code>tcp:<var>host</var></code>[<code>:<var>port</var></code>]</dt>
           <dd>
@@ -5517,7 +5517,8 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           <dt><code>pssl:</code>[<var>port</var>][<code>:<var>host</var></code>]</dt>
           <dd>
             <p>
-              Listens for SSL connections on the specified TCP <var>port</var>.
+              Listens for SSL/TLS connections on the specified TCP
+              <var>port</var>.
               If <var>host</var>, which can either be a DNS name (if built with
               unbound library) or an IP address, is specified, then connections
               are restricted to the resolved or specified local IP address
@@ -5530,14 +5531,14 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
               IPv4 (but not IPv6) addresses.  The
               <ref table="Open_vSwitch" column="ssl"/>
               column in the <ref table="Open_vSwitch"/> table must point to a
-              valid SSL configuration when this form is used.
+              valid SSL/TLS configuration when this form is used.
             </p>
             <p>
               If <var>port</var> is not specified, it currently to 6653.
             </p>
             <p>
-              SSL support is an optional feature that is not always built as
-              part of Open vSwitch.
+              SSL/TLS support is an optional feature that is not always built
+              as part of Open vSwitch.
             </p>
           </dd>
           <dt><code>ptcp:</code>[<var>port</var>][<code>:<var>host</var></code>]</dt>
@@ -5907,18 +5908,18 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           <dt><code>ssl:<var>host</var></code>[<code>:<var>port</var></code>]</dt>
           <dd>
             <p>
-              The specified SSL <var>port</var> on the host at the given
+              The specified SSL/TLS <var>port</var> on the host at the given
               <var>host</var>, which can either be a DNS name (if built with
               unbound library) or an IP address.  The <ref table="Open_vSwitch"
               column="ssl"/> column in the <ref table="Open_vSwitch"/>
-              table must point to a valid SSL configuration when this
+              table must point to a valid SSL/TLS configuration when this
               form is used.
             </p>
             <p>
               If <var>port</var> is not specified, it defaults to 6640.
             </p>
             <p>
-              SSL support is an optional feature that is not always
+              SSL/TLS support is an optional feature that is not always
               built as part of Open vSwitch.
             </p>
           </dd>
@@ -5939,7 +5940,8 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           <dt><code>pssl:</code>[<var>port</var>][<code>:<var>host</var></code>]</dt>
           <dd>
             <p>
-              Listens for SSL connections on the specified TCP <var>port</var>.
+              Listens for SSL/TLS connections on the specified TCP
+              <var>port</var>.
               Specify 0 for <var>port</var> to have the kernel automatically
               choose an available port.  If <var>host</var>, which can either
               be a DNS name (if built with unbound library) or an IP address,
@@ -5949,15 +5951,15 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
               e.g. <code>pssl:6640:[::1]</code>.  If <var>host</var> is not
               specified then it listens only on IPv4 (but not IPv6) addresses.
               The <ref table="Open_vSwitch" column="ssl"/> column in the <ref
-              table="Open_vSwitch"/> table must point to a valid SSL
+              table="Open_vSwitch"/> table must point to a valid SSL/TLS
               configuration when this form is used.
             </p>
             <p>
               If <var>port</var> is not specified, it defaults to 6640.
             </p>
             <p>
-              SSL support is an optional feature that is not always built as
-              part of Open vSwitch.
+              SSL/TLS support is an optional feature that is not always built
+              as part of Open vSwitch.
             </p>
           </dd>
           <dt><code>ptcp:</code>[<var>port</var>][<code>:<var>host</var></code>]</dt>
@@ -6736,11 +6738,11 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
   </table>
 
   <table name="SSL">
-    SSL configuration for an Open_vSwitch.
+    SSL/TLS configuration for an Open_vSwitch.
 
     <column name="private_key">
       Name of a PEM file containing the private key used as the switch's
-      identity for SSL connections to the controller.
+      identity for SSL/TLS connections to the controller.
     </column>
 
     <column name="certificate">
@@ -6757,12 +6759,12 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
 
     <column name="bootstrap_ca_cert">
       If set to <code>true</code>, then Open vSwitch will attempt to
-      obtain the CA certificate from the controller on its first SSL
+      obtain the CA certificate from the controller on its first SSL/TLS
       connection and save it to the named PEM file. If it is successful,
       it will immediately drop the connection and reconnect, and from then
-      on all SSL connections must be authenticated by a certificate signed
+      on all SSL/TLS connections must be authenticated by a certificate signed
       by the CA certificate thus obtained.  <em>This option exposes the
-      SSL connection to a man-in-the-middle attack obtaining the initial
+      SSL/TLS connection to a man-in-the-middle attack obtaining the initial
       CA certificate.</em>  It may still be useful for bootstrapping.
     </column>
 

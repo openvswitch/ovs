@@ -429,10 +429,10 @@ Manager commands:\n\
   [--inactivity-probe=MSECS]\n\
   set-manager TARGET...      set the list of managers to TARGET...\n\
 \n\
-SSL commands:\n\
-  get-ssl                     print the SSL configuration\n\
-  del-ssl                     delete the SSL configuration\n\
-  set-ssl PRIV-KEY CERT CA-CERT  set the SSL configuration\n\
+SSL/TLS commands:\n\
+  get-ssl                     print the SSL/TLS configuration\n\
+  del-ssl                     delete the SSL/TLS configuration\n\
+  set-ssl PRIV-KEY CERT CA-CERT  set the SSL/TLS configuration\n\
 \n\
 Auto Attach commands:\n\
   add-aa-mapping BRIDGE I-SID VLAN   add Auto Attach mapping to BRIDGE\n\
@@ -3254,7 +3254,7 @@ static const struct ctl_command_syntax vsctl_commands[] = {
     {"set-manager", 1, INT_MAX, "TARGET...", pre_manager, cmd_set_manager,
      NULL, "--inactivity-probe=", RW},
 
-    /* SSL commands. */
+    /* SSL/TLS commands. */
     {"get-ssl", 0, 0, "", pre_cmd_get_ssl, cmd_get_ssl, NULL, "", RO},
     {"del-ssl", 0, 0, "", pre_cmd_del_ssl, cmd_del_ssl, NULL, "", RW},
     {"set-ssl", 3, 3, "PRIVATE-KEY CERTIFICATE CA-CERT", pre_cmd_set_ssl,

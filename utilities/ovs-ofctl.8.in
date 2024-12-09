@@ -722,8 +722,8 @@ Non-OpenFlow packets are ignored.  By default, data on TCP ports 6633
 and 6653 are considered to be OpenFlow.  Specify one or more
 \fIport\fR arguments to override the default.
 .IP
-This command cannot usefully print SSL encrypted traffic.  It does not
-understand IPv6.
+This command cannot usefully print SSL/TLS encrypted traffic.  It does
+not understand IPv6.
 .
 .SS "Flow Syntax"
 .PP

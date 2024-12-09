@@ -1,4 +1,4 @@
-.IP "SSL connection options:"
+.IP "SSL/TLS connection options:"
 [\fB\-\-ssl\-protocols=\fIprotocols\fR]
 .br
 [\fB\-\-ssl\-ciphers=\fIciphers\fR]

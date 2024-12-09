@@ -1,13 +1,13 @@
 .IP "\fB\-\-peer\-ca\-cert=\fIpeer-cacert.pem\fR"
 Specifies a PEM file that contains one or more additional certificates
-to send to SSL peers.  \fIpeer-cacert.pem\fR should be the CA
+to send to SSL/TLS peers.  \fIpeer-cacert.pem\fR should be the CA
 certificate used to sign \fB\*(PN\fR's own certificate, that is, the
 certificate specified on \fB\-c\fR or \fB\-\-certificate\fR.  If
 \fB\*(PN\fR's certificate is self-signed, then \fB\-\-certificate\fR
 and \fB\-\-peer\-ca\-cert\fR should specify the same file.
 .IP
-This option is not useful in normal operation, because the SSL peer
+This option is not useful in normal operation, because the SSL/TLS peer
 must already have the CA certificate for the peer to have any
 confidence in \fB\*(PN\fR's identity.  However, this offers a way for
-a new installation to bootstrap the CA certificate on its first SSL
+a new installation to bootstrap the CA certificate on its first SSL/TLS
 connection.

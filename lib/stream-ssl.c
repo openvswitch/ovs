@@ -64,7 +64,7 @@
 
 VLOG_DEFINE_THIS_MODULE(stream_ssl);
 
-/* Active SSL. */
+/* Active SSL/TLS. */
 
 enum ssl_state {
     STATE_TCP_CONNECTING,
@@ -567,7 +567,8 @@ ssl_connect(struct stream *stream)
              * certificate, but that's more trouble than it's worth.  These
              * connections will succeed the next time they retry, assuming that
              * they have a certificate against the correct CA.) */
-            VLOG_INFO("rejecting SSL connection during bootstrap race window");
+            VLOG_INFO(
+                "rejecting SSL/TLS connection during bootstrap race window");
             return EPROTO;
         } else {
 #if OPENSSL_SUPPORTS_SNI
@@ -671,7 +672,7 @@ interpret_ssl_error(const char *function, int ret, int error,
                              function, ovs_strerror(status));
                 return status;
             } else {
-                VLOG_WARN_RL(&rl, "%s: unexpected SSL connection close",
+                VLOG_WARN_RL(&rl, "%s: unexpected SSL/TLS connection close",
                              function);
                 return EPROTO;
             }
@@ -873,7 +874,7 @@ const struct stream_class ssl_stream_class = {
     ssl_wait,                   /* wait */
 };
 
-/* Passive SSL. */
+/* Passive SSL/TLS. */
 
 struct pssl_pstream
 {
@@ -1056,8 +1057,8 @@ do_ssl_init(void)
 
     /* OpenSSL has a bunch of "connection methods": SSLv2_method(),
      * SSLv3_method(), TLSv1_method(), SSLv23_method(), ...  Most of these
-     * support exactly one version of SSL, e.g. TLSv1_method() supports TLSv1
-     * only, not any earlier *or later* version.  The only exception is
+     * support exactly one version of SSL/TLS, e.g. TLSv1_method() supports
+     * TLSv1 only, not any earlier *or later* version.  The only exception is
      * SSLv23_method(), which in fact supports *any* version of SSL and TLS.
      * We don't want SSLv2 or SSLv3 support, so we turn it off below with
      * SSL_CTX_set_options().
@@ -1132,7 +1133,7 @@ tmp_dh_callback(SSL *ssl OVS_UNUSED, int is_export OVS_UNUSED, int keylength)
 }
 #endif
 
-/* Returns true if SSL is at least partially configured. */
+/* Returns true if SSL/TLS is at least partially configured. */
 bool
 stream_ssl_is_configured(void)
 {
@@ -1243,7 +1244,7 @@ stream_ssl_set_key_and_cert(const char *private_key_file,
     }
 }
 
-/* Sets SSL ciphers based on string input. Aborts with an error message
+/* Sets SSL/TLS ciphers based on string input. Aborts with an error message
  * if 'arg' is invalid. */
 void
 stream_ssl_set_ciphers(const char *arg)
@@ -1258,8 +1259,8 @@ stream_ssl_set_ciphers(const char *arg)
     ssl_ciphers = xstrdup(arg);
 }
 
-/* Set SSL protocols based on the string input. Aborts with an error message
- * if 'arg' is invalid. */
+/* Set SSL/TLS protocols based on the string input. Aborts with an error
+ * message if 'arg' is invalid. */
 void
 stream_ssl_set_protocols(const char *arg)
 {
@@ -1289,7 +1290,7 @@ stream_ssl_set_protocols(const char *arg)
     char *save_ptr = NULL;
     char *word = strtok_r(s, " ,\t", &save_ptr);
     if (word == NULL) {
-        VLOG_ERR("SSL protocol settings invalid");
+        VLOG_ERR("SSL/TLS protocol settings invalid");
         goto exit;
     }
     while (word != NULL) {
@@ -1306,7 +1307,7 @@ stream_ssl_set_protocols(const char *arg)
         }
 
         if (!no_flag) {
-            VLOG_ERR("%s: SSL protocol not recognized", word);
+            VLOG_ERR("%s: SSL/TLS protocol not recognized", word);
             goto exit;
         }
 
@@ -1484,17 +1485,18 @@ stream_ssl_set_ca_cert_file__(const char *file_name,
 }
 
 /* Sets 'file_name' as the name of the file from which to read the CA
- * certificate used to verify the peer within SSL connections.  If 'bootstrap'
- * is false, the file must exist.  If 'bootstrap' is false, then the file is
- * read if it is exists; if it does not, then it will be created from the CA
- * certificate received from the peer on the first SSL connection. */
+ * certificate used to verify the peer within SSL/TLS connections.  If
+ * 'bootstrap' is false, the file must exist.  If 'bootstrap' is false, then
+ * the file is read if it is exists; if it does not, then it will be created
+ * from the CA certificate received from the peer on the first SSL/TLS
+ * connection. */
 void
 stream_ssl_set_ca_cert_file(const char *file_name, bool bootstrap)
 {
     stream_ssl_set_ca_cert_file__(file_name, bootstrap, false);
 }
 
-/* SSL protocol logging. */
+/* SSL/TLS protocol logging. */
 
 static const char *
 ssl_alert_level_to_string(uint8_t type)

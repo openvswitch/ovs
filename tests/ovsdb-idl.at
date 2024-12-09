@@ -256,14 +256,14 @@ m4_define([OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PY],
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
-# same as OVSDB_CHECK_IDL but uses the Python IDL implementation with SSL
+# same as OVSDB_CHECK_IDL but uses the Python IDL implementation with SSL/TLS
 m4_define([OVSDB_CHECK_IDL_SSL_PY],
-  [AT_SETUP([ovsdb-idl - $1 - Python3 - SSL])
+  [AT_SETUP([ovsdb-idl - $1 - Python3 - SSL/TLS])
    AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
    $PYTHON3 -c "import ssl"
    SSL_PRESENT=$?
    AT_SKIP_IF([test $SSL_PRESENT != 0])
-   AT_KEYWORDS([ovsdb server idl positive Python with ssl socket $5])
+   AT_KEYWORDS([ovsdb server idl positive Python with ssl tls socket $5])
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
              [0], [stdout], [ignore])
    PKIDIR=$abs_top_builddir/tests
@@ -288,7 +288,7 @@ m4_define([OVSDB_CHECK_IDL_SSL_PY],
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN(["
-     /unexpected SSL connection close/d
+     /unexpected SSL\/TLS connection close/d
      /Protocol error/d
    "])
    AT_CLEANUP])
@@ -2473,7 +2473,7 @@ m4_define([CHECK_STREAM_OPEN_BLOCK],
    AT_CHECK([$2 PROTOCOL:$4:$WRONG_PORT $SSL_KEY_ARGS], [1], [ignore],
             [ignore])
    OVSDB_SERVER_SHUTDOWN(["
-     /unexpected SSL connection close/d
+     /unexpected SSL\/TLS connection close/d
      /Protocol error/d
    "])
    AT_CHECK([$2 PROTOCOL:$4:$TCP_PORT $SSL_KEY_ARGS], [1], [ignore], [ignore])

@@ -31,8 +31,9 @@ stream_ssl_is_configured(void)
 OVS_NO_RETURN static void
 nossl_option(const char *detail)
 {
-    VLOG_FATAL("%s specified but Open vSwitch was built without SSL support",
-               detail);
+    VLOG_FATAL(
+        "%s specified but Open vSwitch was built without SSL/TLS support",
+        detail);
 }
 
 void
@@ -78,13 +79,13 @@ stream_ssl_set_key_and_cert(const char *private_key_file,
 void
 stream_ssl_set_protocols(const char *arg OVS_UNUSED)
 {
-    /* Ignore this option since it seems harmless to set SSL protocols if SSL
-     * won't be used. */
+    /* Ignore this option since it seems harmless to set SSL/TLS protocols if
+     * SSL/TLS won't be used. */
 }
 
 void
 stream_ssl_set_ciphers(const char *arg OVS_UNUSED)
 {
-    /* Ignore this option since it seems harmless to set SSL ciphers if SSL
-     * won't be used. */
+    /* Ignore this option since it seems harmless to set SSL/TLS ciphers if
+     * SSL/TLS won't be used. */
 }

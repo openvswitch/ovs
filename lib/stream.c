@@ -131,7 +131,7 @@ stream_usage(const char *name, bool active, bool passive,
                "PORT at remote HOST\n");
 #ifdef HAVE_OPENSSL
         printf("  ssl:HOST:PORT           "
-               "SSL PORT at remote HOST\n");
+               "SSL/TLS PORT at remote HOST\n");
 #endif
         printf("  unix:FILE               "
                "Unix domain socket named FILE\n");
@@ -143,14 +143,14 @@ stream_usage(const char *name, bool active, bool passive,
                "listen to TCP PORT on IP\n");
 #ifdef HAVE_OPENSSL
         printf("  pssl:PORT[:IP]          "
-               "listen for SSL on PORT on IP\n");
+               "listen for SSL/TLS on PORT on IP\n");
 #endif
         printf("  punix:FILE              "
                "listen on Unix domain socket FILE\n");
     }
 
 #ifdef HAVE_OPENSSL
-    printf("PKI configuration (required to use SSL):\n"
+    printf("PKI configuration (required to use SSL/TLS):\n"
            "  -p, --private-key=FILE  file with private key\n"
            "  -c, --certificate=FILE  file with certificate for private key\n"
            "  -C, --ca-cert=FILE      file with peer CA certificate\n");
@@ -158,9 +158,9 @@ stream_usage(const char *name, bool active, bool passive,
         printf("  --bootstrap-ca-cert=FILE  file with peer CA certificate "
                "to read or create\n");
     }
-    printf("SSL options:\n"
-           "  --ssl-protocols=PROTOS  list of SSL protocols to enable\n"
-           "  --ssl-ciphers=CIPHERS   list of SSL ciphers to enable\n");
+    printf("SSL/TLS options:\n"
+           "  --ssl-protocols=PROTOS  list of SSL/TLS protocols to enable\n"
+           "  --ssl-ciphers=CIPHERS   list of SSL/TLS ciphers to enable\n");
 #endif
 }
 
@@ -827,7 +827,7 @@ stream_content_type_to_string(enum stream_content_type type)
         return "OpenFlow";
 
     case STREAM_SSL:
-        return "SSL";
+        return "SSL/TLS";
     }
 }
 

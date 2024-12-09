@@ -21,18 +21,18 @@
 
       Avoid deeper levels because they do not render well.
 
-=====================
-Open vSwitch with SSL
-=====================
+=========================
+Open vSwitch with SSL/TLS
+=========================
 
 If you plan to configure Open vSwitch to connect across the network to an
 OpenFlow controller, then we recommend that you build Open vSwitch with
-OpenSSL. SSL support ensures integrity and confidentiality of the OpenFlow
+OpenSSL.  SSL/TLS support ensures integrity and confidentiality of the OpenFlow
 connections, increasing network security.
 
 This document describes how to configure an Open vSwitch to connect to an
-OpenFlow controller over SSL.  Refer to :doc:`/intro/install/general`. for
-instructions on building Open vSwitch with SSL support.
+OpenFlow controller over SSL/TLS.  Refer to :doc:`/intro/install/general`. for
+instructions on building Open vSwitch with SSL/TLS support.
 
 Open vSwitch uses TLS version 1.2 or later (TLSv1.2), as specified by
 RFC 5246.  TLSv1.2 was released in August 2008, so all current software and
@@ -41,16 +41,16 @@ hardware should implement it.
 This document assumes basic familiarity with public-key cryptography and
 public-key infrastructure.
 
-SSL Concepts for OpenFlow
--------------------------
+SSL/TLS Concepts for OpenFlow
+-----------------------------
 
 This section is an introduction to the public-key infrastructure architectures
-that Open vSwitch supports for SSL authentication.
+that Open vSwitch supports for SSL/TLS authentication.
 
-To connect over SSL, every Open vSwitch must have a unique private/public key
-pair and a certificate that signs that public key.  Typically, the Open vSwitch
-generates its own public/private key pair.  There are two common ways to obtain
-a certificate for a switch:
+To connect over SSL/TLS, every Open vSwitch must have a unique private/public
+key pair and a certificate that signs that public key.  Typically, the
+Open vSwitch generates its own public/private key pair.  There are two common
+ways to obtain a certificate for a switch:
 
 * Self-signed certificates: The Open vSwitch signs its certificate with its own
   private key.  In this case, each switch must be individually approved by the
@@ -149,9 +149,9 @@ created, because they could be used to impersonate the controller.
 Switch Key Generation with Self-Signed Certificates
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you are using self-signed certificates (see "SSL Concepts for OpenFlow"),
-this is one way to create an acceptable certificate for your controller to
-approve.
+If you are using self-signed certificates (see
+`SSL/TLS Concepts for OpenFlow`_), this is one way to create an acceptable
+certificate for your controller to approve.
 
 1. Run the following command on the Open vSwitch itself::
 
@@ -178,15 +178,15 @@ approve.
    have to use CA certificate bootstrapping when you configure Open vSwitch in
    the next step.)
 
-3. Configure Open vSwitch to use the keys and certificates (see "Configuring
-   SSL Support", below).
+3. Configure Open vSwitch to use the keys and certificates (see
+   `Configuring SSL/TLS Support`_, below).
 
 Switch Key Generation with a Switch PKI (Easy Method)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you are using a switch PKI (see "SSL Concepts for OpenFlow", above), this
-method of switch key generation is a little easier than the alternate method
-described below, but it is also a little less secure because it requires
+If you are using a switch PKI (see `SSL/TLS Concepts for OpenFlow`_, above),
+this method of switch key generation is a little easier than the alternate
+method described below, but it is also a little less secure because it requires
 copying a sensitive private key from file from the machine hosting the PKI to
 the switch.
 
@@ -215,15 +215,15 @@ the switch.
      Don't delete controllerca/cacert.pem!  It is not security-sensitive and
      you will need it to configure additional switches.
 
-4. Configure Open vSwitch to use the keys and certificates (see "Configuring
-   SSL Support", below).
+4. Configure Open vSwitch to use the keys and certificates (see
+   `Configuring SSL/TLS Support`_, below).
 
 Switch Key Generation with a Switch PKI (More Secure)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you are using a switch PKI (see "SSL Concepts for OpenFlow", above), then,
-compared to the previous method, the method described here takes a little more
-work, but it does not involve copying the private key from one machine to
+If you are using a switch PKI (see `SSL/TLS Concepts for OpenFlow`_, above),
+then, compared to the previous method, the method described here takes a little
+more work, but it does not involve copying the private key from one machine to
 another, so it may also be a little more secure.
 
 1. Run the following command on the Open vSwitch itself::
@@ -274,15 +274,15 @@ another, so it may also be a little more secure.
      Don't delete `controllerca/cacert.pem`!  It is not security-sensitive and
      you will need it to configure additional switches.
 
-5. Configure Open vSwitch to use the keys and certificates (see "Configuring
-   SSL Support", below).
+5. Configure Open vSwitch to use the keys and certificates (see
+   `Configuring SSL/TLS Support`_, below).
 
-Configuring SSL Support
------------------------
+Configuring SSL/TLS Support
+---------------------------
 
-SSL configuration requires three additional configuration files.  The first two
-of these are unique to each Open vSwitch.  If you used the instructions above
-to build your PKI, then these files will be named `sc-privkey.pem` and
+SSL/TLS configuration requires three additional configuration files.  The first
+two of these are unique to each Open vSwitch.  If you used the instructions
+above to build your PKI, then these files will be named `sc-privkey.pem` and
 `sc-cert.pem`, respectively:
 
 - A private key file, which contains the private half of an RSA or DSA key.
@@ -320,17 +320,18 @@ above.  You should use absolute file names (ones that begin with ``/``),
 because ovs-vswitchd's current directory is unrelated to the one from which you
 run ovs-vsctl.
 
-If you are using self-signed certificates (see "SSL Concepts for OpenFlow") and
-you did not copy controllerca/cacert.pem from the PKI machine to the Open
-vSwitch, then add the ``--bootstrap`` option, e.g.::
+If you are using self-signed certificates (see
+`SSL/TLS Concepts for OpenFlow`_) and you did not copy controllerca/cacert.pem
+from the PKI machine to the Open vSwitch, then add the ``--bootstrap`` option,
+e.g.::
 
     $ ovs-vsctl -- --bootstrap set-ssl /etc/openvswitch/sc-privkey.pem \
         /etc/openvswitch/sc-cert.pem /etc/openvswitch/cacert.pem
 
 After you have added all of these configuration keys, you may specify ``ssl:``
 connection methods elsewhere in the configuration database.  ``tcp:`` connection
-methods are still allowed even after SSL has been configured, so for security
-you should use only ``ssl:`` connections.
+methods are still allowed even after SSL/TLS has been configured, so for
+security you should use only ``ssl:`` connections.
 
 Reporting Bugs
 --------------

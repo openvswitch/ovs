@@ -368,7 +368,7 @@ effect.
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/ssl-bootstrap.man
-.SS "SSL Connection Options"
+.SS "SSL/TLS Connection Options"
 .so lib/ssl-connect.man
 .SS "Other Options"
 .so lib/ovs-replay.man

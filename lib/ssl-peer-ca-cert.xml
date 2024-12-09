@@ -4,7 +4,7 @@
   <dd>
     <p>
       Specifies a PEM file that contains one or more additional certificates
-      to send to SSL peers.  <var>peer-cacert.pem</var> should be the CA
+      to send to SSL/TLS peers.  <var>peer-cacert.pem</var> should be the CA
       certificate used to sign the program's own certificate, that is, the
       certificate specified on <code>-c</code> or <code>--certificate</code>.
       If the program's certificate is self-signed, then
@@ -12,10 +12,10 @@
       the same file.
     </p>
     <p>
-      This option is not useful in normal operation, because the SSL peer
+      This option is not useful in normal operation, because the SSL/TLS peer
       must already have the CA certificate for the peer to have any
       confidence in the program's identity.  However, this offers a way for
-      a new installation to bootstrap the CA certificate on its first SSL
+      a new installation to bootstrap the CA certificate on its first SSL/TLS
       connection.
     </p>
   </dd>

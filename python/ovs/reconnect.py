@@ -537,7 +537,7 @@ class Reconnect(object):
               connections that quickly abort, so it is OK to call
               self.connected() after a low-level successful connection
               (e.g. connect()) even if the connection might soon abort due to a
-              failure at a high-level (e.g. SSL negotiation failure).
+              failure at a high-level (e.g. SSL/TLS negotiation failure).
 
             - Passive client, ovs.reconnect.CONNECT: The client should try to
               listen for a connection, if it is not already listening.  It

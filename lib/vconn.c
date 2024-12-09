@@ -143,7 +143,7 @@ vconn_usage(bool active, bool passive, bool bootstrap OVS_UNUSED)
                "PORT (default: %d) at remote HOST\n", OFP_PORT);
 #ifdef HAVE_OPENSSL
         printf("  ssl:HOST[:PORT]         "
-               "SSL PORT (default: %d) at remote HOST\n", OFP_PORT);
+               "SSL/TLS PORT (default: %d) at remote HOST\n", OFP_PORT);
 #endif
         printf("  unix:FILE               Unix domain socket named FILE\n");
     }
@@ -155,7 +155,7 @@ vconn_usage(bool active, bool passive, bool bootstrap OVS_UNUSED)
                OFP_PORT);
 #ifdef HAVE_OPENSSL
         printf("  pssl:[PORT][:IP]        "
-               "listen for SSL on PORT (default: %d) on IP\n",
+               "listen for SSL/TLS on PORT (default: %d) on IP\n",
                OFP_PORT);
 #endif
         printf("  punix:FILE              "
@@ -163,7 +163,7 @@ vconn_usage(bool active, bool passive, bool bootstrap OVS_UNUSED)
     }
 
 #ifdef HAVE_OPENSSL
-    printf("PKI configuration (required to use SSL):\n"
+    printf("PKI configuration (required to use SSL/TLS):\n"
            "  -p, --private-key=FILE  file with private key\n"
            "  -c, --certificate=FILE  file with certificate for private key\n"
            "  -C, --ca-cert=FILE      file with peer CA certificate\n");

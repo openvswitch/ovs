@@ -2,19 +2,19 @@
 When \fIcacert.pem\fR exists, this option has the same effect as
 \fB\-C\fR or \fB\-\-ca\-cert\fR.  If it does not exist, then
 \fB\*(PN\fR will attempt to obtain the CA certificate from the
-SSL peer on its first SSL connection and save it to the named PEM
-file.  If it is successful, it will immediately drop the connection
-and reconnect, and from then on all SSL connections must be
+SSL/TLS peer on its first SSL/TLS connection and save it to the named
+PEM file.  If it is successful, it will immediately drop the connection
+and reconnect, and from then on all SSL/TLS connections must be
 authenticated by a certificate signed by the CA certificate thus
 obtained.
 .IP
-\fBThis option exposes the SSL connection to a man-in-the-middle
+\fBThis option exposes the SSL/TLS connection to a man-in-the-middle
 attack obtaining the initial CA certificate\fR, but it may be useful
 for bootstrapping.
 .IP
-This option is only useful if the SSL peer sends its CA certificate as
-part of the SSL certificate chain.  The SSL protocol does not require
-the server to send the CA certificate.
+This option is only useful if the SSL/TLS peer sends its CA certificate
+as part of the SSL/TLS certificate chain.  SSL/TLS protocols do not
+require the server to send the CA certificate.
 .IP
 This option is mutually exclusive with \fB\-C\fR and
 \fB\-\-ca\-cert\fR.

@@ -51,18 +51,18 @@
           </dt>
           <dd>
             <p>
-              The specified SSL <var>port</var> on the host at the given
+              The specified SSL/TLS <var>port</var> on the host at the given
               <var>host</var>, which can either be a DNS name (if built with
-              unbound library) or an IP address. A valid SSL configuration must
-              be provided when this form is used, this configuration can be
-              specified via command-line options or the <ref table="SSL"/>
+              unbound library) or an IP address. A valid SSL/TLS configuration
+              must be provided when this form is used, this configuration can
+              be specified via command-line options or the <ref table="SSL"/>
               table.
             </p>
             <p>
               If <var>port</var> is not specified, it defaults to 6640.
             </p>
             <p>
-              SSL support is an optional feature that is not always
+              SSL/TLS support is an optional feature that is not always
               built as part of Open vSwitch.
             </p>
           </dd>
@@ -87,7 +87,8 @@
           </dt>
           <dd>
             <p>
-              Listens for SSL connections on the specified TCP <var>port</var>.
+              Listens for SSL/TLS connections on the specified TCP
+              <var>port</var>.
               Specify 0 for <var>port</var> to have the kernel automatically
               choose an available port.  If <var>host</var>, which can either
               be a DNS name (if built with unbound library) or an IP address,
@@ -96,7 +97,7 @@
               <var>host</var> is an IPv6 address, wrap in square brackets,
               e.g. <code>pssl:6640:[::1]</code>.  If <var>host</var> is not
               specified then it listens only on IPv4 (but not IPv6) addresses.
-              A valid SSL configuration must be provided when this form is
+              A valid SSL/TLS configuration must be provided when this form is
               used, this can be specified either via command-line options or
               the <ref table="SSL"/> table.
             </p>
@@ -104,8 +105,8 @@
               If <var>port</var> is not specified, it defaults to 6640.
             </p>
             <p>
-              SSL support is an optional feature that is not always built as
-              part of Open vSwitch.
+              SSL/TLS support is an optional feature that is not always built
+              as part of Open vSwitch.
             </p>
           </dd>
           <dt>

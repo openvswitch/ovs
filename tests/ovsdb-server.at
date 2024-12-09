@@ -824,8 +824,8 @@ OVSDB_SERVER_SHUTDOWN(["
 "])
 AT_CLEANUP
 
-AT_SETUP([SSL db: implementation])
-AT_KEYWORDS([ovsdb server positive ssl $5])
+AT_SETUP([SSL/TLS db: implementation])
+AT_KEYWORDS([ovsdb server positive ssl tls $5])
 AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
 # For this test, we pass PKIDIR through a ovsdb-tool transact and
 # msys on Windows does not convert the path style automatically.
@@ -1604,7 +1604,7 @@ AT_CHECK([test $(get_memory_value atoms) -eq $db_atoms_before_conversion])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
-AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv4 sockets)])
+AT_BANNER([OVSDB -- ovsdb-server transactions (SSL/TLS IPv4 sockets)])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -1622,7 +1622,7 @@ AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv4 sockets)])
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_EXECUTION], 
   [AT_SETUP([$1])
-   AT_KEYWORDS([ovsdb server positive ssl $5])
+   AT_KEYWORDS([ovsdb server positive ssl tls $5])
    AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
    $2 > schema
    PKIDIR=$abs_top_builddir/tests
@@ -1640,7 +1640,7 @@ cat stdout >> output
 
 EXECUTION_EXAMPLES
 
-AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv6 sockets)])
+AT_BANNER([OVSDB -- ovsdb-server transactions (SSL/TLS IPv6 sockets)])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -1658,7 +1658,7 @@ AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv6 sockets)])
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_EXECUTION],
   [AT_SETUP([$1])
-   AT_KEYWORDS([ovsdb server positive ssl6 $5])
+   AT_KEYWORDS([ovsdb server positive ssl6 ssl tls $5])
    AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    $2 > schema

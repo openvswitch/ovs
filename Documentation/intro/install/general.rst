@@ -429,7 +429,7 @@ database that it can use::
 
 Configure ovsdb-server to use database created above, to listen on a Unix
 domain socket, to connect to any managers specified in the database itself, and
-to use the SSL configuration in the database::
+to use the SSL/TLS configuration in the database::
 
     $ mkdir -p /usr/local/var/run/openvswitch
     $ ovsdb-server --remote=punix:/usr/local/var/run/openvswitch/db.sock \
@@ -440,8 +440,8 @@ to use the SSL configuration in the database::
         --pidfile --detach --log-file
 
 .. note::
-  If you built Open vSwitch without SSL support, then omit ``--private-key``,
-  ``--certificate``, and ``--bootstrap-ca-cert``.)
+  If you built Open vSwitch without SSL/TLS support, then omit
+  ``--private-key``, ``--certificate``, and ``--bootstrap-ca-cert``.)
 
 Initialize the database using ovs-vsctl. This is only necessary the first time
 after you create the database with ovsdb-tool, though running it at any time is

@@ -155,7 +155,7 @@ Prints a brief overview of the database contents.
 .
 .IP "\fBemer\-reset\fR"
 Reset the configuration into a clean state.  It deconfigures OpenFlow
-controllers, OVSDB servers, and SSL, and deletes port mirroring,
+controllers, OVSDB servers, and SSL/TLS, and deletes port mirroring,
 \fBfail_mode\fR, NetFlow, sFlow, and IPFIX configuration.  This
 command also removes all \fBother\-config\fR keys from all database
 records, except that \fBother\-config:hwaddr\fR is preserved if it is
@@ -479,13 +479,13 @@ Sets the configured manager target or targets.
 Each \fItarget\fR may be an OVSDB active or passive connection method,
 e.g. \fBpssl:6640\fR, as described in \fBovsdb\fR(7).
 .
-.SS "SSL Configuration"
-When \fBovs\-vswitchd\fR is configured to connect over SSL for management or
-controller connectivity, the following parameters are required:
+.SS "SSL/TLS Configuration"
+When \fBovs\-vswitchd\fR is configured to connect over SSL/TLS for management
+or controller connectivity, the following parameters are required:
 .TP
 \fIprivate-key\fR
 Specifies a PEM file containing the private key used as the virtual
-switch's identity for SSL connections to the controller.
+switch's identity for SSL/TLS connections to the controller.
 .TP
 \fIcertificate\fR
 Specifies a PEM file containing a certificate, signed by the
@@ -500,37 +500,37 @@ the virtual switch is connected to a trustworthy controller.
 These files are read only once, at \fBovs\-vswitchd\fR startup time.  If
 their contents change, \fBovs\-vswitchd\fR must be killed and restarted.
 .PP
-These SSL settings apply to all SSL connections made by the virtual
+These SSL/TLS settings apply to all SSL/TLS connections made by the virtual
 switch.
 .
 .IP "\fBget\-ssl\fR"
-Prints the SSL configuration.
+Prints the SSL/TLS configuration.
 .
 .IP "\fBdel\-ssl\fR"
-Deletes the current SSL configuration.
+Deletes the current SSL/TLS configuration.
 .
 .IP "[\fB\-\-bootstrap\fR] \fBset\-ssl\fR \fIprivate-key\fR \fIcertificate\fR \fIca-cert\fR"
-Sets the SSL configuration.  The \fB\-\-bootstrap\fR option is described
+Sets the SSL/TLS configuration.  The \fB\-\-bootstrap\fR option is described
 below.
 .
 .ST "CA Certificate Bootstrap"
 .PP
-Ordinarily, all of the files named in the SSL configuration must exist
+Ordinarily, all of the files named in the SSL/TLS configuration must exist
 when \fBovs\-vswitchd\fR starts.  However, if the \fIca-cert\fR file
 does not exist and the \fB\-\-bootstrap\fR
 option is given, then \fBovs\-vswitchd\fR will attempt to obtain the
-CA certificate from the controller on its first SSL connection and
+CA certificate from the controller on its first SSL/TLS connection and
 save it to the named PEM file.  If it is successful, it will
 immediately drop the connection and reconnect, and from then on all
-SSL connections must be authenticated by a certificate signed by the
+SSL/TLS connections must be authenticated by a certificate signed by the
 CA certificate thus obtained.
 .PP
-\fBThis option exposes the SSL connection to a man-in-the-middle
+\fBThis option exposes the SSL/TLS connection to a man-in-the-middle
 attack obtaining the initial CA certificate\fR, but it may be useful
 for bootstrapping.
 .PP
 This option is only useful if the controller sends its CA certificate
-as part of the SSL certificate chain.  The SSL protocol does not
+as part of the SSL/TLS certificate chain.  SSL/TLS protocols do not
 require the controller to send the CA certificate.
 .
 .SS "Auto-Attach Commands"

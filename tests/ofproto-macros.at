@@ -46,7 +46,7 @@ s/unix#[0-9]*:/unix:/
 
 # PARSE_LISTENING_PORT LOGFILE VARIABLE
 #
-# Parses the TCP or SSL port on which a server is listening from
+# Parses the TCP or SSL/TLS port on which a server is listening from
 # LOGFILE, given that the server was told to listen on a kernel-chosen
 # port, and assigns the port number to shell VARIABLE.  You should
 # specify the listening remote as ptcp:0:127.0.0.1 or

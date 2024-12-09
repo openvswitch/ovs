@@ -3417,12 +3417,13 @@ bridge_run(void)
 
     bridge_run__();
 
-    /* Re-configure SSL.  We do this on every trip through the main loop,
+    /* Re-configure SSL/TLS.  We do this on every trip through the main loop,
      * instead of just when the database changes, because the contents of the
      * key and certificate files can change without the database changing.
      *
      * We do this before bridge_reconfigure() because that function might
-     * initiate SSL connections and thus requires SSL to be configured. */
+     * initiate SSL/TLS connections and thus requires SSL/TLS to be configured.
+     */
     if (cfg && cfg->ssl) {
         const struct ovsrec_ssl *ssl = cfg->ssl;
 

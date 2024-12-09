@@ -4,7 +4,7 @@
   <dt><code>--private-key=</code><var>privkey.pem</var></dt>
   <dd>
     Specifies a PEM file containing the private key used as
-    identity for outgoing SSL connections.
+    identity for outgoing SSL/TLS connections.
   </dd>
 
   <dt><code>-c</code> <var>cert.pem</var></dt>
@@ -13,15 +13,15 @@
     Specifies a PEM file containing a certificate that certifies the
     private key specified on <code>-p</code> or <code>--private-key</code> to be
     trustworthy.  The certificate must be signed by the certificate
-    authority (CA) that the peer in SSL connections will use to verify it.
+    authority (CA) that the peer in SSL/TLS connections will use to verify it.
   </dd>
 
   <dt><code>-C</code> <var>cacert.pem</var></dt>
   <dt><code>--ca-cert=</code><var>cacert.pem</var></dt>
   <dd>
     Specifies a PEM file containing the CA certificate for
-    verifying certificates presented to this program by SSL peers.  (This
-    may be the same certificate that SSL peers use to verify the
+    verifying certificates presented to this program by SSL/TLS peers.  (This
+    may be the same certificate that SSL/TLS peers use to verify the
     certificate specified on <code>-c</code> or <code>--certificate</code>, or it may
     be a different one, depending on the PKI design in use.)
   </dd>
@@ -29,7 +29,7 @@
   <dt><code>-C none</code></dt>
   <dt><code>--ca-cert=none</code></dt>
   <dd>
-    Disables verification of certificates presented by SSL peers.  This
+    Disables verification of certificates presented by SSL/TLS peers.  This
     introduces a security risk, because it means that certificates cannot
     be verified to be those of known trusted hosts.
   </dd>

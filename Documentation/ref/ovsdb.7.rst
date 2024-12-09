@@ -665,7 +665,7 @@ the opposite arrangement as well.
 OVSDB supports the following active connection methods:
 
 ssl:<host>:<port>
-    The specified SSL or TLS <port> on the given <host>.
+    The specified SSL/TLS <port> on the given <host>.
 
 tcp:<host>:<port>
     The specified TCP <port> on the given <host>.
@@ -692,7 +692,7 @@ unix:<file>
 OVSDB supports the following passive connection methods:
 
 pssl:<port>[:<ip>]
-    Listen on the given TCP <port> for SSL or TLS connections.  By default,
+    Listen on the given TCP <port> for SSL/TLS connections.  By default,
     connections are not bound to a particular local IP address.  Specifying
     <ip> limits connections to those from the given IP.
 
@@ -725,8 +725,8 @@ versions, we encourage users to specify a port number.
 
 The ``ssl`` and ``pssl`` connection methods requires additional configuration
 through ``--private-key``, ``--certificate``, and ``--ca-cert`` command line
-options.  Open vSwitch can be built without SSL support, in which case these
-connection methods are not supported.
+options.  Open vSwitch can be built without SSL/TLS support, in which case
+these connection methods are not supported.
 
 Database Life Cycle
 ===================
