@@ -4003,6 +4003,8 @@ static void
 bridge_configure_tables(struct bridge *br)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    char *prev_prefixes = NULL;
+    int prev_start = 0;
     int n_tables;
     int i, j;
 
@@ -4064,18 +4066,21 @@ bridge_configure_tables(struct bridge *br)
                 }
                 mf = mf_from_name(name);
                 if (!mf) {
-                    VLOG_WARN("bridge %s: 'prefixes' with unknown field: %s",
-                              br->name, name);
+                    VLOG_WARN_RL(&rl, "bridge %s: "
+                                 "'prefixes' with unknown field: %s",
+                                 br->name, name);
                     continue;
                 }
                 if (mf->flow_be32ofs < 0 || mf->n_bits % 32) {
-                    VLOG_WARN("bridge %s: 'prefixes' with incompatible field: "
-                              "%s", br->name, name);
+                    VLOG_WARN_RL(&rl, "bridge %s: "
+                                 "'prefixes' with incompatible field: %s",
+                                 br->name, name);
                     continue;
                 }
                 if (s.n_prefix_fields >= ARRAY_SIZE(s.prefix_fields)) {
-                    VLOG_WARN("bridge %s: 'prefixes' with too many fields, "
-                              "field not used: %s", br->name, name);
+                    VLOG_WARN_RL(&rl, "bridge %s: "
+                                 "'prefixes' with too many fields, "
+                                 "field not used: %s", br->name, name);
                     continue;
                 }
                 use_default_prefixes = false;
@@ -4087,8 +4092,10 @@ bridge_configure_tables(struct bridge *br)
             s.n_prefix_fields = ARRAY_SIZE(default_prefix_fields);
             memcpy(s.prefix_fields, default_prefix_fields,
                    sizeof default_prefix_fields);
-        } else {
+        }
+        if (VLOG_IS_DBG_ENABLED()) {
             struct ds ds = DS_EMPTY_INITIALIZER;
+
             for (int k = 0; k < s.n_prefix_fields; k++) {
                 if (k) {
                     ds_put_char(&ds, ',');
@@ -4098,14 +4105,27 @@ bridge_configure_tables(struct bridge *br)
             if (s.n_prefix_fields == 0) {
                 ds_put_cstr(&ds, "none");
             }
-            VLOG_INFO("bridge %s table %d: Prefix lookup with: %s.",
-                      br->name, i, ds_cstr(&ds));
+            if (!prev_prefixes) {
+                prev_prefixes = ds_steal_cstr(&ds);
+                prev_start = i;
+            } else if (prev_prefixes && strcmp(prev_prefixes, ds_cstr(&ds))) {
+                VLOG_DBG("bridge %s tables %d-%d: Prefix lookup with: %s.",
+                         br->name, prev_start, i - 1, prev_prefixes);
+                free(prev_prefixes);
+                prev_prefixes = ds_steal_cstr(&ds);
+                prev_start = i;
+            }
             ds_destroy(&ds);
         }
 
         ofproto_configure_table(br->ofproto, i, &s);
 
         free(s.groups);
+    }
+    if (prev_prefixes) {
+        VLOG_DBG("bridge %s tables %d-%d: Prefix lookup with: %s.",
+                 br->name, prev_start, n_tables - 1, prev_prefixes);
+        free(prev_prefixes);
     }
     for (; j < br->cfg->n_flow_tables; j++) {
         VLOG_WARN_RL(&rl, "bridge %s: ignoring configuration for flow table "
