@@ -10,6 +10,10 @@ Post-v3.4.0
      address fields: nw_dst, nw_src, ipv6_dst and ipv6_src.
      This allows to significantly reduce amount of datapath flows generated
      from mixed IPv4+IPv6 flow tables.
+   - SSL/TLS:
+     * TLSv1 and TLSv1.1 protocols are deprecated and disabled by default
+       on OpenFlow and database connections.  Use --ssl-protocols to turn
+       them back on.  Support will be fully removed in the next release.
    - Userspace datapath:
      * The default zone limit, if set, is now inherited by any zone
        that does not have a specific value defined, rather than being

@@ -795,6 +795,8 @@ class SSLStream(Stream):
         ctx.verify_mode = ssl.CERT_REQUIRED
         ctx.options |= ssl.OP_NO_SSLv2
         ctx.options |= ssl.OP_NO_SSLv3
+        ctx.options |= ssl.OP_NO_TLSv1
+        ctx.options |= ssl.OP_NO_TLSv1_1
         # If the client has not set the SSL configuration files
         # exception would be raised.
         ctx.load_verify_locations(Stream._SSL_ca_cert_file)

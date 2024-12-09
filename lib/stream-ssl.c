@@ -162,7 +162,7 @@ struct ssl_config_file {
 static struct ssl_config_file private_key;
 static struct ssl_config_file certificate;
 static struct ssl_config_file ca_cert;
-static char *ssl_protocols = "TLSv1,TLSv1.1,TLSv1.2";
+static char *ssl_protocols = "TLSv1.2";
 static char *ssl_ciphers = "HIGH:!aNULL:!MD5";
 
 /* Ordinarily, the SSL client and server verify each other's certificates using
@@ -1076,7 +1076,8 @@ do_ssl_init(void)
         return ENOPROTOOPT;
     }
 
-    long options = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
+    long options = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 |
+                   SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1;
 #ifdef SSL_OP_IGNORE_UNEXPECTED_EOF
     options |= SSL_OP_IGNORE_UNEXPECTED_EOF;
 #endif
@@ -1274,6 +1275,15 @@ stream_ssl_set_protocols(const char *arg)
                             SSL_OP_NO_TLSv1_2)
 #endif
     long protocol_flags = SSL_OP_NO_SSL_MASK;
+    struct {
+        const char *name;
+        long no_flag;
+        bool deprecated;
+    } protocols[] = {
+        {"TLSv1",   SSL_OP_NO_TLSv1,   true },
+        {"TLSv1.1", SSL_OP_NO_TLSv1_1, true },
+        {"TLSv1.2", SSL_OP_NO_TLSv1_2, false},
+    };
 
     char *s = xstrdup(arg);
     char *save_ptr = NULL;
@@ -1283,20 +1293,26 @@ stream_ssl_set_protocols(const char *arg)
         goto exit;
     }
     while (word != NULL) {
-        long on_flag;
-        if (!strcasecmp(word, "TLSv1.2")){
-            on_flag = SSL_OP_NO_TLSv1_2;
-        } else if (!strcasecmp(word, "TLSv1.1")){
-            on_flag = SSL_OP_NO_TLSv1_1;
-        } else if (!strcasecmp(word, "TLSv1")){
-            on_flag = SSL_OP_NO_TLSv1;
-        } else {
+        long no_flag = 0;
+
+        for (size_t i = 0; i < ARRAY_SIZE(protocols); i++) {
+            if (!strcasecmp(word, protocols[i].name)) {
+                no_flag = protocols[i].no_flag;
+                if (protocols[i].deprecated) {
+                    VLOG_WARN("%s protocol is deprecated", word);
+                }
+                break;
+            }
+        }
+
+        if (!no_flag) {
             VLOG_ERR("%s: SSL protocol not recognized", word);
             goto exit;
         }
+
         /* Reverse the no flag and mask it out in the flags
          * to turn on that protocol. */
-        protocol_flags &= ~on_flag;
+        protocol_flags &= ~no_flag;
         word = strtok_r(NULL, " ,\t", &save_ptr);
     };
 

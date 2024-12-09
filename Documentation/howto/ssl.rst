@@ -34,9 +34,9 @@ This document describes how to configure an Open vSwitch to connect to an
 OpenFlow controller over SSL.  Refer to :doc:`/intro/install/general`. for
 instructions on building Open vSwitch with SSL support.
 
-Open vSwitch uses TLS version 1.0 or later (TLSv1), as specified by RFC 2246,
-which is very similar to SSL version 3.0.  TLSv1 was released in January 1999,
-so all current software and hardware should implement it.
+Open vSwitch uses TLS version 1.2 or later (TLSv1.2), as specified by
+RFC 5246.  TLSv1.2 was released in August 2008, so all current software and
+hardware should implement it.
 
 This document assumes basic familiarity with public-key cryptography and
 public-key infrastructure.
