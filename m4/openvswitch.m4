@@ -293,22 +293,6 @@ OpenFlow connections over SSL/TLS will not be supported.
    if test "$HAVE_OPENSSL" = yes; then
       AC_DEFINE([HAVE_OPENSSL], [1], [Define to 1 if OpenSSL is installed.])
    fi
-
-   OPENSSL_SUPPORTS_SNI=no
-   if test $HAVE_OPENSSL = yes; then
-      save_CPPFLAGS=$CPPFLAGS
-      CPPFLAGS="$CPPFLAGS $SSL_INCLUDES"
-      AC_CHECK_DECL([SSL_set_tlsext_host_name], [OPENSSL_SUPPORTS_SNI=yes],
-                    [], [#include <openssl/ssl.h>
-])
-      if test $OPENSSL_SUPPORTS_SNI = yes; then
-        AC_DEFINE(
-          [OPENSSL_SUPPORTS_SNI], [1],
-          [Define to 1 if OpenSSL supports Server Name Indication (SNI).])
-      fi
-      CPPFLAGS=$save_CPPFLAGS
-   fi
-   AC_SUBST([OPENSSL_SUPPORTS_SNI])
 ])
 
 dnl Checks for libraries needed by lib/socket-util.c.

@@ -11,13 +11,7 @@ static int
 my_DH_set0_pqg(DH *dh, BIGNUM *p, const BIGNUM **q OVS_UNUSED, BIGNUM *g)
 {
     ovs_assert(q == NULL);
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER)
-    dh->p = p;
-    dh->g = g;
-    return 1;
-#else
     return DH_set0_pqg(dh, p, NULL, g);
-#endif
 }
 DH *get_dh2048(void)
 {

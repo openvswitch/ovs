@@ -14,6 +14,7 @@ Post-v3.4.0
      * TLSv1 and TLSv1.1 protocols are deprecated and disabled by default
        on OpenFlow and database connections.  Use --ssl-protocols to turn
        them back on.  Support will be fully removed in the next release.
+     * OpenSSL 1.1.1 or newer is now required for SSL/TLS support.
    - Userspace datapath:
      * The default zone limit, if set, is now inherited by any zone
        that does not have a specific value defined, rather than being

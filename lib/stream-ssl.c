@@ -286,14 +286,12 @@ new_ssl_stream(char *name, char *server_name, int fd, enum session_type type,
     if (!verify_peer_cert || (bootstrap_ca_cert && type == CLIENT)) {
         SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
     }
-#if OPENSSL_SUPPORTS_SNI
     if (server_name && !SSL_set_tlsext_host_name(ssl, server_name)) {
         VLOG_ERR("%s: failed to set server name indication (%s)",
                  server_name, ERR_error_string(ERR_get_error(), NULL));
         retval = ENOPROTOOPT;
         goto error;
     }
-#endif
 
     /* Create and return the ssl_stream. */
     sslv = xmalloc(sizeof *sslv);
@@ -499,14 +497,7 @@ get_peer_common_name(const struct ssl_stream *sslv)
         goto error;
     }
 
-    const char *cn;
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER)
-    /* ASN1_STRING_data() is deprecated as of OpenSSL version 1.1 */
-    cn = (const char *)ASN1_STRING_data(cn_data);
-#else
-    cn = (const char *)ASN1_STRING_get0_data(cn_data);
- #endif
-    peer_name = xstrdup(cn);
+    peer_name = xstrdup((const char *) ASN1_STRING_get0_data(cn_data));
 
 error:
     X509_free(peer_cert);
@@ -571,13 +562,11 @@ ssl_connect(struct stream *stream)
                 "rejecting SSL/TLS connection during bootstrap race window");
             return EPROTO;
         } else {
-#if OPENSSL_SUPPORTS_SNI
             const char *servername = SSL_get_servername(
                 sslv->ssl, TLSEXT_NAMETYPE_host_name);
             if (servername) {
                 VLOG_DBG("connection indicated server name %s", servername);
             }
-#endif
 
             char *cn = get_peer_common_name(sslv);
 
@@ -1016,15 +1005,6 @@ do_ssl_init(void)
 {
     SSL_METHOD *method;
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER)
-#ifdef _WIN32
-    /* The following call is needed if we "#include <openssl/applink.c>". */
-    CRYPTO_malloc_init();
-#endif
-    SSL_library_init();
-    SSL_load_error_strings();
-#endif
-
     if (!RAND_status()) {
         /* We occasionally see OpenSSL fail to seed its random number generator
          * in heavily loaded hypervisors.  I suspect the following scenario:
@@ -1269,12 +1249,6 @@ stream_ssl_set_protocols(const char *arg)
     }
 
     /* Start with all the flags off and turn them on as requested. */
-#ifndef SSL_OP_NO_SSL_MASK
-    /* For old OpenSSL without this macro, this is the correct value.  */
-#define SSL_OP_NO_SSL_MASK (SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | \
-                            SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | \
-                            SSL_OP_NO_TLSv1_2)
-#endif
     long protocol_flags = SSL_OP_NO_SSL_MASK;
     struct {
         const char *name;

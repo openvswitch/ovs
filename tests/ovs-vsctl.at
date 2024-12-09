@@ -1734,7 +1734,6 @@ AT_CLEANUP
 AT_SETUP([TLS server name indication (SNI)])
 AT_KEYWORDS([ovsdb server positive ssl tls sni])
 AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
-AT_SKIP_IF([test "$OPENSSL_SUPPORTS_SNI" = no])
 AT_SKIP_IF([test "$HAVE_UNBOUND" = no])
 OVSDB_INIT([conf.db])
 PKIDIR=$abs_top_builddir/tests
