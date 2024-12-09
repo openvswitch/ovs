@@ -856,7 +856,7 @@ AT_CHECK(
                 "certificate": "'"$PKIDIR/testpki-cert2.pem"'",
                 "ca_cert": "'"$PKIDIR/testpki-cacert.pem"'",
                 "ssl_protocols": "'"TLSv1.2,TLSv1.1"'",
-                "ssl_ciphers": "'"HIGH:!aNULL:!MD5:!ECDHE-ECDSA-AES256-GCM-SHA384"'"}}]']],
+                "ssl_ciphers": "'"DEFAULT:@SECLEVEL=2:!ECDHE-ECDSA-AES256-GCM-SHA384"'"}}]']],
   [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
 AT_CHECK(

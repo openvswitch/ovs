@@ -18,4 +18,4 @@ omitted is \fBTLSv1.2\fR or later.
 .IP "\fB\-\-ssl\-ciphers=\fIciphers\fR"
 Specifies, in OpenSSL cipher string format, the ciphers \fB\*(PN\fR will 
 support for SSL/TLS connections.  The default when this option is omitted is
-\fBHIGH:!aNULL:!MD5\fR.
+\fBDEFAULT:@SECLEVEL=2\fR.

@@ -165,7 +165,7 @@ static struct ssl_config_file private_key;
 static struct ssl_config_file certificate;
 static struct ssl_config_file ca_cert;
 static char *ssl_protocols = "TLSv1.2+";
-static char *ssl_ciphers = "HIGH:!aNULL:!MD5";
+static char *ssl_ciphers = "DEFAULT:@SECLEVEL=2";
 
 /* Ordinarily, the SSL client and server verify each other's certificates using
  * a CA certificate.  Setting this to false disables this behavior.  (This is a
@@ -1070,7 +1070,7 @@ do_ssl_init(void)
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                        NULL);
     SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
-    SSL_CTX_set_cipher_list(ctx, "HIGH:!aNULL:!MD5");
+    SSL_CTX_set_cipher_list(ctx, "DEFAULT:@SECLEVEL=2");
 
     return 0;
 }
