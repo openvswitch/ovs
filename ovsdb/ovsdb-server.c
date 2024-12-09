@@ -73,6 +73,7 @@ static char *certificate_file;
 static char *ca_cert_file;
 static char *ssl_protocols;
 static char *ssl_ciphers;
+static char *ssl_ciphersuites;
 static bool bootstrap_ca_cert;
 
 /* Try to reclaim heap memory back to system after DB compaction. */
@@ -1792,17 +1793,21 @@ reconfigure_ssl(const struct shash *all_dbs)
     const char *resolved_ca_cert;
     const char *resolved_ssl_protocols;
     const char *resolved_ssl_ciphers;
+    const char *resolved_ssl_ciphersuites;
 
     resolved_private_key = query_db_string(all_dbs, private_key_file, &errors);
     resolved_certificate = query_db_string(all_dbs, certificate_file, &errors);
     resolved_ca_cert = query_db_string(all_dbs, ca_cert_file, &errors);
     resolved_ssl_protocols = query_db_string(all_dbs, ssl_protocols, &errors);
     resolved_ssl_ciphers = query_db_string(all_dbs, ssl_ciphers, &errors);
+    resolved_ssl_ciphersuites = query_db_string(all_dbs, ssl_ciphersuites,
+                                                &errors);
 
     stream_ssl_set_key_and_cert(resolved_private_key, resolved_certificate);
     stream_ssl_set_ca_cert_file(resolved_ca_cert, bootstrap_ca_cert);
     stream_ssl_set_protocols(resolved_ssl_protocols);
     stream_ssl_set_ciphers(resolved_ssl_ciphers);
+    stream_ssl_set_ciphersuites(resolved_ssl_ciphersuites);
 
     return errors.string;
 }
@@ -2697,6 +2702,10 @@ parse_options(int argc, char *argv[],
 
         case OPT_SSL_CIPHERS:
             ssl_ciphers = optarg;
+            break;
+
+        case OPT_SSL_CIPHERSUITES:
+            ssl_ciphersuites = optarg;
             break;
 
         case OPT_BOOTSTRAP_CA_CERT:

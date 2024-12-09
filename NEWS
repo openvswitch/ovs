@@ -20,6 +20,11 @@ Post-v3.4.0
          - "TLSv1-TLSv1.2" to enable all protocols between TLSv1 and TLSv1.2.
          - "TLSv1.2+" to enable protocol TLSv1.2 and later.
        The value must be a list of protocols or exactly one protocol range.
+     * Added explicit support for TLSv1.3.  It can now be enabled via
+       --ssl-protocols (TLSv1.3 was supported in earlier versions only when
+       this option was not set).  TLS ciphersuites for TLSv1.3 and later can
+       be configured via --ssl-ciphersuites (--ssl-ciphers only applies to
+       TLSv1.2 and earlier).
      * ovs-pki now generates 3072-bit keys by default.
    - Userspace datapath:
      * The default zone limit, if set, is now inherited by any zone

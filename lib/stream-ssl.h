@@ -27,17 +27,20 @@ void stream_ssl_set_key_and_cert(const char *private_key_file,
                                  const char *certificate_file);
 void stream_ssl_set_protocols(const char *arg);
 void stream_ssl_set_ciphers(const char *arg);
+void stream_ssl_set_ciphersuites(const char *arg);
 
 #define SSL_OPTION_ENUMS \
         OPT_SSL_PROTOCOLS, \
-        OPT_SSL_CIPHERS
+        OPT_SSL_CIPHERS, \
+        OPT_SSL_CIPHERSUITES
 
 #define STREAM_SSL_LONG_OPTIONS                     \
         {"private-key", required_argument, NULL, 'p'}, \
         {"certificate", required_argument, NULL, 'c'}, \
         {"ca-cert",     required_argument, NULL, 'C'}, \
         {"ssl-protocols", required_argument, NULL, OPT_SSL_PROTOCOLS}, \
-        {"ssl-ciphers", required_argument, NULL, OPT_SSL_CIPHERS}
+        {"ssl-ciphers", required_argument, NULL, OPT_SSL_CIPHERS}, \
+        {"ssl-ciphersuites", required_argument, NULL, OPT_SSL_CIPHERSUITES}
 
 #define STREAM_SSL_OPTION_HANDLERS                      \
         case 'p':                                       \
@@ -58,6 +61,10 @@ void stream_ssl_set_ciphers(const char *arg);
                                                         \
         case OPT_SSL_CIPHERS:                           \
             stream_ssl_set_ciphers(optarg);             \
+            break;                                      \
+                                                        \
+        case OPT_SSL_CIPHERSUITES:                      \
+            stream_ssl_set_ciphersuites(optarg);        \
             break;
 
 #define STREAM_SSL_CASES \

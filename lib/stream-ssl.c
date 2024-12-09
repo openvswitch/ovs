@@ -166,6 +166,7 @@ static struct ssl_config_file certificate;
 static struct ssl_config_file ca_cert;
 static char *ssl_protocols = "TLSv1.2+";
 static char *ssl_ciphers = "DEFAULT:@SECLEVEL=2";
+static char *ssl_ciphersuites = ""; /* Using default ones, unless specified. */
 
 /* Ordinarily, the SSL client and server verify each other's certificates using
  * a CA certificate.  Setting this to false disables this behavior.  (This is a
@@ -1220,8 +1221,8 @@ stream_ssl_set_key_and_cert(const char *private_key_file,
     }
 }
 
-/* Sets SSL/TLS ciphers based on string input. Aborts with an error message
- * if 'arg' is invalid. */
+/* Sets SSL/TLS ciphers for TLSv1.2 and earlier based on string input.
+ * Aborts with an error message if 'arg' is not valid. */
 void
 stream_ssl_set_ciphers(const char *arg)
 {
@@ -1233,6 +1234,21 @@ stream_ssl_set_ciphers(const char *arg)
                  ERR_error_string(ERR_get_error(), NULL));
     }
     ssl_ciphers = xstrdup(arg);
+}
+
+/* Sets TLS ciphersuites for TLSv1.3 and later based on string input.
+ * Aborts with an error message if 'arg' is not valid. */
+void
+stream_ssl_set_ciphersuites(const char *arg)
+{
+    if (ssl_init() || !arg || !strcmp(ssl_ciphersuites, arg)) {
+        return;
+    }
+    if (SSL_CTX_set_ciphersuites(ctx, arg) == 0) {
+        VLOG_ERR("SSL_CTX_set_ciphersuites: %s",
+                 ERR_error_string(ERR_get_error(), NULL));
+    }
+    ssl_ciphersuites = xstrdup(arg);
 }
 
 /* Set SSL/TLS protocols based on the string input. Aborts with an error
@@ -1254,6 +1270,7 @@ stream_ssl_set_protocols(const char *arg)
         {"TLSv1",   TLS1_VERSION,        true },
         {"TLSv1.1", TLS1_1_VERSION,      true },
         {"TLSv1.2", TLS1_2_VERSION,      false},
+        {"TLSv1.3", TLS1_3_VERSION,      false},
     };
     char *dash = strchr(arg, '-');
     bool or_later = false;
