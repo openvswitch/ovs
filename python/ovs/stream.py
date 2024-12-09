@@ -794,10 +794,9 @@ class SSLStream(Stream):
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.verify_mode = ssl.CERT_REQUIRED
         ctx.check_hostname = False
-        ctx.options |= ssl.OP_NO_SSLv2
-        ctx.options |= ssl.OP_NO_SSLv3
-        ctx.options |= ssl.OP_NO_TLSv1
-        ctx.options |= ssl.OP_NO_TLSv1_1
+        # Only allow TLSv1.2 or later.
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.maximum_version = ssl.TLSVersion.MAXIMUM_SUPPORTED
         # If the client has not set the SSL/TLS configuration files
         # exception would be raised.
         ctx.load_verify_locations(Stream._SSL_ca_cert_file)

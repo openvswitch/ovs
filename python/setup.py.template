@@ -93,7 +93,7 @@ setup_args = dict(
         'Topic :: System :: Networking',
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
     ],
     ext_modules=[setuptools.Extension("ovs._json",
                                       sources=["ovs/_json.c"],

@@ -90,7 +90,7 @@ need the following software:
   If libcap-ng is installed, then Open vSwitch will automatically build with
   support for it.
 
-- Python 3.6 or later.
+- Python 3.7 or later.
 
 - Unbound library, from http://www.unbound.net, is optional but recommended if
   you want to enable ovs-vswitchd and other utilities to use DNS names when
@@ -202,7 +202,7 @@ simply install and run Open vSwitch you require the following software:
   from iproute2 (part of all major distributions and available at
   https://wiki.linuxfoundation.org/networking/iproute2).
 
-- Python 3.6 or later.
+- Python 3.7 or later.
 
 On Linux you should ensure that ``/dev/urandom`` exists. To support TAP
 devices, you must also ensure that ``/dev/net/tun`` exists.

@@ -92,7 +92,7 @@ Once that is completed, remove the file ``/tmp/ovs.spec``.
 If python3-sphinx package is not available in your version of RHEL, you can
 install it via pip with 'pip install sphinx'.
 
-Open vSwitch requires python 3.6 or newer which is not available in older
+Open vSwitch requires python 3.7 or newer which is not available in older
 distributions.  For those, one option is to build and install required version
 from source.
 

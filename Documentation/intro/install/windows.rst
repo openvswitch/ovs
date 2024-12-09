@@ -56,7 +56,7 @@ The following explains the steps in some detail.
 
       'C:/MinGW /mingw'.
 
-- Python 3.6 or later.
+- Python 3.7 or later.
 
   Install the latest Python 3.x from python.org and verify that its path is
   part of Windows' PATH environment variable.

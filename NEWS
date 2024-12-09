@@ -33,6 +33,7 @@ Post-v3.4.0
      * Added tool called "ovs-flowviz" capable of parsing OpenFlow
        and datapath flow dumps and displaying them in several different
        formats.
+     * Dropped support for Python < 3.7.
    - DPDK:
      * OVS validated with DPDK 23.11.2.
      * Add hardware offload support for matching ICMPv6 protocol
