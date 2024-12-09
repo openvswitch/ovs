@@ -790,9 +790,10 @@ class SSLStream(Stream):
         if sock is None:
             return family, sock
 
-        # Create an SSL context
-        ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        # Create an SSL context.
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.verify_mode = ssl.CERT_REQUIRED
+        ctx.check_hostname = False
         ctx.options |= ssl.OP_NO_SSLv2
         ctx.options |= ssl.OP_NO_SSLv3
         ctx.options |= ssl.OP_NO_TLSv1

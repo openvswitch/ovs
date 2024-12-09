@@ -1005,8 +1005,6 @@ ssl_init(void)
 static int
 do_ssl_init(void)
 {
-    SSL_METHOD *method;
-
     if (!RAND_status()) {
         /* We occasionally see OpenSSL fail to seed its random number generator
          * in heavily loaded hypervisors.  I suspect the following scenario:
@@ -1037,19 +1035,14 @@ do_ssl_init(void)
         RAND_seed(seed, sizeof seed);
     }
 
-    /* OpenSSL has a bunch of "connection methods": SSLv2_method(),
-     * SSLv3_method(), TLSv1_method(), SSLv23_method(), ...  Most of these
-     * support exactly one version of SSL/TLS, e.g. TLSv1_method() supports
-     * TLSv1 only, not any earlier *or later* version.  The only exception is
-     * SSLv23_method(), which in fact supports *any* version of SSL and TLS.
-     * We don't want SSLv2 or SSLv3 support, so we turn it off below with
-     * SSL_CTX_set_options().
+    /* Using version-flexible "connection method".  Allowed versions will
+     * be restricted below.
      *
-     * The cast is needed to avoid a warning with newer versions of OpenSSL in
-     * which SSLv23_method() returns a "const" pointer. */
-    method = CONST_CAST(SSL_METHOD *, SSLv23_method());
+     * The context can be used for both client and server connections, so
+     * not using specific TLS_server_method() or TLS_client_method() here. */
+    const SSL_METHOD *method = TLS_method();
     if (method == NULL) {
-        VLOG_ERR("TLSv1_method: %s", ERR_error_string(ERR_get_error(), NULL));
+        VLOG_ERR("TLS_method: %s", ERR_error_string(ERR_get_error(), NULL));
         return ENOPROTOOPT;
     }
 
