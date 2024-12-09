@@ -159,7 +159,7 @@ stream_usage(const char *name, bool active, bool passive,
                "to read or create\n");
     }
     printf("SSL/TLS options:\n"
-           "  --ssl-protocols=PROTOS  list of SSL/TLS protocols to enable\n"
+           "  --ssl-protocols=PROTOS  range of SSL/TLS protocols to enable\n"
            "  --ssl-ciphers=CIPHERS   list of SSL/TLS ciphers to enable\n");
 #endif
 }

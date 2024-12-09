@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "bitmap.h"
 #include "coverage.h"
 #include "openvswitch/dynamic-string.h"
 #include "entropy.h"
@@ -42,6 +43,7 @@
 #include "openvswitch/shash.h"
 #include "socket-util.h"
 #include "util.h"
+#include "sset.h"
 #include "stream-provider.h"
 #include "stream.h"
 #include "timeval.h"
@@ -162,7 +164,7 @@ struct ssl_config_file {
 static struct ssl_config_file private_key;
 static struct ssl_config_file certificate;
 static struct ssl_config_file ca_cert;
-static char *ssl_protocols = "TLSv1.2";
+static char *ssl_protocols = "TLSv1.2+";
 static char *ssl_ciphers = "HIGH:!aNULL:!MD5";
 
 /* Ordinarily, the SSL client and server verify each other's certificates using
@@ -1057,12 +1059,13 @@ do_ssl_init(void)
         return ENOPROTOOPT;
     }
 
-    long options = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 |
-                   SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1;
 #ifdef SSL_OP_IGNORE_UNEXPECTED_EOF
-    options |= SSL_OP_IGNORE_UNEXPECTED_EOF;
+    SSL_CTX_set_options(ctx, SSL_OP_IGNORE_UNEXPECTED_EOF);
 #endif
-    SSL_CTX_set_options(ctx, options);
+
+    /* Only allow TLSv1.2 or later. */
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+    SSL_CTX_set_max_proto_version(ctx, 0);
 
 #if OPENSSL_VERSION_NUMBER < 0x3000000fL
     SSL_CTX_set_tmp_dh_callback(ctx, tmp_dh_callback);
@@ -1244,60 +1247,98 @@ stream_ssl_set_ciphers(const char *arg)
 void
 stream_ssl_set_protocols(const char *arg)
 {
-    if (ssl_init() || !arg || !strcmp(arg, ssl_protocols)){
+    if (ssl_init() || !arg || !strcmp(arg, ssl_protocols)) {
         return;
     }
 
-    /* Start with all the flags off and turn them on as requested. */
-    long protocol_flags = SSL_OP_NO_SSL_MASK;
+    struct sset set = SSET_INITIALIZER(&set);
     struct {
         const char *name;
-        long no_flag;
+        int version;
         bool deprecated;
     } protocols[] = {
-        {"TLSv1",   SSL_OP_NO_TLSv1,   true },
-        {"TLSv1.1", SSL_OP_NO_TLSv1_1, true },
-        {"TLSv1.2", SSL_OP_NO_TLSv1_2, false},
+        {"later",   0 /* any version */, false},
+        {"TLSv1",   TLS1_VERSION,        true },
+        {"TLSv1.1", TLS1_1_VERSION,      true },
+        {"TLSv1.2", TLS1_2_VERSION,      false},
     };
+    char *dash = strchr(arg, '-');
+    bool or_later = false;
+    int len = strlen(arg);
 
-    char *s = xstrdup(arg);
-    char *save_ptr = NULL;
-    char *word = strtok_r(s, " ,\t", &save_ptr);
-    if (word == NULL) {
+    if (len && arg[len - 1] == '+') {
+        /* We only support full ranges, so more than one version or later "X+"
+         * doesn't make a lot of sense. */
+        sset_add_and_free(&set, xmemdup0(arg, len - 1));
+        or_later = true;
+    } else if (dash) {
+        /* Again, do not attempt to parse multiple ranges.  The range should
+         * always be a single "X-Y". */
+        sset_add_and_free(&set, xmemdup0(arg, dash - arg));
+        sset_add_and_free(&set, xstrdup(dash + 1));
+    } else {
+        /* Otherwise, it's a list that should not include ranges. */
+        sset_from_delimited_string(&set, arg, " ,\t");
+    }
+
+    if (sset_is_empty(&set)) {
         VLOG_ERR("SSL/TLS protocol settings invalid");
         goto exit;
     }
-    while (word != NULL) {
-        long no_flag = 0;
 
-        for (size_t i = 0; i < ARRAY_SIZE(protocols); i++) {
-            if (!strcasecmp(word, protocols[i].name)) {
-                no_flag = protocols[i].no_flag;
-                if (protocols[i].deprecated) {
-                    VLOG_WARN("%s protocol is deprecated", word);
-                }
-                break;
+    size_t min_version = ARRAY_SIZE(protocols) + 1;
+    size_t max_version = 0;
+    unsigned long map = 0;
+
+    for (size_t i = 1; i < ARRAY_SIZE(protocols); i++) {
+        if (sset_contains(&set, protocols[i].name)) {
+            min_version = MIN(min_version, i);
+            max_version = MAX(max_version, i);
+            if (protocols[i].deprecated) {
+                VLOG_WARN("%s protocol is deprecated", protocols[i].name);
+            }
+            bitmap_set1(&map, i);
+            sset_find_and_delete(&set, protocols[i].name);
+        }
+    }
+
+    if (!sset_is_empty(&set)) {
+        const char *word;
+
+        SSET_FOR_EACH (word, &set) {
+            VLOG_ERR("%s: SSL/TLS protocol not recognized", word);
+        }
+        goto exit;
+    }
+
+    /* At this point we must have parsed at least one protocol. */
+    ovs_assert(min_version && min_version < ARRAY_SIZE(protocols));
+    ovs_assert(max_version && max_version < ARRAY_SIZE(protocols));
+    if (!or_later && !dash) {
+        for (size_t i = min_version + 1; i < max_version; i++) {
+            if (!bitmap_is_set(&map, i)) {
+                VLOG_WARN("SSL/TLS protocol %s"
+                          " is not configured, but will be enabled anyway.",
+                          protocols[i].name);
             }
         }
+    }
 
-        if (!no_flag) {
-            VLOG_ERR("%s: SSL/TLS protocol not recognized", word);
-            goto exit;
-        }
+    if (or_later) {
+        ovs_assert(min_version == max_version);
+        max_version = 0;
+    }
 
-        /* Reverse the no flag and mask it out in the flags
-         * to turn on that protocol. */
-        protocol_flags &= ~no_flag;
-        word = strtok_r(NULL, " ,\t", &save_ptr);
-    };
-
-    /* Set the actual options. */
-    SSL_CTX_set_options(ctx, protocol_flags);
-
+    /* Set the actual versions. */
+    SSL_CTX_set_min_proto_version(ctx, protocols[min_version].version);
+    SSL_CTX_set_max_proto_version(ctx, protocols[max_version].version);
+    VLOG_DBG("Enabled protocol range: %s%s%s", protocols[min_version].name,
+                                               max_version ? " - " : " or ",
+                                               protocols[max_version].name);
     ssl_protocols = xstrdup(arg);
 
 exit:
-    free(s);
+    sset_destroy(&set);
 }
 
 /* Reads the X509 certificate or certificates in file 'file_name'.  On success,

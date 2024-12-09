@@ -15,6 +15,11 @@ Post-v3.4.0
        on OpenFlow and database connections.  Use --ssl-protocols to turn
        them back on.  Support will be fully removed in the next release.
      * OpenSSL 1.1.1 or newer is now required for SSL/TLS support.
+     * The protocol list in --ssl-protocols or corresponding database column
+       now supports specifying simple protocol ranges like:
+         - "TLSv1-TLSv1.2" to enable all protocols between TLSv1 and TLSv1.2.
+         - "TLSv1.2+" to enable protocol TLSv1.2 and later.
+       The value must be a list of protocols or exactly one protocol range.
    - Userspace datapath:
      * The default zone limit, if set, is now inherited by any zone
        that does not have a specific value defined, rather than being
