@@ -51,6 +51,10 @@ Post-v3.4.0
      * New option '--root-ipsec-conf' for ovs-monitor-ipsec with Libreswan
        to allow cases where '--ipsec-conf' is not the main ipsec.conf, but
        included from it.  The value should be the path to the main ipsec.conf.
+     * New option '--use-default-crypto' for ovs-monitor-ipsec with Libreswan
+       to make it not configure any crypto options (ike/esp) for connections.
+       Most useful in combination with '--root-ipsec-conf' where system-wide
+       crypto-policy is included from the root ipsec.conf.
 
 
 v3.4.0 - 15 Aug 2024

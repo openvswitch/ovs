@@ -21,7 +21,7 @@ m4_define([START_PLUTO], [
 ])
 
 dnl IPSEC_ADD_NODE([namespace], [device], [address], [peer address],
-dnl                [custom-ipsec-conf])
+dnl                [custom-ipsec-conf], [extra])
 dnl
 dnl Creates a dummy host that acts as an IPsec endpoint. Creates host in
 dnl 'namespace' and attaches a veth 'device' to 'namespace' to act as the host
@@ -33,6 +33,9 @@ dnl Starts all daemons in 'namespace' that are required for IPsec.
 dnl
 dnl If 'custom-ipsec-conf' is provided, then it will be used as --ipsec-conf
 dnl and the ipsec.conf will be used as --root-ipsec-conf.
+dnl
+dnl If 'extra' is provided, passes it as an additional argument list for
+dnl ovs-monitor-ipsec.
 m4_define([IPSEC_ADD_NODE],
   [ADD_NAMESPACES($1)
   dnl Disable DAD. We know we wont get duplicates on this underlay network.
@@ -79,6 +82,7 @@ m4_define([IPSEC_ADD_NODE],
         --ipsec-secrets=$ovs_base/$1/secrets \
         --log-file=$ovs_base/$1/ovs-monitor-ipsec.log \
         --ipsec-ctl=$ovs_base/$1/pluto.ctl \
+        m4_if([$6], [], [], [$6]) \
         --no-restart-ike-daemon --detach ], [0], [], [stderr])
   on_exit "kill `cat $ovs_base/$1/ovs-monitor-ipsec.pid`"
 
@@ -88,9 +92,9 @@ m4_define([IPSEC_ADD_NODE],
                -- set-controller br-ipsec punix:$ovs_base/br-ipsec.$1.mgmt])]
 )
 m4_define([IPSEC_ADD_NODE_LEFT],
-          [IPSEC_ADD_NODE(left, p0, $1, $2, [$3])])
+          [IPSEC_ADD_NODE(left, p0, $1, $2, [$3], [$4])])
 m4_define([IPSEC_ADD_NODE_RIGHT],
-          [IPSEC_ADD_NODE(right, p1, $1, $2, [$3])])
+          [IPSEC_ADD_NODE(right, p1, $1, $2, [$3], [$4])])
 
 dnl OVS_VSCTL([namespace], [sub-command])
 dnl
@@ -455,6 +459,69 @@ AT_CHECK([grep -c -E "(ike|ikev2|esp)=" $ovs_base/left/custom.conf], [0], [6
 AT_CHECK([grep -q "conn %default" $ovs_base/right/custom.conf], [1])
 AT_CHECK([grep -c -E "(ike|ikev2|esp)=" $ovs_base/right/custom.conf], [0], [6
 ])
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv4, geneve, default crypto)])
+AT_KEYWORDS([ipsec libreswan ipv4 geneve psk default crypto])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up hosts.
+IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2, [], [--use-default-crypto])
+IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1, [], [--use-default-crypto])
+
+dnl Set up IPsec tunnel on 'left' host.
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 options:psk=swordfish])
+
+dnl Set up IPsec tunnel on 'right' host.
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
+
+dnl Check that ipsec.conf doesn't include ike or esp configuration.
+AT_CHECK([grep -q "conn %default" $ovs_base/left/ipsec.conf])
+AT_CHECK([grep -q -E "(ike|ikev2|esp)=" $ovs_base/left/ipsec.conf], [1])
+AT_CHECK([grep -q "conn %default" $ovs_base/right/ipsec.conf])
+AT_CHECK([grep -q -E "(ike|ikev2|esp)=" $ovs_base/right/ipsec.conf], [1])
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv4, geneve, custom conf, default crypto)])
+AT_KEYWORDS([ipsec libreswan ipv4 geneve psk custom conf default crypto])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up hosts.
+IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2, [custom.conf], [--use-default-crypto])
+IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1, [custom.conf], [--use-default-crypto])
+
+dnl Set up IPsec tunnel on 'left' host.
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 options:psk=swordfish])
+
+dnl Set up IPsec tunnel on 'right' host.
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
+
+dnl Check that custom.conf doesn't include default section, and also doesn't
+dnl have ike or esp configuration.
+AT_CHECK([grep -q "conn %default" $ovs_base/left/custom.conf], [1])
+AT_CHECK([grep -q -E "(ike|ikev2|esp)=" $ovs_base/left/custom.conf], [1])
+AT_CHECK([grep -q "conn %default" $ovs_base/right/custom.conf], [1])
+AT_CHECK([grep -q -E "(ike|ikev2|esp)=" $ovs_base/right/custom.conf], [1])
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP

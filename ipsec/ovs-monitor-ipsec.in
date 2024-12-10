@@ -540,6 +540,7 @@ conn prevent_unencrypted_vxlan
         self.last_refresh = time.time()
         self.secrets_file = None
         self.use_default_conn = self.IPSEC_CONF == self.ROOT_IPSEC_CONF
+        self.use_default_crypto = args.use_default_crypto
         vlog.dbg("Using: " + self.IPSEC)
         vlog.dbg("Configuration file: " + self.IPSEC_CONF)
         vlog.dbg("Root configuration file: " + self.ROOT_IPSEC_CONF)
@@ -557,7 +558,8 @@ conn prevent_unencrypted_vxlan
         if self.use_default_conn:
             f.write(self.CONF_DEFAULT_HEADER)
             f.write(self.CONN_CONF_BASE)
-            f.write(self.CONN_CONF_CRYPTO)
+            if not self.use_default_crypto:
+                f.write(self.CONN_CONF_CRYPTO)
             f.write("\n")
         f.close()
 
@@ -575,7 +577,8 @@ conn prevent_unencrypted_vxlan
         if self.use_default_conn:
             self.conf_file.write(self.CONF_DEFAULT_HEADER)
             self.conf_file.write(self.CONN_CONF_BASE)
-            self.conf_file.write(self.CONN_CONF_CRYPTO)
+            if not self.use_default_crypto:
+                self.conf_file.write(self.CONN_CONF_CRYPTO)
             self.conf_file.write("\n")
 
         self.secrets_file.write(FILE_HEADER)
@@ -637,7 +640,8 @@ conn prevent_unencrypted_vxlan
 
         if not self.use_default_conn:
             auth_section = self.CONN_CONF_BASE + auth_section
-            auth_section = self.CONN_CONF_CRYPTO + auth_section
+            if not self.use_default_crypto:
+                auth_section = self.CONN_CONF_CRYPTO + auth_section
 
         if "custom_options" in tunnel.conf:
             for key, value in tunnel.conf["custom_options"].items():
@@ -1431,6 +1435,10 @@ def main():
                         type=int, default=120,
                         help="Timeout for external commands called by the "
                         "ovs-monitor-ipsec daemon, e.g. ipsec --start.")
+    parser.add_argument("--use-default-crypto", action='store_true',
+                        help="Use default crypto configuration, i.e. do"
+                        " not set ike/esp/ikev2 in connections"
+                        " (libreswan only)")
 
     ovs.vlog.add_args(parser)
     ovs.daemon.add_args(parser)
