@@ -2402,6 +2402,98 @@ recirc_id(<recirc>),in_port(2),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(ty
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - mod_nw_src/set_field on IP fragments])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", 36:b1:ee:7c:01:03)
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", 36:b1:ee:7c:01:02)
+
+AT_DATA([flows.txt], [dnl
+  in_port=ovs-p0,ip,nw_src=10.1.1.1 actions=mod_nw_src=11.1.1.1,ovs-p1
+  in_port=ovs-p0,ipv6,ipv6_src=fc00::1 actions=set_field:fc00::100->ipv6_src,ovs-p1
+])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flows br0 flows.txt])
+
+NETNS_DAEMONIZE([at_ns1],
+                [tcpdump -l -nn -xx -U -i p1 -w p1.pcap 2> tcpdump.err],
+                [tcpdump.pid])
+OVS_WAIT_UNTIL([grep "listening" tcpdump.err])
+
+dnl IPv4 Packet content:
+dnl   Ethernet II, Src: 36:b1:ee:7c:01:03, Dst: 36:b1:ee:7c:01:02
+dnl       Type: IPv4 (0x0800)
+dnl   Internet Protocol Version 4, Src: 10.1.1.1, Dst: 10.1.1.2
+dnl       0100 .... = Version: 4
+dnl       .... 0101 = Header Length: 20 bytes (5)
+dnl       Differentiated Services Field: 0x00 (DSCP: CS0, ECN: Not-ECT)
+dnl       Total Length: 38
+dnl       Identification: 0x0001 (1)
+dnl       001. .... = Flags: 0x1, More fragments
+dnl           0... .... = Reserved bit: Not set
+dnl           .0.. .... = Don't fragment: Not set
+dnl           ..1. .... = More fragments: Set
+dnl       ...0 0000 0000 0000 = Fragment Offset: 0
+dnl       Time to Live: 64
+dnl       Protocol: UDP (17)
+dnl       Header Checksum: 0x44c2
+dnl   Data (18 bytes)
+eth="36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00"
+ip="45 00 00 26 00 01 20 00 40 11 44 c2 0a 01 01 01 0a 01 01 02"
+data="0b c4 08 84 00 26 e9 64 01 02 03 04 05 06 07 08 09 0a"
+packet="${eth} ${ip} ${data}"
+
+dnl We send each packet multiple times, one for learning, which will go to
+dnl ovs-vswitchd, and the others will go through the actual datapath.
+for i in 1 2 3 4 5; do
+  NS_CHECK_EXEC([at_ns0],
+                [$PYTHON3 $srcdir/sendpkt.py p0 ${packet} > /dev/null])
+done
+
+dnl Update source address and checksums in original packet for comparison.
+packet=$(echo "$packet" | sed -e 's/ //g' \
+         -e 's/0a010101/0b010101/g' -e 's/44c2/43c2/g' -e 's/e964/e864/g')
+OVS_WAIT_UNTIL([test $(ovs-pcap p1.pcap | grep -c "${packet}") -eq 5])
+
+dnl Repeat similar test with IPv6.
+dnl Packet content:
+dnl   Ethernet II, Src: 36:b1:ee:7c:01:03, Dst: 36:b1:ee:7c:01:02
+dnl       Type: IPv6 (0x86dd)
+dnl   Internet Protocol Version 6, Src: fc00::1, Dst: fc00::2
+dnl       Payload Length: 24
+dnl       Next Header: Fragment Header for IPv6 (44)
+dnl       Hop Limit: 64
+dnl       Fragment Header for IPv6
+dnl           Next header: UDP (17)
+dnl           Reserved octet: 0x00
+dnl           0000 0000 0000 0... = Offset: 0 (0 bytes)
+dnl           .... .... .... .00. = Reserved bits: 0
+dnl           .... .... .... ...1 = More Fragments: Yes
+dnl           Identification: 0x2316ab36
+dnl   Data (16 bytes)
+eth="36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 86 dd"
+ip="60 00 00 00 00 18 2c 40 fc 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 \
+    fc 00 00 00 00 00 00 00 00 00 00 00 00 00 00 02 11 00 00 01 23 16 ab 36"
+data="0b c4 08 84 00 26 07 65 01 02 03 04 05 06 07 08"
+packet="${eth} ${ip} ${data}"
+
+for i in 1 2 3 4 5; do
+  NS_CHECK_EXEC([at_ns0],
+                [$PYTHON3 $srcdir/sendpkt.py p0 ${packet} > /dev/null])
+done
+
+dnl Update checksum and source address in original packet for comparison.
+packet=$(echo "$packet" | sed -e 's/ //g' -e 's/0765/0666/g' -e \
+       's/fc000000000000000000000000000001/fc000000000000000000000000000100/g')
+OVS_WAIT_UNTIL([test $(ovs-pcap p1.pcap | grep -c "${packet}") -eq 5])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([MPLS])
 
 AT_SETUP([mpls - encap header dp-support])
