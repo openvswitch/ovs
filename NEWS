@@ -47,6 +47,10 @@ Post-v3.4.0
    - Tunnels:
      * LISP and STT tunnel port types are deprecated and will be removed in
        the next release.
+   - IPsec:
+     * New option '--root-ipsec-conf' for ovs-monitor-ipsec with Libreswan
+       to allow cases where '--ipsec-conf' is not the main ipsec.conf, but
+       included from it.  The value should be the path to the main ipsec.conf.
 
 
 v3.4.0 - 15 Aug 2024

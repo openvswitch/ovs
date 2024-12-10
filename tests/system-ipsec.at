@@ -20,7 +20,8 @@ m4_define([START_PLUTO], [
         --rundir $ovs_base/$1], [0], [], [stderr])
 ])
 
-dnl IPSEC_ADD_NODE([namespace], [device], [address], [peer address]))
+dnl IPSEC_ADD_NODE([namespace], [device], [address], [peer address],
+dnl                [custom-ipsec-conf])
 dnl
 dnl Creates a dummy host that acts as an IPsec endpoint. Creates host in
 dnl 'namespace' and attaches a veth 'device' to 'namespace' to act as the host
@@ -28,7 +29,10 @@ dnl NIC. Assigns 'address' to 'device' and adds the other end of veth 'device' t
 dnl 'br0' which is an OVS bridge in the default namespace acting as an underlay
 dnl switch. Sets the default gateway of 'namespace' to 'peer address'.
 dnl
-dnl Starts all daemons in 'namespace' that are required for IPsec
+dnl Starts all daemons in 'namespace' that are required for IPsec.
+dnl
+dnl If 'custom-ipsec-conf' is provided, then it will be used as --ipsec-conf
+dnl and the ipsec.conf will be used as --root-ipsec-conf.
 m4_define([IPSEC_ADD_NODE],
   [ADD_NAMESPACES($1)
   dnl Disable DAD. We know we wont get duplicates on this underlay network.
@@ -56,6 +60,12 @@ m4_define([IPSEC_ADD_NODE],
         [0], [], [stderr])
   on_exit "kill_ovs_vswitchd `cat $ovs_base/$1/vswitchd.pid`"
 
+  m4_if([$5], [], [], [
+    AT_CHECK([echo "## A read-only root config. ##" > $ovs_base/$1/ipsec.conf])
+    AT_CHECK([echo "include $ovs_base/$1/$5" >> $ovs_base/$1/ipsec.conf])
+  ])
+  AT_CHECK
+
   dnl Start pluto
   START_PLUTO([$1])
   on_exit 'kill $(cat $ovs_base/$1/pluto.pid)'
@@ -63,7 +73,9 @@ m4_define([IPSEC_ADD_NODE],
   dnl Start ovs-monitor-ipsec
   NS_CHECK_EXEC([$1], [ovs-monitor-ipsec unix:${OVS_RUNDIR}/$1/db.sock\
         --pidfile=${OVS_RUNDIR}/$1/ovs-monitor-ipsec.pid --ike-daemon=libreswan\
-        --ipsec-conf=$ovs_base/$1/ipsec.conf --ipsec-d=$ovs_base/$1/ipsec.d \
+        --ipsec-conf=$ovs_base/$1/m4_if([$5], [], [ipsec.conf], [$5]) \
+        m4_if([$5], [], [], [--root-ipsec-conf=$ovs_base/$1/ipsec.conf]) \
+        --ipsec-d=$ovs_base/$1/ipsec.d \
         --ipsec-secrets=$ovs_base/$1/secrets \
         --log-file=$ovs_base/$1/ovs-monitor-ipsec.log \
         --ipsec-ctl=$ovs_base/$1/pluto.ctl \
@@ -75,8 +87,10 @@ m4_define([IPSEC_ADD_NODE],
     [ovs-vsctl --db unix:$ovs_base/$1/db.sock add-br br-ipsec \
                -- set-controller br-ipsec punix:$ovs_base/br-ipsec.$1.mgmt])]
 )
-m4_define([IPSEC_ADD_NODE_LEFT], [IPSEC_ADD_NODE(left, p0, $1, $2)])
-m4_define([IPSEC_ADD_NODE_RIGHT], [IPSEC_ADD_NODE(right, p1, $1, $2)])
+m4_define([IPSEC_ADD_NODE_LEFT],
+          [IPSEC_ADD_NODE(left, p0, $1, $2, [$3])])
+m4_define([IPSEC_ADD_NODE_RIGHT],
+          [IPSEC_ADD_NODE(right, p1, $1, $2, [$3])])
 
 dnl OVS_VSCTL([namespace], [sub-command])
 dnl
@@ -407,6 +421,40 @@ dnl Set up IPsec tunnel on 'right' host
 IPSEC_ADD_TUNNEL_RIGHT([geneve],
                        [options:remote_ip=fd01::101 options:psk=swordfish])
 CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv4, geneve, custom conf)])
+AT_KEYWORDS([ipsec libreswan ipv4 geneve psk custom conf])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up hosts.
+IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2, [custom.conf])
+IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1, [custom.conf])
+
+dnl Set up IPsec tunnel on 'left' host.
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 options:psk=swordfish])
+
+dnl Set up IPsec tunnel on 'right' host.
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
+
+dnl Check that custom.conf doesn't include default section, but has
+dnl ike and esp configuration per connection.
+AT_CHECK([grep -q "conn %default" $ovs_base/left/custom.conf], [1])
+AT_CHECK([grep -c -E "(ike|ikev2|esp)=" $ovs_base/left/custom.conf], [0], [6
+])
+AT_CHECK([grep -q "conn %default" $ovs_base/right/custom.conf], [1])
+AT_CHECK([grep -c -E "(ike|ikev2|esp)=" $ovs_base/right/custom.conf], [0], [6
+])
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP

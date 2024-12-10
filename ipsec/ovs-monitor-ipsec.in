@@ -425,19 +425,24 @@ conn prevent_unencrypted_vxlan
 
 class LibreSwanHelper(object):
     """This class does LibreSwan specific configurations."""
-    CONF_HEADER = """%s
+    CONF_DEFAULT_HEADER = """\
 config setup
     uniqueids=yes
 
-conn %%default
-    keyingtries=%%forever
+conn %default
+"""
+
+    CONN_CONF_BASE = """\
+    keyingtries=%forever
     type=transport
     auto=route
+"""
+
+    CONN_CONF_CRYPTO = """\
     ike=aes_gcm256-sha2_256
     esp=aes_gcm256
     ikev2=insist
-
-""" % (FILE_HEADER)
+"""
 
     SHUNT_POLICY = """conn prevent_unencrypted_gre
     type=drop
@@ -524,6 +529,9 @@ conn prevent_unencrypted_vxlan
                         else "/run/pluto/pluto.ctl")
 
         self.IPSEC_CONF = libreswan_root_prefix + ipsec_conf
+        self.ROOT_IPSEC_CONF = self.IPSEC_CONF
+        if args.root_ipsec_conf:
+            self.ROOT_IPSEC_CONF = args.root_ipsec_conf
         self.IPSEC_SECRETS = libreswan_root_prefix + ipsec_secrets
         self.IPSEC_D = "sql:" + libreswan_root_prefix + ipsec_d
         self.IPSEC_CTL = libreswan_root_prefix + ipsec_ctl
@@ -531,8 +539,10 @@ conn prevent_unencrypted_vxlan
         self.conns_not_active = set()
         self.last_refresh = time.time()
         self.secrets_file = None
+        self.use_default_conn = self.IPSEC_CONF == self.ROOT_IPSEC_CONF
         vlog.dbg("Using: " + self.IPSEC)
         vlog.dbg("Configuration file: " + self.IPSEC_CONF)
+        vlog.dbg("Root configuration file: " + self.ROOT_IPSEC_CONF)
         vlog.dbg("Secrets file: " + self.IPSEC_SECRETS)
         vlog.dbg("ipsec.d: " + self.IPSEC_D)
         vlog.dbg("Pluto socket: " + self.IPSEC_CTL)
@@ -543,7 +553,12 @@ conn prevent_unencrypted_vxlan
         self._nss_clear_database()
 
         f = open(self.IPSEC_CONF, "w")
-        f.write(self.CONF_HEADER)
+        f.write(FILE_HEADER)
+        if self.use_default_conn:
+            f.write(self.CONF_DEFAULT_HEADER)
+            f.write(self.CONN_CONF_BASE)
+            f.write(self.CONN_CONF_CRYPTO)
+            f.write("\n")
         f.close()
 
         f = open(self.IPSEC_SECRETS, "w")
@@ -556,7 +571,13 @@ conn prevent_unencrypted_vxlan
     def config_init(self):
         self.conf_file = open(self.IPSEC_CONF, "w")
         self.secrets_file = open(self.IPSEC_SECRETS, "w")
-        self.conf_file.write(self.CONF_HEADER)
+        self.conf_file.write(FILE_HEADER)
+        if self.use_default_conn:
+            self.conf_file.write(self.CONF_DEFAULT_HEADER)
+            self.conf_file.write(self.CONN_CONF_BASE)
+            self.conf_file.write(self.CONN_CONF_CRYPTO)
+            self.conf_file.write("\n")
+
         self.secrets_file.write(FILE_HEADER)
 
     def config_global(self, monitor):
@@ -614,6 +635,10 @@ conn prevent_unencrypted_vxlan
         if tunnel.conf["address_family"] == "IPv6":
             auth_section = self.IPV6_CONN + auth_section
 
+        if not self.use_default_conn:
+            auth_section = self.CONN_CONF_BASE + auth_section
+            auth_section = self.CONN_CONF_CRYPTO + auth_section
+
         if "custom_options" in tunnel.conf:
             for key, value in tunnel.conf["custom_options"].items():
                 auth_section += "\n    " + key + "=" + value
@@ -638,7 +663,7 @@ conn prevent_unencrypted_vxlan
     def refresh(self, monitor):
         vlog.info("Refreshing LibreSwan configuration")
         run_command(self.IPSEC_AUTO + ["--ctlsocket", self.IPSEC_CTL,
-                                       "--config", self.IPSEC_CONF,
+                                       "--config", self.ROOT_IPSEC_CONF,
                                        "--rereadsecrets"],
                     "re-read secrets")
 
@@ -708,43 +733,43 @@ conn prevent_unencrypted_vxlan
         if monitor.conf_in_use["skb_mark"] != monitor.conf["skb_mark"]:
             if monitor.conf["skb_mark"]:
                 run_command(self.IPSEC_AUTO +
-                            ["--config", self.IPSEC_CONF,
+                            ["--config", self.ROOT_IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_gre"])
                 run_command(self.IPSEC_AUTO +
-                            ["--config", self.IPSEC_CONF,
+                            ["--config", self.ROOT_IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_geneve"])
                 run_command(self.IPSEC_AUTO +
-                            ["--config", self.IPSEC_CONF,
+                            ["--config", self.ROOT_IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_stt"])
                 run_command(self.IPSEC_AUTO +
-                            ["--config", self.IPSEC_CONF,
+                            ["--config", self.ROOT_IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
                             "--asynchronous", "prevent_unencrypted_vxlan"])
             else:
                 run_command(self.IPSEC_AUTO +
-                            ["--config", self.IPSEC_CONF,
+                            ["--config", self.ROOT_IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_gre"])
                 run_command(self.IPSEC_AUTO +
-                            ["--config", self.IPSEC_CONF,
+                            ["--config", self.ROOT_IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_geneve"])
                 run_command(self.IPSEC_AUTO +
-                            ["--config", self.IPSEC_CONF,
+                            ["--config", self.ROOT_IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_stt"])
                 run_command(self.IPSEC_AUTO +
-                            ["--config", self.IPSEC_CONF,
+                            ["--config", self.ROOT_IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_vxlan"])
@@ -838,13 +863,13 @@ conn prevent_unencrypted_vxlan
         self.conns_not_active.discard(conn)
         run_command(self.IPSEC_AUTO +
                     ["--ctlsocket", self.IPSEC_CTL,
-                     "--config", self.IPSEC_CONF,
+                     "--config", self.ROOT_IPSEC_CONF,
                      "--delete", conn], "delete %s" % conn)
 
     def _start_ipsec_connection(self, conn, action):
         asynchronous = [] if action == "add" else ["--asynchronous"]
         ret, pout, perr = run_command(self.IPSEC_AUTO +
-                                      ["--config", self.IPSEC_CONF,
+                                      ["--config", self.ROOT_IPSEC_CONF,
                                       "--ctlsocket", self.IPSEC_CTL,
                                       "--" + action,
                                       *asynchronous, conn],
@@ -1388,7 +1413,11 @@ def main():
                         help="Don't restart the IKE daemon on startup.")
     parser.add_argument("--ipsec-conf", metavar="IPSEC-CONF",
                         help="Use DIR/IPSEC-CONF as location for "
-                        " ipsec.conf (libreswan only).")
+                        " ipsec.conf to overwrite (libreswan only).")
+    parser.add_argument("--root-ipsec-conf", metavar="ROOT-IPSEC-CONF",
+                        help="The read-only root configuration file that"
+                        " 'include's the one provided in --ipsec-conf.  Will"
+                        " be used to call ipsec commands (libreswan only).")
     parser.add_argument("--ipsec-d", metavar="IPSEC-D",
                         help="Use DIR/IPSEC-D as location for "
                         " ipsec.d (libreswan only).")
