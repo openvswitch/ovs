@@ -1490,6 +1490,31 @@ parse_put_flow_ct_action(struct tc_flower *flower,
         return 0;
 }
 
+/* This function returns true if the tc layer will add a l4 checksum action
+ * for this set action.  Refer to the csum_update_flag() function for
+ * detailed logic.  Note that even the kernel only supports updating TCP,
+ * UDP and ICMPv6.
+ */
+static bool
+tc_will_add_l4_checksum(struct tc_flower *flower, int type)
+{
+    switch (type) {
+    case OVS_KEY_ATTR_IPV4:
+    case OVS_KEY_ATTR_IPV6:
+    case OVS_KEY_ATTR_TCP:
+    case OVS_KEY_ATTR_UDP:
+        switch (flower->key.ip_proto) {
+        case IPPROTO_TCP:
+        case IPPROTO_UDP:
+        case IPPROTO_ICMPV6:
+        case IPPROTO_UDPLITE:
+            return true;
+        }
+        break;
+    }
+    return false;
+}
+
 static int
 parse_put_flow_set_masked_action(struct tc_flower *flower,
                                  struct tc_action *action,
@@ -1518,6 +1543,14 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
     if (type >= ARRAY_SIZE(set_flower_map)
         || !set_flower_map[type][0].size) {
         VLOG_DBG_RL(&rl, "unsupported set action type: %d", type);
+        ofpbuf_uninit(&set_buf);
+        return EOPNOTSUPP;
+    }
+
+    if (flower->key.flags & TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT
+        && tc_will_add_l4_checksum(flower, type)) {
+        VLOG_DBG_RL(&rl, "set action type %d not supported on fragments "
+                    "due to checksum limitation", type);
         ofpbuf_uninit(&set_buf);
         return EOPNOTSUPP;
     }
@@ -2447,6 +2480,12 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             }
 
             mask->nw_frag = 0;
+        } else {
+            /* This scenario should not occur.  Currently, all installed IP DP
+             * flows perform a fully masked match on the fragmentation bits.
+             * However, since TC depends on this behavior, we return ENOTSUPP
+             * for now in case this behavior changes in the future. */
+             return EOPNOTSUPP;
         }
 
         if (key->nw_proto == IPPROTO_TCP) {
