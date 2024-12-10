@@ -2974,7 +2974,10 @@ csum_update_flag(struct tc_flower *flower,
      * eth(dst=<mac>),eth_type(0x0800) actions=set(ipv4(src=<new_ip>))
      * we need to force a more specific flow as this can, for example,
      * need a recalculation of icmp checksum if the packet that passes
-     * is ICMPv6 and tcp checksum if its tcp. */
+     * is ICMPv6 and tcp checksum if its tcp.
+     *
+     * This section of the code must be kept in sync with the pre-check
+     * function in netdev-offload-tc.c, tc_will_add_l4_checksum(). */
 
     switch (htype) {
     case TCA_PEDIT_KEY_EX_HDR_TYPE_IP4:
