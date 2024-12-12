@@ -24,6 +24,7 @@
 #define BUF_SIZE 100
 #define HDR_OFS 10
 #define MSG_OFS 50
+#define DATA_SIZE 16
 
 static void
 test_ofpbuf_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
@@ -55,6 +56,15 @@ test_ofpbuf_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     /* Must remain unchanged. */
     ovs_assert(!buf->size);
     ovs_assert(buf->allocated == 2 * BUF_SIZE);
+    ovs_assert((char *) buf->base + BUF_SIZE == buf->data);
+    ovs_assert(buf->header == (char *) buf->base + BUF_SIZE + HDR_OFS);
+    ovs_assert(buf->msg == (char *) buf->base + BUF_SIZE + MSG_OFS);
+
+    size_t prev_size = buf->size;
+    ofpbuf_put_uninit(buf, DATA_SIZE);
+    ofpbuf_truncate(buf, prev_size);
+    /* Check that everything else is unchanged after truncate. */
+    ovs_assert(!buf->size);
     ovs_assert((char *) buf->base + BUF_SIZE == buf->data);
     ovs_assert(buf->header == (char *) buf->base + BUF_SIZE + HDR_OFS);
     ovs_assert(buf->msg == (char *) buf->base + BUF_SIZE + MSG_OFS);

@@ -292,6 +292,13 @@ static inline bool ofpbuf_oversized(const struct ofpbuf *ofpacts)
     return (char *)ofpbuf_tail(ofpacts) - (char *)ofpacts->header > UINT16_MAX;
 }
 
+/* Truncates the buffer to 'new_size' bytes from the tail end of 'b'. */
+static inline void ofpbuf_truncate(struct ofpbuf *b, size_t new_size)
+{
+    ovs_assert(b->size >= new_size);
+    b->size = new_size;
+}
+
 #ifdef  __cplusplus
 }
 #endif
