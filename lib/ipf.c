@@ -820,7 +820,7 @@ ipf_process_frag(struct ipf *ipf, struct ipf_list *ipf_list,
              * recommend not setting the mempool number of buffers too low
              * and also clamp the number of fragments. */
             struct ipf_frag *frag = &ipf_list->frag_list[last_inuse_idx + 1];
-            frag->pkt = dp_packet_clone(pkt);
+            frag->pkt = pkt;
             frag->start_data_byte = start_data_byte;
             frag->end_data_byte = end_data_byte;
             ipf_list->last_inuse_idx++;
@@ -959,7 +959,6 @@ ipf_extract_frags_from_batch(struct ipf *ipf, struct dp_packet_batch *pb,
                     dp_packet_batch_refill(pb, rp->pkt, pb_idx);
                     rp->list->reass_execute_ctx = rp->pkt;
                 }
-                dp_packet_delete(pkt);
             }
             ovs_mutex_unlock(&ipf->ipf_lock);
         } else {
