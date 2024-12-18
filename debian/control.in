@@ -21,7 +21,7 @@ Build-Depends:
  iproute2,
  libcap-ng-dev,
  libdbus-1-dev [amd64 i386 ppc64el arm64],
-# DPDK_NETDEV  libdpdk-dev (>= 23.11) [amd64 i386 ppc64el arm64],
+# DPDK_NETDEV  libdpdk-dev (>= 24.11) [amd64 i386 ppc64el arm64],
  libnuma-dev [amd64 i386 ppc64el arm64],
  libpcap-dev [amd64 i386 ppc64el arm64],
  libssl-dev,

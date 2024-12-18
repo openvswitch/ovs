@@ -547,15 +547,15 @@ dump_flow_pattern(struct ds *s,
             if (!ipv6_mask) {
                 ipv6_mask = &rte_flow_item_ipv6_mask;
             }
-            memcpy(&addr, ipv6_spec->hdr.src_addr, sizeof addr);
-            memcpy(&mask, ipv6_mask->hdr.src_addr, sizeof mask);
+            memcpy(&addr, &ipv6_spec->hdr.src_addr, sizeof addr);
+            memcpy(&mask, &ipv6_mask->hdr.src_addr, sizeof mask);
             ipv6_string_mapped(addr_str, &addr);
             ipv6_string_mapped(mask_str, &mask);
             DUMP_PATTERN_ITEM(mask, false, "src", "%s",
                               addr_str, mask_str, "");
 
-            memcpy(&addr, ipv6_spec->hdr.dst_addr, sizeof addr);
-            memcpy(&mask, ipv6_mask->hdr.dst_addr, sizeof mask);
+            memcpy(&addr, &ipv6_spec->hdr.dst_addr, sizeof addr);
+            memcpy(&mask, &ipv6_mask->hdr.dst_addr, sizeof mask);
             ipv6_string_mapped(addr_str, &addr);
             ipv6_string_mapped(mask_str, &mask);
             DUMP_PATTERN_ITEM(mask, false, "dst", "%s",
@@ -712,10 +712,10 @@ dump_vxlan_encap(struct ds *s, const struct rte_flow_item *items)
         struct in6_addr addr;
 
         ds_put_cstr(s, "ip-src ");
-        memcpy(&addr, ipv6->hdr.src_addr, sizeof addr);
+        memcpy(&addr, &ipv6->hdr.src_addr, sizeof addr);
         ipv6_format_mapped(&addr, s);
         ds_put_cstr(s, " ip-dst ");
-        memcpy(&addr, ipv6->hdr.dst_addr, sizeof addr);
+        memcpy(&addr, &ipv6->hdr.dst_addr, sizeof addr);
         ipv6_format_mapped(&addr, s);
         ds_put_cstr(s, " ");
     }
@@ -851,7 +851,7 @@ dump_flow_action(struct ds *s, struct ds *s_extra,
             struct in6_addr addr;
 
             ds_put_cstr(s, "ipv6_addr ");
-            memcpy(&addr, set_ipv6->ipv6_addr, sizeof addr);
+            memcpy(&addr, &set_ipv6->ipv6_addr, sizeof addr);
             ipv6_format_addr(&addr, s);
             ds_put_cstr(s, " ");
         }
@@ -1227,18 +1227,18 @@ parse_tnl_ip_match(struct flow_patterns *patterns,
         spec->hdr.hop_limits = match->flow.tunnel.ip_ttl;
         spec->hdr.vtc_flow = htonl((uint32_t) match->flow.tunnel.ip_tos <<
                                    RTE_IPV6_HDR_TC_SHIFT);
-        memcpy(spec->hdr.src_addr, &match->flow.tunnel.ipv6_src,
+        memcpy(&spec->hdr.src_addr, &match->flow.tunnel.ipv6_src,
                sizeof spec->hdr.src_addr);
-        memcpy(spec->hdr.dst_addr, &match->flow.tunnel.ipv6_dst,
+        memcpy(&spec->hdr.dst_addr, &match->flow.tunnel.ipv6_dst,
                sizeof spec->hdr.dst_addr);
 
         mask->hdr.proto = UINT8_MAX;
         mask->hdr.hop_limits = match->wc.masks.tunnel.ip_ttl;
         mask->hdr.vtc_flow = htonl((uint32_t) match->wc.masks.tunnel.ip_tos <<
                                    RTE_IPV6_HDR_TC_SHIFT);
-        memcpy(mask->hdr.src_addr, &match->wc.masks.tunnel.ipv6_src,
+        memcpy(&mask->hdr.src_addr, &match->wc.masks.tunnel.ipv6_src,
                sizeof mask->hdr.src_addr);
-        memcpy(mask->hdr.dst_addr, &match->wc.masks.tunnel.ipv6_dst,
+        memcpy(&mask->hdr.dst_addr, &match->wc.masks.tunnel.ipv6_dst,
                sizeof mask->hdr.dst_addr);
 
         consumed_masks->tunnel.ip_tos = 0;
@@ -1549,9 +1549,9 @@ parse_flow_match(struct netdev *netdev,
         spec->hdr.hop_limits = match->flow.nw_ttl;
         spec->hdr.vtc_flow =
             htonl((uint32_t) match->flow.nw_tos << RTE_IPV6_HDR_TC_SHIFT);
-        memcpy(spec->hdr.src_addr, &match->flow.ipv6_src,
+        memcpy(&spec->hdr.src_addr, &match->flow.ipv6_src,
                sizeof spec->hdr.src_addr);
-        memcpy(spec->hdr.dst_addr, &match->flow.ipv6_dst,
+        memcpy(&spec->hdr.dst_addr, &match->flow.ipv6_dst,
                sizeof spec->hdr.dst_addr);
         if ((match->wc.masks.nw_frag & FLOW_NW_FRAG_ANY)
             && (match->flow.nw_frag & FLOW_NW_FRAG_ANY)) {
@@ -1562,9 +1562,9 @@ parse_flow_match(struct netdev *netdev,
         mask->hdr.hop_limits = match->wc.masks.nw_ttl;
         mask->hdr.vtc_flow =
             htonl((uint32_t) match->wc.masks.nw_tos << RTE_IPV6_HDR_TC_SHIFT);
-        memcpy(mask->hdr.src_addr, &match->wc.masks.ipv6_src,
+        memcpy(&mask->hdr.src_addr, &match->wc.masks.ipv6_src,
                sizeof mask->hdr.src_addr);
-        memcpy(mask->hdr.dst_addr, &match->wc.masks.ipv6_dst,
+        memcpy(&mask->hdr.dst_addr, &match->wc.masks.ipv6_dst,
                sizeof mask->hdr.dst_addr);
 
         consumed_masks->nw_ttl = 0;

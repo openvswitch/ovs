@@ -41,7 +41,7 @@ Post-v3.4.0
        formats.
      * Dropped support for Python < 3.7.
    - DPDK:
-     * OVS validated with DPDK 23.11.2.
+     * Add support for DPDK 24.11.1.
      * Add hardware offload support for matching ICMPv6 protocol
        (experimental).
    - Tunnels:

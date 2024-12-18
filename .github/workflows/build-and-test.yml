@@ -14,7 +14,7 @@ jobs:
       dependencies: gcc libnuma-dev libxdp-dev ninja-build pkgconf
       CC: gcc
       DPDK_GIT: https://dpdk.org/git/dpdk-stable
-      DPDK_VER: 23.11.2
+      DPDK_VER: 24.11.1
     name: dpdk gcc
     outputs:
       dpdk_key: ${{ steps.gen_dpdk_key.outputs.key }}

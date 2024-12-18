@@ -358,7 +358,7 @@ with a mlx5 device::
 All tests are skipped if no hugepages are configured. User must look into the DPDK
 manual to figure out how to `Configure hugepages`_.
 
-.. _Configure hugepages: https://doc.dpdk.org/guides-23.11/linux_gsg/sys_reqs.html
+.. _Configure hugepages: https://doc.dpdk.org/guides-24.11/linux_gsg/sys_reqs.html
 
 All the features documented under `Unit Tests`_ are available for the DPDK
 testsuite.
