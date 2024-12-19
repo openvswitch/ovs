@@ -149,6 +149,7 @@ FLAKE8_PYFILES += utilities/ovs-pcap.in \
 	utilities/ovs-pipegen.py \
 	utilities/usdt-scripts/dpif_op_nl_monitor.py \
 	utilities/usdt-scripts/flow_reval_monitor.py \
+	utilities/usdt-scripts/kernel_delay.py \
 	utilities/usdt-scripts/upcall_monitor.py \
 	utilities/usdt-scripts/upcall_cost.py
 

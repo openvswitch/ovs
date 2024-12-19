@@ -109,6 +109,7 @@ followed by resource-specific data. Which are:
 - ``THREAD STOPPED STATISTICS``
 - ``HARD IRQ STATISTICS``
 - ``SOFT IRQ STATISTICS``
+- ``UPCALL STATISTICS``
 
 The following sections will describe in detail what statistics they report.
 
@@ -185,6 +186,14 @@ interrupts during the threads run time.
 It shows the interrupt name (``NAME``), vector number (``VECT_NR``), the
 number of interrupts (``COUNT``), the total time spent in the interrupt
 handler (``TOTAL ns``), and the worst-case duration (``MAX ns``).
+
+
+``UPCALL STATISTICS``
+~~~~~~~~~~~~~~~~~~~~~
+The ``UPCALL STATISTICS`` section provides information on the number of
+upcalls sent by the kernel to userspace. If any upcalls fail to be sent,
+the specific return codes are recorded. Statistics are presented both as
+a total and on a per-CPU basis.
 
 
 The ``--syscall-events`` option

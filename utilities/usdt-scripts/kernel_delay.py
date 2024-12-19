@@ -39,6 +39,7 @@
 #
 import argparse
 import datetime
+import errno
 import os
 import pytz
 import psutil
@@ -556,6 +557,36 @@ TRACEPOINT_PROBE(irq, softirq_exit)
     data->start_ns = 0;
     return 0;
 }
+
+
+/*
+ * For measuring upcall statistics (per CPU).
+ */
+BPF_PERCPU_HASH(upcall_count);
+
+#if <INSTALL_OVS_DP_UPCALL_PROBE>
+int kretprobe__ovs_dp_upcall(struct pt_regs *ctx)
+{
+    int ret = PT_REGS_RC(ctx);
+    u64 zero = 0;
+    u64 *entry;
+    u64 key;
+
+    if (!capture_enabled__())
+        return 0;
+
+    if (ret >= 0)
+        key = 0;
+    else
+        key = -ret;
+
+    entry = upcall_count.lookup_or_try_init(&key, &zero);
+    if (entry)
+        *entry += 1;
+
+    return 0;
+}
+#endif /* For measuring upcall statistics/errors. */
 """
 
 
@@ -887,6 +918,7 @@ def reset_capture():
     bpf["stack_traces"].clear()
     bpf["stop_start"].clear()
     bpf["stop_data"].clear()
+    bpf["upcall_count"].clear()
 
 
 #
@@ -898,6 +930,97 @@ def print_timestamp(msg):
     time_string = "{} @{} ({} UTC)".format(
         msg, ltz.isoformat(), utc.strftime("%H:%M:%S"))
     print(time_string)
+
+
+#
+# Get errno short string
+#
+def get_errno_short(err):
+    try:
+        return errno.errorcode[err]
+    except KeyError:
+        return "_unknown_"
+
+
+#
+# Format a eBPF per-cpu hash entry (if the count is > 0)
+#
+def format_per_cpu_hash(cpu_hash, key=None, skip_key=None):
+    per_cpu = ""
+
+    if key is not None:
+        total = cpu_hash.sum(key).value
+        if total > 0:
+            for cpu, value in enumerate(cpu_hash.getvalue(key)):
+                if value == 0:
+                    continue
+
+                per_cpu += " {}: {},".format(cpu, value)
+    else:
+        total = 0
+        total_cpu = None
+
+        for key in cpu_hash.keys():
+            if skip_key is not None and skip_key.value == key.value:
+                continue
+
+            if total_cpu is None:
+                total_cpu = [0] * len(cpu_hash.getvalue(key))
+
+            for cpu, value in enumerate(cpu_hash.getvalue(key)):
+                total_cpu[cpu] += value
+                total += value
+
+        if total >= 0 and total_cpu:
+            for cpu, value in enumerate(total_cpu):
+                if value == 0:
+                    continue
+
+                per_cpu += " {}: {},".format(cpu, value)
+
+    return total, per_cpu.strip(", ")
+
+
+#
+# Display kernel upcall statistics
+#
+def display_upcall_results():
+    upcalls = bpf["upcall_count"]
+    have_upcalls = False
+
+    for k in upcalls:
+        if upcalls.sum(k).value == 0:
+            continue
+        have_upcalls = True
+        break
+
+    if not have_upcalls:
+        return
+
+    print("\n\n# UPCALL STATISTICS (TOTAL [CPU_ID: N_UPCALLS_PER_CPU, ...]):\n"
+        "  Total upcalls       : {} [{}]".format(
+            *format_per_cpu_hash(upcalls)))
+
+    for k in sorted(upcalls, key=lambda x: int(x.value)):
+        error = k.value
+        total, per_cpu = format_per_cpu_hash(upcalls, key=k)
+
+        if error != 0 and total == 0:
+            continue
+
+        if error == 0:
+            total_failed, per_cpu_failed = format_per_cpu_hash(upcalls,
+                                                               skip_key=k)
+            if total_failed == 0:
+                continue
+
+            print("  Successfull upcalls : {} [{}]".format(total, per_cpu))
+            print("  Failed upcalls      : {} [{}]".format(total_failed,
+                                                           per_cpu_failed))
+        else:
+            print("    {:3}, {:13}: {} [{}]".format(error,
+                                                    get_errno_short(error),
+                                                    total, per_cpu))
 
 
 #
@@ -1074,7 +1197,12 @@ def process_results(syscall_events=None, trigger_delta=None):
                 indent, "TOTAL:", "", total_count, total_ns))
 
     #
-    # Print events
+    # Print upcall statistics
+    #
+    display_upcall_results()
+
+    #
+    # Print syscall events
     #
     lost_stack_traces = 0
     if syscall_events:
@@ -1194,6 +1322,9 @@ def main():
     parser.add_argument("--skip-syscall-poll-events",
                         help="Skip poll() syscalls with --syscall-events",
                         action="store_true")
+    parser.add_argument("--skip-upcall-stats",
+                        help="Skip the collection of upcall statistics",
+                        action="store_true")
     parser.add_argument("--stack-trace-size",
                         help="Number of unique stack traces that can be "
                         "recorded, default 4096. 0 to disable",
@@ -1297,6 +1428,9 @@ def main():
 
     source = source.replace("<STACK_TRACE_ENABLED>", "true"
                             if options.stack_trace_size > 0 else "false")
+
+    source = source.replace("<INSTALL_OVS_DP_UPCALL_PROBE>", "0"
+                            if options.skip_upcall_stats else "1")
 
     #
     # Handle start/stop probes
