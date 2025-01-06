@@ -8,6 +8,7 @@ DefaultDependencies=no
 [Service]
 LimitNOFILE=1048576
 Type=forking
+PIDFile=/run/openvswitch/ovsdb-server.pid
 Restart=on-failure
 EnvironmentFile=-/etc/default/openvswitch-switch
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \

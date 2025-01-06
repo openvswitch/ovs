@@ -11,6 +11,7 @@ DefaultDependencies=no
 [Service]
 LimitNOFILE=1048576
 Type=forking
+PIDFile=/run/openvswitch/ovs-vswitchd.pid
 Restart=on-failure
 Environment=HOME=/var/run/openvswitch
 EnvironmentFile=-/etc/default/openvswitch-switch
