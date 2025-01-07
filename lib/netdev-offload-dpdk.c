@@ -283,7 +283,7 @@ ufid_to_rte_flow_disassociate(struct ufid_to_rte_flow_data *data)
 }
 
 /*
- * To avoid individual xrealloc calls for each new element, a 'curent_max'
+ * To avoid individual xrealloc calls for each new element, a 'current_max'
  * is used to keep track of current allocated number of elements. Starts
  * by 8 and doubles on each xrealloc call.
  */
