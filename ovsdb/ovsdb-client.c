@@ -555,7 +555,7 @@ static void
 check_ovsdb_error(struct ovsdb_error *error)
 {
     if (error) {
-        ovs_fatal(0, "%s", ovsdb_error_to_string(error));
+        ovs_fatal(0, "%s", ovsdb_error_to_string_free(error));
     }
 }
 
