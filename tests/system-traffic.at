@@ -4603,7 +4603,11 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING
 dnl Check userspace conntrack fragmentation counters.
 DPCTL_CHECK_FRAGMENTATION_PASS()
 
-OVS_TRAFFIC_VSWITCHD_STOP
+dnl Ipv4 max packet size fragmentation dropped.
+NS_EXEC([at_ns0], [ping -s 65507 -q -c 1 -W 0.5 10.1.1.2])
+OVS_CHECK_FRAG_LARGE()
+
+OVS_TRAFFIC_VSWITCHD_STOP(["/Unsupported big reassembled v4 packet/d"])
 AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 fragmentation expiry])
@@ -4897,7 +4901,11 @@ NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-OVS_TRAFFIC_VSWITCHD_STOP
+dnl Ipv6 max packet size fragmentation dropped.
+NS_EXEC([at_ns0], [ping6 -s 65487 -q -c 1 -W 0.5 fc00::2])
+OVS_CHECK_FRAG_LARGE()
+
+OVS_TRAFFIC_VSWITCHD_STOP(["/Unsupported big reassembled v6 packet/d"])
 AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation expiry])

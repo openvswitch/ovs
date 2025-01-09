@@ -202,6 +202,14 @@ m4_define([DPCTL_CHECK_FRAGMENTATION_FAIL],
 
 ])
 
+# OVS_CHECK_FRAG_LARGE
+#
+# This check isn't valid for kernel
+m4_define([OVS_CHECK_FRAG_LARGE],
+[
+
+])
+
 # OVS_CHECK_MIN_KERNEL([minversion], [minsublevel])
 #
 # Skip test if kernel version falls below minversion.minsublevel
