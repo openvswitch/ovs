@@ -3540,6 +3540,19 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         </p>
       </column>
 
+      <column name="options" key="vhost-max-queue-pairs"
+              type='{"type": "integer", "minInteger" : 1, "maxInteger": 128}'>
+        <p>
+          The value specifies the maximum number of queue pairs supported by
+          a vHost device. This is ignored for vhost-user backends, only VDUSE
+          is supported.
+          Only supported by dpdkvhostuserclient interfaces.
+        </p>
+        <p>
+          Default value is 1.
+        </p>
+      </column>
+
       <column name="options" key="tx-retries-max"
               type='{"type": "integer", "minInteger": 0, "maxInteger": 32}'>
         <p>

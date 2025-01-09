@@ -375,6 +375,21 @@ Tx retries max can be set for vhost-user-client ports::
 
   Configurable vhost tx retries are not supported with vhost-user ports.
 
+vhost-user-client max queue pairs config
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For vhost-user-client interfaces using the VDUSE backend, the maximum number of
+queue pairs the Virtio device will support can be set at port creation time. If
+not set, the default value is 1 queue pair. This value is ignored for
+Vhost-user backends.
+
+Maximum number of queue pairs can be set for vhost-user-client-ports::
+
+    $ ovs-vsctl add-port br0 vduse0 \
+        -- set Interface vduse0 type=dpdkvhostuserclient \
+            options:vhost-server-path=/dev/vduse/vduse0 \
+            options:vhost-max-queue-pairs=4
+
 .. _dpdk-testpmd:
 
 DPDK in the Guest
