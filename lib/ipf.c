@@ -410,11 +410,12 @@ ipf_reassemble_v4_frags(struct ipf_list *ipf_list)
     dp_packet_set_size(pkt, dp_packet_size(pkt) - dp_packet_l2_pad_size(pkt));
     struct ip_header *l3 = dp_packet_l3(pkt);
     int len = ntohs(l3->ip_tot_len);
+    int orig_len = dp_packet_size(pkt);
 
     int rest_len = frag_list[ipf_list->last_inuse_idx].end_data_byte -
                    frag_list[1].start_data_byte + 1;
 
-    if (len + rest_len > IPV4_PACKET_MAX_SIZE) {
+    if (orig_len + rest_len > IPV4_PACKET_MAX_SIZE) {
         ipf_print_reass_packet(
             "Unsupported big reassembled v4 packet; v4 hdr:", l3);
         dp_packet_delete(pkt);
@@ -457,11 +458,12 @@ ipf_reassemble_v6_frags(struct ipf_list *ipf_list)
     dp_packet_set_size(pkt, dp_packet_size(pkt) - dp_packet_l2_pad_size(pkt));
     struct  ovs_16aligned_ip6_hdr *l3 = dp_packet_l3(pkt);
     int pl = ntohs(l3->ip6_plen) - sizeof(struct ovs_16aligned_ip6_frag);
+    int orig_len = dp_packet_size(pkt);
 
     int rest_len = frag_list[ipf_list->last_inuse_idx].end_data_byte -
                    frag_list[1].start_data_byte + 1;
 
-    if (pl + rest_len > IPV6_PACKET_MAX_DATA) {
+    if (orig_len + rest_len > IPV6_PACKET_MAX_DATA) {
         ipf_print_reass_packet(
              "Unsupported big reassembled v6 packet; v6 hdr:", l3);
         dp_packet_delete(pkt);
