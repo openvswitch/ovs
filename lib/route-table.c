@@ -58,6 +58,7 @@ struct route_data {
     struct in6_addr rta_gw;
     char ifname[IFNAMSIZ]; /* Interface name. */
     uint32_t mark;
+    uint32_t rta_table_id; /* 0 if missing. */
 };
 
 /* A digested version of a route message sent down by the kernel to indicate
@@ -264,7 +265,6 @@ route_table_parse(struct ofpbuf *buf, void *change_)
 
     if (parsed) {
         const struct nlmsghdr *nlmsg;
-        uint32_t table_id;
         int rta_oif;      /* Output interface index. */
 
         nlmsg = buf->data;
@@ -281,16 +281,9 @@ route_table_parse(struct ofpbuf *buf, void *change_)
             change->relevant = false;
         }
 
-        table_id = rtm->rtm_table;
+        change->rd.rta_table_id = rtm->rtm_table;
         if (attrs[RTA_TABLE]) {
-            table_id = nl_attr_get_u32(attrs[RTA_TABLE]);
-        }
-        /* Do not consider changes in non-standard routing tables. */
-        if (table_id
-            && table_id != RT_TABLE_DEFAULT
-            && table_id != RT_TABLE_MAIN
-            && table_id != RT_TABLE_LOCAL) {
-            change->relevant = false;
+            change->rd.rta_table_id = nl_attr_get_u32(attrs[RTA_TABLE]);
         }
 
         change->nlmsg_type     = nlmsg->nlmsg_type;
@@ -354,11 +347,21 @@ route_table_parse(struct ofpbuf *buf, void *change_)
     return ipv4 ? RTNLGRP_IPV4_ROUTE : RTNLGRP_IPV6_ROUTE;
 }
 
-static void
-route_table_change(const struct route_table_msg *change OVS_UNUSED,
-                   void *aux OVS_UNUSED)
+static bool
+is_standard_table_id(uint32_t table_id)
 {
-    if (!change || change->relevant) {
+    return !table_id
+           || table_id == RT_TABLE_DEFAULT
+           || table_id == RT_TABLE_MAIN
+           || table_id == RT_TABLE_LOCAL;
+}
+
+static void
+route_table_change(const struct route_table_msg *change, void *aux OVS_UNUSED)
+{
+    if (!change
+        || (change->relevant
+            && is_standard_table_id(change->rd.rta_table_id))) {
         route_table_valid = false;
     }
 }
