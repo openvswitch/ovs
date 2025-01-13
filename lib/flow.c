@@ -1193,7 +1193,7 @@ parse_dl_type(const void **datap, size_t *sizep, ovs_be16 *first_vlan_tci_p)
  * If 'packet' is not an Ethernet packet embedding TCP, returns 0.
  * 'dl_type_p' will be set only if the 'packet' is an Ethernet packet.
  * 'nw_frag_p' will be set only if the 'packet' is an IP packet.
- * 'first_vlan_tci' will be set only if the 'packet' contains vlan header.
+ * 'first_vlan_tci_p' will be set only if the 'packet' contains vlan header.
  *
  * The caller must ensure that 'packet' is at least ETH_HEADER_LEN bytes
  * long.'*/
