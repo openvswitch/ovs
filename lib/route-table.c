@@ -83,11 +83,11 @@ struct route_data {
     bool rtn_local;
 
     /* Extracted from Netlink attributes. */
-    struct in6_addr rta_dst; /* 0 if missing. */
+    struct in6_addr rta_dst;     /* 0 if missing. */
     struct in6_addr rta_prefsrc; /* 0 if missing. */
-    uint32_t mark;
-    uint32_t rta_table_id; /* 0 if missing. */
-    uint32_t rta_priority; /* 0 if missing. */
+    uint32_t rta_mark;           /* 0 if missing. */
+    uint32_t rta_table_id;       /* 0 if missing. */
+    uint32_t rta_priority;       /* 0 if missing. */
 };
 
 /* A digested version of a route message sent down by the kernel to indicate
@@ -395,7 +395,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
             }
         }
         if (attrs[RTA_MARK]) {
-            change->rd.mark = nl_attr_get_u32(attrs[RTA_MARK]);
+            change->rd.rta_mark = nl_attr_get_u32(attrs[RTA_MARK]);
         }
         if (attrs[RTA_PRIORITY]) {
             change->rd.rta_priority = nl_attr_get_u32(attrs[RTA_PRIORITY]);
@@ -518,7 +518,7 @@ route_table_handle_msg(const struct route_table_msg *change,
         rdnh = CONTAINER_OF(ovs_list_front(&change->rd.nexthops),
                             const struct route_data_nexthop, nexthop_node);
 
-        ovs_router_insert(rd->mark, &rd->rta_dst,
+        ovs_router_insert(rd->rta_mark, &rd->rta_dst,
                           IN6_IS_ADDR_V4MAPPED(&rd->rta_dst)
                           ? rd->rtm_dst_len + 96 : rd->rtm_dst_len,
                           rd->rtn_local, rdnh->ifname, &rdnh->addr,
