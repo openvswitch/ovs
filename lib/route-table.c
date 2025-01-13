@@ -79,7 +79,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 static uint64_t rt_change_seq;
 
 static struct nln *nln = NULL;
-static struct route_table_msg rtmsg;
+static struct route_table_msg nln_rtmsg_change;
 static struct nln_notifier *route_notifier = NULL;
 static struct nln_notifier *route6_notifier = NULL;
 static struct nln_notifier *name_notifier = NULL;
@@ -113,7 +113,7 @@ route_table_init(void)
     ovs_assert(!route6_notifier);
 
     ovs_router_init();
-    nln = nln_create(NETLINK_ROUTE, route_table_parse, &rtmsg);
+    nln = nln_create(NETLINK_ROUTE, route_table_parse, &nln_rtmsg_change);
 
     route_notifier =
         nln_notifier_create(nln, RTNLGRP_IPV4_ROUTE,
