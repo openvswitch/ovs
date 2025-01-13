@@ -339,6 +339,8 @@ check-tabs:
 	fi
 .PHONY: check-tabs
 
+# NOTE: test-lib-route-table.c excluded due to use of system() to execute
+#       ip route commands provided as arguments by test suite.
 ALL_LOCAL += thread-safety-check
 thread-safety-check:
 	@cd $(srcdir); \
@@ -346,7 +348,8 @@ thread-safety-check:
 	  grep -n -f build-aux/thread-safety-forbidden \
 	    `git ls-files | grep '\.[ch]$$' \
 	      | $(EGREP) -v '^datapath-windows|^lib/sflow|^third-party'` /dev/null \
-	      | $(EGREP) -v ':[ 	]*/?\*'; \
+	      | $(EGREP) -v ':[ 	]*/?\*' \
+	      | $(EGREP) -v '^tests/test-lib-route-table.c'; \
 	then \
 	  echo "See above for list of calls to functions that are"; \
 	  echo "forbidden due to thread safety issues"; \

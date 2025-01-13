@@ -498,6 +498,7 @@ endif
 
 if LINUX
 tests_ovstest_SOURCES += \
+	tests/test-lib-route-table.c \
 	tests/test-netlink-conntrack.c \
 	tests/test-netlink-policy.c \
 	tests/test-psample.c
