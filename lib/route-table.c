@@ -48,56 +48,6 @@ VLOG_DEFINE_THIS_MODULE(route_table);
 
 COVERAGE_DEFINE(route_table_dump);
 
-struct route_data_nexthop {
-    struct ovs_list nexthop_node;
-
-    sa_family_t family;
-    struct in6_addr addr;
-    char ifname[IFNAMSIZ]; /* Interface name. */
-};
-
-struct route_data {
-    /* Routes can have multiple next hops per destination.
-     *
-     * Each next hop has its own set of attributes such as address family,
-     * interface and IP address.
-     *
-     * When retrieving information about a route from the kernel, in the case
-     * of multiple next hops, information is provided as nested attributes.
-     *
-     * A linked list with struct route_data_nexthop entries is used to store
-     * this information as we parse each attribute.
-     *
-     * For the common case of one next hop, the nexthops list will contain a
-     * single entry pointing to the struct route_data primary_next_hop__
-     * element.
-     *
-     * Any dynamically allocated list elements MUST be freed with a call to the
-     * route_data_destroy function. */
-    struct ovs_list nexthops;
-    struct route_data_nexthop primary_next_hop__;
-
-    /* Copied from struct rtmsg. */
-    unsigned char rtm_dst_len;
-    unsigned char rtm_protocol;
-    bool rtn_local;
-
-    /* Extracted from Netlink attributes. */
-    struct in6_addr rta_dst;     /* 0 if missing. */
-    struct in6_addr rta_prefsrc; /* 0 if missing. */
-    uint32_t rta_mark;           /* 0 if missing. */
-    uint32_t rta_table_id;       /* 0 if missing. */
-    uint32_t rta_priority;       /* 0 if missing. */
-};
-
-/* A digested version of a route message sent down by the kernel to indicate
- * that a route has changed. */
-struct route_table_msg {
-    bool relevant;        /* Should this message be processed? */
-    uint16_t nlmsg_type;  /* e.g. RTM_NEWROUTE, RTM_DELROUTE. */
-    struct route_data rd; /* Data parsed from this message. */
-};
-
 static struct ovs_mutex route_table_mutex = OVS_MUTEX_INITIALIZER;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
@@ -115,14 +65,13 @@ static bool route_table_valid = false;
 
 static void route_table_reset(void);
 static void route_table_handle_msg(const struct route_table_msg *, void *aux);
-static int route_table_parse(struct ofpbuf *, void *change);
 static void route_table_change(struct route_table_msg *, void *aux);
 static void route_map_clear(void);
 
 static void name_table_init(void);
 static void name_table_change(const struct rtnetlink_change *, void *);
 
-static void
+void
 route_data_destroy(struct route_data *rd)
 {
     struct route_data_nexthop *rdnh;
@@ -197,10 +146,7 @@ route_table_wait(void)
     ovs_mutex_unlock(&route_table_mutex);
 }
 
-typedef void route_table_handle_msg_callback(const struct route_table_msg *,
-                                             void *aux);
-
-static bool
+bool
 route_table_dump_one_table(uint32_t id,
                            route_table_handle_msg_callback *handle_msg_cb,
                            void *aux)
@@ -468,7 +414,7 @@ error_out:
  * responsibility to free it with a call to route_data_destroy().
  *
  * In case of error, any allocated memory will be freed before returning. */
-static int
+int
 route_table_parse(struct ofpbuf *buf, void *change)
 {
     struct nlmsghdr *nlmsg;
