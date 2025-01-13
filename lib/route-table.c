@@ -198,7 +198,7 @@ route_table_wait(void)
 }
 
 static bool
-route_table_dump_one_table(unsigned char id)
+route_table_dump_one_table(uint32_t id)
 {
     uint64_t reply_stub[NL_DUMP_BUFSIZE / 8];
     struct ofpbuf request, reply, buf;
@@ -212,7 +212,13 @@ route_table_dump_one_table(unsigned char id)
 
     rq_msg = ofpbuf_put_zeros(&request, sizeof *rq_msg);
     rq_msg->rtm_family = AF_UNSPEC;
-    rq_msg->rtm_table = id;
+
+    if (id > UCHAR_MAX) {
+        rq_msg->rtm_table = RT_TABLE_UNSPEC;
+        nl_msg_put_u32(&request, RTA_TABLE, id);
+    } else {
+        rq_msg->rtm_table = id;
+    }
 
     nl_dump_start(&dump, NETLINK_ROUTE, &request);
     ofpbuf_uninit(&request);
@@ -241,7 +247,7 @@ route_table_dump_one_table(unsigned char id)
 static void
 route_table_reset(void)
 {
-    unsigned char tables[] = {
+    uint32_t tables[] = {
         RT_TABLE_DEFAULT,
         RT_TABLE_MAIN,
         RT_TABLE_LOCAL,
