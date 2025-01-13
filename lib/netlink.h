@@ -152,6 +152,7 @@ enum nl_attr_type
     NL_A_IPV6,
     NL_A_NESTED,
     NL_A_LL_ADDR,
+    NL_A_RTA_VIA,
     N_NL_ATTR_TYPES
 };
 

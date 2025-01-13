@@ -65,6 +65,26 @@ Cached: fc00:db8:beef::13/128 dev br0 GW fc00:db8:cafe::1 SRC fc00:db8:cafe::2])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ovs-route - add system route - ipv4 via ipv6 nexthop])
+AT_KEYWORDS([route])
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ovs-vsctl set bridge br0 other-config:hwaddr=00:53:00:00:00:42])
+AT_CHECK([ip link set br0 up])
+
+AT_CHECK([ip addr add 192.168.9.2/24 dev br0], [0], [stdout])
+
+AT_CHECK([ip route add 192.168.10.12/32 \
+          via inet6 fe80::253:ff:fe00:51 dev br0], [0], [stdout])
+
+AT_CHECK([ovs-appctl revalidator/wait])
+
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl ovs/route/show | \
+                      grep -E '192.168.10.12/32' | sort], [dnl
+Cached: 192.168.10.12/32 dev br0 GW fe80::253:ff:fe00:51 SRC fe80::253:ff:fe00:42])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl Checks that OVS doesn't use routes from non-standard tables.
 AT_SETUP([ovs-route - route tables])
 AT_KEYWORDS([route])

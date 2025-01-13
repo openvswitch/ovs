@@ -29,6 +29,16 @@
 #include "openvswitch/vlog.h"
 #include "util.h"
 
+#ifdef HAVE_NETLINK
+#include <linux/rtnetlink.h>
+#else
+/* RTA_VIA */
+struct rtvia {
+    sa_family_t    rtvia_family;
+    uint8_t        rtvia_addr[];
+};
+#endif
+
 VLOG_DEFINE_THIS_MODULE(netlink);
 
 /* A single (bad) Netlink message can in theory dump out many, many log
@@ -819,6 +829,7 @@ min_attr_len(enum nl_attr_type type)
     case NL_A_IPV6: return 16;
     case NL_A_NESTED: return 0;
     case NL_A_LL_ADDR: return 6; /* ETH_ALEN */
+    case NL_A_RTA_VIA: return sizeof(struct rtvia) + sizeof(struct in_addr);
     case N_NL_ATTR_TYPES: default: OVS_NOT_REACHED();
     }
 }
@@ -840,6 +851,7 @@ max_attr_len(enum nl_attr_type type)
     case NL_A_IPV6: return 16;
     case NL_A_NESTED: return SIZE_MAX;
     case NL_A_LL_ADDR: return 20; /* INFINIBAND_ALEN */
+    case NL_A_RTA_VIA: return sizeof(struct rtvia) + sizeof(struct in6_addr);
     case N_NL_ATTR_TYPES: default: OVS_NOT_REACHED();
     }
 }

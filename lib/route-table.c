@@ -51,6 +51,7 @@ COVERAGE_DEFINE(route_table_dump);
 struct route_data_nexthop {
     struct ovs_list nexthop_node;
 
+    sa_family_t family;
     struct in6_addr addr;
     char ifname[IFNAMSIZ]; /* Interface name. */
 };
@@ -276,6 +277,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
         [RTA_PREFSRC] = { .type = NL_A_U32, .optional = true },
         [RTA_TABLE] = { .type = NL_A_U32, .optional = true },
         [RTA_PRIORITY] = { .type = NL_A_U32, .optional = true },
+        [RTA_VIA] = { .type = NL_A_RTA_VIA, .optional = true },
     };
 
     static const struct nl_policy policy6[] = {
@@ -286,6 +288,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
         [RTA_PREFSRC] = { .type = NL_A_IPV6, .optional = true },
         [RTA_TABLE] = { .type = NL_A_U32, .optional = true },
         [RTA_PRIORITY] = { .type = NL_A_U32, .optional = true },
+        [RTA_VIA] = { .type = NL_A_RTA_VIA, .optional = true },
     };
 
     struct nlattr *attrs[ARRAY_SIZE(policy)];
@@ -310,6 +313,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
 
         ovs_list_init(&change->rd.nexthops);
         rdnh = &change->rd.primary_next_hop__;
+        rdnh->family = rtm->rtm_family;
         ovs_list_insert(&change->rd.nexthops, &rdnh->nexthop_node);
 
         change->relevant = true;
@@ -383,6 +387,51 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
         }
         if (attrs[RTA_PRIORITY]) {
             change->rd.rta_priority = nl_attr_get_u32(attrs[RTA_PRIORITY]);
+        }
+        if (attrs[RTA_VIA]) {
+            const struct rtvia *rtvia = nl_attr_get(attrs[RTA_VIA]);
+            ovs_be32 addr;
+
+            if (attrs[RTA_GATEWAY]) {
+                VLOG_DBG_RL(&rl, "route message can not contain both "
+                                 "RTA_GATEWAY and RTA_VIA");
+                goto error_out;
+            }
+
+            rdnh->family = rtvia->rtvia_family;
+
+            switch (rdnh->family) {
+            case AF_INET:
+                if (nl_attr_get_size(attrs[RTA_VIA])
+                        - sizeof *rtvia < sizeof addr) {
+                    VLOG_DBG_RL(&rl, "got short message while parsing RTA_VIA "
+                                     "attribute for family AF_INET");
+                    goto error_out;
+                }
+                memcpy(&addr, rtvia->rtvia_addr, sizeof addr);
+                in6_addr_set_mapped_ipv4(&rdnh->addr, addr);
+                break;
+
+            case AF_INET6:
+                if (nl_attr_get_size(attrs[RTA_VIA])
+                        - sizeof *rtvia < sizeof rdnh->addr) {
+                    VLOG_DBG_RL(&rl, "got short message while parsing RTA_VIA "
+                                     "attribute for family AF_INET6");
+                    goto error_out;
+                }
+                memcpy(&rdnh->addr, rtvia->rtvia_addr, sizeof rdnh->addr);
+                break;
+
+            default:
+                VLOG_DBG_RL(&rl, "unsupported address family, %d, "
+                                 "in via attribute", rdnh->family);
+                goto error_out;
+            }
+        }
+        if (!attrs[RTA_OIF] && !attrs[RTA_GATEWAY] && !attrs[RTA_VIA]) {
+            VLOG_DBG_RL(&rl, "route message needs an RTA_OIF, RTA_GATEWAY or "
+                             "RTA_VIA attribute");
+            goto error_out;
         }
     } else {
         VLOG_DBG_RL(&rl, "received unparseable rtnetlink route message");
