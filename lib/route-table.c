@@ -225,9 +225,10 @@ route_table_reset(void)
 /* Return RTNLGRP_IPV4_ROUTE or RTNLGRP_IPV6_ROUTE on success, 0 on parse
  * error. */
 static int
-route_table_parse(struct ofpbuf *buf, void *change_)
+route_table_parse__(struct ofpbuf *buf, size_t ofs,
+                    const struct nlmsghdr *nlmsg,
+                    const struct rtmsg *rtm, struct route_table_msg *change)
 {
-    struct route_table_msg *change = change_;
     bool parsed, ipv4 = false;
 
     static const struct nl_policy policy[] = {
@@ -251,27 +252,21 @@ route_table_parse(struct ofpbuf *buf, void *change_)
     };
 
     struct nlattr *attrs[ARRAY_SIZE(policy)];
-    const struct rtmsg *rtm;
-
-    rtm = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *rtm);
 
     if (rtm->rtm_family == AF_INET) {
-        parsed = nl_policy_parse(buf, NLMSG_HDRLEN + sizeof(struct rtmsg),
-                                 policy, attrs, ARRAY_SIZE(policy));
+        parsed = nl_policy_parse(buf, ofs, policy, attrs,
+                                 ARRAY_SIZE(policy));
         ipv4 = true;
     } else if (rtm->rtm_family == AF_INET6) {
-        parsed = nl_policy_parse(buf, NLMSG_HDRLEN + sizeof(struct rtmsg),
-                                 policy6, attrs, ARRAY_SIZE(policy6));
+        parsed = nl_policy_parse(buf, ofs, policy6, attrs,
+                                 ARRAY_SIZE(policy6));
     } else {
         VLOG_DBG_RL(&rl, "received non AF_INET rtnetlink route message");
         return 0;
     }
 
     if (parsed) {
-        const struct nlmsghdr *nlmsg;
         int rta_oif;      /* Output interface index. */
-
-        nlmsg = buf->data;
 
         memset(change, 0, sizeof *change);
         change->relevant = true;
@@ -353,6 +348,19 @@ route_table_parse(struct ofpbuf *buf, void *change_)
 
     /* Success. */
     return ipv4 ? RTNLGRP_IPV4_ROUTE : RTNLGRP_IPV6_ROUTE;
+}
+
+static int
+route_table_parse(struct ofpbuf *buf, void *change)
+{
+    struct nlmsghdr *nlmsg;
+    struct rtmsg *rtm;
+
+    nlmsg = ofpbuf_at(buf, 0, NLMSG_HDRLEN);
+    rtm = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *rtm);
+
+    return route_table_parse__(buf, NLMSG_HDRLEN + sizeof *rtm,
+                               nlmsg, rtm, change);
 }
 
 static bool
