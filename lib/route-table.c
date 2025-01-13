@@ -94,7 +94,7 @@ struct route_data {
  * that a route has changed. */
 struct route_table_msg {
     bool relevant;        /* Should this message be processed? */
-    int nlmsg_type;       /* e.g. RTM_NEWROUTE, RTM_DELROUTE. */
+    uint16_t nlmsg_type;  /* e.g. RTM_NEWROUTE, RTM_DELROUTE. */
     struct route_data rd; /* Data parsed from this message. */
 };
 
