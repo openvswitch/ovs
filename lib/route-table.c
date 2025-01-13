@@ -345,7 +345,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
         }
 
         change->nlmsg_type     = nlmsg->nlmsg_type;
-        change->rd.rtm_dst_len = rtm->rtm_dst_len + (ipv4 ? 96 : 0);
+        change->rd.rtm_dst_len = rtm->rtm_dst_len;
         change->rd.rtm_protocol = rtm->rtm_protocol;
         change->rd.local = rtm->rtm_type == RTN_LOCAL;
         if (attrs[RTA_OIF]) {
@@ -518,7 +518,9 @@ route_table_handle_msg(const struct route_table_msg *change,
         rdnh = CONTAINER_OF(ovs_list_front(&change->rd.nexthops),
                             const struct route_data_nexthop, nexthop_node);
 
-        ovs_router_insert(rd->mark, &rd->rta_dst, rd->rtm_dst_len,
+        ovs_router_insert(rd->mark, &rd->rta_dst,
+                          IN6_IS_ADDR_V4MAPPED(&rd->rta_dst)
+                          ? rd->rtm_dst_len + 96 : rd->rtm_dst_len,
                           rd->local, rdnh->ifname, &rdnh->addr,
                           &rd->rta_prefsrc);
     }
