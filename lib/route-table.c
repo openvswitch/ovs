@@ -50,6 +50,7 @@ COVERAGE_DEFINE(route_table_dump);
 struct route_data {
     /* Copied from struct rtmsg. */
     unsigned char rtm_dst_len;
+    unsigned char rtm_protocol;
     bool local;
 
     /* Extracted from Netlink attributes. */
@@ -291,6 +292,7 @@ route_table_parse(struct ofpbuf *buf, void *change_)
 
         change->nlmsg_type     = nlmsg->nlmsg_type;
         change->rd.rtm_dst_len = rtm->rtm_dst_len + (ipv4 ? 96 : 0);
+        change->rd.rtm_protocol = rtm->rtm_protocol;
         change->rd.local = rtm->rtm_type == RTN_LOCAL;
         if (attrs[RTA_OIF]) {
             rta_oif = nl_attr_get_u32(attrs[RTA_OIF]);
