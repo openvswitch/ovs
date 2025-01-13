@@ -295,7 +295,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
             if (!if_indextoname(rta_oif, change->rd.ifname)) {
                 int error = errno;
 
-                VLOG_DBG_RL(&rl, "Could not find interface name[%u]: %s",
+                VLOG_DBG_RL(&rl, "could not find interface name[%u]: %s",
                             rta_oif, ovs_strerror(error));
                 if (error == ENXIO) {
                     change->relevant = false;
