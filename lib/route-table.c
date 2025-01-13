@@ -32,6 +32,7 @@
 #include "netlink.h"
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
+#include "openvswitch/list.h"
 #include "openvswitch/ofpbuf.h"
 #include "ovs-router.h"
 #include "packets.h"
@@ -47,7 +48,34 @@ VLOG_DEFINE_THIS_MODULE(route_table);
 
 COVERAGE_DEFINE(route_table_dump);
 
+struct route_data_nexthop {
+    struct ovs_list nexthop_node;
+
+    struct in6_addr addr;
+    char ifname[IFNAMSIZ]; /* Interface name. */
+};
+
 struct route_data {
+    /* Routes can have multiple next hops per destination.
+     *
+     * Each next hop has its own set of attributes such as address family,
+     * interface and IP address.
+     *
+     * When retrieving information about a route from the kernel, in the case
+     * of multiple next hops, information is provided as nested attributes.
+     *
+     * A linked list with struct route_data_nexthop entries is used to store
+     * this information as we parse each attribute.
+     *
+     * For the common case of one next hop, the nexthops list will contain a
+     * single entry pointing to the struct route_data primary_next_hop__
+     * element.
+     *
+     * Any dynamically allocated list elements MUST be freed with a call to the
+     * route_data_destroy function. */
+    struct ovs_list nexthops;
+    struct route_data_nexthop primary_next_hop__;
+
     /* Copied from struct rtmsg. */
     unsigned char rtm_dst_len;
     unsigned char rtm_protocol;
@@ -56,8 +84,6 @@ struct route_data {
     /* Extracted from Netlink attributes. */
     struct in6_addr rta_dst; /* 0 if missing. */
     struct in6_addr rta_prefsrc; /* 0 if missing. */
-    struct in6_addr rta_gw;
-    char ifname[IFNAMSIZ]; /* Interface name. */
     uint32_t mark;
     uint32_t rta_table_id; /* 0 if missing. */
     uint32_t rta_priority; /* 0 if missing. */
@@ -89,11 +115,23 @@ static bool route_table_valid = false;
 static void route_table_reset(void);
 static void route_table_handle_msg(const struct route_table_msg *);
 static int route_table_parse(struct ofpbuf *, void *change);
-static void route_table_change(const struct route_table_msg *, void *);
+static void route_table_change(struct route_table_msg *, void *aux);
 static void route_map_clear(void);
 
 static void name_table_init(void);
 static void name_table_change(const struct rtnetlink_change *, void *);
+
+static void
+route_data_destroy(struct route_data *rd)
+{
+    struct route_data_nexthop *rdnh;
+
+    LIST_FOR_EACH_POP (rdnh, nexthop_node, &rd->nexthops) {
+        if (rdnh && rdnh != &rd->primary_next_hop__) {
+            free(rdnh);
+        }
+    }
+}
 
 uint64_t
 route_table_get_change_seq(void)
@@ -190,6 +228,7 @@ route_table_dump_one_table(unsigned char id)
                 filtered = false;
             }
             route_table_handle_msg(&msg);
+            route_data_destroy(&msg.rd);
         }
     }
     ofpbuf_uninit(&buf);
@@ -222,8 +261,6 @@ route_table_reset(void)
     }
 }
 
-/* Return RTNLGRP_IPV4_ROUTE or RTNLGRP_IPV6_ROUTE on success, 0 on parse
- * error. */
 static int
 route_table_parse__(struct ofpbuf *buf, size_t ofs,
                     const struct nlmsghdr *nlmsg,
@@ -266,9 +303,15 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
     }
 
     if (parsed) {
+        struct route_data_nexthop *rdnh = NULL;
         int rta_oif;      /* Output interface index. */
 
         memset(change, 0, sizeof *change);
+
+        ovs_list_init(&change->rd.nexthops);
+        rdnh = &change->rd.primary_next_hop__;
+        ovs_list_insert(&change->rd.nexthops, &rdnh->nexthop_node);
+
         change->relevant = true;
 
         if (rtm->rtm_scope == RT_SCOPE_NOWHERE) {
@@ -292,7 +335,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
         if (attrs[RTA_OIF]) {
             rta_oif = nl_attr_get_u32(attrs[RTA_OIF]);
 
-            if (!if_indextoname(rta_oif, change->rd.ifname)) {
+            if (!if_indextoname(rta_oif, rdnh->ifname)) {
                 int error = errno;
 
                 VLOG_DBG_RL(&rl, "could not find interface name[%u]: %s",
@@ -300,7 +343,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
                 if (error == ENXIO) {
                     change->relevant = false;
                 } else {
-                    return 0;
+                    goto error_out;
                 }
             }
         }
@@ -330,9 +373,9 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
             if (ipv4) {
                 ovs_be32 gw;
                 gw = nl_attr_get_be32(attrs[RTA_GATEWAY]);
-                in6_addr_set_mapped_ipv4(&change->rd.rta_gw, gw);
+                in6_addr_set_mapped_ipv4(&rdnh->addr, gw);
             } else {
-                change->rd.rta_gw = nl_attr_get_in6_addr(attrs[RTA_GATEWAY]);
+                rdnh->addr = nl_attr_get_in6_addr(attrs[RTA_GATEWAY]);
             }
         }
         if (attrs[RTA_MARK]) {
@@ -343,13 +386,27 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
         }
     } else {
         VLOG_DBG_RL(&rl, "received unparseable rtnetlink route message");
-        return 0;
+        goto error_out;
     }
 
     /* Success. */
     return ipv4 ? RTNLGRP_IPV4_ROUTE : RTNLGRP_IPV6_ROUTE;
+
+error_out:
+    route_data_destroy(&change->rd);
+    return 0;
 }
 
+/* Parse Netlink message in buf, which is expected to contain a UAPI rtmsg
+ * header and associated route attributes.
+ *
+ * Return RTNLGRP_IPV4_ROUTE or RTNLGRP_IPV6_ROUTE on success, and 0 on a parse
+ * error.
+ *
+ * On success, memory may have been allocated, and it is the caller's
+ * responsibility to free it with a call to route_data_destroy().
+ *
+ * In case of error, any allocated memory will be freed before returning. */
 static int
 route_table_parse(struct ofpbuf *buf, void *change)
 {
@@ -373,23 +430,34 @@ is_standard_table_id(uint32_t table_id)
 }
 
 static void
-route_table_change(const struct route_table_msg *change, void *aux OVS_UNUSED)
+route_table_change(struct route_table_msg *change, void *aux OVS_UNUSED)
 {
     if (!change
         || (change->relevant
             && is_standard_table_id(change->rd.rta_table_id))) {
         route_table_valid = false;
     }
+    if (change) {
+        route_data_destroy(&change->rd);
+    }
 }
 
 static void
 route_table_handle_msg(const struct route_table_msg *change)
 {
-    if (change->relevant && change->nlmsg_type == RTM_NEWROUTE) {
+    if (change->relevant && change->nlmsg_type == RTM_NEWROUTE
+            && !ovs_list_is_empty(&change->rd.nexthops)) {
         const struct route_data *rd = &change->rd;
+        const struct route_data_nexthop *rdnh;
+
+        /* The ovs-router module currently does not implement lookup or
+         * storage for routes with multiple next hops.  For backwards
+         * compatibility, we use the first next hop. */
+        rdnh = CONTAINER_OF(ovs_list_front(&change->rd.nexthops),
+                            const struct route_data_nexthop, nexthop_node);
 
         ovs_router_insert(rd->mark, &rd->rta_dst, rd->rtm_dst_len,
-                          rd->local, rd->ifname, &rd->rta_gw,
+                          rd->local, rdnh->ifname, &rdnh->addr,
                           &rd->rta_prefsrc);
     }
 }
