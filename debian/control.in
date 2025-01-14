@@ -94,7 +94,6 @@ Depends:
  python3-openvswitch (= ${source:Version}),
  strongswan,
  ${misc:Depends},
- ${shlibs:Depends},
 Suggests: python3:any
 Breaks:
  openvswitch-common (<< 2.17~),
