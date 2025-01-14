@@ -258,7 +258,6 @@ Depends:
  openvswitch-switch (>= ${binary:Version}),
  python3-openvswitch (>= ${source:Version}),
  ${misc:Depends},
- ${python3:Depends},
  ${shlibs:Depends},
 Suggests: python3:any
 Breaks:
