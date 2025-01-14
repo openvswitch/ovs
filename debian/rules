@@ -16,7 +16,6 @@ else
 PARALLEL =
 endif
 
-PYTHON3S:=$(shell py3versions -vr)
 DEB_HOST_ARCH?=$(shell dpkg-architecture -qDEB_HOST_ARCH)
 
 override_dh_auto_configure:
@@ -80,9 +79,26 @@ endif # nodpdk
 endif # i386/amd64/ppc64el
 endif # nocheck
 
+export PYBUILD_DESTDIR = $(CURDIR)/debian/tmp
+export PYBUILD_DIR = $(CURDIR)/python
+
+pybuild = \
+	export PKG_CONFIG_PATH=$(CURDIR)/debian/tmp/usr/lib/pkgconfig; \
+	export PKG_CONFIG_SYSROOT_DIR=$(CURDIR)/debian/tmp; \
+	export PKG_CONFIG_SYSTEM_INCLUDE_PATH=/; \
+	export PKG_CONFIG_SYSTEM_LIBRARY_PATH=/; \
+	enable_shared=no \
+	extra_cflags="`pkg-config --cflags libopenvswitch`" \
+	extra_libs="-Wl,-Bstatic -lopenvswitch -Wl,-Bdynamic `pkg-config --libs --static libopenvswitch`" \
+	pybuild
+
 override_dh_auto_build:
 	dh_auto_build --sourcedirectory=_debian -- dist distdir=openvswitch
 	dh_auto_build --sourcedirectory=_debian
+	# We need an extra install here so that we can use pkgconfig to
+	# retrieve accurate CFLAGS and LDFLAGS for building Python extensions.
+	dh_auto_install --sourcedirectory=_debian
+	$(pybuild) --build
 ifneq (,$(filter i386 amd64 ppc64el arm64, $(DEB_HOST_ARCH)))
 ifeq (,$(filter nodpdk, $(DEB_BUILD_OPTIONS)))
 	dh_auto_build --sourcedirectory=_dpdk
@@ -91,27 +107,14 @@ endif
 
 execute_before_dh_auto_clean:
 	find . -name "*.pyc" -delete
+	if test -d $(PYBUILD_DIR)/build; then \
+		pybuild --clean ; \
+	fi
 
 override_dh_auto_install:
+	# We need to use pybuild to install Python extensions.
+	$(pybuild) --install
 	dh_auto_install --sourcedirectory=_debian
-
-execute_after_dh_install:
-	set -e && for pyvers in $(PYTHON3S); do \
-		cd python; \
-		export PKG_CONFIG_PATH=$(CURDIR)/debian/tmp/usr/lib/pkgconfig; \
-		export PKG_CONFIG_SYSROOT_DIR=$(CURDIR)/debian/tmp; \
-		export PKG_CONFIG_SYSTEM_INCLUDE_PATH=/; \
-		export PKG_CONFIG_SYSTEM_LIBRARY_PATH=/; \
-		enable_shared=no \
-		extra_cflags="`pkg-config --cflags libopenvswitch`" \
-		extra_libs="-Wl,-Bstatic -lopenvswitch -Wl,-Bdynamic `pkg-config --libs --static libopenvswitch`" \
-		python$$pyvers setup.py install --install-layout=deb \
-			--root $(CURDIR)/debian/python3-openvswitch; \
-		cd ..; \
-		mkdir -p $(CURDIR)/debian/openvswitch-test/usr/lib/python$$pyvers/dist-packages/ovstest; \
-		install -v -D python/ovstest/*.py \
-			$(CURDIR)/debian/openvswitch-test/usr/lib/python$$pyvers/dist-packages/ovstest; \
-	done
 
 override_dh_installinit:
 	dh_installinit --restart-after-upgrade
