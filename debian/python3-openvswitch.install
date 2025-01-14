@@ -4,6 +4,3 @@
 # dh_python will consolidate into usr/lib/python3/dist-packages retaining
 # version specific shared object files.
 usr/lib/python3* usr/lib/
-
-usr/bin/ovs-flowviz
-usr/share/man/man8/ovs-flowviz.8
