@@ -39,6 +39,7 @@ Rules-Requires-Root: no
 Homepage: http://openvswitch.org/
 Vcs-Browser: https://salsa.debian.org/openstack-team/third-party/openvswitch/-/tree/debian/experimental
 Vcs-Git: https://salsa.debian.org/openstack-team/third-party/openvswitch.git
+X-Python3-Version: >= 3.10
 
 Package: openvswitch-common
 Architecture: linux-any
