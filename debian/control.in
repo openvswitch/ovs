@@ -45,8 +45,9 @@ Architecture: linux-any
 Depends:
  openssl,
  ${misc:Depends},
- ${python3:Depends},
  ${shlibs:Depends},
+Recommends:
+ ${python3:Depends},
 Suggests:
  ethtool,
  openvswitch-doc,
@@ -153,12 +154,13 @@ Depends:
  netbase,
  openvswitch-common (= ${binary:Version}),
  procps,
- python3-netifaces,
- python3-openvswitch (>= ${source:Version}),
  uuid-runtime,
  ${misc:Depends},
- ${python3:Depends},
  ${shlibs:Depends},
+Recommends:
+ python3-netifaces,
+ python3-openvswitch (>= ${source:Version}),
+ ${python3:Depends},
 Breaks:
  openvswitch-common (<< 2.17~),
 Replaces:
@@ -182,7 +184,6 @@ Description: Open vSwitch switch implementations
 # DPDK_NETDEV  dpdk,
 # DPDK_NETDEV  openvswitch-switch (= ${binary:Version}),
 # DPDK_NETDEV  ${misc:Depends},
-# DPDK_NETDEV  ${python3:Depends},
 # DPDK_NETDEV  ${shlibs:Depends},
 # DPDK_NETDEV Enhances:
 # DPDK_NETDEV  openvswitch-switch,
