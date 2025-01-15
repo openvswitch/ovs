@@ -1,0 +1,5 @@
+# This is a POSIX shell fragment                -*- sh -*-
+
+# OVS_CTL_OPTS: Extra options to pass to ovs-ctl.  This is, for example,
+# a suitable place to specify --no-restart-ike-daemon.
+# OVS_CTL_OPTS=

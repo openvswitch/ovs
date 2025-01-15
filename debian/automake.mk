@@ -14,6 +14,8 @@ EXTRA_DIST += \
 	debian/openvswitch-common.lintian-overrides \
 	debian/openvswitch-doc.doc-base \
 	debian/openvswitch-doc.install \
+	debian/openvswitch-ipsec.default \
+	debian/openvswitch-ipsec.dirs \
 	debian/openvswitch-ipsec.init \
 	debian/openvswitch-ipsec.install \
 	debian/openvswitch-ipsec.service \

@@ -242,18 +242,20 @@ start_forwarding () {
 }
 
 start_ovs_ipsec () {
+    set ${datadir}/scripts/ovs-monitor-ipsec unix:"$DB_SOCK"
+    set "$@" --log-file=${logdir}/ovs-monitor-ipsec.log
+    set "$@" --pidfile=${rundir}/ovs-monitor-ipsec.pid
+    set "$@" --detach
+    test X"$MONITOR" = Xno || set "$@" --monitor
+    set "$@" --ike-daemon=$IKE_DAEMON
     if test X$RESTART_IKE_DAEMON = Xno; then
-        no_restart="--no-restart-ike-daemon"
+        set "$@" --no-restart-ike-daemon
     fi
-    if test X"$MONITOR" != Xno; then
-        monitor_arg="--monitor"
+    if test X"$OVS_MONITOR_IPSEC_OPTIONS" != X; then
+        set "$@" $OVS_MONITOR_IPSEC_OPTIONS
     fi
 
-    ${datadir}/scripts/ovs-monitor-ipsec \
-        --pidfile=${rundir}/ovs-monitor-ipsec.pid \
-        --ike-daemon=$IKE_DAEMON \
-        $no_restart $monitor_arg \
-        --log-file --detach unix:${rundir}/db.sock || return 1
+    action "Starting ovs-monitor-ipsec" "$@" || return 1
     return 0
 }
 
@@ -351,6 +353,7 @@ set_defaults () {
     OVS_VSWITCHD_WRAPPER=
     OVSDB_SERVER_OPTIONS=
     OVS_VSWITCHD_OPTIONS=
+    OVS_MONITOR_IPSEC_OPTIONS=
     OVSDB_SERVER_UMASK=
     OVS_VSWITCHD_UMASK=
 
@@ -466,6 +469,9 @@ Option for "start-ovs-ipsec":
       the IKE daemon for ipsec tunnels (either libreswan or strongswan)
   --no-restart-ike-daemon
       do not restart the IKE daemon on startup
+  --ovs-monitor-ipsec-options=OPTIONS
+      additional options for ovs-monitor-ipsec (example:
+      '--ipsec-conf=/etc/ipsec.d/ovs.conf --root-ipsec-conf=/etc/ipsec.conf')
 
 Other options:
   -h, --help                  display this help message

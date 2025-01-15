@@ -41,6 +41,8 @@ test -x $DAEMON || exit 0
 
 . /lib/lsb/init-functions
 
+test -e /etc/default/openvswitch-ipsec && . /etc/default/openvswitch-ipsec
+
 DODTIME=10              # Time to wait for the server to die, in seconds
                         # If this value is set too low you might not
                         # let some servers to die gracefully and
@@ -72,7 +74,8 @@ running() {
 }
 
 start_server() {
-    ${DATADIR}/scripts/ovs-ctl --ike-daemon=strongswan start-ovs-ipsec
+    ${DATADIR}/scripts/ovs-ctl --ike-daemon=strongswan \
+        start-ovs-ipsec $OVS_CTL_OPTS
     return 0
 }
 

@@ -7,8 +7,9 @@ After=openvswitch-switch.service
 Type=forking
 PIDFile=/run/openvswitch/ovs-monitor-ipsec.pid
 Restart=on-failure
+EnvironmentFile=-/etc/default/openvswitch-ipsec
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl --no-monitor \
-                    --ike-daemon=strongswan start-ovs-ipsec
+                    --ike-daemon=strongswan start-ovs-ipsec $OVS_CTL_OPTS
 ExecStop=/usr/share/openvswitch/scripts/ovs-ctl stop-ovs-ipsec
 
 [Install]

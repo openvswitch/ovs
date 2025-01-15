@@ -25,6 +25,9 @@
 #   --ovs-vswitchd-options='-vconsole:dbg -vfile:dbg'
 #   --ovsdb-server-options='-vconsole:dbg -vfile:dbg'
 #
+# Or to start with non-root IPsec config file:
+#   --ovs-monitor-ipsec-options='--ipsec-conf=/etc/ipsec.d/ovs.conf --root-ipsec-conf=/etc/ipsec.conf'
+#
 OPTIONS=""
 
 # Uncomment and set the OVS User/Group value

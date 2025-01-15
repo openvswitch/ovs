@@ -1,1 +1,3 @@
+#!/usr/bin/dh-exec
+debian/openvswitch-ipsec.default => /usr/share/openvswitch/ipsec/default.template
 usr/share/openvswitch/scripts/ovs-monitor-ipsec

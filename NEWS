@@ -55,6 +55,8 @@ Post-v3.4.0
        to make it not configure any crypto options (ike/esp) for connections.
        Most useful in combination with '--root-ipsec-conf' where system-wide
        crypto-policy is included from the root ipsec.conf.
+     * New option '--ovs-monitor-ipsec-options' for 'ovs-ctl start-ovs-ipsec'
+       to pass above new options to ovs-monitor-ipsec.
 
 
 v3.4.0 - 15 Aug 2024
