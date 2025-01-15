@@ -56,8 +56,6 @@ EXTRA_DIST += \
 	debian/openvswitch-vtep.init \
 	debian/openvswitch-vtep.install \
 	debian/ovs-systemd-reload \
-	debian/patches/ovs-ctl-ipsec.patch \
-	debian/patches/series \
 	debian/rules \
 	debian/source/format \
 	debian/source/lintian-overrides \
