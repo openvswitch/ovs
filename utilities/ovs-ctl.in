@@ -245,12 +245,15 @@ start_ovs_ipsec () {
     if test X$RESTART_IKE_DAEMON = Xno; then
         no_restart="--no-restart-ike-daemon"
     fi
+    if test X"$MONITOR" != Xno; then
+        monitor_arg="--monitor"
+    fi
 
     ${datadir}/scripts/ovs-monitor-ipsec \
         --pidfile=${rundir}/ovs-monitor-ipsec.pid \
         --ike-daemon=$IKE_DAEMON \
-        $no_restart \
-        --log-file --detach --monitor unix:${rundir}/db.sock || return 1
+        $no_restart $monitor_arg \
+        --log-file --detach unix:${rundir}/db.sock || return 1
     return 0
 }
 
