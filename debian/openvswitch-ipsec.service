@@ -6,6 +6,7 @@ After=openvswitch-switch.service
 [Service]
 Type=forking
 PIDFile=/run/openvswitch/ovs-monitor-ipsec.pid
+Restart=on-failure
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl --no-monitor \
                     --ike-daemon=strongswan start-ovs-ipsec
 ExecStop=/usr/share/openvswitch/scripts/ovs-ctl stop-ovs-ipsec
