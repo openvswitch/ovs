@@ -916,11 +916,11 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
                 }
             }
         } else if (!(netdev_flags & (NETDEV_TX_VXLAN_TNL_TSO |
+                                     NETDEV_TX_GRE_TNL_TSO |
                                      NETDEV_TX_GENEVE_TNL_TSO))) {
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
                 if (dp_packet_hwol_is_tso(packet) &&
-                    (dp_packet_hwol_is_tunnel_vxlan(packet) ||
-                     dp_packet_hwol_is_tunnel_geneve(packet))) {
+                    dp_packet_hwol_is_tunnel(packet)) {
                     return netdev_send_tso(netdev, qid, batch, concurrent_txq);
                 }
             }
@@ -1011,6 +1011,8 @@ netdev_push_header(const struct netdev *netdev,
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, batch) {
         if (OVS_UNLIKELY(data->tnl_type != OVS_VPORT_TYPE_GENEVE &&
                          data->tnl_type != OVS_VPORT_TYPE_VXLAN &&
+                         data->tnl_type != OVS_VPORT_TYPE_GRE &&
+                         data->tnl_type != OVS_VPORT_TYPE_IP6GRE &&
                          dp_packet_hwol_is_tso(packet))) {
             COVERAGE_INC(netdev_push_header_drops);
             dp_packet_delete(packet);
@@ -1019,16 +1021,17 @@ netdev_push_header(const struct netdev *netdev,
                          netdev_get_name(netdev), netdev_get_type(netdev));
         } else {
             if (data->tnl_type != OVS_VPORT_TYPE_GENEVE &&
-                data->tnl_type != OVS_VPORT_TYPE_VXLAN) {
+                data->tnl_type != OVS_VPORT_TYPE_VXLAN &&
+                data->tnl_type != OVS_VPORT_TYPE_GRE &&
+                data->tnl_type != OVS_VPORT_TYPE_IP6GRE) {
                 dp_packet_ol_send_prepare(packet, 0);
-            } else if (dp_packet_hwol_is_tunnel_geneve(packet) ||
-                       dp_packet_hwol_is_tunnel_vxlan(packet)) {
+            } else if (dp_packet_hwol_is_tunnel(packet)) {
                 if (dp_packet_hwol_is_tso(packet)) {
                     COVERAGE_INC(netdev_push_header_drops);
                     dp_packet_delete(packet);
                     VLOG_WARN_RL(&rl, "%s: Tunneling packets with TSO is not "
                                       "supported with multiple levels of "
-                                      "VXLAN or GENEVE encapsulation.",
+                                      "VXLAN, GENEVE, or GRE encapsulation.",
                                  netdev_get_name(netdev));
                     continue;
                 }
@@ -1480,6 +1483,7 @@ netdev_get_status(const struct netdev *netdev, struct smap *smap)
         OL_ADD_STAT("sctp_csum", NETDEV_TX_OFFLOAD_SCTP_CKSUM);
         OL_ADD_STAT("tcp_seg", NETDEV_TX_OFFLOAD_TCP_TSO);
         OL_ADD_STAT("vxlan_tso", NETDEV_TX_VXLAN_TNL_TSO);
+        OL_ADD_STAT("gre_tso", NETDEV_TX_GRE_TNL_TSO);
         OL_ADD_STAT("geneve_tso", NETDEV_TX_GENEVE_TNL_TSO);
         OL_ADD_STAT("out_ip_csum", NETDEV_TX_OFFLOAD_OUTER_IP_CKSUM);
         OL_ADD_STAT("out_udp_csum", NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM);

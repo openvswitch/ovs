@@ -604,6 +604,8 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
                        NETDEV_TX_OFFLOAD_SCTP_CKSUM |
                        NETDEV_TX_OFFLOAD_IPV4_CKSUM);
         }
+    } else if (dp_packet_hwol_is_tunnel_gre(p)) {
+        tnl_inner = true;
     }
 
     if (dp_packet_hwol_tx_ip_csum(p)) {

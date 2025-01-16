@@ -110,8 +110,8 @@ Limitations
 ~~~~~~~~~~~
 
 The current OvS userspace `TSO` implementation supports flat, VLAN networks,
-and some tunneled connections.  Currently only VxLAN and Geneve tunnels are
-supported.
+and some tunneled connections.  Currently only VxLAN, Geneve and GRE tunnels
+are supported.
 
 The NIC driver must support and advertise checksum offload for TCP and UDP.
 However, SCTP is not mandatory because very few drivers advertised support
@@ -121,7 +121,7 @@ enabled, otherwise TSO can still be enabled but SCTP packets sent to the NIC
 will be dropped.
 
 There is a limited software implementation of TSO when tunnels are used which
-only supports VxLAN and Geneve.  When these tunnels are used with TSO,
+only supports VxLAN, Geneve, and GRE.  When these tunnels are used with TSO,
 not all ports attached to the datapath need to support hardware TSO.
 Guests using vhost-user in client mode will receive TSO packet regardless of
 TSO being enabled or disabled within the guest.

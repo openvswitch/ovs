@@ -658,11 +658,11 @@ OVS_VSWITCHD_START(
                      other-config:datapath-id=1234 fail-mode=secure])
 
 AT_CHECK([ovs-vsctl get interface p1 status | sed -n 's/^{\(.*\).*}$/\1/p'], [0], [dnl
-tx_geneve_tso_offload="false", tx_ip_csum_offload="false", tx_out_ip_csum_offload="false", tx_out_udp_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false", tx_vxlan_tso_offload="false"
+tx_geneve_tso_offload="false", tx_gre_tso_offload="false", tx_ip_csum_offload="false", tx_out_ip_csum_offload="false", tx_out_udp_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false", tx_vxlan_tso_offload="false"
 ], [])
 
 AT_CHECK([ovs-vsctl get interface br0 status | sed -n 's/^{\(.*\).*}$/\1/p'], [0], [dnl
-tx_geneve_tso_offload="false", tx_ip_csum_offload="false", tx_out_ip_csum_offload="false", tx_out_udp_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false", tx_vxlan_tso_offload="false"
+tx_geneve_tso_offload="false", tx_gre_tso_offload="false", tx_ip_csum_offload="false", tx_out_ip_csum_offload="false", tx_out_udp_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false", tx_vxlan_tso_offload="false"
 ], [])
 
 OVS_VSWITCHD_STOP
@@ -937,15 +937,26 @@ AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy \
                        options:csum=true ofport_request=4 \
                     -- add-port int-br t4 -- set Interface t4 type=geneve \
                        options:remote_ip=2001:cafe::93 options:key=123 \
-                       options:csum=true ofport_request=5], [0])
+                       options:csum=true ofport_request=5 \
+                    -- add-port int-br t5 -- set Interface t5 type=gre \
+                       options:remote_ip=2001:cafe::93 options:key=123 \
+                       options:csum=true ofport_request=6 \
+                    -- add-port int-br t6 -- set Interface t6 type=gre \
+                       options:remote_ip=1.1.2.92 options:key=123 \
+                       options:csum=false ofport_request=7], [0])
 
-flow_s="eth(src=8a:bf:7e:2f:05:84,dst=0a:8f:39:4f:e0:73),eth_type(0x0800),
-        ipv4(src=192.168.123.2,dst=192.168.123.1,proto=6,tos=1,ttl=64,frag=no),
-        tcp(src=54392,dst=5201),tcp_flags(ack)"
+dnl The final tunnel intentionally has checksum turned off to exercise a
+dnl different code path, there is no GRE checksum offload anyways.
 
-flow_s_v6="eth(src=8a:bf:7e:2f:05:84,dst=0a:8f:39:4f:e0:73),eth_type(0x86dd),
-           ipv6(src=2001:cafe::88,dst=2001:cafe::92,proto=6),
-           tcp(src=54392,dst=5201),tcp_flags(ack)"
+m4_define([IPV4_TSO], [m4_join([,],
+  [eth(src=8a:bf:7e:2f:05:84,dst=0a:8f:39:4f:e0:73),eth_type(0x0800)],
+  [ipv4(src=192.168.123.2,dst=192.168.123.1,proto=6,tos=1,ttl=64,frag=no)],
+  [tcp(src=54392,dst=5201),tcp_flags(ack)])])
+
+m4_define([IPV6_TSO], [m4_join([,],
+  [eth(src=8a:bf:7e:2f:05:84,dst=0a:8f:39:4f:e0:73),eth_type(0x86dd)],
+  [ipv6(src=2001:cafe::88,dst=2001:cafe::92,proto=6)],
+  [tcp(src=54392,dst=5201),tcp_flags(ack)])])
 
 dnl Setup dummy interface tunnel connectivity.
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br1 1.1.2.88/24], [0], [OK
@@ -968,9 +979,9 @@ AT_CHECK([ovs-vsctl set Interface p1 options:tx_pcap=p1.pcap -- \
                     set Interface int-br options:ol_ip_csum_set_good=false -- \
                     set Interface int-br options:ol_tso_segsz=500])
 
-AT_CHECK([ovs-appctl netdev-dummy/receive int-br "in_port(2),${flow_s}" \
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br "IPV4_TSO" \
           --len 2054])
-AT_CHECK([ovs-appctl netdev-dummy/receive int-br "in_port(2),${flow_s_v6}" \
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br "IPV6_TSO" \
           --len 2074])
 
 dnl Check that first we have the following packets:
@@ -984,10 +995,26 @@ dnl - IPv6 Geneve tunnel with IPv4 payload
 dnl - IPv6 Geneve tunnel with IPv6 payload
 dnl - IPv6 Geneve tunnel with IPv4 payload
 dnl - IPv6 Geneve tunnel with IPv6 payload
+dnl - IPv4 GRE tunnel with IPv4 payload
+dnl - IPv4 GRE tunnel with IPv6 payload
+dnl - IPv6 GRE tunnel with IPv4 payload
+dnl - IPv6 GRE tunnel with IPv6 payload
 dnl These are sorted since OVS may send payloads to the tunnels in any order.
 zero400=$(printf '0%.0s' $(seq 800))
 zero100=$(printf '0%.0s' $(seq 200))
 AT_CHECK_UNQUOTED([ovs-pcap p1.pcap | sort], [0], [dnl
+[aabbcc000001aa55aa55000308004500025a00004000402f31c0010102580101025c200065580000007b0a8f394fe0738abf]dnl
+[7e2f058486dd60000000020806002001cafe0000000000000000000000882001cafe000000000000000000000092d4781451]dnl
+[000000000000000050100000edfd0000${zero100}${zero400}]
+[aabbcc000001aa55aa55000308004500025a00014000402f31bf010102580101025c200065580000007b0a8f394fe0738abf]dnl
+[7e2f058486dd60000000020806002001cafe0000000000000000000000882001cafe000000000000000000000092d4781451]dnl
+[000001f40000000050100000ec090000${zero100}${zero400}]
+[aabbcc000001aa55aa55000308004500025a00024000402f31be010102580101025c200065580000007b0a8f394fe0738abf]dnl
+[7e2f058486dd60000000020806002001cafe0000000000000000000000882001cafe000000000000000000000092d4781451]dnl
+[000003e80000000050100000ea150000${zero100}${zero400}]
+[aabbcc000001aa55aa55000308004500025a00034000402f31bd010102580101025c200065580000007b0a8f394fe0738abf]dnl
+[7e2f058486dd60000000020806002001cafe0000000000000000000000882001cafe000000000000000000000092d4781451]dnl
+[000005dc0000000050100000e8210000${zero100}${zero400}]
 [aabbcc000001aa55aa55000308004500026200004000401131d6010102580101025ce01312b5024e5f360800000000007b00]dnl
 [0a8f394fe0738abf7e2f058486dd60000000020806002001cafe0000000000000000000000882001cafe0000000000000000]dnl
 [00000092d4781451000000000000000050100000edfd0000${zero100}${zero400}]
@@ -1012,6 +1039,18 @@ AT_CHECK_UNQUOTED([ovs-pcap p1.pcap | sort], [0], [dnl
 [aabbcc000001aa55aa55000308004500026200034000401131d3010102580101025ce01317c1024efcd10000655800007b00]dnl
 [0a8f394fe0738abf7e2f058486dd60000000020806002001cafe0000000000000000000000882001cafe0000000000000000]dnl
 [00000092d4781451000005dc0000000050100000e8210000${zero100}${zero400}]
+[aabbcc000001aa55aa55000308004501024600004000402f31d3010102580101025c200065580000007b0a8f394fe0738abf]dnl
+[7e2f058408004501021c0000000040060187c0a87b02c0a87b01d47814510000000000000000501000004dc20000]dnl
+[${zero100}${zero400}]
+[aabbcc000001aa55aa55000308004501024600014000402f31d2010102580101025c200065580000007b0a8f394fe0738abf]dnl
+[7e2f058408004501021c0001000040060186c0a87b02c0a87b01d4781451000001f400000000501000004bce0000]dnl
+[${zero100}${zero400}]
+[aabbcc000001aa55aa55000308004501024600024000402f31d1010102580101025c200065580000007b0a8f394fe0738abf]dnl
+[7e2f058408004501021c0002000040060185c0a87b02c0a87b01d4781451000003e8000000005010000049da0000]dnl
+[${zero100}${zero400}]
+[aabbcc000001aa55aa55000308004501024600034000402f31d0010102580101025c200065580000007b0a8f394fe0738abf]dnl
+[7e2f058408004501021c0003000040060184c0a87b02c0a87b01d4781451000005dc000000005010000047e60000]dnl
+[${zero100}${zero400}]
 [aabbcc000001aa55aa55000308004501024e00004000401131e9010102580101025ce01312b5023abd990800000000007b00]dnl
 [0a8f394fe0738abf7e2f058408004501021c0000000040060187c0a87b02c0a87b01d4781451000000000000000050100000]dnl
 [4dc20000${zero100}${zero400}]
@@ -1036,6 +1075,18 @@ AT_CHECK_UNQUOTED([ovs-pcap p1.pcap | sort], [0], [dnl
 [aabbcc000001aa55aa55000308004501024e00034000401131e6010102580101025ce01317c1023a5b350000655800007b00]dnl
 [0a8f394fe0738abf7e2f058408004501021c0003000040060184c0a87b02c0a87b01d4781451000005dc0000000050100000]dnl
 [47e60000${zero100}${zero400}]
+[aabbcc000006aa55aa55000386dd60000000024a2f402001cafe0000000000000000000000882001cafe0000000000000000]dnl
+[00000093a0006558da8e00000000007b0a8f394fe0738abf7e2f058486dd60000000020806002001cafe0000000000000000]dnl
+[000000882001cafe000000000000000000000092d4781451000005dc0000000050100000e8210000${zero100}${zero400}]
+[aabbcc000006aa55aa55000386dd60000000024a2f402001cafe0000000000000000000000882001cafe0000000000000000]dnl
+[00000093a0006558dc8200000000007b0a8f394fe0738abf7e2f058486dd60000000020806002001cafe0000000000000000]dnl
+[000000882001cafe000000000000000000000092d4781451000003e80000000050100000ea150000${zero100}${zero400}]
+[aabbcc000006aa55aa55000386dd60000000024a2f402001cafe0000000000000000000000882001cafe0000000000000000]dnl
+[00000093a0006558de7600000000007b0a8f394fe0738abf7e2f058486dd60000000020806002001cafe0000000000000000]dnl
+[000000882001cafe000000000000000000000092d4781451000001f40000000050100000ec090000${zero100}${zero400}]
+[aabbcc000006aa55aa55000386dd60000000024a2f402001cafe0000000000000000000000882001cafe0000000000000000]dnl
+[00000093a0006558e06a00000000007b0a8f394fe0738abf7e2f058486dd60000000020806002001cafe0000000000000000]dnl
+[000000882001cafe000000000000000000000092d4781451000000000000000050100000edfd0000${zero100}${zero400}]
 [aabbcc000006aa55aa55000386dd60000000024e11402001cafe0000000000000000000000882001cafe0000000000000000]dnl
 [00000093e01312b5024e8ed10800000000007b000a8f394fe0738abf7e2f058486dd60000000020806002001cafe00000000]dnl
 [00000000000000882001cafe000000000000000000000092d4781451000000000000000050100000edfd0000${zero100}]dnl
@@ -1068,6 +1119,18 @@ AT_CHECK_UNQUOTED([ovs-pcap p1.pcap | sort], [0], [dnl
 [00000093e01317c1024e2c6d0000655800007b000a8f394fe0738abf7e2f058486dd60000000020806002001cafe00000000]dnl
 [00000000000000882001cafe000000000000000000000092d4781451000005dc0000000050100000e8210000${zero100}]dnl
 [${zero400}]
+[aabbcc000006aa55aa55000386dd6010000002362f402001cafe0000000000000000000000882001cafe0000000000000000]dnl
+[00000093a00065583a4e00000000007b0a8f394fe0738abf7e2f058408004501021c0003000040060184c0a87b02c0a87b01]dnl
+[d4781451000005dc000000005010000047e60000${zero100}${zero400}]
+[aabbcc000006aa55aa55000386dd6010000002362f402001cafe0000000000000000000000882001cafe0000000000000000]dnl
+[00000093a00065583c4300000000007b0a8f394fe0738abf7e2f058408004501021c0002000040060185c0a87b02c0a87b01]dnl
+[d4781451000003e8000000005010000049da0000${zero100}${zero400}]
+[aabbcc000006aa55aa55000386dd6010000002362f402001cafe0000000000000000000000882001cafe0000000000000000]dnl
+[00000093a00065583e3800000000007b0a8f394fe0738abf7e2f058408004501021c0001000040060186c0a87b02c0a87b01]dnl
+[d4781451000001f400000000501000004bce0000${zero100}${zero400}]
+[aabbcc000006aa55aa55000386dd6010000002362f402001cafe0000000000000000000000882001cafe0000000000000000]dnl
+[00000093a0006558402d00000000007b0a8f394fe0738abf7e2f058408004501021c0000000040060187c0a87b02c0a87b01]dnl
+[d47814510000000000000000501000004dc20000${zero100}${zero400}]
 [aabbcc000006aa55aa55000386dd60100000023a11402001cafe0000000000000000000000882001cafe0000000000000000]dnl
 [00000093e01312b5023aed340800000000007b000a8f394fe0738abf7e2f058408004501021c0000000040060187c0a87b02]dnl
 [c0a87b01d47814510000000000000000501000004dc20000${zero100}${zero400}]

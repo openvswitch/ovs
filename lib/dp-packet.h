@@ -104,6 +104,9 @@ enum dp_packet_offload_mask {
     /* Offload tunnel packet, outer header is IPv6. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_OUTER_IPV6,
                 RTE_MBUF_F_TX_OUTER_IPV6, 0x40000),
+    /* Offload packet is GRE tunnel. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_TUNNEL_GRE,
+                RTE_MBUF_F_TX_TUNNEL_GRE, 0x80000),
 
     /* Adding new field requires adding to DP_PACKET_OL_SUPPORTED_MASK. */
 };
@@ -123,6 +126,7 @@ enum dp_packet_offload_mask {
                                      DP_PACKET_OL_TX_IP_CKSUM        | \
                                      DP_PACKET_OL_TX_TUNNEL_GENEVE   | \
                                      DP_PACKET_OL_TX_TUNNEL_VXLAN    | \
+                                     DP_PACKET_OL_TX_TUNNEL_GRE      | \
                                      DP_PACKET_OL_TX_OUTER_IPV4      | \
                                      DP_PACKET_OL_TX_OUTER_IP_CKSUM  | \
                                      DP_PACKET_OL_TX_OUTER_UDP_CKSUM | \
@@ -1171,6 +1175,22 @@ dp_packet_hwol_is_tunnel_vxlan(struct dp_packet *b)
     return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_TUNNEL_VXLAN);
 }
 
+/* Returns 'true' if packet 'b' is marked for GRE tunnel offloading. */
+static inline bool
+dp_packet_hwol_is_tunnel_gre(struct dp_packet *b)
+{
+    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_TUNNEL_GRE);
+}
+
+/* Returns true if packet 'b' has any offloadable tunnel type. */
+static inline bool
+dp_packet_hwol_is_tunnel(struct dp_packet *b)
+{
+    return !!(*dp_packet_ol_flags_ptr(b) & (DP_PACKET_OL_TX_TUNNEL_VXLAN |
+                                            DP_PACKET_OL_TX_TUNNEL_GRE |
+                                            DP_PACKET_OL_TX_TUNNEL_GENEVE));
+}
+
 /* Returns 'true' if packet 'b' is marked for outer IPv4 checksum offload. */
 static inline bool
 dp_packet_hwol_is_outer_ipv4_cksum(const struct dp_packet *b)
@@ -1289,11 +1309,19 @@ dp_packet_hwol_set_tunnel_vxlan(struct dp_packet *b)
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TUNNEL_VXLAN;
 }
 
+/* Mark packet 'b' for GRE tunnel offloading. */
+static inline void
+dp_packet_hwol_set_tunnel_gre(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TUNNEL_GRE;
+}
+
 /* Clears tunnel offloading marks. */
 static inline void
 dp_packet_hwol_reset_tunnel(struct dp_packet *b)
 {
     *dp_packet_ol_flags_ptr(b) &= ~(DP_PACKET_OL_TX_TUNNEL_VXLAN |
+                                    DP_PACKET_OL_TX_TUNNEL_GRE |
                                     DP_PACKET_OL_TX_TUNNEL_GENEVE);
 }
 
@@ -1352,6 +1380,9 @@ dp_packet_hwol_reset_tcp_seg(struct dp_packet *p)
             ol_flags |= DP_PACKET_OL_TX_OUTER_IP_CKSUM;
         }
         ol_flags |= DP_PACKET_OL_TX_OUTER_UDP_CKSUM;
+    } else if (ol_flags & DP_PACKET_OL_TX_TUNNEL_GRE &&
+               ol_flags & DP_PACKET_OL_TX_OUTER_IPV4) {
+        ol_flags |= DP_PACKET_OL_TX_OUTER_IP_CKSUM;
     }
 
     *dp_packet_ol_flags_ptr(p) = ol_flags;

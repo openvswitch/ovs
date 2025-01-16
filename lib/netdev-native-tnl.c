@@ -194,8 +194,7 @@ netdev_tnl_push_ip_header(struct dp_packet *packet, const void *header,
         packet_set_ipv6_flow_label(&ip6->ip6_flow, ipv6_label);
         packet->l4_ofs = dp_packet_size(packet) - *ip_tot_size;
 
-        if (dp_packet_hwol_is_tunnel_geneve(packet) ||
-            dp_packet_hwol_is_tunnel_vxlan(packet)) {
+        if (dp_packet_hwol_is_tunnel(packet)) {
             dp_packet_hwol_set_tx_outer_ipv6(packet);
         } else {
             dp_packet_hwol_set_tx_ipv6(packet);
@@ -207,8 +206,7 @@ netdev_tnl_push_ip_header(struct dp_packet *packet, const void *header,
         ip = netdev_tnl_ip_hdr(eth);
         ip->ip_tot_len = htons(*ip_tot_size);
         /* Postpone checksum to when the packet is pushed to the port. */
-        if (dp_packet_hwol_is_tunnel_geneve(packet) ||
-            dp_packet_hwol_is_tunnel_vxlan(packet)) {
+        if (dp_packet_hwol_is_tunnel(packet)) {
             dp_packet_hwol_set_tx_outer_ipv4(packet);
             dp_packet_hwol_set_tx_outer_ipv4_csum(packet);
         } else {
@@ -271,7 +269,9 @@ dp_packet_tnl_ol_process(struct dp_packet *packet,
         ip = dp_packet_l3(packet);
 
         if (data->tnl_type == OVS_VPORT_TYPE_GENEVE ||
-            data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
+            data->tnl_type == OVS_VPORT_TYPE_VXLAN ||
+            data->tnl_type == OVS_VPORT_TYPE_GRE ||
+            data->tnl_type == OVS_VPORT_TYPE_IP6GRE) {
 
             if (IP_VER(ip->ip_ihl_ver) == 4) {
                 dp_packet_hwol_set_tx_ipv4(packet);
@@ -286,6 +286,9 @@ dp_packet_tnl_ol_process(struct dp_packet *packet,
         dp_packet_hwol_set_tunnel_geneve(packet);
     } else if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
         dp_packet_hwol_set_tunnel_vxlan(packet);
+    } else if (data->tnl_type == OVS_VPORT_TYPE_GRE ||
+               data->tnl_type == OVS_VPORT_TYPE_IP6GRE) {
+        dp_packet_hwol_set_tunnel_gre(packet);
     }
 }
 
@@ -535,8 +538,12 @@ netdev_gre_push_header(const struct netdev *netdev,
                        const struct ovs_action_push_tnl *data)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
+    uint16_t l3_ofs = packet->l3_ofs;
+    uint16_t l4_ofs = packet->l4_ofs;
     struct gre_base_hdr *greh;
     int ip_tot_size;
+
+    dp_packet_tnl_ol_process(packet, data);
 
     greh = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
                                      &ip_tot_size, 0);
@@ -547,11 +554,24 @@ netdev_gre_push_header(const struct netdev *netdev,
     }
 
     if (greh->flags & htons(GRE_SEQ)) {
-        /* Last 4 byte is GRE seqno */
-        int seq_ofs = gre_header_len(greh->flags) - 4;
-        ovs_16aligned_be32 *seq_opt =
-            ALIGNED_CAST(ovs_16aligned_be32 *, (char *)greh + seq_ofs);
-        put_16aligned_be32(seq_opt, htonl(atomic_count_inc(&dev->gre_seqno)));
+        if (!dp_packet_hwol_is_tso(packet)) {
+            /* Last 4 bytes are GRE seqno. */
+            int seq_ofs = gre_header_len(greh->flags) - 4;
+            ovs_16aligned_be32 *seq_opt =
+                ALIGNED_CAST(ovs_16aligned_be32 *, (char *) greh + seq_ofs);
+
+            put_16aligned_be32(seq_opt,
+                               htonl(atomic_count_inc(&dev->gre_seqno)));
+        } else {
+            VLOG_WARN_RL(&err_rl, "Cannot use GRE Sequence numbers with TSO.");
+        }
+    }
+
+    if (l3_ofs != UINT16_MAX) {
+        packet->inner_l3_ofs = l3_ofs + data->header_len;
+    }
+    if (l4_ofs != UINT16_MAX) {
+        packet->inner_l4_ofs = l4_ofs + data->header_len;
     }
 }
 

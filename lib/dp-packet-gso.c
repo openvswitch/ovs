@@ -73,8 +73,7 @@ dp_packet_gso_nr_segs(struct dp_packet *p)
     const char *data_tail;
     const char *data_pos;
 
-    if (dp_packet_hwol_is_tunnel_vxlan(p) ||
-        dp_packet_hwol_is_tunnel_geneve(p)) {
+    if (dp_packet_hwol_is_tunnel(p)) {
         data_pos = dp_packet_get_inner_tcp_payload(p);
     } else {
         data_pos = dp_packet_get_tcp_payload(p);
@@ -105,7 +104,9 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
     bool outer_ipv4;
     int hdr_len;
     int seg_len;
-    bool tnl;
+    bool udp_tnl = dp_packet_hwol_is_tunnel_vxlan(p) ||
+                   dp_packet_hwol_is_tunnel_geneve(p);
+    bool gre_tnl = dp_packet_hwol_is_tunnel_gre(p);
 
     tso_segsz = dp_packet_get_tso_segsz(p);
     if (!tso_segsz) {
@@ -114,11 +115,9 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
         return false;
     }
 
-    if (dp_packet_hwol_is_tunnel_vxlan(p) ||
-        dp_packet_hwol_is_tunnel_geneve(p)) {
+    if (udp_tnl || gre_tnl) {
         outer_ipv4 = dp_packet_hwol_is_outer_ipv4(p);
         tcp_hdr = dp_packet_inner_l4(p);
-        tnl = true;
 
         if (outer_ipv4) {
             outer_ip_id = ntohs(((struct ip_header *) dp_packet_l3(p))->ip_id);
@@ -130,7 +129,6 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
     } else {
         outer_ipv4 = dp_packet_hwol_is_ipv4(p);
         tcp_hdr = dp_packet_l4(p);
-        tnl = false;
 
         if (outer_ipv4) {
             struct ip_header *ip_hdr = dp_packet_l3(p);
@@ -156,13 +154,15 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
         seg = dp_packet_gso_seg_new(p, hdr_len, data_pos, seg_len);
         data_pos += seg_len;
 
-        if (tnl) {
+        if (udp_tnl) {
             /* Update tunnel UDP header length. */
             struct udp_header *tnl_hdr;
 
             tnl_hdr = dp_packet_l4(seg);
             tnl_hdr->udp_len = htons(dp_packet_l4_size(seg));
+        }
 
+        if (udp_tnl || gre_tnl) {
             /* Update tunnel inner L3 header. */
             if (dp_packet_hwol_is_ipv4(seg)) {
                 struct ip_header *ip_hdr = dp_packet_inner_l3(seg);
@@ -194,7 +194,7 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
         }
 
         /* Update L4 header. */
-        if (tnl) {
+        if (udp_tnl || gre_tnl) {
             tcp_hdr = dp_packet_inner_l4(seg);
         } else {
             tcp_hdr = dp_packet_l4(seg);
@@ -206,6 +206,18 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
             uint16_t tcp_flags = TCP_FLAGS(tcp_hdr->tcp_ctl)
                                  & ~(TCP_PSH | TCP_FIN);
             tcp_hdr->tcp_ctl = TCP_CTL(tcp_flags, tcp_offset);
+        }
+
+        if (gre_tnl) {
+            struct gre_base_hdr *ghdr;
+
+            ghdr = dp_packet_l4(seg);
+
+            if (ghdr->flags & htons(GRE_CSUM)) {
+                ovs_be16 *csum_opt = (ovs_be16 *) (ghdr + 1);
+                *csum_opt = 0;
+                *csum_opt = csum(ghdr, dp_packet_l4_size(seg));
+            }
         }
 
         if (dp_packet_batch_is_full(curr_batch)) {

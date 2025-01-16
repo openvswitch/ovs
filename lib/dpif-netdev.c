@@ -8928,9 +8928,7 @@ dp_netdev_recirculate(struct dp_netdev_pmd_thread *pmd,
     struct dp_packet *packet;
 
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, packets) {
-        if (dp_packet_hwol_is_tunnel_geneve(packet) ||
-                dp_packet_hwol_is_tunnel_vxlan(packet)) {
-
+        if (dp_packet_hwol_is_tunnel(packet)) {
             if (dp_packet_hwol_is_tso(packet)) {
                 /* Can't perform GSO in the middle of a pipeline. */
                 COVERAGE_INC(datapath_drop_tunnel_tso_recirc);
