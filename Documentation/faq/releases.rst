@@ -222,6 +222,7 @@ Q: What DPDK version does each Open vSwitch release work with?
     3.2.x        22.11.6
     3.3.x        23.11.2
     3.4.x        23.11.2
+    3.5.x        24.11.1
     ============ ========
 
 Q: Are all the DPDK releases that OVS versions work with maintained?
