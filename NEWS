@@ -31,6 +31,8 @@ Post-v3.4.0
        that does not have a specific value defined, rather than being
        treated as a global value, aligning the behavior with that of
        the kernel datapath.
+     * Extended the support for TSO software fallback to include support for
+       VXLAN and Geneve tunneled packets.
    - Linux TC offload:
      * Add support for matching tunnel flags if the kernel supports it.
      * Add support for the "Don't Fragment" (DF) flag in the encap action,

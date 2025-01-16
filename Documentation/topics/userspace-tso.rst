@@ -120,12 +120,11 @@ in Open vSwitch. Currently, if the NIC supports that, then the feature is
 enabled, otherwise TSO can still be enabled but SCTP packets sent to the NIC
 will be dropped.
 
-There is no software implementation of TSO in conjunction with tunnels.  So
-when VxLAN or Geneve tunnels are in use, all ports attached to the datapath
-must support TSO or packets using this combination of features will be dropped
-on ports without hardware TSO support.  That also means guests using
-vhost-user in client mode will receive TSO packet regardless of TSO being
-enabled or disabled within the guest.
+There is a limited software implementation of TSO when tunnels are used which
+only supports VxLAN and Geneve.  When these tunnels are used with TSO,
+not all ports attached to the datapath need to support hardware TSO.
+Guests using vhost-user in client mode will receive TSO packet regardless of
+TSO being enabled or disabled within the guest.
 
 All kernel devices that use the raw socket interface (veth, for example)
 require the kernel commit 9d2f67e43b73 ("net/packet: fix packet drop as of
