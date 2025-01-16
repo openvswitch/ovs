@@ -8,6 +8,8 @@ v3.3.4 - xx xxx xxxx
                     name=table123 prefixes=nw_dst,nw_src,ipv6_dst,ipv6_src
      This allows to significantly reduce amount of datapath flows generated
      from mixed IPv4+IPv6 flow tables, if configured.
+   - DPDK:
+     * OVS validated with DPDK 23.11.3.
 
 v3.3.3 - 15 Nov 2024
 --------------------
