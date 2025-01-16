@@ -109,9 +109,9 @@ then started again. OvS will then report::
 Limitations
 ~~~~~~~~~~~
 
-The current OvS userspace `TSO` implementation supports flat and VLAN networks
-only (i.e. no support for `TSO` over tunneled connection [VxLAN, GRE, IPinIP,
-etc.]).
+The current OvS userspace `TSO` implementation supports flat, VLAN networks,
+and some tunneled connections.  Currently only VxLAN and Geneve tunnels are
+supported.
 
 The NIC driver must support and advertise checksum offload for TCP and UDP.
 However, SCTP is not mandatory because very few drivers advertised support
@@ -120,11 +120,12 @@ in Open vSwitch. Currently, if the NIC supports that, then the feature is
 enabled, otherwise TSO can still be enabled but SCTP packets sent to the NIC
 will be dropped.
 
-There is no software implementation of TSO, so all ports attached to the
-datapath must support TSO or packets using that feature will be dropped
-on ports without TSO support.  That also means guests using vhost-user
-in client mode will receive TSO packet regardless of TSO being enabled
-or disabled within the guest.
+There is no software implementation of TSO in conjunction with tunnels.  So
+when VxLAN or Geneve tunnels are in use, all ports attached to the datapath
+must support TSO or packets using this combination of features will be dropped
+on ports without hardware TSO support.  That also means guests using
+vhost-user in client mode will receive TSO packet regardless of TSO being
+enabled or disabled within the guest.
 
 All kernel devices that use the raw socket interface (veth, for example)
 require the kernel commit 9d2f67e43b73 ("net/packet: fix packet drop as of
