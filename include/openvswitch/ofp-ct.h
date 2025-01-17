@@ -24,6 +24,8 @@
 
 #include "openflow/nicira-ext.h"
 
+struct ds;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
