@@ -32,11 +32,15 @@ _ovs_vsctl () {
 # A bar (|) character in an argument means thing before bar OR thing
 # after bar; for example, del-port can take a port or an interface.
 
-_OVS_VSCTL_COMMANDS="$(_ovs_vsctl --commands)"
+_OVS_VSCTL_COMMANDS=
+_OVS_VSCTL_OPTIONS=
+if command -v ovs-vsctl > /dev/null; then
+    _OVS_VSCTL_COMMANDS="$(_ovs_vsctl --commands)"
 
-# This doesn't complete on short arguments, so it filters them out.
-_OVS_VSCTL_OPTIONS="$(_ovs_vsctl --options | awk '/^--/ { print $0 }' \
-                      | sed -e 's/\(.*\)=ARG/\1=/')"
+    # This doesn't complete on short arguments, so it filters them out.
+    _OVS_VSCTL_OPTIONS="$(_ovs_vsctl --options | awk '/^--/ { print $0 }' \
+                          | sed -e 's/\(.*\)=ARG/\1=/')"
+fi
 IFS=$SAVE_IFS
 
 declare -A _OVS_VSCTL_PARSED_ARGS
