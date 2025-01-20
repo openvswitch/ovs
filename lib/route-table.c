@@ -469,6 +469,10 @@ route_table_parse(struct ofpbuf *buf, void *change)
     nlmsg = ofpbuf_at(buf, 0, NLMSG_HDRLEN);
     rtm = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *rtm);
 
+    if (!nlmsg || !rtm) {
+        return 0;
+    }
+
     return route_table_parse__(buf, NLMSG_HDRLEN + sizeof *rtm,
                                nlmsg, rtm, NULL, change);
 }
