@@ -71,8 +71,8 @@ static void route_map_clear(void);
 static void name_table_init(void);
 static void name_table_change(const struct rtnetlink_change *, void *);
 
-void
-route_data_destroy(struct route_data *rd)
+static void
+route_data_destroy_nexthops__(struct route_data *rd)
 {
     struct route_data_nexthop *rdnh;
 
@@ -81,6 +81,12 @@ route_data_destroy(struct route_data *rd)
             free(rdnh);
         }
     }
+}
+
+void
+route_data_destroy(struct route_data *rd)
+{
+    route_data_destroy_nexthops__(rd);
 }
 
 uint64_t
@@ -275,12 +281,9 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
 
         ovs_list_init(&change->rd.nexthops);
         rdnh = rtnh ? xzalloc(sizeof *rdnh) : &change->rd.primary_next_hop__;
+        ovs_list_insert(&change->rd.nexthops, &rdnh->nexthop_node);
 
-        if (!attrs[RTA_MULTIPATH]) {
-            rdnh->family = rtm->rtm_family;
-            ovs_list_insert(&change->rd.nexthops, &rdnh->nexthop_node);
-        }
-
+        rdnh->family = rtm->rtm_family;
         change->relevant = true;
 
         if (rtm->rtm_scope == RT_SCOPE_NOWHERE) {
@@ -407,6 +410,20 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
                 VLOG_DBG_RL(&rl, "unexpected nested RTA_MULTIPATH attribute");
                 goto error_out;
             }
+
+            /* The change->rd->nexthops list is unconditionally populated with
+             * a single rdnh entry as we start parsing above.  Multiple
+             * branches above may access it or jump to error_out, and having it
+             * on the list is the only way to ensure proper cleanup.
+             *
+             * Getting to this point, we know that the above branches has not
+             * provided next hop information, because information about
+             * multiple next hops is encoded in the nested attributes after the
+             * RTA_MULTIPATH attribute.
+             *
+             * Before retrieving those we need to remove the empty rdnh entry
+             * from the list. */
+            route_data_destroy_nexthops__(&change->rd);
 
             NL_NESTED_FOR_EACH (nla, left, attrs[RTA_MULTIPATH]) {
                 struct route_table_msg mp_change;
