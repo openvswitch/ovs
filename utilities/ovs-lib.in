@@ -236,6 +236,10 @@ start_daemon () {
         umask "$previuos_umask_value"
     fi
 
+    if test X"$OOM_SCORE" != X; then
+        echo "$OOM_SCORE" > /proc/`cat $rundir/$daemon.pid`/oom_score_adj 2>/dev/null
+    fi
+
     if test X"$strace" != X; then
         # Strace doesn't have the -D option so we attach after the fact.
         setsid $strace -o "$logdir/$daemon.strace.log" \

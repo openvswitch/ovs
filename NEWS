@@ -2,6 +2,9 @@ Post-v3.5.0
 --------------------
    - DPDK:
      * New debug appctl command 'dpdk/get-memzone-stats'.
+   - ovs-ctl:
+     * Added a new option, --oom-score=<score>, to set the daemons' Linux
+       Out-Of-Memory (OOM) killer score.
 
 
 v3.5.0 - xx xxx xxxx

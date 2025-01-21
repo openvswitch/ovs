@@ -356,6 +356,7 @@ set_defaults () {
     OVS_MONITOR_IPSEC_OPTIONS=
     OVSDB_SERVER_UMASK=
     OVS_VSWITCHD_UMASK=
+    OOM_SCORE=
 
     DB_FILE=$dbdir/conf.db
     DB_SOCK=$rundir/db.sock
@@ -448,6 +449,7 @@ Less important options for "start", "restart" and "force-reload-kmod":
   --no-full-hostname             set short hostname instead of full hostname
   --no-record-hostname           do not attempt to determine/record system
                                  hostname as part of start command
+  --oom-score=SCORE              Set oom-score after starting ovs daemon.
 
 Debugging options for "start", "restart" and "force-reload-kmod":
   --ovsdb-server-wrapper=WRAPPER

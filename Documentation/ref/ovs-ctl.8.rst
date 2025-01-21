@@ -194,6 +194,11 @@ The following options are less important:
     place, because, perhaps, OVSDB manager is running on the same host
     as OVS and share similar attack vectors.
 
+* ``--oom-score=<score>``
+
+  Sets the Linux Out-Of-Memory (OOM) killer score for the OVS daemon
+  after it's been started.
+
 * ``--ovsdb-server-priority=<niceness>`` or
   ``--ovs-vswitchd-priority=<niceness>``
 
