@@ -1,5 +1,7 @@
 Post-v3.5.0
 --------------------
+   - DPDK:
+     * New debug appctl command 'dpdk/get-memzone-stats'.
 
 
 v3.5.0 - xx xxx xxxx

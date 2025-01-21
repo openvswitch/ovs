@@ -15,5 +15,7 @@ components (see \fBdpdk/log-list\fR command on \fBovs\-appctl\fR(8)) separated
 by a colon from the logging \fBlevel\fR to apply.
 .IP "\fBdpdk/get-malloc-stats\fR"
 Prints the heap information statistics about DPDK malloc.
+.IP "\fBdpdk/get-memzone-stats\fR"
+Prints the reserved memory zones from DPDK.
 .RE
 .
