@@ -430,7 +430,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
                 struct rtnexthop *mp_rtnh;
                 struct ofpbuf mp_buf;
 
-                ofpbuf_use_data(&mp_buf, nla, nla->nla_len);
+                ofpbuf_use_const(&mp_buf, nla, nla->nla_len);
                 mp_rtnh = ofpbuf_try_pull(&mp_buf, sizeof *mp_rtnh);
 
                 if (!mp_rtnh) {
