@@ -171,9 +171,9 @@ strip_eth () {
 # 'recirc=<recirc_id>' respectively.  This should make output easier to
 # compare.
 strip_recirc() {
-   sed 's/recirc_id([[x0-9]]*)/recirc_id(<recirc>)/
-        s/recirc_id=[[x0-9]]*/recirc_id=<recirc>/
-        s/recirc([[x0-9]]*)/recirc(<recirc>)/'
+   sed 's/recirc_id([[x0-9a-f]]*)/recirc_id(<recirc>)/
+        s/recirc_id=[[x0-9a-f]]*/recirc_id=<recirc>/
+        s/recirc([[x0-9a-f]]*)/recirc(<recirc>)/'
 }
 
 # Strips dp_hash from output.
