@@ -226,6 +226,24 @@ route_table_reset(void)
     }
 }
 
+/* Returns true if the given route requires nexthop information (output
+ * interface, nexthop IP, ...).  Returns false for special route types
+ * that don't need this information. */
+static bool
+route_type_needs_nexthop(unsigned char rtmsg_type)
+{
+    switch (rtmsg_type) {
+    case RTN_BLACKHOLE:
+    case RTN_THROW:
+    case RTN_UNREACHABLE:
+    case RTN_PROHIBIT:
+        return false;
+
+    default:
+        return true;
+    }
+}
+
 static int
 route_table_parse__(struct ofpbuf *buf, size_t ofs,
                     const struct nlmsghdr *nlmsg,
@@ -447,13 +465,20 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
                                        &mp_change.rd.nexthops);
             }
         }
-        if (!attrs[RTA_OIF] && !attrs[RTA_GATEWAY]
-                && !attrs[RTA_VIA] && !attrs[RTA_MULTIPATH]) {
+        if (route_type_needs_nexthop(rtm->rtm_type)
+            && !attrs[RTA_OIF] && !attrs[RTA_GATEWAY]
+            && !attrs[RTA_VIA] && !attrs[RTA_MULTIPATH]) {
             VLOG_DBG_RL(&rl, "route message needs an RTA_OIF, RTA_GATEWAY, "
                              "RTA_VIA or RTA_MULTIPATH attribute");
             goto error_out;
         }
         /* Add any additional RTA attribute processing before RTA_MULTIPATH. */
+
+        /* Ensure that the change->rd->nexthops list is cleared in cases when
+         * the route does not need a next hop. */
+        if (!route_type_needs_nexthop(rtm->rtm_type)) {
+            route_data_destroy_nexthops__(&change->rd);
+        }
     } else {
         VLOG_DBG_RL(&rl, "received unparseable rtnetlink route message");
         goto error_out;
