@@ -804,6 +804,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
     uint8_t nw_frag, nw_tos, nw_ttl, nw_proto;
     uint8_t *ct_nw_proto_p = NULL;
     ovs_be16 ct_tp_src = 0, ct_tp_dst = 0;
+    bool tunneling;
 
     /* Metadata. */
     if (flow_tnl_dst_is_set(&md->tunnel)) {
@@ -857,7 +858,13 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
     /* Initialize packet's layer pointer and offsets. */
     frame = data;
-    dp_packet_reset_offsets(packet);
+    tunneling = dp_packet_hwol_is_tunnel(packet);
+    if (tunneling) {
+        /* Preserve inner offsets from previous circulation. */
+        dp_packet_reset_outer_offsets(packet);
+    } else {
+        dp_packet_reset_offsets(packet);
+    }
 
     if (packet_type == htonl(PT_ETH)) {
         /* Must have full Ethernet header to proceed. */
@@ -936,9 +943,16 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         nw_proto = nh->ip_proto;
         nw_frag = ipv4_get_nw_frag(nh);
         data_pull(&data, &size, ip_len);
-        dp_packet_hwol_set_tx_ipv4(packet);
-        if (dp_packet_ip_checksum_good(packet)) {
-            dp_packet_hwol_set_tx_ip_csum(packet);
+        if (tunneling) {
+            dp_packet_hwol_set_tx_outer_ipv4(packet);
+            if (dp_packet_ip_checksum_good(packet)) {
+                dp_packet_hwol_set_tx_outer_ipv4_csum(packet);
+            }
+        } else {
+            dp_packet_hwol_set_tx_ipv4(packet);
+            if (dp_packet_ip_checksum_good(packet)) {
+                dp_packet_hwol_set_tx_ip_csum(packet);
+            }
         }
     } else if (dl_type == htons(ETH_TYPE_IPV6)) {
         const struct ovs_16aligned_ip6_hdr *nh = data;
@@ -953,7 +967,11 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         }
         data_pull(&data, &size, sizeof *nh);
 
-        dp_packet_hwol_set_tx_ipv6(packet);
+        if (tunneling) {
+            dp_packet_hwol_set_tx_outer_ipv6(packet);
+        } else {
+            dp_packet_hwol_set_tx_ipv6(packet);
+        }
         plen = ntohs(nh->ip6_plen);
         dp_packet_set_l2_pad_size(packet, size - plen);
         size = plen;   /* Never pull padding. */
@@ -1078,7 +1096,11 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 dp_packet_ol_l4_csum_check_partial(packet);
                 if (dp_packet_l4_checksum_good(packet)
                     || dp_packet_ol_l4_csum_partial(packet)) {
-                    dp_packet_hwol_set_csum_udp(packet);
+                    if (tunneling) {
+                        dp_packet_hwol_set_outer_udp_csum(packet);
+                    } else {
+                        dp_packet_hwol_set_csum_udp(packet);
+                    }
                 }
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_SCTP)) {

@@ -210,6 +210,7 @@ static inline void dp_packet_set_tso_segsz(struct dp_packet *, uint16_t);
 void *dp_packet_resize_l2(struct dp_packet *, int increment);
 void *dp_packet_resize_l2_5(struct dp_packet *, int increment);
 static inline void *dp_packet_eth(const struct dp_packet *);
+static inline void dp_packet_reset_outer_offsets(struct dp_packet *);
 static inline void dp_packet_reset_offsets(struct dp_packet *);
 static inline void dp_packet_reset_offload(struct dp_packet *);
 static inline uint16_t dp_packet_l2_pad_size(const struct dp_packet *);
@@ -433,15 +434,22 @@ dp_packet_eth(const struct dp_packet *b)
             ? dp_packet_data(b) : NULL;
 }
 
-/* Resets all layer offsets.  'l3' offset must be set before 'l2' can be
- * retrieved. */
+/* Resets all outer layer offsets. */
 static inline void
-dp_packet_reset_offsets(struct dp_packet *b)
+dp_packet_reset_outer_offsets(struct dp_packet *b)
 {
     b->l2_pad_size = 0;
     b->l2_5_ofs = UINT16_MAX;
     b->l3_ofs = UINT16_MAX;
     b->l4_ofs = UINT16_MAX;
+}
+
+/* Resets all layer offsets.  'l3' offset must be set before 'l2' can be
+ * retrieved. */
+static inline void
+dp_packet_reset_offsets(struct dp_packet *b)
+{
+    dp_packet_reset_outer_offsets(b);
     b->inner_l3_ofs = UINT16_MAX;
     b->inner_l4_ofs = UINT16_MAX;
 }
@@ -1314,15 +1322,6 @@ static inline void
 dp_packet_hwol_set_tunnel_gre(struct dp_packet *b)
 {
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TUNNEL_GRE;
-}
-
-/* Clears tunnel offloading marks. */
-static inline void
-dp_packet_hwol_reset_tunnel(struct dp_packet *b)
-{
-    *dp_packet_ol_flags_ptr(b) &= ~(DP_PACKET_OL_TX_TUNNEL_VXLAN |
-                                    DP_PACKET_OL_TX_TUNNEL_GRE |
-                                    DP_PACKET_OL_TX_TUNNEL_GENEVE);
 }
 
 /* Mark packet 'b' as a tunnel packet with outer IPv4 header. */
