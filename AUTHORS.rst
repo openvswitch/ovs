@@ -312,6 +312,7 @@ Mark Kavanagh                      mark.b.kavanagh81@gmail.com
 Mark Maglana                       mmaglana@gmail.com
 Mark Michelson                     mmichels@redhat.com
 Markos Chandras                    mchandras@suse.de
+Markus Linnala                     markus.linnala@gmail.com
 Martin Casado                      casado@cs.stanford.edu
 Martin Fong                        mwfong@csl.sri.com
 Martin Kalcok                      martin.kalcok@canonical.com
