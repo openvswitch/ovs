@@ -12,10 +12,7 @@ noinst_HEADERS += \
         include/sparse/netinet/ip6.h \
         include/sparse/netpacket/packet.h \
         include/sparse/pthread.h \
-        include/sparse/rte_atomic.h \
-        include/sparse/rte_mbuf.h \
         include/sparse/rte_memcpy.h \
-        include/sparse/rte_trace_point.h \
         include/sparse/sys/socket.h \
         include/sparse/sys/sysmacros.h \
         include/sparse/sys/types.h \
