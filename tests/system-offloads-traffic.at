@@ -958,3 +958,33 @@ OVS_WAIT_UNTIL([grep -q "Datapath does not support explicit drop action" ovs-vsw
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([offloads - 802.1ad should be offloaded])
+OVS_TRAFFIC_VSWITCHD_START(
+  [], [], [-- set Open_vSwitch . other_config:hw-offload=true])
+OVS_CHECK_8021AD()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+ADD_SVLAN(p0, at_ns0, 4094, "10.255.2.1/24")
+ADD_SVLAN(p1, at_ns1, 4094, "10.255.2.2/24")
+
+ADD_CVLAN(p0.4094, at_ns0, 100, "10.2.2.1/24")
+ADD_CVLAN(p1.4094, at_ns1, 100, "10.2.2.2/24")
+
+AT_CHECK([ovs-ofctl add-flow br0 "priority=1 action=normal"])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows type=tc,offloaded | grep "eth_type(0x0800)" | DUMP_CLEAN_SORTED], [0], [dnl
+in_port(2),eth(macs),eth_type(0x88a8),vlan(vid=4094,pcp=0),encap(eth_type(0x0800)), packets:0, bytes:0, used:0.001s, actions:output
+in_port(3),eth(macs),eth_type(0x88a8),vlan(vid=4094,pcp=0),encap(eth_type(0x0800)), packets:0, bytes:0, used:0.001s, actions:output
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows type=ovs | grep "eth_type(0x0800)" | DUMP_CLEAN_SORTED], [0], [])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

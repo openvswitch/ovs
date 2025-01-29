@@ -2253,6 +2253,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     const struct flow_tnl *tnl = &match->flow.tunnel;
     struct flow_tnl *tnl_mask = &mask->tunnel;
     struct dpif_flow_stats adjust_stats;
+    bool exact_match_on_dl_type;
     bool recirc_act = false;
     uint32_t block_id = 0;
     struct tcf_id id;
@@ -2270,6 +2271,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
 
     memset(&flower, 0, sizeof flower);
 
+    exact_match_on_dl_type = mask->dl_type == htons(0xffff);
     chain = key->recirc_id;
     mask->recirc_id = 0;
 
@@ -2434,7 +2436,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     mask->dl_type = 0;
     mask->in_port.odp_port = 0;
 
-    if (key->dl_type == htons(ETH_P_ARP)) {
+    if (exact_match_on_dl_type && key->dl_type == htons(ETH_P_ARP)) {
             flower.key.arp.spa = key->nw_src;
             flower.key.arp.tpa = key->nw_dst;
             flower.key.arp.sha = key->arp_sha;
@@ -2453,7 +2455,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             memset(&mask->arp_tha, 0, sizeof mask->arp_tha);
     }
 
-    if (is_ip_any(key) && !is_ipv6_fragment_and_masked(key, mask)) {
+    if (exact_match_on_dl_type && is_ip_any(key)
+        && !is_ipv6_fragment_and_masked(key, mask)) {
         flower.key.ip_proto = key->nw_proto;
         flower.mask.ip_proto = mask->nw_proto;
         mask->nw_proto = 0;
@@ -2483,9 +2486,9 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         } else {
             /* This scenario should not occur.  Currently, all installed IP DP
              * flows perform a fully masked match on the fragmentation bits.
-             * However, since TC depends on this behavior, we return ENOTSUPP
+             * However, since TC depends on this behavior, we return EOPNOTSUPP
              * for now in case this behavior changes in the future. */
-             return EOPNOTSUPP;
+            return EOPNOTSUPP;
         }
 
         if (key->nw_proto == IPPROTO_TCP) {
