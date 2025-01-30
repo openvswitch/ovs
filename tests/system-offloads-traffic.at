@@ -1047,3 +1047,122 @@ AT_CHECK([ovs-appctl dpctl/dump-flows type=ovs | grep "eth_type(0x0800)" | DUMP_
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([offloads - split kernel vs offload datapath rules])
+OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p1, at_ns0, br0, "10.0.0.1/24")
+ADD_VETH(p2, at_ns1, br0, "10.0.0.2/24")
+
+AT_CHECK([ovs-vsctl -- set interface ovs-p1 ofport_request=1 \
+                    -- set interface ovs-p2 ofport_request=2])
+
+AT_DATA([groups.txt], [dnl
+group_id=1,type=select,selection_method=dp_hash,bucket=bucket_id:0,weight:100,actions=ct(commit,table=2)
+])
+AT_DATA([flows.txt], [dnl
+table=0,arp,actions=NORMAL
+table=0,priority=100,cookie=0x12345678,in_port=ovs-p1,ip,nw_dst=10.0.0.2,actions=resubmit(,1)
+table=0,priority=100,cookie=0xabcedf,in_port=ovs-p2,ip,nw_dst=10.0.0.1,actions=ct(table=3)
+table=1,priority=200,ip,actions=group:1
+table=2,ip,actions=ovs-p2
+table=3,ip,actions=ovs-p1
+])
+AT_CHECK([ovs-ofctl add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.1 -W 2 10.0.0.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl revalidator/wait])
+
+dnl In this test we should not have the first recirculation(s) in the kernel
+dnl datapath, and the final flow in TC.  They should all be in the kernel
+dnl datapath, as the dp_hash() action is currently not supported by TC.
+dnl The command below ensures they are all handled in the kernel datapath.
+AT_CHECK([ovs-appctl dpctl/dump-flows --names type=ovs filter='in_port(ovs-p1),ipv4' | \
+          strip_recirc | strip_dp_hash | DUMP_CLEAN_SORTED], [0], [dnl
+recirc_id(<recirc>),in_port(ovs-p1),eth(),eth_type(0x0800),ipv4(dst=10.0.0.2,frag=no), packets:2, bytes:196, used:0.001s, actions:hash(l4(0)),recirc(<recirc>)
+recirc_id(<recirc>),in_port(ovs-p1),eth(),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:196, used:0.001s, actions:ct(commit),recirc(<recirc>)
+recirc_id(<recirc>),in_port(ovs-p1),eth(),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:196, used:0.001s, actions:ovs-p2
+])
+AT_CHECK([ovs-appctl dpctl/dump-flows --names type=tc filter='in_port(ovs-p1),ipv4' | \
+          strip_recirc | strip_dp_hash | DUMP_CLEAN_SORTED], [0], [dnl
+])
+
+dnl The next test will install two DP flows that are both accepted in the
+dnl TC datapath.  But then the first one is moved to the kernel datapath,
+dnl we have to make sure both flows are moved to kernel (and no dual rules
+dnl exist).
+
+AT_DATA([flows.txt], [dnl
+table=0,arp,actions=NORMAL
+table=0,priority=100,in_port=ovs-p1,ip,nw_dst=10.0.0.2,actions=ct(table=1)
+table=0,priority=100,in_port=ovs-p2,ip,nw_dst=10.0.0.1,actions=ovs-p1
+table=1,ip,actions=ovs-p2
+])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:max-idle=2000])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl revalidator/purge])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.1 -W 2 10.0.0.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl dpctl/dump-flows --names type=tc filter='in_port(ovs-p1),ipv4' | \
+          strip_recirc | strip_dp_hash | DUMP_CLEAN_SORTED], [0], [dnl
+recirc_id(<recirc>),in_port(ovs-p1),eth(),eth_type(0x0800),ipv4(dst=10.0.0.2,frag=no), packets:2, bytes:168, used:0.001s, actions:ct,recirc(<recirc>)
+recirc_id(<recirc>),in_port(ovs-p1),eth(),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:168, used:0.001s, actions:ovs-p2
+])
+AT_CHECK([ovs-appctl dpctl/dump-flows --names type=ovs filter='in_port(ovs-p1),ipv4' | \
+          strip_recirc | strip_dp_hash | DUMP_CLEAN_SORTED], [0], [dnl
+])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,in_port=ovs-p1,ip,nw_dst=10.0.0.2,actions=controller(),ct(table=1)
+])
+
+AT_CHECK([ovs-ofctl del-flows br0 table=0,in_port=ovs-p1,ip,nw_dst=10.0.0.2])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl revalidator/wait])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.1 -W 2 10.0.0.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl revalidator/wait])
+
+dnl Unfortunately, until the unreachable TC rule times out, packets will be
+dnl handled by upcalls.  So we first check for this case and then verify that
+dnl the rule finally moved.
+AT_CHECK([ovs-appctl dpctl/dump-flows --names type=tc filter='in_port(ovs-p1),ipv4' | \
+          strip_recirc | strip_dp_hash | DUMP_CLEAN_SORTED], [0], [dnl
+recirc_id(<recirc>),in_port(ovs-p1),eth(),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:168, used:0.001s, actions:ovs-p2
+])
+AT_CHECK([ovs-appctl dpctl/dump-flows --names type=ovs filter='in_port(ovs-p1),ipv4' | \
+          strip_recirc | strip_dp_hash | DUMP_CLEAN_SORTED], [0], [dnl
+recirc_id(<recirc>),in_port(ovs-p1),eth(),eth_type(0x0800),ipv4(dst=10.0.0.2,frag=no), packets:3, bytes:294, used:0.001s, actions:userspace(pid=4294967295,controller(reason=1,dont_send=0,continuation=0,recirc_id=<recirc>,rule_cookie=0,controller_id=0,max_len=65535)),ct,recirc(<recirc>)
+])
+
+check_rules_and_ping() {
+  NS_CHECK_EXEC([at_ns0], [ping -q -c 1 -i 0.1 -W 2 10.0.0.2], [0], [ignore])
+  AT_CHECK([ovs-appctl revalidator/wait])
+  AT_CHECK([ovs-appctl dpctl/dump-flows -m filter='in_port(ovs-p1),ipv4'],
+            [0], [stdout])
+
+  [[ "$(wc -l < stdout)" -ne 2 ]] && return 0
+  grep -q "dp:tc" stdout
+}
+
+OVS_WAIT_WHILE(
+  [check_rules_and_ping],
+  [ovs-appctl dpctl/dump-flows -m --names filter='in_port(ovs-p1),ipv4'])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

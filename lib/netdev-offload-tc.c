@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <linux/if_ether.h>
 
+#include "ccmap.h"
 #include "dpif.h"
 #include "hash.h"
 #include "id-pool.h"
@@ -77,6 +78,10 @@ struct policer_node {
     struct hmap_node node;
     uint32_t police_idx;
 };
+
+/* ccmap and protective mutex for counting recirculation id (chain) usage. */
+static struct ovs_mutex used_chains_mutex = OVS_MUTEX_INITIALIZER;
+static struct ccmap used_chains OVS_GUARDED;
 
 /* Protects below meter police ids pool. */
 static struct ovs_mutex meter_police_ids_mutex = OVS_MUTEX_INITIALIZER;
@@ -204,6 +209,10 @@ static struct ovs_mutex ufid_lock = OVS_MUTEX_INITIALIZER;
  * @adjust_stats: When flow gets updated with new actions, we need to adjust
  *                the reported stats to include previous values as the hardware
  *                rule is removed and re-added. This stats copy is used for it.
+ * @chain_goto: If a TC jump action exists for the flow, the target chain it
+ *              jumps to is stored here.  Only a single goto action is stored,
+ *              as TC supports only one goto action per flow (there is no
+ *              return mechanism).
  */
 struct ufid_tc_data {
     struct hmap_node ufid_to_tc_node;
@@ -212,6 +221,7 @@ struct ufid_tc_data {
     struct tcf_id id;
     struct netdev *netdev;
     struct dpif_flow_stats adjust_stats;
+    uint32_t chain_goto;
 };
 
 static void
@@ -233,6 +243,13 @@ del_ufid_tc_mapping_unlocked(const ovs_u128 *ufid)
     hmap_remove(&ufid_to_tc, &data->ufid_to_tc_node);
     hmap_remove(&tc_to_ufid, &data->tc_to_ufid_node);
     netdev_close(data->netdev);
+
+    if (data->chain_goto) {
+        ovs_mutex_lock(&used_chains_mutex);
+        ccmap_dec(&used_chains, data->chain_goto);
+        ovs_mutex_unlock(&used_chains_mutex);
+    }
+
     free(data);
 }
 
@@ -288,7 +305,8 @@ del_filter_and_ufid_mapping(struct tcf_id *id, const ovs_u128 *ufid,
 /* Add ufid entry to ufid_to_tc hashmap. */
 static void
 add_ufid_tc_mapping(struct netdev *netdev, const ovs_u128 *ufid,
-                    struct tcf_id *id, struct dpif_flow_stats *stats)
+                    struct tcf_id *id, struct dpif_flow_stats *stats,
+                    uint32_t chain_goto)
 {
     struct ufid_tc_data *new_data = xzalloc(sizeof *new_data);
     size_t ufid_hash = hash_bytes(ufid, sizeof *ufid, 0);
@@ -300,6 +318,8 @@ add_ufid_tc_mapping(struct netdev *netdev, const ovs_u128 *ufid,
     new_data->ufid = *ufid;
     new_data->id = *id;
     new_data->netdev = netdev_ref(netdev);
+    new_data->chain_goto = chain_goto;
+
     if (stats) {
         new_data->adjust_stats = *stats;
     }
@@ -2315,6 +2335,17 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     chain = key->recirc_id;
     mask->recirc_id = 0;
 
+    if (chain) {
+        /* If we match on a recirculation ID, we must ensure the previous
+         * flow is also in the TC datapath; otherwise, the entry is useless,
+         * as the related packets will be handled by upcalls. */
+        if (!ccmap_find(&used_chains, chain)) {
+            VLOG_DBG_RL(&rl, "match for chain %u failed due to non-existing "
+                        "goto chain action", chain);
+            return EOPNOTSUPP;
+        }
+    }
+
     if (flow_tnl_dst_is_set(&key->tunnel) ||
         flow_tnl_src_is_set(&key->tunnel)) {
         VLOG_DBG_RL(&rl,
@@ -2657,11 +2688,28 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     id = tc_make_tcf_id_chain(ifindex, block_id, chain, prio, hook);
     err = tc_replace_flower(&id, &flower);
     if (!err) {
+        uint32_t chain_goto = 0;
+
         if (stats) {
             memset(stats, 0, sizeof *stats);
             netdev_tc_adjust_stats(stats, &adjust_stats);
         }
-        add_ufid_tc_mapping(netdev, ufid, &id, &adjust_stats);
+
+        if (recirc_act) {
+            struct tc_action *action = flower.actions;
+
+            for (int i = 0; i < flower.action_count; i++, action++) {
+                if (action->type == TC_ACT_GOTO && action->chain) {
+                    chain_goto = action->chain;
+                    ovs_mutex_lock(&used_chains_mutex);
+                    ccmap_inc(&used_chains, chain_goto);
+                    ovs_mutex_unlock(&used_chains_mutex);
+                    break;
+                }
+            }
+        }
+
+        add_ufid_tc_mapping(netdev, ufid, &id, &adjust_stats, chain_goto);
     }
 
     return err;
@@ -3138,6 +3186,8 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     tc_add_del_qdisc(ifindex, false, 0, hook);
 
     if (ovsthread_once_start(&once)) {
+        ccmap_init(&used_chains);
+
         probe_tc_block_support(ifindex);
         /* Need to re-fetch block id as it depends on feature availability. */
         block_id = get_block_id_from_netdev(netdev);
