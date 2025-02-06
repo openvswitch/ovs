@@ -1165,6 +1165,8 @@ dpif_ipfix_set_options(
     struct ofproto_ipfix_flow_exporter_options *options;
     struct dpif_ipfix_flow_exporter_map_node *node;
 
+    ovs_assert(flow_exporters_options || n_flow_exporters_options == 0);
+
     ovs_mutex_lock(&mutex);
     dpif_ipfix_bridge_exporter_set_options(&di->bridge_exporter,
                                            bridge_exporter_options,
