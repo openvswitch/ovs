@@ -1896,6 +1896,7 @@ ofproto_type_run(const char *datapath_type)
 
     datapath_type = ofproto_normalize_type(datapath_type);
     class = ofproto_class_find__(datapath_type);
+    ovs_assert(class);
 
     error = class->type_run ? class->type_run(datapath_type) : 0;
     if (error && error != EAGAIN) {
@@ -1912,6 +1913,7 @@ ofproto_type_wait(const char *datapath_type)
 
     datapath_type = ofproto_normalize_type(datapath_type);
     class = ofproto_class_find__(datapath_type);
+    ovs_assert(class);
 
     if (class->type_wait) {
         class->type_wait(datapath_type);
