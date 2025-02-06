@@ -58,7 +58,7 @@ such privileges.
 Options
 =======
 
-.. program: ovs-sim
+.. program:: ovs-sim
 
 *script*
     Runs *script*, which should be a Bash script, within a subshell
