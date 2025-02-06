@@ -6948,6 +6948,7 @@ meter_insert_rule(struct rule *rule)
     uint32_t meter_id = ofpacts_get_meter(a->ofpacts, a->ofpacts_len);
     struct meter *meter = ofproto_get_meter(rule->ofproto, meter_id);
 
+    ovs_assert(meter);
     ovs_list_insert(&meter->rules, &rule->meter_list_node);
 }
 
