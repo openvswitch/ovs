@@ -1178,8 +1178,14 @@ AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=2 icmp_first=2 icmp_reply=3])],
 ])
 AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
 ])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=UNKNOWN icmp_first=2 icmp_reply=3])],
+  [1], [], [ovs-vsctl: invalid zone argument, zone=UNKNOWN
+])
 AT_CHECK([RUN_OVS_VSCTL([del-zone-tp netdev zone=11])],
   [1], [], [ovs-vsctl: zone id 11 does not have a policy
+])
+AT_CHECK([RUN_OVS_VSCTL([del-zone-tp netdev zone=UNKNOWN])],
+  [1], [], [ovs-vsctl: invalid zone argument, zone=UNKNOWN
 ])
 AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
 ])
@@ -1205,6 +1211,15 @@ AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev default -1])],
 ])
 AT_CHECK([RUN_OVS_VSCTL([del-zone-limit netdev default])],
   [1], [], [ovs-vsctl: datapath netdev does not have a limit
+])
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev UNKNOWN 1])],
+  [1], [], [ovs-vsctl: invalid zone id, UNKNOWN
+])
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev default VALUE])],
+  [1], [], [ovs-vsctl: invalid limit, VALUE
+])
+AT_CHECK([RUN_OVS_VSCTL([del-zone-limit netdev UNKNOWN])],
+  [1], [], [ovs-vsctl: invalid zone id, UNKNOWN
 ])
 
 AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 'capabilities={recirc=true}' -- set Open_vSwitch . datapaths:"system"=@m])], [0], [stdout])

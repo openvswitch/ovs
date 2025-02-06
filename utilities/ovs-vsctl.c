@@ -1294,8 +1294,11 @@ cmd_add_zone_tp(struct ctl_context *ctx)
     int64_t zone_id;
 
     const char *dp_name = ctx->argv[1];
-    ovs_scan(ctx->argv[2], "zone=%"SCNi64, &zone_id);
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+
+    if (!ovs_scan(ctx->argv[2], "zone=%"SCNi64, &zone_id)) {
+        ctl_fatal("invalid zone argument, %s", ctx->argv[2]);
+    }
 
     struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, dp_name);
     if (!dp) {
@@ -1331,7 +1334,10 @@ cmd_del_zone_tp(struct ctl_context *ctx)
 
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *dp_name = ctx->argv[1];
-    ovs_scan(ctx->argv[2], "zone=%"SCNi64, &zone_id);
+
+    if (!ovs_scan(ctx->argv[2], "zone=%"SCNi64, &zone_id)) {
+        ctl_fatal("invalid zone argument, %s", ctx->argv[2]);
+    }
 
     struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, dp_name);
     if (!dp) {
@@ -1396,8 +1402,14 @@ cmd_set_zone_limit(struct ctl_context *ctx)
 
     const char *dp_name = ctx->argv[1];
 
-    ovs_scan(ctx->argv[2], "%"SCNi64, &zone_id);
-    ovs_scan(ctx->argv[3], "%"SCNi64, &limit);
+    if (!ovs_scan(ctx->argv[2], "%"SCNi64, &zone_id)
+        && strcmp(ctx->argv[2], "default")) {
+        ctl_fatal("invalid zone id, %s", ctx->argv[2]);
+    }
+
+    if (!ovs_scan(ctx->argv[3], "%"SCNi64, &limit)) {
+        ctl_fatal("invalid limit, %s", ctx->argv[3]);
+    }
 
     struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, dp_name);
     if (!dp) {
@@ -1435,7 +1447,10 @@ cmd_del_zone_limit(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *dp_name = ctx->argv[1];
 
-    ovs_scan(ctx->argv[2], "%"SCNi64, &zone_id);
+    if (!ovs_scan(ctx->argv[2], "%"SCNi64, &zone_id)
+        && strcmp(ctx->argv[2], "default")) {
+        ctl_fatal("invalid zone id, %s", ctx->argv[2]);
+    }
 
     struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, dp_name);
     if (!dp) {
