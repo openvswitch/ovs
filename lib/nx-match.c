@@ -131,9 +131,10 @@ nxm_experimenter_len(uint64_t header)
 
 /* Returns the number of bytes that follow the header for an NXM/OXM entry
  * with the given 'header'. */
-static int
+static unsigned int
 nxm_payload_len(uint64_t header)
 {
+    ovs_assert(nxm_length(header) >= nxm_experimenter_len(header));
     return nxm_length(header) - nxm_experimenter_len(header);
 }
 
@@ -162,14 +163,16 @@ nxm_header_len(uint64_t header)
 static uint64_t
 nxm_make_exact_header(uint64_t header)
 {
-    int new_len = nxm_payload_len(header) / 2 + nxm_experimenter_len(header);
+    unsigned int new_len = nxm_payload_len(header)
+                           / 2 + nxm_experimenter_len(header);
     return NXM_HEADER(nxm_vendor(header), nxm_class(header),
                       nxm_field(header), 0, new_len);
 }
 static uint64_t
 nxm_make_wild_header(uint64_t header)
 {
-    int new_len = nxm_payload_len(header) * 2 + nxm_experimenter_len(header);
+    unsigned int new_len = nxm_payload_len(header) * 2
+                           + nxm_experimenter_len(header);
     return NXM_HEADER(nxm_vendor(header), nxm_class(header),
                       nxm_field(header), 1, new_len);
 }
