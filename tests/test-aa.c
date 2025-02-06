@@ -239,6 +239,7 @@ test_aa_send(void)
 
     if (n == 0) {
         printf("Error: unable to build packet\n");
+        lldp_destroy_dummy(lldp);
         return 1;
     }
 

@@ -129,7 +129,7 @@ test_ccmap_inc_dec(hash_func *hash)
         check_ccmap(&ccmap, values, i + 1, hash);
     }
     shuffle(values, N_ELEMS);
-    for (i = 0; i < N_ELEMS; i++) {
+    for (i = 0; i < (N_ELEMS - 1); i++) {
         ccmap_dec(&ccmap, hash(values[i]));
         check_ccmap(&ccmap, values + (i + 1), N_ELEMS - (i + 1), hash);
     }

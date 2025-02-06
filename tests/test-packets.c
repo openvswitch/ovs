@@ -157,7 +157,7 @@ test_ipv6_parsing(void)
     struct in6_addr o_ipv6, p_ipv6;
     struct in6_addr mask;
 
-    inet_pton(AF_INET6, "2001:db8:0:0:0:0:2:1", &o_ipv6);
+    assert(inet_pton(AF_INET6, "2001:db8:0:0:0:0:2:1", &o_ipv6) == 1);
 
     assert(!ipv6_parse_masked("2001:db8:0:0:0:0:2:1/64", &p_ipv6, &mask));
     assert(ipv6_addr_equals(&o_ipv6, &p_ipv6));

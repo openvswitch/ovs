@@ -426,6 +426,7 @@ do_log_io(struct ovs_cmdl_context *ctx)
     }
 
     ovsdb_log_close(log);
+    ovsdb_log_close(replacement);
 }
 
 static void
@@ -3089,7 +3090,8 @@ do_idl_partial_update_set_column(struct ovs_cmdl_context *ctx)
     myTxn = ovsdb_idl_txn_create(idl);
     idltest_simple3_get_uset(myRow, OVSDB_TYPE_UUID);
     struct uuid uuid_to_add;
-    uuid_from_string(&uuid_to_add, "001e43d2-dd3f-4616-ab6a-83a490bb0991");
+    ovs_assert(uuid_from_string(&uuid_to_add,
+               "001e43d2-dd3f-4616-ab6a-83a490bb0991"));
     idltest_simple3_update_uset_addvalue(myRow, uuid_to_add);
     idltest_simple3_set_name(myRow, "String2");
     ovsdb_idl_txn_commit_block(myTxn);
@@ -3101,7 +3103,8 @@ do_idl_partial_update_set_column(struct ovs_cmdl_context *ctx)
     /* Insert duplicate element. */
     myTxn = ovsdb_idl_txn_create(idl);
     struct uuid uuid_to_add2;
-    uuid_from_string(&uuid_to_add2, "0026b3ba-571b-4729-8227-d860a5210ab8");
+    ovs_assert(uuid_from_string(&uuid_to_add2,
+               "0026b3ba-571b-4729-8227-d860a5210ab8"));
     idltest_simple3_update_uset_addvalue(myRow, uuid_to_add2);
     ovsdb_idl_txn_commit_block(myTxn);
     ovsdb_idl_txn_destroy(myTxn);
@@ -3145,7 +3148,8 @@ do_idl_partial_update_set_column(struct ovs_cmdl_context *ctx)
     /* create row, insert key, delete row */
     myTxn = ovsdb_idl_txn_create(idl);
     myRow = idltest_simple3_insert(myTxn);
-    uuid_from_string(&uuid_to_add, "12345678-dd3f-4616-ab6a-83a490bb0991");
+    ovs_assert(uuid_from_string(&uuid_to_add,
+               "12345678-dd3f-4616-ab6a-83a490bb0991"));
     idltest_simple3_update_uset_addvalue(myRow, uuid_to_add);
     idltest_simple3_set_name(myRow, "String2");
     idltest_simple3_delete(myRow);
