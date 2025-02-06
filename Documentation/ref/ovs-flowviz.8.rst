@@ -52,7 +52,7 @@ them in one of the predefined *format*\ s.
 Options
 =======
 
-.. program: ovs-flowviz
+.. program:: ovs-flowviz
 
 .. option:: -h, --help
 
@@ -151,6 +151,8 @@ option.
 
 Arguments:
 
+.. program:: ovs-flowviz [datapath|openflow] console
+
 .. option:: -h, --heat-map
 
    Color of the packet and byte counters to reflect their relative size.
@@ -200,6 +202,8 @@ A logical block is a set of flows that have:
 * Optionally, the ``cookie`` can be included as part of the logical flow.
 
 Arguments:
+
+.. program:: ovs-flowviz openflow logic
 
 .. option:: -s, --show-flows
 
@@ -276,6 +280,8 @@ The datapath ``graph`` generates a graphviz visual representation of the
 same tree-like flow hierarchy that the ``tree`` format prints.
 
 Arguments:
+
+.. program:: ovs-flowviz datapath console
 
 .. option:: -h, --html
 
