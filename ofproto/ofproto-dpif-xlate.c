@@ -6938,7 +6938,8 @@ rewrite_flow_push_nsh(struct xlate_ctx *ctx,
                                "supported for packet type (%d,0x%x)",
                                pt_ns(packet_type), pt_ns_type(packet_type));
             ctx->error = XLATE_UNSUPPORTED_PACKET_TYPE;
-            return buf;
+            ofpbuf_delete(buf);
+            return NULL;
     }
     /* Note that we have matched on packet_type! */
     wc->masks.packet_type = OVS_BE32_MAX;
