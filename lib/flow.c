@@ -402,6 +402,14 @@ parse_ethertype(const void **datap, size_t *sizep)
     return htons(FLOW_DL_TYPE_NONE);
 }
 
+static inline bool
+icmp6_is_nd(const struct icmp6_data_header *icmp6)
+{
+    return (icmp6->icmp6_base.icmp6_code == 0 &&
+            (icmp6->icmp6_base.icmp6_type == ND_NEIGHBOR_SOLICIT ||
+             icmp6->icmp6_base.icmp6_type == ND_NEIGHBOR_ADVERT));
+}
+
 /* Returns 'true' if the packet is an ND packet. In that case the '*nd_target'
  * and 'arp_buf[]' are filled in.  If the packet is not an ND packet, 'false'
  * is returned and no values are filled in on '*nd_target' or 'arp_buf[]'. */
@@ -412,9 +420,7 @@ parse_icmpv6(const void **datap, size_t *sizep,
              const union ovs_16aligned_in6_addr **nd_target,
              struct eth_addr arp_buf[2], uint8_t *opt_type)
 {
-    if (icmp6->icmp6_base.icmp6_code != 0 ||
-        (icmp6->icmp6_base.icmp6_type != ND_NEIGHBOR_SOLICIT &&
-         icmp6->icmp6_base.icmp6_type != ND_NEIGHBOR_ADVERT)) {
+    if (!icmp6_is_nd(icmp6)) {
         return false;
     }
 
@@ -1188,6 +1194,15 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 }
             }
         }
+    } else if (ct_nw_proto_p &&
+               (*ct_nw_proto_p == IPPROTO_TCP ||
+                *ct_nw_proto_p == IPPROTO_UDP ||
+                *ct_nw_proto_p == IPPROTO_SCTP ||
+                *ct_nw_proto_p == IPPROTO_ICMP ||
+                (*ct_nw_proto_p == IPPROTO_ICMPV6 && !icmp6_is_nd(data)))) {
+        miniflow_pad_from_64(mf, ct_tp_src);
+        miniflow_push_be16(mf, ct_tp_src, ct_tp_src);
+        miniflow_push_be16(mf, ct_tp_dst, ct_tp_dst);
     }
  out:
     dst->map = mf.map;
