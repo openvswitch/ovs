@@ -4518,6 +4518,91 @@ OVS_CHECK_FRAG_LARGE()
 OVS_TRAFFIC_VSWITCHD_STOP(["/Unsupported big reassembled v4 packet/d"])
 AT_CLEANUP
 
+AT_SETUP([conntrack - IPv4 fragmentation with ct orig match])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,ip,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=2,icmp,ct_state=+rpl,action=1
+priority=100,in_port=1,ip,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ct_state=+new+trk,action=ct(commit)
+priority=100,in_port=1,ip,ct_nw_proto=1,ct_tp_src=8,ct_tp_dst=0,ct_state=+new+trk,action=ct(commit),2
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Packet content:
+dnl   Ethernet II, Src: 50:54:00:00:00:0a, Dst: 50:54:00:00:00:09
+dnl       Type: IPv4 (0x0800)
+dnl   Internet Protocol Version 4, Src: 10.1.1.1, Dst: 10.1.1.2
+dnl       Total Length: 1420
+dnl       Identification: 0x0001 (1)
+dnl       001. .... = Flags: 0x1, More fragments
+dnl           0... .... = Reserved bit: Not set
+dnl           .0.. .... = Don't fragment: Not set
+dnl           ..1. .... = More fragments: Set
+dnl       ...0 0000 0000 0000 = Fragment Offset: 0
+dnl       Time to Live: 64
+dnl       Protocol: UDP (17)
+dnl   User Datagram Protocol, Src Port: 1, Dst Port: 2
+dnl       Source Port: 1
+dnl       Destination Port: 2
+dnl       Length: 1608
+dnl       UDP payload (1392 bytes)
+dnl   Data (1392 bytes)
+eth="50 54 00 00 00 09 50 54 00 00 00 0a 08 00"
+ip="45 00 05 8c 00 01 20 00 40 11 3f 5c 0a 01 01 01 0a 01 01 02"
+udp="00 01 00 02 06 48 dd 56"
+data_len=$(seq 1392)
+data=$(printf '00 %.0s' ${data_len})
+packet="${eth} ${ip} ${udp} ${data}"
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 ${packet} > /dev/null])
+
+dnl Packet content:
+dnl   Ethernet II, Src: 50:54:00:00:00:0a, Dst: 50:54:00:00:00:09
+dnl       Type: IPv4 (0x0800)
+dnl   Internet Protocol Version 4, Src: 10.1.1.1, Dst: 10.1.1.2
+dnl       0100 .... = Version: 4
+dnl       .... 0101 = Header Length: 20 bytes (5)
+dnl       Differentiated Services Field: 0x00 (DSCP: CS0, ECN: Not-ECT)
+dnl           0000 00.. = Differentiated Services Codepoint: Default (0)
+dnl           .... ..00 = Explicit Congestion Notification: Not ECN-Capable Transport (0)
+dnl       Total Length: 228
+dnl       Identification: 0x0001 (1)
+dnl       000. .... = Flags: 0x0
+dnl           0... .... = Reserved bit: Not set
+dnl           .0.. .... = Don't fragment: Not set
+dnl           ..0. .... = More fragments: Not set
+dnl       ...0 0000 1010 1111 = Fragment Offset: 1400
+dnl       Time to Live: 64
+dnl       Protocol: UDP (17)
+dnl   Data (208 bytes)
+eth="50 54 00 00 00 09 50 54 00 00 00 0a 08 00"
+ip="45 00 00 e4 00 01 00 af 40 11 63 55 0a 01 01 01 0a 01 01 02"
+data_len=$(seq 208)
+data=$(printf '00 %.0s' ${data_len})
+packet="${eth} ${ip} ${data}"
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 ${packet} > /dev/null])
+
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 1 -W 1 10.1.1.2 | FORMAT_PING], [0], [dnl
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sort], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0)
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - IPv4 fragmentation expiry])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -4814,6 +4899,92 @@ NS_EXEC([at_ns0], [ping6 -s 65487 -q -c 1 -W 0.5 fc00::2])
 OVS_CHECK_FRAG_LARGE()
 
 OVS_TRAFFIC_VSWITCHD_STOP(["/Unsupported big reassembled v6 packet/d"])
+AT_CLEANUP
+
+AT_SETUP([conntrack - IPv6 fragmentation with ct orig match])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96", "50:54:00:00:00:09", [], "nodad")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96", "50:54:00:00:00:0a", [], "nodad")
+
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,ipv6,ct_state=-trk,action=ct(table=0)
+priority=10,in_port=2,ipv6,ct_tp_src=128,ct_state=+trk+est+rpl,action=1
+priority=10,in_port=1,ipv6,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ct_state=+new+trk,action=ct(commit)
+priority=10,in_port=1,ipv6,ct_nw_proto=58,ct_tp_src=128,ct_tp_dst=0,ct_state=+new+trk,action=ct(commit),2
+priority=100,icmp6,icmp_type=135,action=normal
+priority=100,icmp6,icmp_type=136,action=normal
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Packet content:
+dnl   Ethernet II, Src: 50:54:00:00:00:0a, Dst: 50:54:00:00:00:09
+dnl       Type: IPv6 (0x86dd)
+dnl   Internet Protocol Version 6, Src: fc00::1, Dst: fc00::2
+dnl       Payload Length: 1344
+dnl       Next Header: Fragment Header for IPv6 (44)
+dnl       Hop Limit: 64
+dnl       Fragment Header for IPv6
+dnl           Next header: UDP (17)
+dnl           Reserved octet: 0x00
+dnl           0000 0000 0000 0... = Offset: 0 (0 bytes)
+dnl           .... .... .... .00. = Reserved bits: 0
+dnl           .... .... .... ...1 = More Fragments: Yes
+dnl           Identification: 0x9bdb1fa7
+dnl   User Datagram Protocol, Src Port: 1, Dst Port: 2
+dnl       Source Port: 1
+dnl       Destination Port: 2
+dnl       Length: 1608
+dnl       UDP payload (1328 bytes)
+dnl   Data (1328 bytes)
+eth="50 54 00 00 00 09 50 54 00 00 00 0a 86 dd"
+ipv6="60 00 00 00 05 40 2c 40 fc 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 \
+      fc 00 00 00 00 00 00 00 00 00 00 00 00 00 00 02 11 00 00 01 9b db 1f a7"
+udp="00 01 00 02 06 48 fb 56"
+data_len=$(seq 1328)
+data=$(printf '00 %.0s' ${data_len})
+packet="${eth} ${ipv6} ${udp} ${data}"
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 ${packet} > /dev/null])
+
+dnl IPv6 Packet content
+dnl   Ethernet II, Src: 50:54:00:00:00:0a, Dst: 50:54:00:00:00:09
+dnl       Type: IPv6 (0x86dd)
+dnl   Internet Protocol Version 6, Src: fc00::1, Dst: fc00::2
+dnl       Payload Length: 280
+dnl       Next Header: Fragment Header for IPv6 (44)
+dnl       Hop Limit: 64
+dnl       Fragment Header for IPv6
+dnl           Next header: UDP (17)
+dnl           Reserved octet: 0x00
+dnl           0000 0101 0011 1... = Offset: 167 (1336 bytes)
+dnl           .... .... .... .00. = Reserved bits: 0
+dnl           .... .... .... ...0 = More Fragments: No
+dnl           Identification: 0x9bdb1fa7
+dnl   Data (272 bytes)
+eth="50 54 00 00 00 09 50 54 00 00 00 0a 86 dd"
+ipv6="60 00 00 00 01 18 2c 40 fc 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 \
+      fc 00 00 00 00 00 00 00 00 00 00 00 00 00 00 02 11 00 05 38 9b db 1f a7"
+data_len=$(seq 272)
+data=$(printf '00 %.0s' ${data_len})
+packet="${eth} ${ipv6} ${data}"
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 ${packet} > /dev/null])
+
+dnl Send also fragmented ICMPv6.
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 1 -W 1 fc00::2 | FORMAT_PING], [0], [dnl
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2) | sort], [0], [dnl
+icmpv6,orig=(src=fc00::1,dst=fc00::2,id=<cleared>,type=128,code=0),reply=(src=fc00::2,dst=fc00::1,id=<cleared>,type=129,code=0)
+udp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation expiry])
