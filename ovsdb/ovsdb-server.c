@@ -503,7 +503,7 @@ add_database_config(struct shash *db_conf, const char *opt,
 
     conf = shash_replace_nocopy(db_conf, filename, conf);
     if (conf) {
-        VLOG_WARN("Duplicate database configuration: %s", filename);
+        VLOG_WARN("Duplicate database configuration: %s", opt);
         db_config_destroy(conf);
     }
 }
