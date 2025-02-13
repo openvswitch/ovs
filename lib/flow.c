@@ -1067,7 +1067,8 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
                 if (OVS_LIKELY(tcp_hdr_len >= TCP_HEADER_LEN)
                     && OVS_LIKELY(size >= tcp_hdr_len)) {
-                    miniflow_push_be32(mf, arp_tha.ea[2], 0);
+                    /* tcp_flags are not at the beginning of the block. */
+                    miniflow_pad_from_64(mf, tcp_flags);
                     miniflow_push_be32(mf, tcp_flags,
                                        TCP_FLAGS_BE32(tcp->tcp_ctl));
                     miniflow_push_be16(mf, tp_src, tcp->tcp_src);
@@ -1138,8 +1139,8 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
                 miniflow_push_be16(mf, tp_src, htons(igmp->igmp_type));
                 miniflow_push_be16(mf, tp_dst, htons(igmp->igmp_code));
-                miniflow_push_be16(mf, ct_tp_src, ct_tp_src);
-                miniflow_push_be16(mf, ct_tp_dst, ct_tp_dst);
+                /* ct_tp_src/dst are not extracted for IGMP. */
+                miniflow_pad_to_64(mf, tp_dst);
                 miniflow_push_be32(mf, igmp_group_ip4,
                                    get_16aligned_be32(&igmp->group));
                 miniflow_pad_to_64(mf, igmp_group_ip4);
