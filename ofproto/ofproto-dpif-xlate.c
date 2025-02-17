@@ -3857,9 +3857,9 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
                      "sending %s request",
                      buf_dip6, out_dev->xbridge->name, d_ip ? "ARP" : "ND");
 
-        err = ovs_router_get_netdev_source_address(&d_ip6,
-                                                   out_dev->xbridge->name,
-                                                   &nh_s_ip6);
+        err = ovs_router_get_netdev_source_address(
+            &d_ip6, netdev_get_name(out_dev->netdev), &nh_s_ip6);
+
         if (err) {
             nh_s_ip6 = s_ip6;
         }
