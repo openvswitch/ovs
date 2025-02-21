@@ -2137,6 +2137,9 @@ parse_clone_actions(struct netdev *netdev,
             if (add_output_action(netdev, actions, ca)) {
                 return -1;
             }
+        } else if (clone_type == OVS_ACTION_ATTR_PUSH_VLAN) {
+            const struct ovs_action_push_vlan *vlan = nl_attr_get(ca);
+            parse_vlan_push_action(actions, vlan);
         } else {
             VLOG_DBG_RL(&rl,
                         "Unsupported nested action inside clone(), "
