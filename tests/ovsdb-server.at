@@ -912,17 +912,6 @@ AT_CHECK_UNQUOTED(
   [[@<:@{"rows":@<:@{"private_key":"$PKIDIR/testpki-privkey2.pem"}@:>@}@:>@
 ]], [ignore])
 
-# Check that, when the server has TLSv1.2+ and the client has
-# TLSv1.1, connection fails.
-AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.1]), [1], [stdout], [stderr])
-cat stderr > output
-AT_CHECK_UNQUOTED(
-  [sed -n "/failed to connect/s/ (.*)//p" output], [0],
-  [ovsdb-client: failed to connect to "ssl:127.0.0.1:$SSL_PORT"
-], 
-  [ignore])
-AT_CHECK([grep -q 'TLSv1.1 protocol is deprecated' output])
-AT_CHECK([grep -q 'Enabled protocol range: TLSv1.1 - TLSv1.1' stderr])
 # Check that when ciphers are not compatible, a negotiation
 # failure occurs.
 AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.2], [ECDHE-ECDSA-AES256-GCM-SHA384]),
@@ -954,22 +943,100 @@ AT_CHECK_UNQUOTED(
 AT_CHECK([grep -q -E "(sslv3|ssl/tls) alert handshake failure" output])
 
 # Checking parsing of different protocol ranges.
-AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.1,TLSv1.3]), [0], [stdout], [stderr])
-AT_CHECK([grep -q 'Enabled protocol range: TLSv1.1 - TLSv1.3' stderr])
-AT_CHECK([grep -q \
-            'TLSv1.2 is not configured, but will be enabled anyway' stderr])
-AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.1-TLSv1.3]), [0], [stdout], [stderr])
-AT_CHECK([grep -q 'Enabled protocol range: TLSv1.1 - TLSv1.3' stderr])
-AT_CHECK([grep -q 'will be enabled anyway' stderr], [1])
-AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.3-TLSv1.1]), [0], [stdout], [stderr])
-AT_CHECK([grep -q 'Enabled protocol range: TLSv1.1 - TLSv1.3' stderr])
-AT_CHECK([grep -q 'will be enabled anyway' stderr], [1])
+AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.2,TLSv1.3]), [0], [stdout], [stderr])
+AT_CHECK([grep -q 'Enabled protocol range: TLSv1.2 - TLSv1.3' stderr])
+AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.2-TLSv1.3]), [0], [stdout], [stderr])
+AT_CHECK([grep -q 'Enabled protocol range: TLSv1.2 - TLSv1.3' stderr])
+AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.3-TLSv1.2]), [0], [stdout], [stderr])
+AT_CHECK([grep -q 'Enabled protocol range: TLSv1.2 - TLSv1.3' stderr])
 AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.3+]), [0], [stdout], [stderr])
 AT_CHECK([grep -q 'Enabled protocol range: TLSv1.3 or later' stderr])
 AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.2-TLSv1.3,TLSv1.3+]), [0], [stdout], [stderr])
 AT_CHECK([grep -q 'SSL/TLS protocol not recognized' stderr])
 AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.2+TLSv1.3]), [0], [stdout], [stderr])
 AT_CHECK([grep -q 'SSL/TLS protocol not recognized' stderr])
+AT_CHECK(SSL_OVSDB_CLIENT([TLSv1+]), [0], [stdout], [stderr])
+AT_CHECK([grep -q 'SSL/TLS protocol not recognized' stderr])
+AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.1]), [0], [stdout], [stderr])
+AT_CHECK([grep -q 'SSL/TLS protocol not recognized' stderr])
+
+OVSDB_SERVER_SHUTDOWN(["
+  /stream_ssl|WARN/d
+  /Protocol error/d
+"])
+AT_CLEANUP
+
+AT_SETUP([SSL/TLS db: implementation (TLSv1.3 only)])
+AT_KEYWORDS([ovsdb server positive ssl tls $5])
+AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+# For this test, we pass PKIDIR through a ovsdb-tool transact and
+# msys on Windows does not convert the path style automatically.
+# So, do that forcefully with a 'pwd -W' (called through pwd() function).
+PKIDIR="$(cd $abs_top_builddir/tests && pwd)"
+AT_SKIP_IF([expr "$PKIDIR" : ".*[[       '\"
+\\]]"])
+AT_DATA([schema],
+  [[{"name": "mydb",
+     "tables": {
+       "SSL": {
+         "columns": {
+           "private_key": {"type": "string"},
+           "certificate": {"type": "string"},
+           "ca_cert": {"type": "string"},
+           "ssl_protocols" : {"type": "string"},
+           "ssl_ciphers" : {"type" : "string"},
+           "ssl_ciphersuites" : {"type": "string"}
+         }}}}
+]])
+AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+AT_CHECK(
+  [[ovsdb-tool transact db \
+     '["mydb",
+       {"op": "insert",
+        "table": "SSL",
+        "row": {"private_key": "'"$PKIDIR/testpki-privkey2.pem"'",
+                "certificate": "'"$PKIDIR/testpki-cert2.pem"'",
+                "ca_cert": "'"$PKIDIR/testpki-cacert.pem"'",
+                "ssl_protocols": "'"TLSv1.3"'"
+               }}]']],
+  [0], [ignore], [ignore])
+on_exit 'kill `cat *.pid`'
+AT_CHECK(
+  [ovsdb-server --log-file --detach --no-chdir --pidfile \
+        --private-key=db:mydb,SSL,private_key \
+        --certificate=db:mydb,SSL,certificate \
+        --ca-cert=db:mydb,SSL,ca_cert \
+        --ssl-protocols=db:mydb,SSL,ssl_protocols \
+        --ssl-ciphers=db:mydb,SSL,ssl_ciphers \
+        --ssl-ciphersuites=db:mydb,SSL,ssl_ciphersuites \
+        --remote=pssl:0:127.0.0.1 db],
+  [0], [ignore], [ignore])
+PARSE_LISTENING_PORT([ovsdb-server.log], [SSL_PORT])
+
+# SSL_OVSDB_CLIENT(PROTOCOL)
+m4_define([SSL_OVSDB_CLIENT], [dnl
+  ovsdb-client -vconsole:stream_ssl:dbg \
+    --private-key=$PKIDIR/testpki-privkey.pem \
+    --certificate=$PKIDIR/testpki-cert.pem \
+    --ca-cert=$PKIDIR/testpki-cacert.pem \
+    --ssl-protocols=[$1] \
+    transact ssl:127.0.0.1:$SSL_PORT \
+    '[[["mydb",
+      {"op": "select",
+       "table": "SSL",
+       "where": [],
+       "columns": ["private_key"]}]]]'])
+
+# Check that, when the server has TLSv1.3 and the client has
+# TLSv1.2, connection fails.
+AT_CHECK(SSL_OVSDB_CLIENT([TLSv1.2]), [1], [stdout], [stderr])
+cat stderr > output
+AT_CHECK_UNQUOTED(
+  [sed -n "/failed to connect/s/ (.*)//p" output], [0],
+  [ovsdb-client: failed to connect to "ssl:127.0.0.1:$SSL_PORT"
+],
+  [ignore])
+AT_CHECK([grep -q 'Enabled protocol range: TLSv1.2 - TLSv1.2' stderr])
 
 OVSDB_SERVER_SHUTDOWN(["
   /stream_ssl|WARN/d

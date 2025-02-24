@@ -161,7 +161,7 @@ stream_usage(const char *name, bool active, bool passive,
     printf("SSL/TLS options:\n"
            "  --ssl-protocols=PROTOS    range of SSL/TLS protocols to enable\n"
            "  --ssl-ciphers=CIPHERS     list of SSL/TLS ciphers to enable\n"
-           "                            with TLSv1.2 and earlier\n"
+           "                            with TLSv1.2\n"
            "  --ssl-ciphersuites=SUITES list of SSL/TLS ciphersuites to\n"
            "                            enable with TLSv1.3 and later\n");
 #endif

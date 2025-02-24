@@ -1221,7 +1221,7 @@ stream_ssl_set_key_and_cert(const char *private_key_file,
     }
 }
 
-/* Sets SSL/TLS ciphers for TLSv1.2 and earlier based on string input.
+/* Sets SSL/TLS ciphers for TLSv1.2 based on string input.
  * Aborts with an error message if 'arg' is not valid. */
 void
 stream_ssl_set_ciphers(const char *arg)
@@ -1267,8 +1267,6 @@ stream_ssl_set_protocols(const char *arg)
         bool deprecated;
     } protocols[] = {
         {"later",   0 /* any version */, false},
-        {"TLSv1",   TLS1_VERSION,        true },
-        {"TLSv1.1", TLS1_1_VERSION,      true },
         {"TLSv1.2", TLS1_2_VERSION,      false},
         {"TLSv1.3", TLS1_3_VERSION,      false},
     };

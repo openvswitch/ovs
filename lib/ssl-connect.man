@@ -1,24 +1,24 @@
 .IP "\fB\-\-ssl\-protocols=\fIprotocols\fR"
 Specifies a range or a comma- or space-delimited list of the SSL/TLS protocols
-\fB\*(PN\fR will enable for SSL/TLS connections.  Supported
-\fIprotocols\fR include \fBTLSv1\fR (deprecated), \fBTLSv1.1\fR (deprecated),
-\fBTLSv1.2\fR and \fBTLSv1.3\fR.  Ranges can be provided in a form of two
-protocol names separated with a dash, or as a single protocol name with a plus
-sign.  For example, use \fBTLSv1.1-TLSv1.3\fR to allow \fBTLSv1.1\fR,
-\fBTLSv1.2\fR and \fBTLSv1.3\fR.  Use \fBTLSv1.2+\fR to allow \fBTLSv1.2\fR and
-any later protocol.  The option accepts a list of protocols or exactly one
-range.  The range is a preferred way of specifying protocols and the option
-always behaves as if the range between the minimum and the maximum specified
-version is provided, i.e., if the option is set to \fBTLSv1.1,TLSv1.3\fR, the
-\fBTLSv1.2\fR will also be enabled as if it was a range.
+\fB\*(PN\fR will enable for SSL/TLS connections.  Supported \fIprotocols\fR
+include \fBTLSv1.2\fR and \fBTLSv1.3\fR.
+Ranges can be provided in a form of two protocol names separated with a dash,
+or as a single protocol name with a plus sign.  For example, use
+\fBTLSv1.2-TLSv1.3\fR to allow \fBTLSv1.2\fR and \fBTLSv1.3\fR.  Use
+\fBTLSv1.2+\fR to allow \fBTLSv1.2\fR and any later protocol.
+The option accepts a list of protocols or exactly one range.  The
+range is a preferred way of specifying protocols and the option always behaves
+as if the range between the minimum and the maximum specified version is
+provided, i.e., if the option is set to \fBTLSv1.X,TLSv1.(X+2)\fR, the
+\fBTLSv1.(X+1)\fR will also be enabled as if it was a range.
 Regardless of order, the highest protocol supported by both sides will
 be chosen when making the connection.  The default when this option is
 omitted is \fBTLSv1.2\fR or later.
 .
 .IP "\fB\-\-ssl\-ciphers=\fIciphers\fR"
 Specifies, in OpenSSL cipher string format, the ciphers \fB\*(PN\fR will
-support for SSL/TLS connections with TLSv1.2 and earlier.  The default when
-this option is omitted is \fBDEFAULT:@SECLEVEL=2\fR.
+support for SSL/TLS connections with TLSv1.2.
+The default when this option is omitted is \fBDEFAULT:@SECLEVEL=2\fR.
 .
 .IP "\fB\-\-ssl\-ciphersuites=\fIciphersuites\fR"
 Specifies, in OpenSSL ciphersuite string format, the ciphersuites

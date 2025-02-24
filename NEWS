@@ -5,6 +5,9 @@ Post-v3.5.0
    - ovs-ctl:
      * Added a new option, --oom-score=<score>, to set the daemons' Linux
        Out-Of-Memory (OOM) killer score.
+   - SSL/TLS:
+     * Support for deprecated TLSv1 and TLSv1.1 protocols on OpenFlow and
+       database connections is now removed.
    - Tunnels:
      * Support for previously deprecated LISP and STT tunnel port types
        is now removed.
