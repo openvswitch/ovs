@@ -18,7 +18,6 @@
 #define __VPORT_H_ 1
 
 #include "Gre.h"
-#include "Stt.h"
 #include "Switch.h"
 #include "VxLan.h"
 #include "Geneve.h"
@@ -180,7 +179,6 @@ OvsIsTunnelVportType(OVS_VPORT_TYPE ovsType)
 {
     return ovsType == OVS_VPORT_TYPE_VXLAN ||
            ovsType == OVS_VPORT_TYPE_GENEVE ||
-           ovsType == OVS_VPORT_TYPE_STT ||
            ovsType == OVS_VPORT_TYPE_GRE;
 }
 
@@ -252,9 +250,6 @@ GetPortFromPriv(POVS_VPORT_ENTRY vport)
     ASSERT(vportPriv);
     switch(vport->ovsType) {
     case OVS_VPORT_TYPE_GRE:
-        break;
-    case OVS_VPORT_TYPE_STT:
-        dstPort = ((POVS_STT_VPORT)vportPriv)->dstPort;
         break;
     case OVS_VPORT_TYPE_VXLAN:
         dstPort = ((POVS_VXLAN_VPORT)vportPriv)->dstPort;

@@ -22,7 +22,6 @@
 #include "IpHelper.h"
 #include "Jhash.h"
 #include "Oid.h"
-#include "Stt.h"
 #include "Switch.h"
 #include "User.h"
 #include "Vport.h"
@@ -764,11 +763,6 @@ OvsFindTunnelVportByDstPortAndNWProto(POVS_SWITCH_CONTEXT switchContext,
                     continue;
                 }
                 break;
-            case IPPROTO_TCP:
-                if (vport->ovsType != OVS_VPORT_TYPE_STT) {
-                    continue;
-                }
-                break;
             case IPPROTO_GRE:
                 break;
             default:
@@ -1114,9 +1108,6 @@ OvsInitTunnelVport(PVOID userContext,
         }
         break;
     }
-    case OVS_VPORT_TYPE_STT:
-        status = OvsInitSttTunnel(vport, dstPort);
-        break;
     case OVS_VPORT_TYPE_GENEVE:
         status = OvsInitGeneveTunnel(vport, dstPort);
         break;
@@ -1254,7 +1245,6 @@ InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
     switch(vport->ovsType) {
     case OVS_VPORT_TYPE_GRE:
     case OVS_VPORT_TYPE_VXLAN:
-    case OVS_VPORT_TYPE_STT:
     case OVS_VPORT_TYPE_GENEVE:
     {
         UINT16 dstPort = GetPortFromPriv(vport);
@@ -1335,9 +1325,6 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
     }
     case OVS_VPORT_TYPE_GENEVE:
         OvsCleanupGeneveTunnel(vport);
-        break;
-    case OVS_VPORT_TYPE_STT:
-        OvsCleanupSttTunnel(vport);
         break;
     case OVS_VPORT_TYPE_GRE:
         OvsCleanupGreTunnel(vport);
@@ -2299,10 +2286,6 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             case OVS_VPORT_TYPE_GENEVE:
                 transportPortDest = GENEVE_UDP_PORT;
                 break;
-            case OVS_VPORT_TYPE_STT:
-                transportPortDest = STT_TCP_PORT;
-                nwProto = IPPROTO_TCP;
-                break;
             default:
                 nlError = NL_ERROR_INVAL;
                 goto Cleanup;
@@ -2420,9 +2403,6 @@ Cleanup:
                     switch (vport->ovsType) {
                     case OVS_VPORT_TYPE_VXLAN:
                         OvsCleanupVxlanTunnel(NULL, vport, NULL, NULL);
-                        break;
-                    case OVS_VPORT_TYPE_STT:
-                        OvsCleanupSttTunnel(vport);
                         break;
                     case OVS_VPORT_TYPE_GENEVE:
                         OvsCleanupGeneveTunnel(vport);

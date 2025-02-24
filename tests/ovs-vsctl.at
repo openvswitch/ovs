@@ -1613,7 +1613,6 @@ m4_foreach(
 [ovs-dummy],
 [genev_sys],
 [gre_sys],
-[lisp_sys],
 [vxlan_sys]],
 [
 # Try creating the port
@@ -1639,19 +1638,16 @@ AT_SETUP([add-port -- reserved names 2])
 # Creates all type of tunnel ports
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 ofport_request=1\
-                    -- add-port br0 p3 -- set Interface p3 type=lisp \
+                    -- add-port br0 p3 -- set Interface p3 type=vxlan \
                     options:remote_ip=2.2.2.2 ofport_request=3 \
-                    -- add-port br0 p4 -- set Interface p4 type=vxlan \
-                    options:remote_ip=2.2.2.2 ofport_request=4 \
-                    -- add-port br0 p5 -- set Interface p5 type=geneve \
-                    options:remote_ip=2.2.2.2 ofport_request=5])
+                    -- add-port br0 p4 -- set Interface p4 type=geneve \
+                    options:remote_ip=2.2.2.2 ofport_request=4])
 
 # Test creating all reserved tunnel port names
 m4_foreach(
 [reserved_name],
 [[genev_sys],
 [gre_sys],
-[lisp_sys],
 [vxlan_sys]],
 [
 # Try creating the port

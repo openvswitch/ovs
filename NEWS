@@ -5,6 +5,9 @@ Post-v3.5.0
    - ovs-ctl:
      * Added a new option, --oom-score=<score>, to set the daemons' Linux
        Out-Of-Memory (OOM) killer score.
+   - Tunnels:
+     * Support for previously deprecated LISP and STT tunnel port types
+       is now removed.
 
 
 v3.5.0 - 17 Feb 2025

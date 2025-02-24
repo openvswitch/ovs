@@ -215,12 +215,6 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
         goto create_switch_done;
     }
 
-    status = OvsInitSttDefragmentation();
-    if (status != STATUS_SUCCESS) {
-        OVS_LOG_ERROR("Exit: Failed to initialize Stt Defragmentation");
-        goto create_switch_done;
-    }
-
     status = OvsInitConntrack(switchContext);
     if (status != STATUS_SUCCESS) {
         OvsUninitSwitchContext(switchContext);
@@ -284,7 +278,6 @@ OvsExtDetach(NDIS_HANDLE filterModuleContext)
     }
     OvsDeleteSwitch(switchContext);
     OvsCleanupIpHelper();
-    OvsCleanupSttDefragmentation();
     OvsCleanupConntrack();
     OvsCleanupCtRelated();
     OvsCleanupIpFragment();

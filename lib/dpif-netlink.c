@@ -901,12 +901,6 @@ get_vport_type(const struct dpif_netlink_vport *vport)
     case OVS_VPORT_TYPE_VXLAN:
         return "vxlan";
 
-    case OVS_VPORT_TYPE_LISP:
-        return "lisp";
-
-    case OVS_VPORT_TYPE_STT:
-        return "stt";
-
     case OVS_VPORT_TYPE_ERSPAN:
         return "erspan";
 
@@ -942,14 +936,10 @@ netdev_to_ovs_vport_type(const char *type)
         return OVS_VPORT_TYPE_NETDEV;
     } else if (!strcmp(type, "internal")) {
         return OVS_VPORT_TYPE_INTERNAL;
-    } else if (strstr(type, "stt")) {
-        return OVS_VPORT_TYPE_STT;
     } else if (!strcmp(type, "geneve")) {
         return OVS_VPORT_TYPE_GENEVE;
     } else if (!strcmp(type, "vxlan")) {
         return OVS_VPORT_TYPE_VXLAN;
-    } else if (!strcmp(type, "lisp")) {
-        return OVS_VPORT_TYPE_LISP;
     } else if (!strcmp(type, "erspan")) {
         return OVS_VPORT_TYPE_ERSPAN;
     } else if (!strcmp(type, "ip6erspan")) {

@@ -2823,56 +2823,6 @@
             </p>
           </dd>
 
-          <dt><code>lisp</code></dt>
-          <dd>
-            <p>
-              This port type is deprecated.
-            </p>
-            <p>
-              A layer 3 tunnel over the experimental, UDP-based Locator/ID
-              Separation Protocol (RFC 6830).
-            </p>
-            <p>
-              Only IPv4 and IPv6 packets are supported by the protocol, and
-              they are sent and received without an Ethernet header.  Traffic
-              to/from LISP ports is expected to be configured explicitly, and
-              the ports are not intended to participate in learning based
-              switching.  As such, they are always excluded from packet
-              flooding.
-            </p>
-          </dd>
-
-          <dt><code>stt</code></dt>
-          <dd>
-            <p>
-              This port type is deprecated.
-            </p>
-
-            <p>
-              The Stateless TCP Tunnel (STT) is particularly useful when tunnel
-              endpoints are in end-systems, as it utilizes the capabilities of
-              standard network interface cards to improve performance.
-              STT utilizes a TCP-like header inside the IP header.  It is
-              stateless, i.e., there is no TCP connection state of any kind
-              associated with the tunnel.  The TCP-like header is used to
-              leverage the capabilities of existing network interface cards,
-              but should not be interpreted as implying any sort of connection
-              state between endpoints.
-            </p>
-
-            <p>
-              Since the STT protocol does not engage in the usual TCP 3-way
-              handshake, so it will have difficulty traversing stateful
-              firewalls.
-            </p>
-
-            <p>
-              The protocol is documented at
-              <code>https://tools.ietf.org/html/draft-davie-stt</code>.
-              All traffic uses a default destination port of 7471.
-            </p>
-          </dd>
-
           <dt><code>patch</code></dt>
           <dd>
             A pair of virtual devices that act as a patch cable.
@@ -2928,8 +2878,7 @@
       <p>
         These options apply to interfaces with <ref column="type"/> of
         <code>geneve</code>, <code>bareudp</code>, <code>gre</code>,
-        <code>ip6gre</code>, <code>vxlan</code>, <code>lisp</code>,
-        <code>stt</code> and <code>srv6</code>.
+        <code>ip6gre</code>, <code>vxlan</code>, and <code>srv6</code>.
       </p>
 
       <p>
@@ -3023,9 +2972,8 @@
             key="in_key"/> at all.
           </li>
           <li>
-            A positive 24-bit (for Geneve, VXLAN, and LISP), 32-bit (for GRE)
-            or 64-bit (for STT) number.  The tunnel receives only
-            packets with the specified key.
+            A positive 24-bit (for Geneve and VXLAN) or 32-bit (for GRE)
+            number.  The tunnel receives only packets with the specified key.
           </li>
           <li>
             The word <code>flow</code>.  The tunnel accepts packets with any
@@ -3054,9 +3002,9 @@
             key="out_key"/> at all.
           </li>
           <li>
-            A positive 24-bit (for Geneve, VXLAN and LISP), 32-bit (for GRE) or
-            64-bit (for STT) number.  Packets sent through the tunnel
-            will have the specified key.
+            A positive 24-bit (for Geneve and VXLAN) or 32-bit (for GRE)
+            number.  Packets sent through the tunnel will have the specified
+            key.
           </li>
           <li>
             The word <code>flow</code>.  Packets sent through the tunnel will
@@ -3069,8 +3017,8 @@
       </column>
 
       <column name="options" key="dst_port">
-        Optional.  The tunnel transport layer destination port, for UDP and TCP
-        based tunnel protocols (Geneve, VXLAN, LISP, and STT).
+        Optional.  The tunnel transport layer destination port, for UDP
+        based tunnel protocols (Geneve, VXLAN).
       </column>
 
       <column name="options" key="key">
@@ -3106,35 +3054,6 @@
         option sets packet mark for the tunnel endpoint for all tunnel packets
         including tunnel monitoring.
       </column>
-
-      <group title="Tunnel Options: lisp only">
-        <column name="options" key="packet_type"
-                type='{"type": "string", "enum": ["set",
-                      ["legacy_l3", "ptap"]]}'>
-          <p>
-            LISP tunnel type is deprecated.
-          </p>
-
-          <p>
-            A LISP tunnel sends and receives only IPv4 and IPv6 packets.  This
-            option controls what how the tunnel represents the packets that it
-            sends and receives:
-          </p>
-
-          <ul>
-            <li>
-              By default, or if this option is <code>legacy_l3</code>, the
-              tunnel represents packets as Ethernet frames for compatibility
-              with legacy OpenFlow controllers that expect this behavior.
-            </li>
-            <li>
-              If this option is <code>ptap</code>, the tunnel represents
-              packets using the <code>packet_type</code> mechanism introduced
-              in OpenFlow 1.5.
-            </li>
-          </ul>
-        </column>
-      </group>
 
       <group title="Tunnel Options: vxlan only">
 
@@ -3279,11 +3198,10 @@
       <group title="Tunnel Options: IPsec">
         <p>
           Setting any of these options enables IPsec support for a given
-          tunnel.  <code>gre</code>, <code>geneve</code>,
-          <code>vxlan</code> and <code>stt</code>
-          interfaces support these options.  See the <code>IPsec</code>
-          section in the <ref table="Open_vSwitch"/> table for a description
-          of each mode.
+          tunnel.  <code>gre</code>, <code>geneve</code> and
+          <code>vxlan</code> interfaces support these options.  See the
+          <code>IPsec</code> section in the <ref table="Open_vSwitch"/> table
+          for a description of each mode.
         </p>
         <column name="options" key="psk" type='{"type": "string"}'>
           <p>
@@ -6944,7 +6862,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           <p>type: unsigned 8-bit integer.</p>
           <p>data type semantics: identifier.</p>
           <p>description: Identifier of the layer 2 network overlay network
-          encapsulation type: 0x01 VxLAN, 0x02 GRE, 0x03 LISP, 0x07 GENEVE.</p>
+          encapsulation type: 0x01 VxLAN, 0x02 GRE, 0x07 GENEVE.</p>
         </dd>
         <dt>tunnelKey:</dt>
         <dd>
@@ -6953,9 +6871,8 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           <p>data type semantics: identifier.</p>
           <p>description: Key which is used for identifying an individual
           traffic flow within a VxLAN (24-bit VNI), GENEVE (24-bit VNI),
-          GRE (32-bit key), or LISP (24-bit instance ID) tunnel. The
-          key is encoded in this octetarray as a 3-, 4-, or 8-byte integer
-          ID in network byte order.</p>
+          or GRE (32-bit key) tunnel. The key is encoded in this octetarray
+          as a 3- or 4-byte integer ID in network byte order.</p>
         </dd>
         <dt>tunnelSourceIPv4Address:</dt>
         <dd>

@@ -29,7 +29,6 @@
 #include "Offload.h"
 #include "PacketIO.h"
 #include "Recirc.h"
-#include "Stt.h"
 #include "Switch.h"
 #include "User.h"
 #include "Vport.h"
@@ -49,8 +48,6 @@ typedef struct _OVS_ACTION_STATS {
     UINT64 txGre;
     UINT64 rxVxlan;
     UINT64 txVxlan;
-    UINT64 rxStt;
-    UINT64 txStt;
     UINT64 rxGeneve;
     UINT64 txGeneve;
     UINT64 flowMiss;
@@ -212,9 +209,6 @@ OvsDetectTunnelRxPkt(OvsForwardingContext *ovsFwdCtx,
                                                   dstPort, nwProto);
         if (tunnelVport) {
             switch(tunnelVport->ovsType) {
-            case OVS_VPORT_TYPE_STT:
-                ovsActionStats.rxStt++;
-                break;
             case OVS_VPORT_TYPE_VXLAN:
                 ovsActionStats.rxVxlan++;
                 break;
@@ -313,9 +307,6 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
                 break;
             case OVS_VPORT_TYPE_VXLAN:
                 ovsActionStats.txVxlan++;
-                break;
-            case OVS_VPORT_TYPE_STT:
-                ovsActionStats.txStt++;
                 break;
             case OVS_VPORT_TYPE_GENEVE:
                ovsActionStats.txGeneve++;
@@ -671,11 +662,6 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
                                &ovsFwdCtx->tunKey, ovsFwdCtx->switchContext,
                                &ovsFwdCtx->layers, &newNbl, &switchFwdInfo);
         break;
-    case OVS_VPORT_TYPE_STT:
-        status = OvsEncapStt(ovsFwdCtx->tunnelTxNic, ovsFwdCtx->curNbl,
-                             &ovsFwdCtx->tunKey, ovsFwdCtx->switchContext,
-                             &ovsFwdCtx->layers, &newNbl, &switchFwdInfo);
-        break;
     case OVS_VPORT_TYPE_GENEVE:
         status = OvsEncapGeneve(ovsFwdCtx->tunnelTxNic, ovsFwdCtx->curNbl,
                                 &ovsFwdCtx->tunKey, ovsFwdCtx->switchContext,
@@ -766,14 +752,6 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
     case OVS_VPORT_TYPE_VXLAN:
         status = OvsDecapVxlan(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
                                &ovsFwdCtx->tunKey, &newNbl);
-        break;
-    case OVS_VPORT_TYPE_STT:
-        status = OvsDecapStt(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
-                             &ovsFwdCtx->tunKey, &newNbl);
-        if (status == NDIS_STATUS_SUCCESS && newNbl == NULL) {
-            /* This was an STT-LSO Fragment */
-            dropReason = L"OVS-STT segment is cached";
-        }
         break;
     case OVS_VPORT_TYPE_GENEVE:
         status = OvsDecapGeneve(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,

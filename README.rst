@@ -37,7 +37,7 @@ following features:
 - NIC bonding with or without LACP on upstream switch
 - NetFlow, sFlow(R), and mirroring for increased visibility
 - QoS (Quality of Service) configuration, plus policing
-- Geneve, GRE, VXLAN, STT, ERSPAN, GTP-U, SRv6, Bareudp, and LISP tunneling
+- Geneve, GRE, VXLAN, ERSPAN, GTP-U, SRv6, and Bareudp tunneling
 - 802.1ag connectivity fault management
 - OpenFlow 1.0 plus numerous extensions
 - Transactional configuration database with C and Python bindings

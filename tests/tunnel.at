@@ -564,18 +564,6 @@ ffffffffffffaa55aa55000008060001080006040001aa55aa550000ac1f0101000000000000ac1f
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([tunnel - LISP])
-OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=lisp \
-                    options:remote_ip=1.1.1.1 ofport_request=1])
-
-AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-    br0 65534/100: (dummy-internal)
-    p1 1/4341: (lisp: remote_ip=1.1.1.1)
-])
-
-OVS_VSWITCHD_STOP(["/'lisp' port type is deprecated/d"])
-AT_CLEANUP
-
 AT_SETUP([tunnel - ERSPAN])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=erspan \
                     options:remote_ip=1.1.1.1 options:key=1 options:erspan_ver=1 \

@@ -56,17 +56,6 @@ $auth_section
     leftprotoport=udp
     rightprotoport=udp/6081
 
-"""), "stt": Template("""\
-conn $ifname-in-$version
-$auth_section
-    leftprotoport=tcp/7471
-    rightprotoport=tcp
-
-conn $ifname-out-$version
-$auth_section
-    leftprotoport=tcp
-    rightprotoport=tcp/7471
-
 """), "vxlan": Template("""\
 conn $ifname-in-$version
 $auth_section
@@ -225,11 +214,6 @@ conn %%default
 conn prevent_unencrypted_geneve
     type=drop
     leftprotoport=udp/6081
-    mark={0}
-
-conn prevent_unencrypted_stt
-    type=drop
-    leftprotoport=tcp/7471
     mark={0}
 
 conn prevent_unencrypted_vxlan
@@ -454,12 +438,6 @@ conn prevent_unencrypted_geneve
     type=drop
     left=%defaultroute
     leftprotoport=udp/6081
-    mark={0}
-
-conn prevent_unencrypted_stt
-    type=drop
-    left=%defaultroute
-    leftprotoport=tcp/7471
     mark={0}
 
 conn prevent_unencrypted_vxlan
@@ -750,11 +728,6 @@ conn prevent_unencrypted_vxlan
                             ["--config", self.ROOT_IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
                             "--add",
-                            "--asynchronous", "prevent_unencrypted_stt"])
-                run_command(self.IPSEC_AUTO +
-                            ["--config", self.ROOT_IPSEC_CONF,
-                            "--ctlsocket", self.IPSEC_CTL,
-                            "--add",
                             "--asynchronous", "prevent_unencrypted_vxlan"])
             else:
                 run_command(self.IPSEC_AUTO +
@@ -767,11 +740,6 @@ conn prevent_unencrypted_vxlan
                             "--ctlsocket", self.IPSEC_CTL,
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_geneve"])
-                run_command(self.IPSEC_AUTO +
-                            ["--config", self.ROOT_IPSEC_CONF,
-                            "--ctlsocket", self.IPSEC_CTL,
-                            "--delete",
-                            "--asynchronous", "prevent_unencrypted_stt"])
                 run_command(self.IPSEC_AUTO +
                             ["--config", self.ROOT_IPSEC_CONF,
                             "--ctlsocket", self.IPSEC_CTL,
@@ -1178,7 +1146,7 @@ class IPsecMonitor(object):
     def is_tunneling_type_supported(self, tunnel_type):
         """Returns True if we know how to configure IPsec for these
         types of tunnels.  Otherwise, returns False."""
-        return tunnel_type in ["gre", "geneve", "vxlan", "stt"]
+        return tunnel_type in ["gre", "geneve", "vxlan"]
 
     def is_ipsec_required(self, options_column):
         """Return True if tunnel needs to be encrypted.  Otherwise,

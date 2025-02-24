@@ -703,8 +703,7 @@ Add tunnels
 
 #. IPv4 tunnel, e.g.:
 
-   The Windows Open vSwitch implementation support VXLAN and STT tunnels
-   (STT tunnel ports are deprecated).
+   The Windows Open vSwitch implementation supports VXLAN and Geneve tunnels.
    To add tunnels. For example, first add the tunnel port between
    172.168.201.101 <->172.168.201.102:
 
@@ -728,7 +727,7 @@ Add tunnels
       > ovs-vsctl set Interface tun-2 options:in_key=flow
       > ovs-vsctl set Interface tun-2 options:out_key=flow
 
-      Where ``<port-type>`` is one of: ``stt`` or ``vxlan``
+      Where ``<port-type>`` is one of: ``geneve`` or ``vxlan``
 
    .. note::
 

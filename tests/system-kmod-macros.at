@@ -20,7 +20,7 @@ m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 protocols=OpenFlow10,OpenFlow1
 m4_define([OVS_TRAFFIC_VSWITCHD_START],
   [AT_CHECK([modprobe openvswitch])
    on_exit 'modprobe -r openvswitch'
-   m4_foreach([mod], [[vport_geneve], [vport_gre], [vport_lisp], [vport_stt], [vport_vxlan]],
+   m4_foreach([mod], [[vport_geneve], [vport_gre], [vport_vxlan]],
               [modprobe -q mod || echo "Module mod not loaded."
                on_exit 'modprobe -q -r mod'
               ])

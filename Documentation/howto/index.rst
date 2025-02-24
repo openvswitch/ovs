@@ -41,7 +41,6 @@ OVS
    selinux
    libvirt
    ssl
-   lisp
    tunneling
    userspace-tunneling
    vlan

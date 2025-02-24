@@ -63,8 +63,6 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/PacketParser.h \
 	datapath-windows/ovsext/Recirc.c \
 	datapath-windows/ovsext/Recirc.h \
-	datapath-windows/ovsext/Stt.c \
-	datapath-windows/ovsext/Stt.h \
 	datapath-windows/ovsext/Switch.c \
 	datapath-windows/ovsext/Switch.h \
 	datapath-windows/ovsext/Tunnel.c \

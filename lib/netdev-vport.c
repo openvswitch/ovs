@@ -57,8 +57,6 @@ VLOG_DEFINE_THIS_MODULE(netdev_vport);
 
 #define GENEVE_DST_PORT 6081
 #define VXLAN_DST_PORT 4789
-#define LISP_DST_PORT 4341
-#define STT_DST_PORT 7471
 
 #define DEFAULT_TTL 64
 
@@ -119,7 +117,6 @@ netdev_vport_needs_dst_port(const struct netdev *dev)
 
     return (class->get_config == get_tunnel_config &&
             (!strcmp("geneve", type) || !strcmp("vxlan", type) ||
-             !strcmp("lisp", type) || !strcmp("stt", type) ||
              !strcmp("gtpu", type) || !strcmp("bareudp",type)));
 }
 
@@ -224,12 +221,6 @@ netdev_vport_construct(struct netdev *netdev_)
     } else if (!strcmp(type, "vxlan")) {
         tnl_cfg->dst_port = port ? htons(port) : htons(VXLAN_DST_PORT);
         update_vxlan_global_cfg(netdev_, NULL, tnl_cfg);
-    } else if (!strcmp(type, "lisp")) {
-        tnl_cfg->dst_port = port ? htons(port) : htons(LISP_DST_PORT);
-        VLOG_WARN("%s: 'lisp' port type is deprecated.", name);
-    } else if (!strcmp(type, "stt")) {
-        tnl_cfg->dst_port = port ? htons(port) : htons(STT_DST_PORT);
-        VLOG_WARN("%s: 'stt' port type is deprecated.", name);
     } else if (!strcmp(type, "gtpu")) {
         tnl_cfg->dst_port = port ? htons(port) : htons(GTPU_DST_PORT);
     } else if (!strcmp(type, "bareudp")) {
@@ -480,9 +471,7 @@ static enum tunnel_layers
 tunnel_supported_layers(const char *type,
                         const struct netdev_tunnel_config *tnl_cfg)
 {
-    if (!strcmp(type, "lisp")) {
-        return TNL_L3;
-    } else if (!strcmp(type, "gre")) {
+    if (!strcmp(type, "gre")) {
         return TNL_L2 | TNL_L3;
     } else if (!strcmp(type, "vxlan")
                && tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GPE)) {
@@ -630,7 +619,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
     int err;
 
     has_csum = strstr(type, "gre") || strstr(type, "geneve") ||
-               strstr(type, "stt") || strstr(type, "vxlan");
+               strstr(type, "vxlan");
     has_seq = strstr(type, "gre");
     memset(&tnl_cfg, 0, sizeof tnl_cfg);
 
@@ -641,14 +630,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
 
     if (!strcmp(type, "vxlan")) {
         tnl_cfg.dst_port = htons(VXLAN_DST_PORT);
-    }
-
-    if (!strcmp(type, "lisp")) {
-        tnl_cfg.dst_port = htons(LISP_DST_PORT);
-    }
-
-    if (!strcmp(type, "stt")) {
-        tnl_cfg.dst_port = htons(STT_DST_PORT);
     }
 
     if (!strcmp(type, "gtpu")) {
@@ -1032,8 +1013,6 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
 
         if ((!strcmp("geneve", type) && dst_port != GENEVE_DST_PORT) ||
             (!strcmp("vxlan", type) && dst_port != VXLAN_DST_PORT) ||
-            (!strcmp("lisp", type) && dst_port != LISP_DST_PORT) ||
-            (!strcmp("stt", type) && dst_port != STT_DST_PORT) ||
             (!strcmp("gtpu", type) && dst_port != GTPU_DST_PORT) ||
             !strcmp("bareudp", type)) {
             smap_add_format(args, "dst_port", "%d", dst_port);
@@ -1313,20 +1292,6 @@ netdev_vport_tunnel_register(void)
               .push_header = netdev_tnl_push_udp_header,
               .pop_header = netdev_vxlan_pop_header,
               .get_ifindex = NETDEV_VPORT_GET_IFINDEX
-          },
-          {{NULL, NULL, 0, 0}}
-        },
-        { "lisp_sys",
-          {
-              TUNNEL_FUNCTIONS_COMMON,
-              .type = "lisp"
-          },
-          {{NULL, NULL, 0, 0}}
-        },
-        { "stt_sys",
-          {
-              TUNNEL_FUNCTIONS_COMMON,
-              .type = "stt"
           },
           {{NULL, NULL, 0, 0}}
         },

@@ -199,7 +199,7 @@ Red Hat Network Scripts Integration
 
 A RHEL host has default firewall rules that prevent any Open vSwitch tunnel
 traffic from passing through. If a user configures Open vSwitch tunnels like
-Geneve, GRE, VXLAN, LISP etc., they will either have to manually add iptables
+Geneve, GRE, VXLAN, etc., they will either have to manually add iptables
 firewall rules to allow the tunnel traffic or add it through a startup script
 Refer to the "enable-protocol" command in the ovs-ctl(8) manpage for more
 information.

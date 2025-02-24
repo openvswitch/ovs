@@ -45,10 +45,10 @@ OVS IPsec
 ~~~~~~~~~
 
 OVS IPsec aims to provide a simple interface for user to add encryption on OVS
-tunnels. It supports GRE, GENEVE, VXLAN, and STT tunnel. The IPsec
-configuration is done by setting options of the tunnel interface and
-other_config of Open_vSwitch. You can choose different authentication methods
-and plaintext tunnel policies based on your requirements.
+tunnels. It supports GRE, GENEVE, and VXLAN tunnels. The IPsec configuration is
+done by setting options of the tunnel interface and other_config of
+Open_vSwitch. You can choose different authentication methods and plaintext
+tunnel policies based on your requirements.
 
 OVS does not currently provide any support for IPsec encryption for traffic not
 encapsulated in a tunnel.

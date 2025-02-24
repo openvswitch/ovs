@@ -8593,7 +8593,7 @@ AT_SETUP([ofproto-dpif - Flow IPFIX sanity check - tunnel set])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
                     options:key=5 ofport_request=1\
-                    -- add-port br0 p2 -- set Interface p2 type=stt \
+                    -- add-port br0 p2 -- set Interface p2 type=geneve \
                     options:remote_ip=1.1.1.2 options:local_ip=2.2.2.3 \
                     options:key=6 ofport_request=2\
                     -- add-port br0 p3 -- set Interface p3 type=dummy \
@@ -8651,14 +8651,14 @@ AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(3),eth(src=50:54:00:00:00:
 dnl Make sure flow sample action in datapath is behind set tunnel
 dnl action at egress point of tunnel port.
 AT_CHECK([tail -1 stdout], [0], [dnl
-Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=1),tunnel_out_port=1),1,set(tunnel(tun_id=0x6,src=2.2.2.3,dst=1.1.1.2,tos=0x1,ttl=64,tp_dst=7471,flags(df|key))),userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=7471),tunnel_out_port=7471),7471
+Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=1),tunnel_out_port=1),1,set(tunnel(tun_id=0x6,src=2.2.2.3,dst=1.1.1.2,tos=0x1,ttl=64,tp_dst=6081,flags(df|key))),userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=6081),tunnel_out_port=6081),6081
 ])
 
 dnl Remove the flow which contains sample action.
 AT_CHECK([ovs-ofctl del-flows br0 in_port=3], [0], [ignore])
 AT_CHECK([ovs-vsctl destroy Flow_Sample_Collector_Set 1], [0], [ignore])
 
-OVS_VSWITCHD_STOP(["/'stt' port type is deprecated/d"])
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - Flow IPFIX sanity check - from field])

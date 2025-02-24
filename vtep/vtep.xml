@@ -730,11 +730,10 @@
     <group title="Per Logical-Switch Tunnel Key">
       <p>
         Tunnel protocols tend to have a field that allows the tunnel
-        to be partitioned into sub-tunnels: VXLAN has a VNI, GRE and
-        STT have a key, CAPWAP has a WSI, and so on.  We call these
-        generically ``tunnel keys.''  Given that one needs to use a
-        tunnel key at all, there are at least two reasonable ways to
-        assign their values:
+        to be partitioned into sub-tunnels: VXLAN has a VNI, GRE has a key,
+        CAPWAP has a WSI, and so on.  We call these generically
+        ``tunnel keys.''  Given that one needs to use a tunnel key at all,
+        there are at least two reasonable ways to assign their values:
       </p>
 
       <ul>

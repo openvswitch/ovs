@@ -60,7 +60,6 @@ enum dpif_sflow_tunnel_type {
     DPIF_SFLOW_TUNNEL_UNKNOWN = 0,
     DPIF_SFLOW_TUNNEL_VXLAN,
     DPIF_SFLOW_TUNNEL_GRE,
-    DPIF_SFLOW_TUNNEL_LISP,
     DPIF_SFLOW_TUNNEL_GENEVE
 };
 
@@ -628,8 +627,6 @@ dpif_sflow_tunnel_type(struct ofport *ofport) {
             return DPIF_SFLOW_TUNNEL_GRE;
         } else if (strcmp(type, "vxlan") == 0) {
             return DPIF_SFLOW_TUNNEL_VXLAN;
-        } else if (strcmp(type, "lisp") == 0) {
-            return DPIF_SFLOW_TUNNEL_LISP;
         } else if (strcmp(type, "geneve") == 0) {
             return DPIF_SFLOW_TUNNEL_GENEVE;
         }
@@ -649,7 +646,6 @@ dpif_sflow_tunnel_proto(enum dpif_sflow_tunnel_type tunnel_type)
         break;
 
     case DPIF_SFLOW_TUNNEL_VXLAN:
-    case DPIF_SFLOW_TUNNEL_LISP:
     case DPIF_SFLOW_TUNNEL_GENEVE:
         ipproto = IPPROTO_UDP;
 

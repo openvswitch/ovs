@@ -27,7 +27,7 @@
     Open vSwitch 2.7 and earlier considered Ethernet fields to be root fields,
     and this remains the default mode of operation for Open vSwitch bridges.
     When a packet is received from a non-Ethernet interfaces, such as a layer-3
-    LISP tunnel, Open vSwitch 2.7 and earlier force-fit the packet to this
+    VXLAN-GPE tunnel, Open vSwitch 2.7 and earlier force-fit the packet to this
     Ethernet-centric point of view by pretending that an Ethernet header is
     present whose Ethernet type that indicates the packet's actual type (and
     whose source and destination addresses are all-zero).
@@ -44,7 +44,7 @@
     turn off this legacy behavior, on a port-by-port basis, by setting
     <code>options:packet_type</code> to <code>ptap</code> in the
     <code>Interface</code> table.  This is significant only for ports that can
-    handle non-Ethernet packets, which is currently just LISP, VXLAN-GPE, and
+    handle non-Ethernet packets, which is currently just VXLAN-GPE, and
     GRE tunnel ports.  See <code>ovs-vwitchd.conf.db</code>(5) for more
     information.
   </p>
@@ -1455,9 +1455,7 @@ ovs-ofctl add-flow br-int 'in_port=3,tun_src=192.168.1.1,tun_id=5001 actions=1'
         <li>
           VXLAN and Geneve have a 24-bit virtual network identifier (VNI).
         </li>
-        <li>LISP has a 24-bit instance ID.</li>
         <li>GRE has an optional 32-bit key.</li>
-        <li>STT has a 64-bit key.</li>
         <li>ERSPAN has a 10-bit key (Session ID).</li>
         <li>GTPU has a 32-bit key (Tunnel Endpoint ID).</li>
       </ul>
@@ -4830,13 +4828,6 @@ r c c c r.
       (MPLS) Label Stack Entry: ``EXP'' Field Renamed to ``Traffic
       Class'' Field,'' <url
       href="http://www.ietf.org/rfc/rfc5462.txt"/>.
-    </dd>
-
-    <dt>RFC 6830</dt>
-    <dd>
-      D. Farinacci, V. Fuller, D. Meyer, and D. Lewis, ``The
-      Locator/ID Separation Protocol (LISP),'' <url
-      href="http://www.ietf.org/rfc/rfc6830.txt"/>.
     </dd>
 
     <dt>RFC 7348</dt>

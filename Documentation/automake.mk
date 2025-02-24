@@ -69,7 +69,6 @@ DOC_SOURCE = \
 	Documentation/howto/libvirt.rst \
 	Documentation/howto/selinux.rst \
 	Documentation/howto/ssl.rst \
-	Documentation/howto/lisp.rst \
 	Documentation/howto/qos.png \
 	Documentation/howto/qos.rst \
 	Documentation/howto/sflow.png \

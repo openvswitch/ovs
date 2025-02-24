@@ -66,27 +66,27 @@ enum ipfix_sampled_packet_type {
 };
 
 /* The standard layer2SegmentId (ID 351) element is included in vDS to send
- * the VxLAN tunnel's VNI. It is 64-bit long, the most significant byte is
- * used to indicate the type of tunnel (0x01 = VxLAN, 0x02 = GRE) and the three
- * least significant bytes hold the value of the layer 2 overlay network
- * segment identifier: a 24-bit VxLAN tunnel's VNI or a 24-bit GRE tunnel's
- * TNI. This is not compatible with STT, as implemented in OVS, as
- * its tunnel IDs is 64-bit.
+ * the VxLAN tunnel's VNI. It is 64-bit long, the most significant byte is used
+ * to indicate the type of tunnel (0x01 = VxLAN, 0x02 = GRE) and the three or
+ * four least significant bytes hold the value of the layer 2 overlay network
+ * segment identifier: a 24-bit VxLAN or Geneve tunnel's VNI or a 32-bit GRE
+ * tunnel's TNI.
  *
  * Two new enterprise information elements are defined which are similar to
  * laryerSegmentId but support 64-bit IDs:
  *     tunnelType (ID 891) and tunnelKey (ID 892).
+ * OVS currently doesn't support any tunnel types that require 64-bit IDs, but
+ * these elements are used for historical reasons.
  *
  * The enum dpif_ipfix_tunnel_type is to declare the types supported in the
  * tunnelType element.
- * The number of ipfix tunnel types includes two reserverd types: 0x04 and 0x06.
  */
 enum dpif_ipfix_tunnel_type {
     DPIF_IPFIX_TUNNEL_UNKNOWN = 0x00,
     DPIF_IPFIX_TUNNEL_VXLAN = 0x01,
     DPIF_IPFIX_TUNNEL_GRE = 0x02,
-    DPIF_IPFIX_TUNNEL_LISP = 0x03,
-    DPIF_IPFIX_TUNNEL_STT = 0x04,
+    /* 0x03 - 0x06 are either reserved or previously used by no longer
+     * supported tunnel types, hence should not be used for any new ones. */
     DPIF_IPFIX_TUNNEL_GENEVE = 0x07,
     NUM_DPIF_IPFIX_TUNNEL
 };
@@ -226,7 +226,7 @@ enum ipfix_proto_l4 {
 };
 enum ipfix_proto_tunnel {
     IPFIX_PROTO_NOT_TUNNELED = 0,
-    IPFIX_PROTO_TUNNELED,  /* Support gre, lisp and vxlan. */
+    IPFIX_PROTO_TUNNELED,  /* Support gre, geneve and vxlan. */
     NUM_IPFIX_PROTO_TUNNEL
 };
 
@@ -386,13 +386,9 @@ struct ipfix_data_record_flow_key_icmp {
 BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_flow_key_icmp) == 2);
 
 static uint8_t tunnel_protocol[NUM_DPIF_IPFIX_TUNNEL] = {
-    0,              /* reserved */
-    IPPROTO_UDP,    /* DPIF_IPFIX_TUNNEL_VXLAN */
-    IPPROTO_GRE,    /* DPIF_IPFIX_TUNNEL_GRE */
-    IPPROTO_UDP,    /* DPIF_IPFIX_TUNNEL_LISP*/
-    IPPROTO_TCP,    /* DPIF_IPFIX_TUNNEL_STT*/
-    0          ,    /* reserved */
-    IPPROTO_UDP,    /* DPIF_IPFIX_TUNNEL_GENEVE*/
+    [DPIF_IPFIX_TUNNEL_VXLAN] =  IPPROTO_UDP,
+    [DPIF_IPFIX_TUNNEL_GRE] =    IPPROTO_GRE,
+    [DPIF_IPFIX_TUNNEL_GENEVE] = IPPROTO_UDP,
 };
 
 OVS_PACKED(
@@ -511,12 +507,11 @@ BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_tcp) == 48);
 
 /*
  * support tunnel key for:
- * VxLAN: 24-bit VIN,
+ * VxLAN: 24-bit VNI,
+ * Geneve: 24-bit VNI,
  * GRE: 32-bit key,
- * LISP: 24-bit instance ID
- * STT: 64-bit key
  */
-#define MAX_TUNNEL_KEY_LEN 8
+#define MAX_TUNNEL_KEY_LEN 4
 
 #define MAX_IF_NAME_LEN 64
 #define MAX_IF_DESCR_LEN 128
@@ -866,12 +861,8 @@ dpif_ipfix_tunnel_type(const struct ofport *ofport)
         return DPIF_IPFIX_TUNNEL_GRE;
     } else if (strcmp(type, "vxlan") == 0) {
         return DPIF_IPFIX_TUNNEL_VXLAN;
-    } else if (strcmp(type, "lisp") == 0) {
-        return DPIF_IPFIX_TUNNEL_LISP;
     } else if (strcmp(type, "geneve") == 0) {
         return DPIF_IPFIX_TUNNEL_GENEVE;
-    } else if (strcmp(type, "stt") == 0) {
-        return DPIF_IPFIX_TUNNEL_STT;
     }
 
     return DPIF_IPFIX_TUNNEL_UNKNOWN;
@@ -886,11 +877,8 @@ dpif_ipfix_tunnel_key_length(enum dpif_ipfix_tunnel_type tunnel_type)
             /* 32-bit key gre */
             return 4;
         case DPIF_IPFIX_TUNNEL_VXLAN:
-        case DPIF_IPFIX_TUNNEL_LISP:
         case DPIF_IPFIX_TUNNEL_GENEVE:
             return 3;
-        case DPIF_IPFIX_TUNNEL_STT:
-            return 8;
         case DPIF_IPFIX_TUNNEL_UNKNOWN:
         case NUM_DPIF_IPFIX_TUNNEL:
         default:

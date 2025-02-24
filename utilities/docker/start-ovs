@@ -27,7 +27,6 @@ case $1 in
         ;;
         "ovs-vswitchd") depmod -a
                         modprobe openvswitch
-                        modprobe vport_stt
                         modprobe vport_geneve
                         /usr/share/openvswitch/scripts/ovs-ctl \
                         --no-ovsdb-server start
