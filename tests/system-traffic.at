@@ -7324,6 +7324,10 @@ dnl Solicit another "destination unreachable" response.
 dnl To verify that after flushing, the same openflow rules are matched.
 NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
 
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>)
+])
+
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | ofctl_strip_bytes | sort | grep -v drop], [0], [dnl
  n_packets=1, priority=10,arp actions=NORMAL
@@ -7338,10 +7342,6 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | ofctl_strip_byt
  table=8, n_packets=1, priority=0 actions=set_field:0->xreg0
  table=8, n_packets=1, reg2=0xa0101f0/0xfffffff0 actions=set_field:0x808888888888->xreg0
 OFPST_FLOW reply (OF1.5):
-])
-
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>)
 ])
 
 AT_CHECK([tcpdump -n -v "icmp" -r p0.pcap 2>/dev/null | grep -E 'wrong|bad'], [1], [ignore-nolog])
