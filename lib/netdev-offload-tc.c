@@ -2699,6 +2699,10 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             struct tc_action *action = flower.actions;
 
             for (int i = 0; i < flower.action_count; i++, action++) {
+                /* If action->chain is zero, this is not a true "goto"
+                 * (recirculation) action, but rather a drop action.
+                 * Since it does not involve recirculation handling,
+                 * it should be ignored. */
                 if (action->type == TC_ACT_GOTO && action->chain) {
                     chain_goto = action->chain;
                     ovs_mutex_lock(&used_chains_mutex);
