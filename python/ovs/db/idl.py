@@ -1854,7 +1854,7 @@ class Transaction(object):
                 else:
                     # Let ovsdb-server decide whether to really delete it.
                     pass
-            elif row._changes:
+            else:
                 op = {"table": row._table.name}
                 if row._data is None:
                     op["op"] = "insert"

@@ -2502,6 +2502,8 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
 
             s = idltest_simple_insert(txn);
             idltest_simple_set_i(s, atoi(arg1));
+        } else if (!strcmp(name, "insert_no_columns_changed")) {
+            idltest_simple_insert(txn);
         } else if (!strcmp(name, "insert_uuid")) {
             struct idltest_simple *s;
 
