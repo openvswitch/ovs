@@ -1729,7 +1729,7 @@ class Transaction(object):
                     and ovs.ovsuuid.is_valid_string(json[1])):
                 uuid = ovs.ovsuuid.from_string(json[1])
                 row = self._txn_rows.get(uuid, None)
-                if row and row._data is None:
+                if row and row._data is None and not row._persist_uuid:
                     return ["named-uuid", _uuid_name_from_uuid(uuid)]
             else:
                 return [self._substitute_uuids(elem) for elem in json]

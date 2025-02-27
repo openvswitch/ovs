@@ -451,6 +451,16 @@ def idl_set(idl, commands, step):
             s = txn.insert(idl.tables["simple"], new_uuid=uuid.UUID(args[0]),
                            persist_uuid=True)
             s.i = int(args[1])
+        elif name == "insert_uuid_uref":
+            if len(args) != 2:
+                sys.stderr.write('"set" command requires 2 argument\n')
+                sys.exit(1)
+
+            s4 = txn.insert(idl.tables["simple4"], new_uuid=uuid.UUID(args[1]),
+                            persist_uuid=True)
+            s3 = txn.insert(idl.tables["simple3"], new_uuid=uuid.UUID(args[0]),
+                            persist_uuid=True)
+            s3.uref = s4
         elif name == "delete":
             if len(args) != 1:
                 sys.stderr.write('"delete" command requires 1 argument\n')
