@@ -508,6 +508,8 @@ def idl_set(idl, commands, step):
 
             s = txn.insert(idl.tables["simple"])
             s.i = int(args[0])
+        elif name == "insert_no_columns_changed":
+            txn.insert(idl.tables["simple"])
         elif name == "insert_uuid":
             if len(args) != 2:
                 sys.stderr.write('"set" command requires 2 argument\n')
