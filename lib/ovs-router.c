@@ -60,7 +60,7 @@ static bool use_system_routing_table = true;
 
 struct ovs_router_entry {
     struct cls_rule cr;
-    char output_bridge[IFNAMSIZ];
+    char output_netdev[IFNAMSIZ];
     struct in6_addr gw;
     struct in6_addr nw_addr;
     struct in6_addr src_addr;
@@ -85,16 +85,17 @@ ovs_router_disable_system_routing_table(void)
 }
 
 static bool
-ovs_router_lookup_fallback(const struct in6_addr *ip6_dst, char output_bridge[],
-                           struct in6_addr *src6, struct in6_addr *gw6)
+ovs_router_lookup_fallback(const struct in6_addr *ip6_dst,
+                           char output_netdev[], struct in6_addr *src6,
+                           struct in6_addr *gw6)
 {
     ovs_be32 src;
 
     if (!use_system_routing_table
-        || !route_table_fallback_lookup(ip6_dst, output_bridge, gw6)) {
+        || !route_table_fallback_lookup(ip6_dst, output_netdev, gw6)) {
         return false;
     }
-    if (netdev_get_in4_by_name(output_bridge, (struct in_addr *)&src)) {
+    if (netdev_get_in4_by_name(output_netdev, (struct in_addr *)&src)) {
         return false;
     }
     if (src6) {
@@ -105,7 +106,7 @@ ovs_router_lookup_fallback(const struct in6_addr *ip6_dst, char output_bridge[],
 
 bool
 ovs_router_lookup(uint32_t mark, const struct in6_addr *ip6_dst,
-                  char output_bridge[],
+                  char output_netdev[],
                   struct in6_addr *src, struct in6_addr *gw)
 {
     const struct cls_rule *cr;
@@ -131,14 +132,14 @@ ovs_router_lookup(uint32_t mark, const struct in6_addr *ip6_dst,
     if (cr) {
         struct ovs_router_entry *p = ovs_router_entry_cast(cr);
 
-        ovs_strlcpy(output_bridge, p->output_bridge, IFNAMSIZ);
+        ovs_strlcpy(output_netdev, p->output_netdev, IFNAMSIZ);
         *gw = p->gw;
         if (src && !ipv6_addr_is_set(src)) {
             *src = p->src_addr;
         }
         return true;
     }
-    return ovs_router_lookup_fallback(ip6_dst, output_bridge, src, gw);
+    return ovs_router_lookup_fallback(ip6_dst, output_netdev, src, gw);
 }
 
 static void
@@ -167,14 +168,14 @@ static void rt_init_match(struct match *match, uint32_t mark,
 
 static int
 verify_prefsrc(const struct in6_addr *ip6_dst,
-               const char output_bridge[],
+               const char netdev_name[],
                struct in6_addr *prefsrc)
 {
     struct in6_addr *mask, *addr6;
     struct netdev *dev;
     int err, n_in6, i;
 
-    err = netdev_open(output_bridge, NULL, &dev);
+    err = netdev_open(netdev_name, NULL, &dev);
     if (err) {
         return err;
     }
@@ -207,7 +208,7 @@ out:
 
 int
 ovs_router_get_netdev_source_address(const struct in6_addr *ip6_dst,
-                                     const char output_bridge[],
+                                     const char netdev_name[],
                                      struct in6_addr *psrc)
 {
     struct in6_addr *mask, *addr6;
@@ -215,7 +216,7 @@ ovs_router_get_netdev_source_address(const struct in6_addr *ip6_dst,
     struct netdev *dev;
     bool is_ipv4;
 
-    err = netdev_open(output_bridge, NULL, &dev);
+    err = netdev_open(netdev_name, NULL, &dev);
     if (err) {
         return err;
     }
@@ -257,12 +258,12 @@ out:
 static int
 ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
                     const struct in6_addr *ip6_dst,
-                    uint8_t plen, const char output_bridge[],
+                    uint8_t plen, const char output_netdev[],
                     const struct in6_addr *gw,
                     const struct in6_addr *ip6_src)
 {
     int (*get_src_addr)(const struct in6_addr *ip6_dst,
-                        const char output_bridge[],
+                        const char output_netdev[],
                         struct in6_addr *prefsrc);
     const struct cls_rule *cr;
     struct ovs_router_entry *p;
@@ -272,7 +273,7 @@ ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
     rt_init_match(&match, mark, ip6_dst, plen);
 
     p = xzalloc(sizeof *p);
-    ovs_strlcpy(p->output_bridge, output_bridge, sizeof p->output_bridge);
+    ovs_strlcpy(p->output_netdev, output_netdev, sizeof p->output_netdev);
     if (ipv6_addr_is_set(gw)) {
         p->gw = *gw;
     }
@@ -289,9 +290,9 @@ ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
         get_src_addr = ovs_router_get_netdev_source_address;
     }
 
-    err = get_src_addr(ip6_dst, output_bridge, &p->src_addr);
+    err = get_src_addr(ip6_dst, output_netdev, &p->src_addr);
     if (err && ipv6_addr_is_set(gw)) {
-        err = get_src_addr(gw, output_bridge, &p->src_addr);
+        err = get_src_addr(gw, output_netdev, &p->src_addr);
     }
     if (err) {
         struct ds ds = DS_EMPTY_INITIALIZER;
@@ -313,20 +314,20 @@ ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
         /* An old rule with the same match was displaced. */
         ovsrcu_postpone(rt_entry_free, ovs_router_entry_cast(cr));
     }
-    tnl_port_map_insert_ipdev(output_bridge);
+    tnl_port_map_insert_ipdev(output_netdev);
     seq_change(tnl_conf_seq);
     return 0;
 }
 
 void
 ovs_router_insert(uint32_t mark, const struct in6_addr *ip_dst, uint8_t plen,
-                  bool local, const char output_bridge[],
+                  bool local, const char output_netdev[],
                   const struct in6_addr *gw, const struct in6_addr *prefsrc)
 {
     if (use_system_routing_table) {
         uint8_t priority = local ? plen + 64 : plen;
         ovs_router_insert__(mark, priority, local, ip_dst, plen,
-                            output_bridge, gw, prefsrc);
+                            output_netdev, gw, prefsrc);
     }
 }
 
@@ -334,14 +335,14 @@ ovs_router_insert(uint32_t mark, const struct in6_addr *ip_dst, uint8_t plen,
  * from the system routing table are disabled.  Used for unit tests. */
 void
 ovs_router_force_insert(uint32_t mark, const struct in6_addr *ip_dst,
-                        uint8_t plen, bool local, const char output_bridge[],
+                        uint8_t plen, bool local, const char output_netdev[],
                         const struct in6_addr *gw,
                         const struct in6_addr *prefsrc)
 {
     uint8_t priority = local ? plen + 64 : plen;
 
     ovs_router_insert__(mark, priority, local, ip_dst, plen,
-                        output_bridge, gw, prefsrc);
+                        output_netdev, gw, prefsrc);
 }
 
 static void
@@ -349,7 +350,7 @@ rt_entry_delete__(const struct cls_rule *cr)
 {
     struct ovs_router_entry *p = ovs_router_entry_cast(cr);
 
-    tnl_port_map_delete_ipdev(p->output_bridge);
+    tnl_port_map_delete_ipdev(p->output_netdev);
     classifier_remove_assert(&cls, cr);
     ovsrcu_postpone(rt_entry_free, ovs_router_entry_cast(cr));
 }
@@ -532,7 +533,7 @@ ovs_router_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
             ds_put_format(&ds, " MARK %"PRIu32, rt->mark);
         }
 
-        ds_put_format(&ds, " dev %s", rt->output_bridge);
+        ds_put_format(&ds, " dev %s", rt->output_netdev);
         if (ipv6_addr_is_set(&rt->gw)) {
             ds_put_format(&ds, " GW ");
             ipv6_format_mapped(&rt->gw, &ds);
@@ -618,7 +619,7 @@ ovs_router_init(void)
         fatal_signal_add_hook(ovs_router_flush_handler, NULL, NULL, true);
         classifier_init(&cls, NULL);
         unixctl_command_register("ovs/route/add",
-                                 "ip/plen output_bridge [gw] "
+                                 "ip/plen output_netdev [gw] "
                                  "[pkt_mark=mark] [src=src_ip]",
                                  2, 5, ovs_router_add, NULL);
         unixctl_command_register("ovs/route/show", "", 0, 0,
