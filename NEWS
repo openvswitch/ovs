@@ -1,5 +1,6 @@
-v3.3.4 - xx xxx xxxx
+v3.3.4 - 27 Feb 2025
 --------------------
+   - Bug fixes
    - The limit on the number of fields for address prefix tracking in flow
      tables increased from 3 to 4.  For example, it is now possible to
      specify both IPv4 and IPv6 address fields at the same time:
