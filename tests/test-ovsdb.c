@@ -2451,6 +2451,10 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
     struct ovsdb_idl_txn *txn;
     enum ovsdb_idl_txn_status status;
     bool increment = false;
+    /* FIXME: ovsdb_idl_check_consistency() doesn't currently handle refs added
+     * in the same txn, so if any op does this, we need to skip the check until
+     * that is fixed. */
+    bool skip_pre_commit_consistency_check = false;
 
     txn = ovsdb_idl_txn_create(idl);
     ovsdb_idl_check_consistency(idl);
@@ -2517,6 +2521,26 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
             }
             s = idltest_simple_insert_persist_uuid(txn, &s_uuid);
             idltest_simple_set_i(s, atoi(arg2));
+        } else if (!strcmp(name, "insert_uuid_uref")) {
+            struct idltest_simple3 *s3;
+            struct idltest_simple4 *s4;
+
+            if (!arg1 || !arg2) {
+                ovs_fatal(0,
+                          "\"insert_uuid_uref\" command requires 2 arguments");
+            }
+
+            struct uuid s3_uuid;
+            struct uuid s4_uuid;
+            if (!uuid_from_string(&s3_uuid, arg1) ||
+                !uuid_from_string(&s4_uuid, arg2)) {
+                 ovs_fatal(
+                    0, "\"insert_uuid_uref\" command requires 2 valid uuids");
+            }
+            s4 = idltest_simple4_insert_persist_uuid(txn, &s4_uuid);
+            s3 = idltest_simple3_insert_persist_uuid(txn, &s3_uuid);
+            idltest_simple3_set_uref(s3, &s4, 1);
+            skip_pre_commit_consistency_check = true;
         } else if (!strcmp(name, "delete")) {
             const struct idltest_simple *s;
 
@@ -2585,7 +2609,9 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
         } else {
             ovs_fatal(0, "unknown command %s", name);
         }
-        ovsdb_idl_check_consistency(idl);
+        if (!skip_pre_commit_consistency_check) {
+            ovsdb_idl_check_consistency(idl);
+        }
     }
 
     status = ovsdb_idl_txn_commit_block(txn);
