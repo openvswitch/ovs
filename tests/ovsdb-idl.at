@@ -494,6 +494,15 @@ OVSDB_CHECK_IDL([simple idl, writing via IDL with unicode],
 003: done
 ]])
 
+OVSDB_CHECK_IDL([simple idl, inserting without modifying a column, insert_no_columns_changed],
+  [],
+  [['insert_no_columns_changed']],
+  [[000: empty
+001: commit, status=success
+002: table simple: i=0 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+003: done
+]])
+
 m4_define([OVSDB_CHECK_IDL_PY_WITH_EXPOUT],
   [AT_SETUP([ovsdb-idl - $1 - Python3])
    AT_KEYWORDS([ovsdb server idl positive Python $5])
