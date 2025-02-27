@@ -2826,7 +2826,7 @@ m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_C],
             [0], [stdout], [stderr])
    AT_CHECK([sort stdout],
             [0], [$3])
-   AT_CHECK([grep $4 stderr], [0], [ignore])
+   m4_if([$4], [], [], [AT_CHECK([grep $4 stderr], [0], [ignore])])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -2838,7 +2838,7 @@ m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_PY],
             [0], [stdout], [stderr])
    AT_CHECK([sort stdout],
             [0], [$3])
-   AT_CHECK([grep $4 stderr], [0], [ignore])
+   m4_if([$4], [], [], [AT_CHECK([grep $4 stderr], [0], [ignore])])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -2876,6 +2876,14 @@ OVSDB_CHECK_IDL_PERS_UUID_INSERT([simple idl, persistent uuid insert],
 ]],
   [['This UUID would duplicate a UUID already present within the table or deleted within the same transaction']])
 
+OVSDB_CHECK_IDL_PERS_UUID_INSERT([simple idl, persistent uuid insert uref],
+  [['insert_uuid_uref d7f2845f-2e8d-46a9-8330-f6d0b7d2ca36 689420a0-515b-4c0f-8eba-7ad59a344b54']],
+  [[000: empty
+001: commit, status=success
+002: table simple3: name= uset=[] uref=[689420a0-515b-4c0f-8eba-7ad59a344b54] uuid=d7f2845f-2e8d-46a9-8330-f6d0b7d2ca36
+002: table simple4: name= uuid=689420a0-515b-4c0f-8eba-7ad59a344b54
+003: done
+]])
 
 m4_define([OVSDB_CHECK_IDL_CHANGE_AWARE],
   [AT_SETUP([simple idl, database change aware, online conversion - $1])
