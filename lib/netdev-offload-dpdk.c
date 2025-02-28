@@ -2075,9 +2075,9 @@ err:
     return -1;
 }
 
-static int
-parse_vlan_push_action(struct flow_actions *actions,
-                       const struct ovs_action_push_vlan *vlan_push)
+static void
+add_vlan_push_action(struct flow_actions *actions,
+                     const struct ovs_action_push_vlan *vlan_push)
 {
     struct rte_flow_action_of_push_vlan *rte_push_vlan;
     struct rte_flow_action_of_set_vlan_pcp *rte_vlan_pcp;
@@ -2096,7 +2096,6 @@ parse_vlan_push_action(struct flow_actions *actions,
     rte_vlan_vid->vlan_vid = htons(vlan_tci_to_vid(vlan_push->vlan_tci));
     add_flow_action(actions, RTE_FLOW_ACTION_TYPE_OF_SET_VLAN_VID,
                     rte_vlan_vid);
-    return 0;
 }
 
 static void
@@ -2139,7 +2138,7 @@ parse_clone_actions(struct netdev *netdev,
             }
         } else if (clone_type == OVS_ACTION_ATTR_PUSH_VLAN) {
             const struct ovs_action_push_vlan *vlan = nl_attr_get(ca);
-            parse_vlan_push_action(actions, vlan);
+            add_vlan_push_action(actions, vlan);
         } else {
             VLOG_DBG_RL(&rl,
                         "Unsupported nested action inside clone(), "
@@ -2233,9 +2232,7 @@ parse_flow_actions(struct netdev *netdev,
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_PUSH_VLAN) {
             const struct ovs_action_push_vlan *vlan = nl_attr_get(nla);
 
-            if (parse_vlan_push_action(actions, vlan)) {
-                return -1;
-            }
+            add_vlan_push_action(actions, vlan);
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_VLAN) {
             add_flow_action(actions, RTE_FLOW_ACTION_TYPE_OF_POP_VLAN, NULL);
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_TUNNEL_PUSH) {
