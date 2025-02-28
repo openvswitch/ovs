@@ -33,14 +33,22 @@ EOF
     exit $1
 }
 
-case $MACHTYPE in
-    *-msys)
-        slash="-"
-        ;;
-    *)
-        slash="/"
-        ;;
-esac
+
+
+# Check for MSYS which now reports itself as cygwin in MACHTYPE
+if [[ -n "$MSYSTEM" ]]; then
+    slash="-"
+else
+    # fallback to old behavior
+    case $MACHTYPE in
+        *-msys)
+            slash="-"
+            ;;
+        *)
+            slash="/"
+            ;;
+    esac
+fi
 # prog specifies the program that should be run (cl.exe or link.exe)
 # We'll assume cl to start out
 prog=cl
