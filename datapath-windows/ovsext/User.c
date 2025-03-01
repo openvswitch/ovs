@@ -406,8 +406,10 @@ _MapNlAttrToOvsPktExec(PNL_MSG_HDR nlMsgHdr, PNL_ATTR *nlAttrs,
     execute->actions = NlAttrGet(nlAttrs[OVS_PACKET_ATTR_ACTIONS]);
     execute->actionsLen = NlAttrGetSize(nlAttrs[OVS_PACKET_ATTR_ACTIONS]);
 
-    ASSERT(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
-    execute->inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
+    //TODO revisit and understand if this check is needed
+    if (keyAttrs[OVS_KEY_ATTR_IN_PORT]) {
+        execute->inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
+    }
     execute->keyAttrs = keyAttrs;
 
     if (nlAttrs[OVS_PACKET_ATTR_MRU]) {
