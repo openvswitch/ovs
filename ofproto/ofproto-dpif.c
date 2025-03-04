@@ -6151,20 +6151,12 @@ ofbundle_get_a_port(const struct ofbundle *bundle)
 }
 
 static void
-ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                         const char *argv[], void *aux OVS_UNUSED)
+ofproto_unixctl_fdb_show_text(const struct ofproto_dpif *ofproto,
+                              struct ds *ds)
 {
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    const struct ofproto_dpif *ofproto;
     const struct mac_entry *e;
 
-    ofproto = ofproto_dpif_lookup_by_name(argv[1]);
-    if (!ofproto) {
-        unixctl_command_reply_error(conn, "no such bridge");
-        return;
-    }
-
-    ds_put_cstr(&ds, " port  VLAN  MAC                Age\n");
+    ds_put_cstr(ds, " port  VLAN  MAC                Age\n");
     ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
         struct ofbundle *bundle = mac_entry_get_port(ofproto->ml, e);
@@ -6173,17 +6165,83 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
         ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
                 NULL, name, sizeof name);
-        ds_put_format(&ds, "%5s  %4d  "ETH_ADDR_FMT"  ",
+        ds_put_format(ds, "%5s  %4d  "ETH_ADDR_FMT"  ",
                 name, e->vlan, ETH_ADDR_ARGS(e->mac));
         if (MAC_ENTRY_AGE_STATIC_ENTRY == age) {
-            ds_put_format(&ds, "static\n");
+            ds_put_format(ds, "static\n");
         } else {
-            ds_put_format(&ds, "%3d\n", age);
+            ds_put_format(ds, "%3d\n", age);
         }
     }
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
-    unixctl_command_reply(conn, ds_cstr(&ds));
-    ds_destroy(&ds);
+}
+
+static void
+ofproto_unixctl_fdb_show_json(const struct ofproto_dpif *ofproto,
+                              struct json **fdb_entries)
+{
+    struct json **json_entries = NULL;
+    const struct mac_entry *entry;
+    size_t num_entries;
+    int i = 0;
+
+    ovs_rwlock_rdlock(&ofproto->ml->rwlock);
+
+    num_entries = hmap_count(&ofproto->ml->table);
+    if (!num_entries) {
+        goto done_unlock;
+    }
+
+    json_entries = xmalloc(num_entries * sizeof *json_entries);
+
+    LIST_FOR_EACH (entry, lru_node, &ofproto->ml->lrus) {
+        struct ofbundle *bundle = mac_entry_get_port(ofproto->ml, entry);
+        struct ofport_dpif *port = ofbundle_get_a_port(bundle);
+        struct json *json_entry = json_object_create();
+        int age = mac_entry_age(ofproto->ml, entry);
+
+        ovs_assert(i < num_entries);
+        json_object_put(json_entry, "port",
+                        json_integer_create(
+                            (OVS_FORCE long long) port->up.ofp_port));
+        json_object_put(json_entry, "vlan", json_integer_create(entry->vlan));
+        json_object_put_format(json_entry, "mac", ETH_ADDR_FMT,
+                               ETH_ADDR_ARGS(entry->mac));
+        if (MAC_ENTRY_AGE_STATIC_ENTRY == age) {
+            json_object_put(json_entry, "static", json_boolean_create(true));
+        } else {
+            json_object_put(json_entry, "age", json_integer_create(age));
+        }
+        json_entries[i++] = json_entry;
+    }
+done_unlock:
+    ovs_rwlock_unlock(&ofproto->ml->rwlock);
+    *fdb_entries = json_array_create(json_entries, i);
+}
+
+static void
+ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                          const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    const struct ofproto_dpif *ofproto = ofproto_dpif_lookup_by_name(argv[1]);
+
+    if (!ofproto) {
+        unixctl_command_reply_error(conn, "no such bridge");
+        return;
+    }
+
+    if (unixctl_command_get_output_format(conn) == UNIXCTL_OUTPUT_FMT_JSON) {
+        struct json *fdb_entries;
+
+        ofproto_unixctl_fdb_show_json(ofproto, &fdb_entries);
+        unixctl_command_reply_json(conn, fdb_entries);
+    } else {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+
+        ofproto_unixctl_fdb_show_text(ofproto, &ds);
+        unixctl_command_reply(conn, ds_cstr(&ds));
+        ds_destroy(&ds);
+    }
 }
 
 static void

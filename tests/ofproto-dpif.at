@@ -7100,6 +7100,22 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [d
     1     0  50:54:00:00:00:06    ?
 ])
 
+dnl Check json output.
+AT_CHECK([ovs-appctl --format json --pretty fdb/show br0 \
+          | sed 's/"age": [[0-9]]*/"age": ?/g'], [0], [dnl
+[[
+  {
+    "age": ?,
+    "mac": "50:54:00:00:00:05",
+    "port": 3,
+    "vlan": 0},
+  {
+    "age": ?,
+    "mac": "50:54:00:00:00:06",
+    "port": 1,
+    "vlan": 0}]]
+])
+
 # Trace a packet arrival that updates the first learned MAC entry.
 OFPROTO_TRACE(
   [ovs-dummy],
@@ -7706,6 +7722,32 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -
     1     0  50:54:00:00:01:01  static
     2     0  50:54:00:00:00:02
     2     0  50:54:00:00:02:02  static
+])
+
+dnl Check json output.
+AT_CHECK([ovs-appctl --format json --pretty fdb/show br0 \
+          | sed 's/"age": [[0-9]]*/"age": ?/g'], [0], [dnl
+[[
+  {
+    "age": ?,
+    "mac": "50:54:00:00:00:01",
+    "port": 1,
+    "vlan": 0},
+  {
+    "age": ?,
+    "mac": "50:54:00:00:00:02",
+    "port": 2,
+    "vlan": 0},
+  {
+    "mac": "50:54:00:00:01:01",
+    "port": 1,
+    "static": true,
+    "vlan": 0},
+  {
+    "mac": "50:54:00:00:02:02",
+    "port": 2,
+    "static": true,
+    "vlan": 0}]]
 ])
 
 dnl Remove static mac entry.
