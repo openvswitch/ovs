@@ -12,10 +12,11 @@ fi
 #
 # Disabling sqlite support because sindex build fails and we don't
 # really need this utility being installed.
-git clone git://git.kernel.org/pub/scm/devel/sparse/sparse.git
-cd sparse
-make -j4 HAVE_SQLITE= install
-cd ..
+if test -d sparse; then
+    pushd sparse
+    make -j4 HAVE_SQLITE= install
+    popd
+fi
 
 # Installing wheel separately because it may be needed to build some
 # of the packages during dependency backtracking and pip >= 22.0 will
