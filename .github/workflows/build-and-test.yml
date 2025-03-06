@@ -306,6 +306,13 @@ jobs:
       if:   matrix.m32 != ''
       run:  sudo apt install -y gcc-multilib
 
+    - name: checkout sparse
+      uses: actions/checkout@v4
+      # Official mirror of the git.kernel.org/pub/scm/devel/sparse/sparse.git.
+      with:
+        repository: lucvoo/sparse
+        path: sparse
+
     - name: prepare
       run:  ./.ci/linux-prepare.sh
 
