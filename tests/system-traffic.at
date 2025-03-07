@@ -4512,7 +4512,7 @@ priority=100,in_port=2,icmp,ct_state=+trk+rel,ct_mark=1,action=1
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
-NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
+NS_CHECK_EXEC([at_ns0], [echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort | grep -v drop], [0], [dnl
@@ -7501,7 +7501,7 @@ OVS_DAEMONIZE([tcpdump -n -U -i ovs-p0 -w p0.pcap], [tcpdump.pid])
 sleep 1
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
-NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
+NS_CHECK_EXEC([at_ns0], [echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | sort | grep -v drop], [0], [dnl
@@ -7580,7 +7580,7 @@ OVS_DAEMONIZE([tcpdump -n -U -i ovs-p0 -w p0.pcap], [tcpdump.pid])
 sleep 1
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
-NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
+NS_CHECK_EXEC([at_ns0], [echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000])
 
 dnl Flush conntrack state.
 dnl To verify related packets are handled exactly the same as before flushing.
@@ -7588,7 +7588,7 @@ AT_CHECK([ovs-appctl dpctl/flush-conntrack], [0])
 
 dnl Solicit another "destination unreachable" response.
 dnl To verify that after flushing, the same openflow rules are matched.
-NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
+NS_CHECK_EXEC([at_ns0], [echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | ofctl_strip_bytes | sort | grep -v drop], [0], [dnl
@@ -8359,7 +8359,7 @@ OVS_DAEMONIZE([tcpdump -n -U -i ovs-p0 -w p0.pcap], [tcpdump.pid])
 sleep 1
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
-NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc -6 $NC_EOF_OPT -u fc00::2 1"])
+NS_CHECK_EXEC([at_ns0], [echo a | nc -6 $NC_EOF_OPT -u fc00::2 1])
 
 AT_CHECK([tcpdump -n -v "icmp6" -r p0.pcap 2>/dev/null | grep -E 'wrong|bad'], [1], [ignore-nolog])
 
