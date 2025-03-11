@@ -10,7 +10,7 @@ clone_folder: C:\openvswitch_compile
 shallow_clone: true
 
 init:
-- ps: $env:PATH ="C:\Python312-x64;"+$env:PATH
+- ps: $env:PATH ="C:\Python312-x64;C:\Python312-x64\Scripts;"+$env:PATH
 - ps: New-Item -Type HardLink -Path  "C:\Python312-x64\python3.exe"
                               -Value "C:\Python312-x64\python.exe"
 
