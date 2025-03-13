@@ -33,6 +33,7 @@
 #include <sys/time.h>
 
 #include "byte-order.h"
+#include "coverage.h"
 #include "csum.h"
 #include "dp-packet.h"
 #include "netdev.h"
@@ -48,6 +49,11 @@
 
 VLOG_DEFINE_THIS_MODULE(native_tnl);
 static struct vlog_rate_limit err_rl = VLOG_RATE_LIMIT_INIT(60, 5);
+
+COVERAGE_DEFINE(native_tnl_l3csum_checked);
+COVERAGE_DEFINE(native_tnl_l3csum_err);
+COVERAGE_DEFINE(native_tnl_l4csum_checked);
+COVERAGE_DEFINE(native_tnl_l4csum_err);
 
 #define VXLAN_HLEN   (sizeof(struct udp_header) +         \
                       sizeof(struct vxlanhdr))
@@ -82,8 +88,8 @@ netdev_tnl_get_src_port(struct dp_packet *packet)
     return htons(hash + tnl_udp_port_min);
 }
 
-void *
-netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
+static void *
+ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
                   unsigned int *hlen)
 {
     void *nh;
@@ -107,16 +113,20 @@ netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
               ((char *)nh - (char *)dp_packet_data(packet));
 
     if (IP_VER(ip->ip_ihl_ver) == 4) {
-
+        bool bad_csum = dp_packet_ip_checksum_bad(packet);
         ovs_be32 ip_src, ip_dst;
 
         /* A packet coming from a network device might have the
          * csum already checked. In this case, skip the check. */
-        if (OVS_UNLIKELY(!dp_packet_hwol_l3_csum_ipv4_ol(packet))) {
-            if (csum(ip, IP_IHL(ip->ip_ihl_ver) * 4)) {
-                VLOG_WARN_RL(&err_rl, "ip packet has invalid checksum");
-                return NULL;
-            }
+        if (OVS_UNLIKELY(!bad_csum
+                         && !dp_packet_hwol_l3_csum_ipv4_ol(packet))) {
+            COVERAGE_INC(native_tnl_l3csum_checked);
+            bad_csum = csum(ip, IP_IHL(ip->ip_ihl_ver) * 4);
+        }
+        if (OVS_UNLIKELY(bad_csum)) {
+            COVERAGE_INC(native_tnl_l3csum_err);
+            VLOG_WARN_RL(&err_rl, "ip packet has invalid checksum");
+            return NULL;
         }
 
         if (ntohs(ip->ip_tot_len) > l3_size) {
@@ -227,15 +237,18 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
 {
     struct udp_header *udp;
 
-    udp = netdev_tnl_ip_extract_tnl_md(packet, tnl, hlen);
+    udp = ip_extract_tnl_md(packet, tnl, hlen);
     if (!udp) {
         return NULL;
     }
 
     if (udp->udp_csum) {
-        if (OVS_LIKELY(!dp_packet_ol_l4_csum_partial(packet)) &&
-            OVS_UNLIKELY(!dp_packet_l4_checksum_good(packet))) {
+        bool bad_csum = dp_packet_l4_checksum_bad(packet);
+
+        if (OVS_LIKELY(!bad_csum && !dp_packet_ol_l4_csum_partial(packet))
+            && OVS_UNLIKELY(!dp_packet_l4_checksum_good(packet))) {
             uint32_t csum;
+            COVERAGE_INC(native_tnl_l4csum_checked);
             if (netdev_tnl_is_header_ipv6(dp_packet_data(packet))) {
                 csum = packet_csum_pseudoheader6(dp_packet_l3(packet));
             } else {
@@ -246,9 +259,11 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
                                  ((const unsigned char *)udp -
                                   (const unsigned char *)dp_packet_eth(packet)
                                  ));
-            if (csum_finish(csum)) {
-                return NULL;
-            }
+            bad_csum = csum_finish(csum);
+        }
+        if (OVS_UNLIKELY(bad_csum)) {
+            COVERAGE_INC(native_tnl_l4csum_err);
+            return NULL;
         }
         tnl->flags |= FLOW_TNL_F_CSUM;
     }
@@ -449,7 +464,7 @@ parse_gre_header(struct dp_packet *packet,
     unsigned int ulen;
     uint16_t greh_protocol;
 
-    greh = netdev_tnl_ip_extract_tnl_md(packet, tnl, &ulen);
+    greh = ip_extract_tnl_md(packet, tnl, &ulen);
     if (!greh) {
         return -EINVAL;
     }
@@ -647,7 +662,7 @@ netdev_erspan_pop_header(struct dp_packet *packet)
         goto err;
     }
 
-    greh = netdev_tnl_ip_extract_tnl_md(packet, tnl, &ulen);
+    greh = ip_extract_tnl_md(packet, tnl, &ulen);
     if (!greh) {
         goto err;
     }
@@ -1083,7 +1098,7 @@ netdev_srv6_pop_header(struct dp_packet *packet)
     }
 
     pkt_metadata_init_tnl(md);
-    if (!netdev_tnl_ip_extract_tnl_md(packet, tnl, &hlen)) {
+    if (!ip_extract_tnl_md(packet, tnl, &hlen)) {
         goto err;
     }
 
