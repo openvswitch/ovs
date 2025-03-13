@@ -3411,7 +3411,7 @@ flow_compose(struct dp_packet *p, const struct flow *flow,
              * bit.
              */
             ip->ip_csum ^= (OVS_FORCE ovs_be16) 0x1;
-            dp_packet_ip_checksum_bad(p);
+            dp_packet_ol_set_ip_csum_bad(p);
         } else {
             dp_packet_ol_set_ip_csum_good(p);
         }
