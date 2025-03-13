@@ -1271,6 +1271,10 @@ parse_tcp_flags(struct dp_packet *packet,
 
         size = tot_len;   /* Never pull padding. */
         data_pull(&data, &size, ip_len);
+        dp_packet_hwol_set_tx_ipv4(packet);
+        if (dp_packet_ip_checksum_good(packet)) {
+            dp_packet_hwol_set_tx_ip_csum(packet);
+        }
     } else if (dl_type == htons(ETH_TYPE_IPV6)) {
         const struct ovs_16aligned_ip6_hdr *nh = data;
         uint16_t plen;
@@ -1283,6 +1287,7 @@ parse_tcp_flags(struct dp_packet *packet,
         }
         data_pull(&data, &size, sizeof *nh);
 
+        dp_packet_hwol_set_tx_ipv6(packet);
         plen = ntohs(nh->ip6_plen); /* Never pull padding. */
         dp_packet_set_l2_pad_size(packet, size - plen);
         size = plen;
@@ -1300,11 +1305,29 @@ parse_tcp_flags(struct dp_packet *packet,
     }
 
     packet->l4_ofs = (uint16_t)((char *)data - frame);
-    if (!(nw_frag & FLOW_NW_FRAG_LATER) && nw_proto == IPPROTO_TCP &&
-        size >= TCP_HEADER_LEN) {
-        const struct tcp_header *tcp = data;
+    if (!(nw_frag & FLOW_NW_FRAG_LATER)) {
+        if (nw_proto == IPPROTO_TCP && size >= TCP_HEADER_LEN) {
+            const struct tcp_header *tcp = data;
 
-        return TCP_FLAGS(tcp->tcp_ctl);
+            dp_packet_ol_l4_csum_check_partial(packet);
+            if (dp_packet_l4_checksum_good(packet)
+                || dp_packet_ol_l4_csum_partial(packet)) {
+                dp_packet_hwol_set_csum_tcp(packet);
+            }
+            return TCP_FLAGS(tcp->tcp_ctl);
+        } else if (nw_proto == IPPROTO_UDP && size >= UDP_HEADER_LEN) {
+            dp_packet_ol_l4_csum_check_partial(packet);
+            if (dp_packet_l4_checksum_good(packet)
+                || dp_packet_ol_l4_csum_partial(packet)) {
+                dp_packet_hwol_set_csum_udp(packet);
+            }
+        } else if (nw_proto == IPPROTO_SCTP && size >= SCTP_HEADER_LEN) {
+            dp_packet_ol_l4_csum_check_partial(packet);
+            if (dp_packet_l4_checksum_good(packet)
+                || dp_packet_ol_l4_csum_partial(packet)) {
+                dp_packet_hwol_set_csum_sctp(packet);
+            }
+        }
     }
 
     return 0;
