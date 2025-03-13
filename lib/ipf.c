@@ -38,6 +38,7 @@
 VLOG_DEFINE_THIS_MODULE(ipf);
 COVERAGE_DEFINE(ipf_stuck_frag_list_expired);
 COVERAGE_DEFINE(ipf_stuck_frag_list_purged);
+COVERAGE_DEFINE(ipf_l3csum_checked);
 COVERAGE_DEFINE(ipf_l3csum_err);
 
 enum {
@@ -585,11 +586,6 @@ ipf_list_state_transition(struct ipf *ipf, struct ipf_list *ipf_list,
 static bool
 ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
 {
-    if (OVS_UNLIKELY(dp_packet_ip_checksum_bad(pkt))) {
-        COVERAGE_INC(ipf_l3csum_err);
-        goto invalid_pkt;
-    }
-
     const struct eth_header *l2 = dp_packet_eth(pkt);
     const struct ip_header *l3 = dp_packet_l3(pkt);
 
@@ -619,8 +615,12 @@ ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
         goto invalid_pkt;
     }
 
-    if (OVS_UNLIKELY(!dp_packet_ip_checksum_good(pkt)
-                     && csum(l3, ip_hdr_len) != 0)) {
+    bool bad_csum = dp_packet_ip_checksum_bad(pkt);
+    if (OVS_UNLIKELY(!bad_csum && !dp_packet_ip_checksum_good(pkt))) {
+        COVERAGE_INC(ipf_l3csum_checked);
+        bad_csum = csum(l3, ip_hdr_len);
+    }
+    if (OVS_UNLIKELY(bad_csum)) {
         COVERAGE_INC(ipf_l3csum_err);
         goto invalid_pkt;
     }
