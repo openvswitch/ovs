@@ -7272,7 +7272,7 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
                 const struct ip_header *ip_hdr = l3_off;
                 csum = ~csum_finish(packet_csum_pseudoheader(ip_hdr));
             } else if (dp_packet_hwol_tx_ipv6(b)) {
-                const struct ovs_16aligned_ip6_hdr *ip6_hdr = l4_off;
+                const struct ovs_16aligned_ip6_hdr *ip6_hdr = l3_off;
                 csum = ~csum_finish(packet_csum_pseudoheader6(ip6_hdr));
             }
 
