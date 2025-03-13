@@ -126,9 +126,6 @@ extern uint16_t tnl_udp_port_max;
 ovs_be16 netdev_tnl_get_src_port(struct dp_packet *);
 
 void *
-netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
-                             unsigned int *hlen);
-void *
 netdev_tnl_push_ip_header(struct dp_packet *packet, const void *header,
                           int size, int *ip_tot_size, ovs_be32 ipv6_label);
 void
