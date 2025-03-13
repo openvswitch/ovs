@@ -1610,6 +1610,168 @@ AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=false])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([userspace offload - conntrack])
+OVS_VSWITCHD_START(
+  [add-br br1 -- set bridge br1 datapath-type=dummy -- \
+   add-port br1 p1 -- \
+       set Interface p1 type=dummy -- \
+   add-port br1 p2 -- \
+       set Interface p2 type=dummy --])
+
+AT_CHECK([ovs-appctl vlog/set netdev_dummy:file:dbg])
+
+dnl Modify the ip_dst addr to force changing the IP csum.
+AT_CHECK([ovs-ofctl add-flow br1 'in_port=p1,ip,ct_state=-trk,actions=ct(commit,nat(dst=192.168.1.1),table=0),p2'])
+
+flow_s="\
+  eth_src=8a:bf:7e:2f:05:84,eth_dst=0a:8f:39:4f:e0:73,\
+  tcp,ip_src=192.168.123.2,ip_dst=192.168.123.1,ip_frag=no,\
+  tcp_src=54392,tcp_dst=5201,tcp_flags=ack"
+
+good_frame=$(ovs-ofctl compose-packet --bare "${flow_s}")
+
+AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap])
+
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [0
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [0
+])
+
+dnl Checks for good packet (Tx offloads disabled).
+flow_expected=$(echo "${flow_s}" | sed 's/192.168.123.1/192.168.1.1/g')
+good_expected=$(ovs-ofctl compose-packet --bare "${flow_expected}")
+
+dnl No Rx flag.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${good_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [1
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [0
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
+])
+
+dnl Flag as Rx good.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${good_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [1
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [0
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=false])
+
+dnl Flag as Rx bad.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_bad=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${good_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [1
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [1
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_bad=false])
+
+dnl Checks for bad packet (Tx offloads disabled).
+bad_frame=$(ovs-ofctl compose-packet --bare --bad-csum "${flow_s}")
+
+dnl No Rx flag.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [2
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [2
+])
+
+dnl Flag as Rx good.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [2
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [2
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+dnl In this case, datapath will fix the csum as it trusts the Rx status.
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=false])
+
+dnl Flag as Rx bad.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_bad=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [2
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [3
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_bad=false])
+
+dnl Checks for good packet (Tx offloads enabled).
+AT_CHECK([ovs-vsctl set Interface p2 options:ol_ip_tx_csum=true])
+
+dnl No Rx flag.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${good_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [3
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [3
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
+])
+
+dnl Flag as Rx good.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${good_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [3
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [3
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=false])
+
+dnl Flag as Rx bad.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_bad=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${good_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [3
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [4
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_bad=false])
+
+dnl Checks for bad packet (Tx offloads enabled).
+
+dnl No Rx flag.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [4
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [5
+])
+
+dnl Flag as Rx good.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [4
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [5
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+dnl In this case, datapath will fix the csum as it trusts the Rx status.
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=false])
+
+dnl Flag as Rx bad.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_bad=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [4
+])
+AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [6
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_bad=false])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([userspace offload - tso])
 OVS_VSWITCHD_START(
   [set Open_vSwitch . other_config:userspace-tso-enable=true -- \
