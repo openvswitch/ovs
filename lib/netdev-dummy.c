@@ -150,10 +150,26 @@ struct netdev_dummy {
     int requested_n_rxq OVS_GUARDED;
     int requested_numa_id OVS_GUARDED;
 
-    /* Enable netdev IP csum offload. */
-    bool ol_ip_csum OVS_GUARDED;
-    /* Flag RX packet with good csum. */
-    bool ol_ip_csum_set_good OVS_GUARDED;
+    /* Force IP Rx csum good. */
+    bool ol_ip_rx_csum_set_good OVS_GUARDED;
+    /* Force IP Rx csum bad. */
+    bool ol_ip_rx_csum_set_bad OVS_GUARDED;
+    /* Announce netdev IP Tx csum offload. */
+    bool ol_ip_tx_csum OVS_GUARDED;
+    /* Disable IP Tx csum offload. */
+    bool ol_ip_tx_csum_disabled OVS_GUARDED;
+
+    /* Force L4 Rx csum good. */
+    bool ol_l4_rx_csum_set_good OVS_GUARDED;
+    /* Force L4 Rx csum bad. */
+    bool ol_l4_rx_csum_set_bad OVS_GUARDED;
+    /* Force L4 Rx csum partial. */
+    bool ol_l4_rx_csum_set_partial OVS_GUARDED;
+    /* Announce netdev L4 Tx csum offload. */
+    bool ol_l4_tx_csum OVS_GUARDED;
+    /* Disable L4 Tx csum offload. */
+    bool ol_l4_tx_csum_disabled OVS_GUARDED;
+
     /* Set the segment size for netdev TSO support. */
     int ol_tso_segsz OVS_GUARDED;
 };
@@ -802,12 +818,33 @@ netdev_dummy_get_config(const struct netdev *dev, struct smap *args)
     /* pcap, rxq_pcap and tx_pcap cannot be recovered because filenames have
      * been discarded after opening file descriptors */
 
-    if (netdev->ol_ip_csum) {
-        smap_add_format(args, "ol_ip_csum", "%s", "true");
+    if (netdev->ol_ip_rx_csum_set_good) {
+        smap_add_format(args, "ol_ip_rx_csum_set_good", "%s", "true");
+    }
+    if (netdev->ol_ip_rx_csum_set_bad) {
+        smap_add_format(args, "ol_ip_rx_csum_set_bad", "%s", "true");
+    }
+    if (netdev->ol_ip_tx_csum) {
+        smap_add_format(args, "ol_ip_tx_csum", "%s", "true");
+        if (netdev->ol_ip_tx_csum_disabled) {
+            smap_add_format(args, "ol_ip_tx_csum_disabled", "%s", "true");
+        }
     }
 
-    if (netdev->ol_ip_csum_set_good) {
-        smap_add_format(args, "ol_ip_csum_set_good", "%s", "true");
+    if (netdev->ol_l4_rx_csum_set_good) {
+        smap_add_format(args, "ol_l4_rx_csum_set_good", "%s", "true");
+    }
+    if (netdev->ol_l4_rx_csum_set_bad) {
+        smap_add_format(args, "ol_l4_rx_csum_set_bad", "%s", "true");
+    }
+    if (netdev->ol_l4_rx_csum_set_partial) {
+        smap_add_format(args, "ol_l4_rx_csum_set_partial", "%s", "true");
+    }
+    if (netdev->ol_l4_tx_csum) {
+        smap_add_format(args, "ol_l4_tx_csum", "%s", "true");
+        if (netdev->ol_l4_tx_csum_disabled) {
+            smap_add_format(args, "ol_l4_tx_csum_disabled", "%s", "true");
+        }
     }
 
     if (netdev->ol_tso_segsz && userspace_tso_enabled()) {
@@ -938,11 +975,36 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args,
         }
     }
 
-    netdev->ol_ip_csum_set_good = smap_get_bool(args, "ol_ip_csum_set_good",
-                                                false);
-    netdev->ol_ip_csum = smap_get_bool(args, "ol_ip_csum", false);
-    if (netdev->ol_ip_csum) {
+    netdev->ol_ip_rx_csum_set_good =
+        smap_get_bool(args, "ol_ip_rx_csum_set_good", false);
+    netdev->ol_ip_rx_csum_set_bad =
+        smap_get_bool(args, "ol_ip_rx_csum_set_bad", false);
+    netdev->ol_ip_tx_csum = smap_get_bool(args, "ol_ip_tx_csum", false);
+    if (netdev->ol_ip_tx_csum) {
         netdev_->ol_flags |= NETDEV_TX_OFFLOAD_IPV4_CKSUM;
+        netdev->ol_ip_tx_csum_disabled =
+            smap_get_bool(args, "ol_ip_tx_csum_disabled", false);
+    } else {
+        netdev_->ol_flags &= ~NETDEV_TX_OFFLOAD_IPV4_CKSUM;
+        netdev->ol_ip_tx_csum_disabled = true;
+    }
+
+    netdev->ol_l4_rx_csum_set_good =
+        smap_get_bool(args, "ol_l4_rx_csum_set_good", false);
+    netdev->ol_l4_rx_csum_set_bad =
+        smap_get_bool(args, "ol_l4_rx_csum_set_bad", false);
+    netdev->ol_l4_rx_csum_set_partial =
+        smap_get_bool(args, "ol_l4_rx_csum_set_partial", false);
+    netdev->ol_l4_tx_csum = smap_get_bool(args, "ol_l4_tx_csum", false);
+    if (netdev->ol_l4_tx_csum) {
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_CKSUM;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_UDP_CKSUM;
+        netdev->ol_l4_tx_csum_disabled =
+            smap_get_bool(args, "ol_l4_tx_csum_disabled", false);
+    } else {
+        netdev_->ol_flags &= ~NETDEV_TX_OFFLOAD_TCP_CKSUM;
+        netdev_->ol_flags &= ~NETDEV_TX_OFFLOAD_UDP_CKSUM;
+        netdev->ol_l4_tx_csum_disabled = true;
     }
 
     if (userspace_tso_enabled()) {
@@ -1131,15 +1193,51 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
     netdev->rxq_stats[rxq_->queue_id].bytes += dp_packet_size(packet);
     netdev->custom_stats[0].value++;
     netdev->custom_stats[1].value++;
-    if (netdev->ol_ip_csum_set_good) {
-        /* The netdev hardware sets the flag when the packet has good csum. */
+
+    if (netdev->ol_ip_rx_csum_set_good) {
         dp_packet_ol_set_ip_csum_good(packet);
+    } else if (netdev->ol_ip_rx_csum_set_bad) {
+        dp_packet_ol_set_ip_csum_bad(packet);
+    } else {
+        dp_packet_ol_reset_ip_csum_good(packet);
+    }
+
+    if (netdev->ol_l4_rx_csum_set_good) {
+        dp_packet_ol_set_l4_csum_good(packet);
+    } else if (netdev->ol_l4_rx_csum_set_bad) {
+        dp_packet_ol_set_l4_csum_bad(packet);
+    } else if (netdev->ol_l4_rx_csum_set_partial) {
+        dp_packet_ol_set_l4_csum_partial(packet);
+    } else {
+        dp_packet_ol_reset_l4_csum_good(packet);
     }
 
     if (userspace_tso_enabled() && netdev->ol_tso_segsz) {
         dp_packet_set_tso_segsz(packet, netdev->ol_tso_segsz);
         dp_packet_hwol_set_tcp_seg(packet);
         dp_packet_hwol_set_csum_tcp(packet);
+    }
+
+    if (VLOG_IS_DBG_ENABLED()) {
+        bool ip_csum_good;
+        bool l4_csum_good;
+        bool ip_csum_bad;
+        bool l4_csum_bad;
+
+        ip_csum_good = !!(*dp_packet_ol_flags_ptr(packet)
+                          & DP_PACKET_OL_RX_IP_CKSUM_GOOD);
+        ip_csum_bad = !!(*dp_packet_ol_flags_ptr(packet)
+                         & DP_PACKET_OL_RX_IP_CKSUM_BAD);
+        l4_csum_good = !!(*dp_packet_ol_flags_ptr(packet)
+                          & DP_PACKET_OL_RX_L4_CKSUM_GOOD);
+        l4_csum_bad = !!(*dp_packet_ol_flags_ptr(packet)
+                         & DP_PACKET_OL_RX_L4_CKSUM_BAD);
+        VLOG_DBG("Rx: packet with csum IP %s, L4 %s, segsz %"PRIu16,
+                 ip_csum_good ? (ip_csum_bad ? "good+bad" : "good")
+                              : (ip_csum_bad ? "bad" : "unknown"),
+                 l4_csum_good ? (l4_csum_bad ? "partial" : "good")
+                              : (l4_csum_bad ? "bad" : "unknown"),
+                 dp_packet_get_tso_segsz(packet));
     }
 
     ovs_mutex_unlock(&netdev->mutex);
@@ -1197,9 +1295,18 @@ netdev_dummy_send(struct netdev *netdev, int qid,
     DP_PACKET_BATCH_FOR_EACH(i, packet, batch) {
         const void *buffer = dp_packet_data(packet);
         size_t size = dp_packet_size(packet);
+        uint64_t flags;
         bool is_tso;
 
         ovs_mutex_lock(&dev->mutex);
+        flags = netdev->ol_flags;
+        if (!dev->ol_ip_tx_csum_disabled) {
+            flags &= ~NETDEV_TX_OFFLOAD_IPV4_CKSUM;
+        }
+        if (!dev->ol_l4_tx_csum_disabled) {
+            flags &= ~NETDEV_TX_OFFLOAD_TCP_CKSUM;
+            flags &= ~NETDEV_TX_OFFLOAD_UDP_CKSUM;
+        }
         is_tso = userspace_tso_enabled() && dev->ol_tso_segsz &&
                  dp_packet_hwol_is_tso(packet);
         ovs_mutex_unlock(&dev->mutex);
@@ -1229,10 +1336,44 @@ netdev_dummy_send(struct netdev *netdev, int qid,
             }
         }
 
-        if (dp_packet_hwol_tx_ip_csum(packet) &&
-            !dp_packet_ip_checksum_good(packet)) {
-            dp_packet_ip_set_header_csum(packet, false);
-            dp_packet_ol_set_ip_csum_good(packet);
+        if (VLOG_IS_DBG_ENABLED()) {
+            bool ip_csum_good;
+            bool l4_csum_good;
+            bool ip_csum_bad;
+            bool l4_csum_bad;
+
+            ip_csum_good = !!(*dp_packet_ol_flags_ptr(packet)
+                              & DP_PACKET_OL_RX_IP_CKSUM_GOOD);
+            ip_csum_bad = !!(*dp_packet_ol_flags_ptr(packet)
+                             & DP_PACKET_OL_RX_IP_CKSUM_BAD);
+            l4_csum_good = !!(*dp_packet_ol_flags_ptr(packet)
+                              & DP_PACKET_OL_RX_L4_CKSUM_GOOD);
+            l4_csum_bad = !!(*dp_packet_ol_flags_ptr(packet)
+                             & DP_PACKET_OL_RX_L4_CKSUM_BAD);
+            VLOG_DBG("Tx: packet with csum IP %s, L4 %s, segsz %"PRIu16
+                     ", Tx flags %s, %s, %s",
+                     ip_csum_good ? (ip_csum_bad ? "good+bad" : "good")
+                                  : (ip_csum_bad ? "bad" : "unknown"),
+                     l4_csum_good ? (l4_csum_bad ? "partial" : "good")
+                                  : (l4_csum_bad ? "bad" : "unknown"),
+                     dp_packet_get_tso_segsz(packet),
+                     dp_packet_hwol_tx_ip_csum(packet) ? "ip_csum" : "none",
+                     dp_packet_hwol_tx_l4_checksum(packet) ? "l4_csum"
+                                                           : "none",
+                     dp_packet_hwol_is_tso(packet) ? "tso" : "none");
+        }
+
+        if (dp_packet_hwol_tx_ip_csum(packet)
+            && !dp_packet_ip_checksum_good(packet)) {
+            dp_packet_ol_send_prepare(packet, flags);
+        }
+        if (dp_packet_hwol_l4_is_tcp(packet)
+            && !dp_packet_l4_checksum_good(packet)) {
+            dp_packet_ol_send_prepare(packet, flags);
+        }
+        if (dp_packet_hwol_l4_is_udp(packet)
+            && !dp_packet_l4_checksum_good(packet)) {
+            dp_packet_ol_send_prepare(packet, flags);
         }
 
         ovs_mutex_lock(&dev->mutex);

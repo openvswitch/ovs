@@ -1532,6 +1532,13 @@ dp_packet_ol_reset_l4_csum_good(struct dp_packet *p)
     }
 }
 
+static inline void
+dp_packet_ol_set_l4_csum_bad(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_RX_L4_CKSUM_GOOD;
+    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_RX_L4_CKSUM_BAD;
+}
+
 /* Marks packet 'p' with good integrity if checksum offload locations
  * were provided. In the case of encapsulated packets, these values may
  * be deeper into the packet than OVS might expect. But the packet
