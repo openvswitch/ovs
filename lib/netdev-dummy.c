@@ -1194,6 +1194,8 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
     netdev->custom_stats[0].value++;
     netdev->custom_stats[1].value++;
 
+    *dp_packet_ol_flags_ptr(packet) &= ~DP_PACKET_OL_TX_ANY_CKSUM;
+
     if (netdev->ol_ip_rx_csum_set_good) {
         dp_packet_ol_set_ip_csum_good(packet);
     } else if (netdev->ol_ip_rx_csum_set_bad) {
@@ -1215,7 +1217,6 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
     if (userspace_tso_enabled() && netdev->ol_tso_segsz) {
         dp_packet_set_tso_segsz(packet, netdev->ol_tso_segsz);
         dp_packet_hwol_set_tcp_seg(packet);
-        dp_packet_hwol_set_csum_tcp(packet);
     }
 
     if (VLOG_IS_DBG_ENABLED()) {

@@ -1088,6 +1088,82 @@ AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=false])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([userspace offload - tcp csum offload (simple match)])
+OVS_VSWITCHD_START(
+  [add-br br1 -- set bridge br1 datapath-type=dummy -- \
+   add-port br1 p1 -- \
+       set Interface p1 type=dummy -- \
+   add-port br1 p2 -- \
+       set Interface p2 type=dummy --])
+
+AT_CHECK([ovs-appctl vlog/set netdev_dummy:file:dbg])
+
+AT_CHECK([ovs-ofctl add-flow br1 in_port=p1,actions=output:p2])
+
+flow_s="\
+  eth_src=8a:bf:7e:2f:05:84,eth_dst=0a:8f:39:4f:e0:73,\
+  tcp,ip_src=192.168.123.2,ip_dst=192.168.123.1,ip_frag=no,\
+  tcp_src=54392,tcp_dst=5201,tcp_flags=ack"
+
+good_frame=$(ovs-ofctl compose-packet --bare "${flow_s}")
+bad_frame=$(echo $good_frame | sed -e "s/6b72/dead/")
+
+AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${bad_frame}
+])
+dnl First packet, no simple matching.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0], [dnl
+  simple match hits: 0
+])
+
+dnl No Rx flag.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${bad_frame}
+])
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0], [dnl
+  simple match hits: 1
+])
+
+dnl Flag as Rx good.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${bad_frame}
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=false])
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0], [dnl
+  simple match hits: 2
+])
+
+dnl Flag as Rx bad.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_bad=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${bad_frame}
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_bad=false])
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0], [dnl
+  simple match hits: 3
+])
+
+dnl Flag as Rx partial.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_partial=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_frame}
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_partial=false])
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0], [dnl
+  simple match hits: 4
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([userspace offload - udp csum offload])
 OVS_VSWITCHD_START(
   [add-br br1 -- set bridge br1 datapath-type=dummy -- \
