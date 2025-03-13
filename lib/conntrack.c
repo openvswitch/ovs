@@ -914,6 +914,7 @@ nat_inner_packet(struct dp_packet *pkt, struct conn_key *key,
     const char *inner_l4 = NULL;
     uint16_t orig_l3_ofs = pkt->l3_ofs;
     uint16_t orig_l4_ofs = pkt->l4_ofs;
+    uint64_t orig_ol_flags = *dp_packet_ol_flags_ptr(pkt);
 
     void *l3 = dp_packet_l3(pkt);
     void *l4 = dp_packet_l4(pkt);
@@ -932,6 +933,9 @@ nat_inner_packet(struct dp_packet *pkt, struct conn_key *key,
     }
     pkt->l3_ofs += (char *) inner_l3 - (char *) l3;
     pkt->l4_ofs += inner_l4 - (char *) l4;
+    /* Drop any offloads to force below helpers to calculate checksums
+     * if needed. */
+    *dp_packet_ol_flags_ptr(pkt) &= ~DP_PACKET_OL_TX_ANY_CKSUM;
 
     /* Reverse the key for inner packet. */
     struct conn_key rev_key = *key;
@@ -957,6 +961,7 @@ nat_inner_packet(struct dp_packet *pkt, struct conn_key *key,
 
     pkt->l3_ofs = orig_l3_ofs;
     pkt->l4_ofs = orig_l4_ofs;
+    *dp_packet_ol_flags_ptr(pkt) = orig_ol_flags;
 }
 
 static void

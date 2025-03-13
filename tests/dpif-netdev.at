@@ -1769,6 +1769,17 @@ AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [6
 ])
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_bad=false])
 
+dnl Special case, check natted ICMP (for traffic flagged good).
+icmp_frame="0a8f393fe0738abf7e2f05840800450000440001000040010364c0a87b02c0a87b010303746c0000000045000028000100004006037bc0a87b01c0a87b021451d4780000000000000000500220002fc40000"
+icmp_expected="0a8f393fe0738abf7e2f05840800450000440001000040017d64c0a87b02c0a801010303fa6b00000000450000280001000040067d7bc0a80101c0a87b021451d478000000000000000050022000a9c40000"
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=true])
+AT_CHECK([ovs-ofctl add-flow br1 'in_port=p1,icmp,ct_state=-trk,actions=ct(commit,nat(dst=192.168.1.1)),p2'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${icmp_frame}])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${icmp_expected}
+])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=false])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
