@@ -48,7 +48,9 @@
 VLOG_DEFINE_THIS_MODULE(conntrack);
 
 COVERAGE_DEFINE(conntrack_full);
+COVERAGE_DEFINE(conntrack_l3csum_checked);
 COVERAGE_DEFINE(conntrack_l3csum_err);
+COVERAGE_DEFINE(conntrack_l4csum_checked);
 COVERAGE_DEFINE(conntrack_l4csum_err);
 COVERAGE_DEFINE(conntrack_lookup_natted_miss);
 
@@ -1547,9 +1549,12 @@ extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
         return false;
     }
 
-    if (validate_checksum && csum(data, ip_len) != 0) {
-        COVERAGE_INC(conntrack_l3csum_err);
-        return false;
+    if (validate_checksum) {
+        COVERAGE_INC(conntrack_l3csum_checked);
+        if (csum(data, ip_len)) {
+            COVERAGE_INC(conntrack_l3csum_err);
+            return false;
+        }
     }
 
     if (new_data) {
@@ -1616,6 +1621,7 @@ checksum_valid(const struct conn_key *key, const void *data, size_t size,
         valid = false;
     }
 
+    COVERAGE_INC(conntrack_l4csum_checked);
     if (!valid) {
         COVERAGE_INC(conntrack_l4csum_err);
     }
@@ -1628,19 +1634,19 @@ sctp_checksum_valid(const void *data, size_t size)
 {
     struct sctp_header *sctp = (struct sctp_header *) data;
     ovs_be32 rcvd_csum, csum;
-    bool ret;
 
     rcvd_csum = get_16aligned_be32(&sctp->sctp_csum);
     put_16aligned_be32(&sctp->sctp_csum, 0);
     csum = crc32c(data, size);
     put_16aligned_be32(&sctp->sctp_csum, rcvd_csum);
 
-    ret = (rcvd_csum == csum);
-    if (!ret) {
+    COVERAGE_INC(conntrack_l4csum_checked);
+    if (rcvd_csum != csum) {
         COVERAGE_INC(conntrack_l4csum_err);
+        return false;
     }
 
-    return ret;
+    return true;
 }
 
 static inline bool
@@ -1723,12 +1729,15 @@ check_l4_sctp(const void *data, size_t size, bool validate_checksum)
 static inline bool
 check_l4_icmp(const void *data, size_t size, bool validate_checksum)
 {
-    if (validate_checksum && csum(data, size) != 0) {
-        COVERAGE_INC(conntrack_l4csum_err);
-        return false;
-    } else {
-        return true;
+    if (validate_checksum) {
+        COVERAGE_INC(conntrack_l4csum_checked);
+        if (csum(data, size)) {
+            COVERAGE_INC(conntrack_l4csum_err);
+            return false;
+        }
     }
+
+    return true;
 }
 
 static inline bool
@@ -2077,8 +2086,8 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
             /* Validate the checksum only when hwol is not supported and the
              * packet's checksum status is not known. */
             ok = extract_l3_ipv4(&ctx->key, l3, dp_packet_l3_size(pkt), NULL,
-                                 !dp_packet_hwol_is_ipv4(pkt) &&
-                                 !dp_packet_ip_checksum_good(pkt));
+                                 !dp_packet_hwol_l3_csum_ipv4_ol(pkt)
+                                 && !dp_packet_ip_checksum_good(pkt));
         }
     } else if (ctx->key.dl_type == htons(ETH_TYPE_IPV6)) {
         ok = extract_l3_ipv6(&ctx->key, l3, dp_packet_l3_size(pkt), NULL);
