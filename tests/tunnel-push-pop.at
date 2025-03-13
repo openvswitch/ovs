@@ -514,6 +514,30 @@ AT_CHECK([tail -1 stdout], [0],
 ])
 AT_CHECK([ovs-ofctl del-flows int-br])
 
+dnl Check decapsulation of VXLAN packet
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e00010000401173e90101025c0101025812b512b5003a00000800000000007b00fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e00010000401173e90101025c0101025812b512b5003a02320800000000007b00fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e00010000401173e90101025c0101025812b512b5003a202e0c00000300015900fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+ovs-appctl time/warp 1000
+AT_CHECK([ovs-ofctl dump-ports int-br | grep -E 'port  [[248]]:' | sort], [0], [dnl
+  port  2: rx pkts=2, bytes=84, drop=?, errs=?, frame=?, over=?, crc=?
+  port  4: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
+  port  8: rx pkts=1, bytes=42, drop=?, errs=?, frame=?, over=?, crc=?
+])
+
+dnl Idem, with Rx cksum good
+AT_CHECK([ovs-vsctl set interface p0 options:ol_ip_rx_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e00010000401173e90101025c0101025812b512b5003a00000800000000007b00fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e00010000401173e90101025c0101025812b512b5003a02320800000000007b00fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e00010000401173e90101025c0101025812b512b5003a202e0c00000300015900fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+AT_CHECK([ovs-vsctl set interface p0 options:ol_ip_rx_csum_set_good=false])
+ovs-appctl time/warp 1000
+AT_CHECK([ovs-ofctl dump-ports int-br | grep -E 'port  [[248]]:' | sort], [0], [dnl
+  port  2: rx pkts=4, bytes=168, drop=?, errs=?, frame=?, over=?, crc=?
+  port  4: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
+  port  8: rx pkts=2, bytes=84, drop=?, errs=?, frame=?, over=?, crc=?
+])
+
 dnl Check decapsulation of GRE packet
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007e79464000402fba550101025c0101025820006558000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007e79464000402fba550101025c0101025820006558000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
@@ -535,14 +559,53 @@ AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  7'], [0], [dnl
   port  7: rx pkts=3, bytes=252, drop=?, errs=?, frame=?, over=?, crc=?
 ])
 
-AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007079464000402fba600101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+dnl No drop so far.
+AT_CHECK([ovs-appctl coverage/read-counter datapath_drop_tunnel_pop_error], [0], [0
+])
+AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_err], [0], [0
+])
+AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_err], [0], [0
+])
+dnl Yet csum validation happened on all previous packets.
+AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_checked], [0], [12
+])
+AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_checked], [0], [4
+])
+
+dnl Send various incorrect bad IP checksum packets.
+dnl GRE
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007079464000402fDEAD0101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+dnl VxLAN
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e000100004011DEAD0101025c0101025812b512b5003a00000800000000007b00fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+dnl VxLAN-GPE
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e000100004011DEAD0101025c0101025812b512b5003a202e0c00000300015900fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+
+dnl Idem, with Rx cksum bad but with a valid and an invalid packet.
+AT_CHECK([ovs-vsctl set interface p0 options:ol_ip_rx_csum_set_bad=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e00010000401173e90101025c0101025812b512b5003a02320800000000007b00fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007079464000402fDEAD0101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-vsctl set interface p0 options:ol_ip_rx_csum_set_bad=false])
+
+dnl Send various incorrect bad UDP checksum packets.
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e00010000401173e90101025c0101025812b512b5003aDEAD0800000000007b00fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+
+dnl Idem, with Rx cksum bad but with a valid and an invalid packet.
+AT_CHECK([ovs-vsctl set interface p0 options:ol_l4_rx_csum_set_bad=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e00010000401173e90101025c0101025812b512b5003a02320800000000007b00fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500004e00010000401173e90101025c0101025812b512b5003aDEAD0800000000007b00fe71d883724fbeb6f4e1494a08004500001c0001000040013ede1e0000011e0000020000ffff00000000'])
+AT_CHECK([ovs-vsctl set interface p0 options:ol_l4_rx_csum_set_bad=false])
 
 ovs-appctl time/warp 5000
 
-AT_CHECK([
-ovs-appctl coverage/read-counter datapath_drop_tunnel_pop_error
-], [0], [dnl
-1
+AT_CHECK([ovs-appctl coverage/read-counter datapath_drop_tunnel_pop_error], [0], [8
+])
+AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_err], [0], [5
+])
+AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_err], [0], [3
+])
+AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_checked], [0], [18
+])
+AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_checked], [0], [5
 ])
 
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004503007079464000402fba600101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
