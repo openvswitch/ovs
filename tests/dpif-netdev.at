@@ -230,6 +230,7 @@ m4_define([DPIF_NETDEV_MISS_FLOW_DUMP],
    AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
 ], [])
    AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+   AT_CHECK([ovs-appctl vlog/disable-rate-limit dpif])
 
    AT_CHECK([ovs-ofctl add-flow br0 action=normal])
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
