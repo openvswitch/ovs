@@ -1335,6 +1335,99 @@ m4_for([id], [1], [64], [1], [
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - select group with dp_hash, insert/remove buckets])
+
+OVS_VSWITCHD_START
+add_of_ports br0 1 10
+
+AT_CHECK([ovs-appctl vlog/set ofproto_dpif:file:dbg])
+
+dnl Add a group without buckets.
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 \
+            'group_id=1235,type=select,selection_method=dp_hash'])
+AT_CHECK([grep -A3 "Constructing select group 1235" ovs-vswitchd.log \
+            | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1235
+ofproto_dpif|DBG|Selection method specified: dp_hash.
+ofproto_dpif|DBG|  Don't apply dp_hash method without buckets.
+ofproto_dpif|DBG|Falling back to default hash method.
+])
+
+m4_define([OFG_BUCKET], [bucket=weight=$1,bucket_id=$1,output:10])
+
+dnl Add two buckets one by one.
+get_log_next_line_num
+AT_CHECK([ovs-ofctl -O OpenFlow15 insert-buckets br0 \
+            group_id=1235,command_bucket_id=last,OFG_BUCKET([5])])
+AT_CHECK([tail -n +$LINENUM ovs-vswitchd.log | grep -E '(Bucket|group 1235)' \
+            | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1235
+ofproto_dpif|DBG|  Bucket 5: weight=5, target=16.00 hits=16
+ofproto_dpif|DBG|Modifying select group 1235
+ofproto_dpif|DBG|  Bucket 5: weight=5, target=16.00 hits=16
+])
+get_log_next_line_num
+AT_CHECK([ovs-ofctl -O OpenFlow15 insert-buckets br0 \
+            group_id=1235,command_bucket_id=last,OFG_BUCKET([6])])
+AT_CHECK([tail -n +$LINENUM ovs-vswitchd.log | grep -E '(Bucket|group 1235)' \
+            | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1235
+ofproto_dpif|DBG|  Bucket 6: weight=6, target=16.00 hits=16
+ofproto_dpif|DBG|Modifying select group 1235
+ofproto_dpif|DBG|  Bucket 5: weight=5, target=7.27 hits=7
+ofproto_dpif|DBG|  Bucket 6: weight=6, target=8.73 hits=9
+])
+dnl Add two more in the middle.
+get_log_next_line_num
+AT_CHECK([ovs-ofctl -O OpenFlow15 insert-buckets br0 \
+            group_id=1235,command_bucket_id=5,OFG_BUCKET([7]),OFG_BUCKET([8])])
+AT_CHECK([tail -n +$LINENUM ovs-vswitchd.log | grep -E '(Bucket|group 1235)' \
+            | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1235
+ofproto_dpif|DBG|  Bucket 7: weight=7, target=7.47 hits=7
+ofproto_dpif|DBG|  Bucket 8: weight=8, target=8.53 hits=9
+ofproto_dpif|DBG|Modifying select group 1235
+ofproto_dpif|DBG|  Bucket 5: weight=5, target=3.08 hits=3
+ofproto_dpif|DBG|  Bucket 7: weight=7, target=4.31 hits=4
+ofproto_dpif|DBG|  Bucket 8: weight=8, target=4.92 hits=5
+ofproto_dpif|DBG|  Bucket 6: weight=6, target=3.69 hits=4
+])
+dnl Remove the last bucket.
+get_log_next_line_num
+AT_CHECK([ovs-ofctl -O OpenFlow15 remove-buckets br0 \
+            group_id=1235,command_bucket_id=last])
+AT_CHECK([tail -n +$LINENUM ovs-vswitchd.log | grep -E '(Bucket|group 1235)' \
+            | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1235
+ofproto_dpif|DBG|Modifying select group 1235
+ofproto_dpif|DBG|  Bucket 5: weight=5, target=4.00 hits=4
+ofproto_dpif|DBG|  Bucket 7: weight=7, target=5.60 hits=6
+ofproto_dpif|DBG|  Bucket 8: weight=8, target=6.40 hits=6
+])
+dnl Remove the one in the middle.
+get_log_next_line_num
+AT_CHECK([ovs-ofctl -O OpenFlow15 remove-buckets br0 \
+            group_id=1235,command_bucket_id=7])
+AT_CHECK([tail -n +$LINENUM ovs-vswitchd.log | grep -E '(Bucket|group 1235)' \
+            | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1235
+ofproto_dpif|DBG|Modifying select group 1235
+ofproto_dpif|DBG|  Bucket 5: weight=5, target=6.15 hits=6
+ofproto_dpif|DBG|  Bucket 8: weight=8, target=9.85 hits=10
+])
+dnl Remove all the remaining.
+get_log_next_line_num
+AT_CHECK([ovs-ofctl -O OpenFlow15 remove-buckets br0 \
+            group_id=1235,command_bucket_id=all])
+AT_CHECK([tail -n +$LINENUM ovs-vswitchd.log | grep -E '(Bucket|group 1235)' \
+            | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1235
+ofproto_dpif|DBG|Modifying select group 1235
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - select group with explicit dp_hash selection method])
 
 OVS_VSWITCHD_START
