@@ -5392,7 +5392,6 @@ group_set_selection_method(struct group_dpif *group)
     const struct ofputil_group_props *props = &group->up.props;
     const char *selection_method = props->selection_method;
 
-    VLOG_DBG("Constructing select group %"PRIu32, group->up.group_id);
     if (selection_method[0] == '\0') {
         VLOG_DBG("No selection method specified. Trying dp_hash.");
         /* If the controller has not specified a selection method, check if
@@ -5459,6 +5458,7 @@ group_construct(struct ofgroup *group_)
     group_construct_stats(group);
     group->hash_map = NULL;
     if (group->up.type == OFPGT11_SELECT) {
+        VLOG_DBG("Constructing select group %"PRIu32, group->up.group_id);
         group_set_selection_method(group);
     }
     ovs_mutex_unlock(&group->stats_mutex);
@@ -5473,6 +5473,21 @@ group_destruct(struct ofgroup *group_)
     if (group->hash_map) {
         free(group->hash_map);
         group->hash_map = NULL;
+    }
+}
+
+static void
+group_modify(struct ofgroup *group_)
+{
+    struct group_dpif *group = group_dpif_cast(group_);
+
+    if (group->hash_map) {
+        free(group->hash_map);
+        group->hash_map = NULL;
+    }
+    if (group->up.type == OFPGT11_SELECT) {
+        VLOG_DBG("Modifying select group %"PRIu32, group->up.group_id);
+        group_set_selection_method(group);
     }
 }
 
@@ -7299,7 +7314,7 @@ const struct ofproto_class ofproto_dpif_class = {
     group_construct,            /* group_construct */
     group_destruct,             /* group_destruct */
     group_dealloc,              /* group_dealloc */
-    NULL,                       /* group_modify */
+    group_modify,               /* group_modify */
     group_get_stats,            /* group_get_stats */
     get_datapath_version,       /* get_datapath_version */
     get_datapath_cap,
