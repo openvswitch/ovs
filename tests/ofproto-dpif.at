@@ -9482,6 +9482,7 @@ AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using 
 ], [])
 AT_CHECK([ovs-appctl time/stop])
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/disable-rate-limit dpif])
 
 AT_CHECK([ovs-ofctl add-flow br0 actions=LOCAL,output:1,output:2])
 AT_CHECK([ovs-ofctl add-flow br1 actions=LOCAL,output:1,output:3])
@@ -10197,6 +10198,7 @@ m4_define([OFPROTO_DPIF_MEGAFLOW_DISABLED],
   [AT_SETUP([ofproto-dpif megaflow - disabled$1])
    OVS_VSWITCHD_START([], [], [], [m4_if([$1], [], [], [--dummy-numa="0,0,0,0,1,1,1,1"])])
    AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+   AT_CHECK([ovs-appctl vlog/disable-rate-limit dpif])
    func=`printf '%s_' "$1" | cut -c 4-`
    add_${func}of_ports br0 1 2
    AT_DATA([flows.txt], [dnl
