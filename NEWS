@@ -11,6 +11,9 @@ Post-v3.5.0
    - Tunnels:
      * Support for previously deprecated LISP and STT tunnel port types
        is now removed.
+   - ovs-tcpdump:
+     * Update the --mirror-to option, adding support for specifying an
+       existing port as a mirror interface.
 
 
 v3.5.0 - 17 Feb 2025

@@ -421,13 +421,16 @@ def py_which(executable):
                for path in os.environ["PATH"].split(os.pathsep))
 
 
-def teardown(db_sock, interface, mirror_interface, tap_created):
+def teardown(db_sock, interface, mirror_interface, mirror_created,
+             tap_created):
     def cleanup_mirror():
         try:
             ovsdb = OVSDB(db_sock)
             ovsdb.destroy_mirror(interface, ovsdb.port_bridge(interface))
-            ovsdb.destroy_port(mirror_interface, ovsdb.port_bridge(interface))
-            if tap_created is True:
+            if mirror_created:
+                ovsdb.destroy_port(mirror_interface,
+                                   ovsdb.port_bridge(interface))
+            if tap_created:
                 _del_taps[sys.platform](mirror_interface)
         except Exception:
             print("Unable to tear down the ports and mirrors.")
@@ -505,15 +508,21 @@ def main():
         if sys.platform in _make_mirror_name:
             mirror_interface = _make_mirror_name[sys.platform](interface)
 
+    mirror_created = True
     if sys.platform in _make_taps and \
-       mirror_interface not in interfaces():
+       mirror_interface not in interfaces() and \
+       not ovsdb.port_exists(mirror_interface):
         _make_taps[sys.platform](mirror_interface,
                                  ovsdb.interface_mtu(interface))
         tap_created = True
     else:
+        if mirror_interface in interfaces() or \
+           ovsdb.port_exists(mirror_interface):
+            mirror_created = False
         tap_created = False
 
-    if mirror_interface not in interfaces():
+    if mirror_interface not in interfaces() and \
+       not ovsdb.port_exists(mirror_interface):
         print("ERROR: Please create an interface called `%s`" %
               mirror_interface)
         print("See your OS guide for how to do this.")
@@ -524,15 +533,12 @@ def main():
     if not ovsdb.port_exists(interface):
         print("ERROR: Port %s does not exist." % interface)
         sys.exit(1)
-    if ovsdb.port_exists(mirror_interface):
-        print("ERROR: Mirror port (%s) exists for port %s." %
-              (mirror_interface, interface))
-        sys.exit(1)
 
-    teardown(db_sock, interface, mirror_interface, tap_created)
+    teardown(db_sock, interface, mirror_interface, mirror_created, tap_created)
 
     try:
-        ovsdb.make_port(mirror_interface, ovsdb.port_bridge(interface))
+        if mirror_created:
+            ovsdb.make_port(mirror_interface, ovsdb.port_bridge(interface))
         ovsdb.bridge_mirror(interface, mirror_interface,
                             ovsdb.port_bridge(interface),
                             mirror_select_all, mirror_filter=mirror_filter)
