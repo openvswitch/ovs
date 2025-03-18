@@ -37,19 +37,23 @@ spellcheck = False
 quiet = False
 spell_check_dict = None
 missing_authors = []
+codespell_dictionaries = ['dictionary.txt', 'dictionary_code.txt']
+__codespell_dict_reset_once = True
 
 
 def open_spell_check_dict():
     import enchant
 
+    codespell_files = []
     try:
         import codespell_lib
         codespell_dir = os.path.dirname(codespell_lib.__file__)
-        codespell_file = os.path.join(codespell_dir, 'data', 'dictionary.txt')
-        if not os.path.exists(codespell_file):
-            codespell_file = ''
+        for fn in codespell_dictionaries:
+            fn = os.path.join(codespell_dir, 'data', fn)
+            if os.path.exists(fn):
+                codespell_files.append(fn)
     except:
-        codespell_file = ''
+        pass
 
     try:
         extra_keywords = ['ovs', 'vswitch', 'vswitchd', 'ovs-vswitchd',
@@ -121,8 +125,8 @@ def open_spell_check_dict():
 
         spell_check_dict = enchant.Dict("en_US")
 
-        if codespell_file:
-            with open(codespell_file) as f:
+        for fn in codespell_files:
+            with open(fn) as f:
                 for line in f.readlines():
                     words = line.strip().split('>')[1].strip(', ').split(',')
                     for word in words:
@@ -1130,6 +1134,7 @@ Check options:
 -a|--check-authors-file        Check AUTHORS file for existence of the authors.
                                Should be used by commiters only!
 -b|--skip-block-whitespace     Skips the if/while/for whitespace tests
+-D|--dictionaries DICTIONARY   Specify codespell dictionaries.
 -l|--skip-leading-whitespace   Skips the leading whitespace test
 -q|--quiet                     Only print error and warning information
 -s|--skip-signoff-lines        Tolerate missing Signed-off-by line
@@ -1215,10 +1220,11 @@ if __name__ == '__main__':
                                           sys.argv[1:])
         n_patches = int(numeric_options[-1][1:]) if numeric_options else 0
 
-        optlist, args = getopt.getopt(args, 'abhlstfSq',
+        optlist, args = getopt.getopt(args, 'abD:hlstfSq',
                                       ["check-file",
                                        "help",
                                        "check-authors-file",
+                                       "dictionaries=",
                                        "skip-block-whitespace",
                                        "skip-leading-whitespace",
                                        "skip-signoff-lines",
@@ -1237,6 +1243,11 @@ if __name__ == '__main__':
             sys.exit(0)
         elif o in ("-a", "--check-authors-file"):
             check_authors_file = True
+        elif o in ("-D", "--dictionaries"):
+            if __codespell_dict_reset_once:
+                __codespell_dict_reset_once = False
+                codespell_dictionaries = []
+            codespell_dictionaries.append(a)
         elif o in ("-b", "--skip-block-whitespace"):
             skip_block_whitespace_check = True
         elif o in ("-l", "--skip-leading-whitespace"):
@@ -1252,11 +1263,7 @@ if __name__ == '__main__':
         elif o in ("-f", "--check-file"):
             checking_file = True
         elif o in ("-S", "--spellcheck"):
-            if not open_spell_check_dict():
-                print("WARNING: The enchant library isn't available.")
-                print("         Please install python enchant.")
-            else:
-                spellcheck = True
+            spellcheck = True
         elif o in ("-q", "--quiet"):
             quiet = True
         else:
@@ -1265,6 +1272,11 @@ if __name__ == '__main__':
 
     if sys.stdout.isatty():
         colors = True
+
+    if spellcheck and not open_spell_check_dict():
+        print("WARNING: The enchant library isn't available.")
+        print("         Please install python enchant.")
+        spellcheck = False
 
     if n_patches:
         status = 0
