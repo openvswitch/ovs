@@ -585,9 +585,9 @@ class PassiveStream(object):
         if not PassiveStream.is_valid_name(name):
             return errno.EAFNOSUPPORT, None
 
-        bind_path = name[6:]
+        bind_path = None
         if name.startswith("punix:"):
-            bind_path = ovs.util.abs_file_name(ovs.dirs.RUNDIR, bind_path)
+            bind_path = ovs.util.abs_file_name(ovs.dirs.RUNDIR, name[6:])
             if sys.platform != 'win32':
                 error, sock = ovs.socket_util.make_unix_socket(
                     socket.SOCK_STREAM, True, bind_path, None)
