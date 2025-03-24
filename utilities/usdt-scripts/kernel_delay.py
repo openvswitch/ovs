@@ -182,17 +182,56 @@ struct syscall_data_key_t {
     u32 syscall;
 };
 
+struct long_poll_data_key_t {
+    u32 pid;
+    u32 tid;
+};
+
+struct long_poll_data_t {
+    u64 count;
+    u64 total_ns;
+    u64 min_ns;
+    u64 max_ns;
+};
+
 BPF_HASH(syscall_start, u64, u64);
 BPF_HASH(syscall_data, struct syscall_data_key_t, struct syscall_data_t);
+BPF_HASH(long_poll_start, u64, u64);
+BPF_HASH(long_poll_data, struct long_poll_data_key_t, struct long_poll_data_t);
 
 TRACEPOINT_PROBE(raw_syscalls, sys_enter) {
     u64 pid_tgid = bpf_get_current_pid_tgid();
+    struct long_poll_data_t *val, init_val = {.min_ns = U64_MAX};
+    struct long_poll_data_key_t key;
 
     if (!capture_enabled(pid_tgid))
        return 0;
 
     u64 t = bpf_ktime_get_ns();
     syscall_start.update(&pid_tgid, &t);
+
+    /* Do long poll handling from here on. */
+    if (args->id != <SYSCALL_POLL_ID>)
+        return 0;
+
+    u64 *start_ns = long_poll_start.lookup(&pid_tgid);
+
+    if (!start_ns || *start_ns == 0)
+        return 0;
+
+    key.pid = pid_tgid >> 32;
+    key.tid = (u32)pid_tgid;
+
+    val = long_poll_data.lookup_or_try_init(&key, &init_val);
+    if (val) {
+        u64 delta = t - *start_ns;
+        val->count++;
+        val->total_ns += delta;
+        if (delta > val->max_ns)
+            val->max_ns = delta;
+        if (delta < val->min_ns)
+            val->min_ns = delta;
+    }
 
     return 0;
 }
@@ -206,6 +245,12 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit) {
     if (!capture_enabled(pid_tgid))
        return 0;
 
+    u64 t = bpf_ktime_get_ns();
+
+    if (args->id == <SYSCALL_POLL_ID>) {
+        long_poll_start.update(&pid_tgid, &t);
+    }
+
     key.pid = pid_tgid >> 32;
     key.tid = (u32)pid_tgid;
     key.syscall = args->id;
@@ -217,7 +262,7 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit) {
 
     val = syscall_data.lookup_or_try_init(&key, &zero);
     if (val) {
-        u64 delta = bpf_ktime_get_ns() - *start_ns;
+        u64 delta = t - *start_ns;
         val->count++;
         val->total_ns += delta;
         if (delta > val->worst_ns)
@@ -1039,6 +1084,9 @@ def process_results(syscall_events=None, trigger_delta=None):
     threads_syscall = {k.tid for k, _ in bpf["syscall_data"].items()
                        if k.syscall != 0xffffffff}
 
+    threads_long_poll = {k.tid for k, _ in bpf["long_poll_data"].items()
+                         if k.pid != 0xffffffff}
+
     threads_run = {k.tid for k, _ in bpf["run_data"].items()
                    if k.pid != 0xffffffff}
 
@@ -1055,7 +1103,8 @@ def process_results(syscall_events=None, trigger_delta=None):
                        if k.pid != 0xffffffff}
 
     threads = sorted(threads_syscall | threads_run | threads_ready |
-                     threads_stopped | threads_hardirq | threads_softirq,
+                     threads_stopped | threads_hardirq | threads_softirq |
+                     threads_long_poll,
                      key=lambda x: get_thread_name(options.pid, x))
 
     #
@@ -1098,6 +1147,21 @@ def process_results(syscall_events=None, trigger_delta=None):
         if total_count > 0:
             print("{}{:20.20} {:6}  {:10}  {:16,}".format(
                 indent, "TOTAL( - poll):", "", total_count, total_ns))
+
+        #
+        # LONG POLL STATISTICS
+        #
+        for k, v in filter(lambda t: t[0].tid == thread,
+                           bpf["long_poll_data"].items()):
+
+            print("\n{:10} {:16} {}\n{}{:10}  {:>16}  {:>16}  {:>16}".format(
+                "", "", "[LONG POLL STATISTICS]", indent,
+                "COUNT", "AVERAGE ns", "MIN ns", "MAX ns"))
+
+            print("{}{:10}  {:16,}  {:16,}  {:16,}".format(
+                indent, v.count, int(v.total_ns / max(v.count, 1)),
+                v.min_ns, v.max_ns))
+            break
 
         #
         # THREAD RUN STATISTICS
@@ -1428,6 +1492,8 @@ def main():
 
     source = source.replace("<STACK_TRACE_ENABLED>", "true"
                             if options.stack_trace_size > 0 else "false")
+
+    source = source.replace("<SYSCALL_POLL_ID>", str(poll_id))
 
     source = source.replace("<INSTALL_OVS_DP_UPCALL_PROBE>", "0"
                             if options.skip_upcall_stats else "1")

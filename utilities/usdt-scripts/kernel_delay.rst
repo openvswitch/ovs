@@ -67,13 +67,17 @@ with the ``--pid`` option.
                   read                      0           1             1,292             1,292
                   TOTAL( - poll):                     519       144,405,334
 
+                  [LONG POLL STATISTICS]
+                  COUNT             AVERAGE ns            MIN ns            MAX ns
+                          58            76,773             7,388           234,129
+
                   [THREAD RUN STATISTICS]
                   SCHED_CNT           TOTAL ns            MIN ns            MAX ns
-                       6       136,764,071             1,480       115,146,424
+                           6       136,764,071             1,480       115,146,424
 
                   [THREAD READY STATISTICS]
                   SCHED_CNT           TOTAL ns            MAX ns
-                       7            11,334             6,636
+                           7            11,334             6,636
 
                   [THREAD STOPPED STATISTICS]
                   STOP_CNT            TOTAL ns            MAX ns
@@ -104,6 +108,7 @@ For this, it displays the thread's id (``TID``) and name (``THREAD``),
 followed by resource-specific data. Which are:
 
 - ``SYSCALL STATISTICS``
+- ``LONG POLL STATISTICS``
 - ``THREAD RUN STATISTICS``
 - ``THREAD READY STATISTICS``
 - ``THREAD STOPPED STATISTICS``
@@ -127,6 +132,14 @@ and usually, the thread gets swapped out.
 
 Note that it only counts calls that started and stopped during the
 measurement interval!
+
+
+``LONG POLL STATISTICS``
+~~~~~~~~~~~~~~~~~~~~~~
+``LONG POLL STATISTICS`` tell you how long the thread was running between two
+poll system calls. This relates to the 'Unreasonably long ... ms poll interval'
+message reported by ovs-vswitchd. More details about this message can be found
+in the example section.
 
 
 ``THREAD RUN STATISTICS``
