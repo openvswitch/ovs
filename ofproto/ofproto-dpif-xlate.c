@@ -6498,8 +6498,13 @@ put_ct_label(const struct flow *flow, struct ofpbuf *odp_actions,
 }
 
 static void
-put_drop_action(struct ofpbuf *odp_actions, enum xlate_error error)
+put_drop_action(struct ofproto_dpif *ofproto, struct ofpbuf *odp_actions,
+                enum xlate_error error)
 {
+    if (!ovs_explicit_drop_action_supported(ofproto)) {
+        return;
+    }
+
     nl_msg_put_u32(odp_actions, OVS_ACTION_ATTR_DROP, error);
 }
 
@@ -8127,9 +8132,7 @@ xlate_tweak_odp_actions(struct xlate_ctx *ctx)
     }
 
     if (!last_action) {
-        if (ovs_explicit_drop_action_supported(ctx->xbridge->ofproto)) {
-            put_drop_action(actions, XLATE_OK);
-        }
+        put_drop_action(ctx->xbridge->ofproto, actions, XLATE_OK);
         return;
     }
 
@@ -8159,11 +8162,10 @@ xlate_tweak_odp_actions(struct xlate_ctx *ctx)
     /* If the last action of the list is an observability action, add an
      * explicit drop action so that drop statistics remain reliable. */
     if (ctx->xbridge->ofproto->explicit_sampled_drops &&
-        ovs_explicit_drop_action_supported(ctx->xbridge->ofproto) &&
         last_observe_offset != UINT32_MAX &&
         (unsigned char *) last_action == (unsigned char *) actions->data +
                                          last_observe_offset) {
-        put_drop_action(actions, XLATE_OK);
+        put_drop_action(ctx->xbridge->ofproto, actions, XLATE_OK);
     }
 }
 
@@ -8611,9 +8613,7 @@ exit:
         if (xin->odp_actions) {
             ofpbuf_clear(xin->odp_actions);
             /* Make the drop explicit if the datapath supports it. */
-            if (ovs_explicit_drop_action_supported(ctx.xbridge->ofproto)) {
-                put_drop_action(xin->odp_actions, ctx.error);
-            }
+            put_drop_action(ctx.xbridge->ofproto, xin->odp_actions, ctx.error);
         }
     } else {
         /* In the non-error case, see if we can further optimize or tweak
