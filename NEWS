@@ -1,5 +1,9 @@
 Post-v3.5.0
 --------------------
+   - Bonding:
+     * Bond rebalancing log messages of INFO log level are highly reduced: they
+       are now printed once in rebalance run.  Previous detailed log messages
+       have been moved to the DBG log level.
    - DPDK:
      * New debug appctl command 'dpdk/get-memzone-stats'.
    - ovs-ctl:

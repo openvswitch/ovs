@@ -1197,13 +1197,13 @@ bond_shift_load(struct bond_entry *hash, struct bond_member *to)
     struct bond *bond = from->bond;
     uint64_t delta = hash->tx_bytes;
 
-    VLOG_INFO("bond %s: shift %"PRIu64"kB of load (with hash %"PRIdPTR") "
-              "from %s to %s (now carrying %"PRIu64"kB and "
-              "%"PRIu64"kB load, respectively)",
-              bond->name, delta / 1024, hash - bond->hash,
-              from->name, to->name,
-              (from->tx_bytes - delta) / 1024,
-              (to->tx_bytes + delta) / 1024);
+    VLOG_DBG("bond %s: shift %"PRIu64"kB of load (with hash %"PRIdPTR") "
+             "from %s to %s (now carrying %"PRIu64"kB and "
+             "%"PRIu64"kB load, respectively)",
+             bond->name, delta / 1024, hash - bond->hash,
+             from->name, to->name,
+             (from->tx_bytes - delta) / 1024,
+             (to->tx_bytes + delta) / 1024);
 
     /* Shift load away from 'from' to 'to'. */
     from->tx_bytes -= delta;
@@ -1434,8 +1434,24 @@ bond_rebalance(struct bond *bond)
         e->tx_bytes /= 2;
     }
 
-    if (use_recirc && rebalanced) {
-        bond_update_post_recirc_rules__(bond,true);
+    if (rebalanced) {
+        struct ds member_stats = DS_EMPTY_INITIALIZER;
+        int i = 0;
+
+        HMAP_FOR_EACH (member, hmap_node, &bond->members) {
+            if (++i > 1) {
+                ds_put_cstr(&member_stats, " and ");
+            }
+            ds_put_format(&member_stats, "%s:%"PRIu64"kB", member->name,
+                          member->tx_bytes / 1024);
+        }
+        VLOG_INFO("bond %s: rebalanced (now carrying: %s)",
+                  bond->name, ds_cstr(&member_stats));
+        ds_destroy(&member_stats);
+
+        if (use_recirc) {
+            bond_update_post_recirc_rules__(bond, true);
+        }
     }
 
 done:
