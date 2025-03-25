@@ -2884,6 +2884,9 @@ do_idl(struct ovs_cmdl_context *ctx)
         if (!strcmp(arg, "reconnect")) {
             print_and_log("%03d: reconnect", step++);
             ovsdb_idl_force_reconnect(idl);
+        } else if (!strcmp(arg, "sleep")) {
+            print_and_log("%03d: sleep", step++);
+            xsleep(1);
         }  else if (!strncmp(arg, remote_s, strlen(remote_s))) {
             ovsdb_idl_set_remote(idl, arg + strlen(remote_s), true);
             print_and_log("%03d: new remotes: %s, is connected: %s", step++,

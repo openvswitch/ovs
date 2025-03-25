@@ -1562,6 +1562,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, weak references, 
       {"op": "delete",
        "table": "simple",
        "where": [["s", "==", "row1_s"]]}]' \
+    '+sleep' \
     '["idltest",
       {"op": "insert",
        "table": "simple",
@@ -1574,16 +1575,17 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, weak references, 
 001: table simple: updated columns: s
 002: {"error":null,"result":[{"uuid":["uuid","<3>"]},{"count":1}]}
 003: {"error":null,"result":[{"count":1}]}
-004: table simple6: name=row0_s6 weak_ref=[<0>] uuid=<1>
-004: table simple6: updated columns: weak_ref
-004: table simple: inserted/deleted row: i=0 r=0 b=false s=row1_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
-004: table simple: updated columns: s
-005: {"error":null,"result":[{"uuid":["uuid","<4>"]}]}
-006: table simple6: name=row0_s6 weak_ref=[<0>] uuid=<1>
-006: table simple: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<0>
-006: table simple: inserted row: i=0 r=0 b=false s=row2_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<4>
-006: table simple: updated columns: s
-007: done
+004: sleep
+005: table simple6: name=row0_s6 weak_ref=[<0>] uuid=<1>
+005: table simple6: updated columns: weak_ref
+005: table simple: inserted/deleted row: i=0 r=0 b=false s=row1_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
+005: table simple: updated columns: s
+006: {"error":null,"result":[{"uuid":["uuid","<4>"]}]}
+007: table simple6: name=row0_s6 weak_ref=[<0>] uuid=<1>
+007: table simple: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<0>
+007: table simple: inserted row: i=0 r=0 b=false s=row2_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<4>
+007: table simple: updated columns: s
+008: done
 ]])
 
 dnl This test checks that deleting both the destination and source of the
@@ -1757,14 +1759,16 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, strong references, in
     '+["idltest",
       {"op": "delete",
        "table": "link2",
-       "where": [["i", "==", 2]]}]'
+       "where": [["i", "==", 2]]}]' \
+    '+sleep'
   ]],
   [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
 002: {"error":null,"result":[{"count":1}]}
-003: table link1: inserted row: i=1 k=1 ka=[] l2= uuid=<0>
-003: table link1: updated columns: i k
-004: done
+003: sleep
+004: table link1: inserted row: i=1 k=1 ka=[] l2= uuid=<0>
+004: table link1: updated columns: i k
+005: done
 ]])
 
 OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
@@ -2741,6 +2745,7 @@ OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link1],
        "table": "link2",
        "where": [["i", "==", 2]]}
        ]' \
+    '+sleep' \
     '["idltest",
       {"op": "delete",
        "table": "link2",
@@ -2750,15 +2755,16 @@ OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link1],
   [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]}]}
 002: {"error":null,"result":[{"count":1}]}
-003: table link1: inserted row: i=1 k=1 ka=[] l2= uuid=<1>
-003: table link1: updated columns: i k
-003: table link2: inserted row: i=1 l1=1 uuid=<0>
-003: table link2: inserted/deleted row: i=2 l1=1 uuid=<2>
-003: table link2: updated columns: i l1
-003: table link2: updated columns: i l1
-004: {"error":null,"result":[{"count":1}]}
-005: table link1: i=1 k=1 ka=[] l2= uuid=<1>
-006: done
+003: sleep
+004: table link1: inserted row: i=1 k=1 ka=[] l2= uuid=<1>
+004: table link1: updated columns: i k
+004: table link2: inserted row: i=1 l1=1 uuid=<0>
+004: table link2: inserted/deleted row: i=2 l1=1 uuid=<2>
+004: table link2: updated columns: i l1
+004: table link2: updated columns: i l1
+005: {"error":null,"result":[{"count":1}]}
+006: table link1: i=1 k=1 ka=[] l2= uuid=<1>
+007: done
 ]])
 OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link2],
   [],
@@ -2784,6 +2790,7 @@ OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link2],
        "table": "link1",
        "where": [["i", "==", 2]]}
        ]' \
+    '+sleep' \
     '["idltest",
       {"op": "delete",
        "table": "link1",
@@ -2793,15 +2800,16 @@ OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link2],
   [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]}]}
 002: {"error":null,"result":[{"count":1}]}
-003: table link1: inserted row: i=1 k=1 ka=[] l2=1 uuid=<0>
-003: table link1: inserted/deleted row: i=2 k=1 ka=[] l2=1 uuid=<2>
-003: table link1: updated columns: i k l2
-003: table link1: updated columns: i k l2
-003: table link2: inserted row: i=1 l1= uuid=<1>
-003: table link2: updated columns: i
-004: {"error":null,"result":[{"count":1}]}
-005: table link2: i=1 l1= uuid=<1>
-006: done
+003: sleep
+004: table link1: inserted row: i=1 k=1 ka=[] l2=1 uuid=<0>
+004: table link1: inserted/deleted row: i=2 k=1 ka=[] l2=1 uuid=<2>
+004: table link1: updated columns: i k l2
+004: table link1: updated columns: i k l2
+004: table link2: inserted row: i=1 l1= uuid=<1>
+004: table link2: updated columns: i
+005: {"error":null,"result":[{"count":1}]}
+006: table link2: i=1 l1= uuid=<1>
+007: done
 ]])
 
 m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_C],
