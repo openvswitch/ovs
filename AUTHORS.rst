@@ -212,7 +212,7 @@ Huanle Han                         hanxueluo@gmail.com
 Hui Kang                           kangh@us.ibm.com
 Hyong Youb Kim                     hyonkim@cisco.com
 Ian Campbell                       Ian.Campbell@citrix.com
-Ian Stokes                         ian.stokes@intel.com
+Ian Stokes                         ian.stokes.oss@gmail.com
 Ilya Maximets                      i.maximets@ovn.org
 Iman Tabrizian                     tabrizian@outlook.com
 Isaku Yamahata                     yamahata@valinux.co.jp
