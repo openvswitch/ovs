@@ -100,7 +100,7 @@ struct ofbundle {
                                  * NULL if all VLANs are trunked. */
     unsigned long *cvlans;
     struct lacp *lacp;          /* LACP if LACP is enabled, otherwise NULL. */
-    struct bond *bond;          /* Nonnull iff more than one port. */
+    struct bond *bond;          /* Nonnull if more than one port. */
     enum port_priority_tags_mode use_priority_tags;
                                 /* Use 802.1p tag for frames in VLAN 0? */
 
@@ -1455,7 +1455,7 @@ check_max_dp_hash_alg(struct dpif_backer *backer)
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&odp_parms, &key);
 
-    /* All datapaths support algortithm 0 (OVS_HASH_ALG_L4). */
+    /* All datapaths support algorithm 0 (OVS_HASH_ALG_L4). */
     for (int alg = 1; alg < __OVS_HASH_MAX; alg++) {
         struct ofpbuf actions;
         bool ok;
@@ -3468,7 +3468,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle->bond = NULL;
     }
 
-    /* Set proteced port mode */
+    /* Set protected port mode. */
     if (s->protected != bundle->protected) {
         bundle->protected = s->protected;
         need_flush = true;
@@ -4434,7 +4434,7 @@ ofproto_dpif_credit_table_stats(struct ofproto_dpif *ofproto, uint8_t table_id,
 
 /* Look up 'flow' in 'ofproto''s classifier version 'version', starting from
  * table '*table_id'.  Returns the rule that was found, which may be one of the
- * special rules according to packet miss hadling.  If 'may_packet_in' is
+ * special rules according to packet miss handling.  If 'may_packet_in' is
  * false, returning of the miss_rule (which issues packet ins for the
  * controller) is avoided.  Updates 'wc', if nonnull, to reflect the fields
  * that were used during the lookup.
@@ -6305,7 +6305,7 @@ struct dpif_support_field {
     enum dpif_support_field_type type;
 };
 
-#define DPIF_SUPPORT_FIELD_INTIALIZER(RT_PTR, BT_PTR, TITLE, TYPE) \
+#define DPIF_SUPPORT_FIELD_INITIALIZER(RT_PTR, BT_PTR, TITLE, TYPE) \
     (struct dpif_support_field) {RT_PTR, BT_PTR, TITLE, TYPE}
 
 static void
@@ -6360,26 +6360,26 @@ dpif_set_support(struct dpif_backer_support *rt_support,
     struct shash_node *node;
     bool changed = false;
 
-#define DPIF_SUPPORT_FIELD(TYPE, NAME, TITLE) \
-    {\
-      struct dpif_support_field *f = xmalloc(sizeof *f);            \
-      *f = DPIF_SUPPORT_FIELD_INTIALIZER(&rt_support->NAME,         \
-                                         &bt_support->NAME,         \
-                                         TITLE,                     \
-                                         DPIF_SUPPORT_FIELD_##TYPE);\
-      shash_add_once(&all_fields, #NAME, f);                        \
+#define DPIF_SUPPORT_FIELD(TYPE, NAME, TITLE)                           \
+    {                                                                   \
+        struct dpif_support_field *f = xmalloc(sizeof *f);              \
+        *f = DPIF_SUPPORT_FIELD_INITIALIZER(&rt_support->NAME,          \
+                                            &bt_support->NAME,          \
+                                            TITLE,                      \
+                                            DPIF_SUPPORT_FIELD_##TYPE); \
+        shash_add_once(&all_fields, #NAME, f);                          \
     }
     DPIF_SUPPORT_FIELDS;
 #undef DPIF_SUPPORT_FIELD
 
-#define ODP_SUPPORT_FIELD(TYPE, NAME, TITLE) \
-    {\
-        struct dpif_support_field *f = xmalloc(sizeof *f);            \
-        *f = DPIF_SUPPORT_FIELD_INTIALIZER(&rt_support->odp.NAME,     \
-                                           &bt_support->odp.NAME,     \
-                                           TITLE,                     \
-                                           DPIF_SUPPORT_FIELD_##TYPE);\
-      shash_add_once(&all_fields, #NAME, f);                          \
+#define ODP_SUPPORT_FIELD(TYPE, NAME, TITLE)                            \
+    {                                                                   \
+        struct dpif_support_field *f = xmalloc(sizeof *f);              \
+        *f = DPIF_SUPPORT_FIELD_INITIALIZER(&rt_support->odp.NAME,      \
+                                            &bt_support->odp.NAME,      \
+                                            TITLE,                      \
+                                            DPIF_SUPPORT_FIELD_##TYPE); \
+        shash_add_once(&all_fields, #NAME, f);                          \
     }
     ODP_SUPPORT_FIELDS;
 #undef ODP_SUPPORT_FIELD
@@ -6409,7 +6409,8 @@ dpif_set_support(struct dpif_backer_support *rt_support,
                 *(bool *)field->rt_ptr = true;
                 changed = true;
             } else {
-                ds_put_cstr(ds, "Can not enable features not supported by the datapth");
+                ds_put_cstr(ds,
+                    "Can not enable features not supported by the datapath");
             }
         } else if (!strcasecmp(value, "false")) {
             *(bool *)field->rt_ptr = false;
