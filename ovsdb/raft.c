@@ -65,6 +65,8 @@ enum raft_role {
     RAFT_LEADER
 };
 
+static const char *raft_role_to_string(enum raft_role);
+
 /* Flags for unit tests. */
 enum raft_failure_test {
     FT_NO_TEST,
@@ -375,6 +377,11 @@ static void raft_send_append_request(struct raft *,
                                      struct raft_server *, unsigned int n,
                                      const char *comment);
 
+static void raft_role_transition_at(struct raft *, enum raft_role,
+                                    const char *func, const char *source);
+#define raft_role_transition(raft, role) \
+    raft_role_transition_at(raft, role, __func__, OVS_SOURCE_LOCATOR)
+
 static void raft_become_leader(struct raft *);
 static void raft_become_follower(struct raft *);
 static void raft_reset_election_timer(struct raft *);
@@ -436,7 +443,7 @@ raft_alloc(void)
     hmap_node_nullify(&raft->hmap_node);
     hmap_init(&raft->servers);
     raft->log_start = raft->log_end = 1;
-    raft->role = RAFT_FOLLOWER;
+    raft_role_transition(raft, RAFT_FOLLOWER);
     sset_init(&raft->remote_addresses);
     raft->join_timeout = LLONG_MAX;
     ovs_list_init(&raft->waiters);
@@ -1876,8 +1883,8 @@ raft_start_election(struct raft *raft, bool is_prevote,
     ovs_assert(raft->role != RAFT_LEADER);
 
     raft->leader_sid = UUID_ZERO;
-    raft->role = RAFT_CANDIDATE;
     raft->prevote_passed = !is_prevote;
+    raft_role_transition(raft, RAFT_CANDIDATE);
 
     if (is_prevote || leadership_transfer) {
         /* If there was no leader elected since last election, we know we are
@@ -2783,7 +2790,7 @@ raft_become_follower(struct raft *raft)
         return;
     }
 
-    raft->role = RAFT_FOLLOWER;
+    raft_role_transition(raft, RAFT_FOLLOWER);
     raft_reset_election_timer(raft);
 
     /* Notify clients about lost leadership.
@@ -2900,6 +2907,26 @@ raft_set_leader(struct raft *raft, const struct uuid *sid)
     raft->candidate_retrying = false;
 }
 
+static const char *
+raft_role_to_string(enum raft_role role)
+{
+    switch (role) {
+    case RAFT_FOLLOWER:  return "follower";
+    case RAFT_CANDIDATE: return "candidate";
+    case RAFT_LEADER:    return "leader";
+    default: return "<error>";
+    }
+}
+
+static void
+raft_role_transition_at(struct raft *raft, enum raft_role role,
+                        const char *func, const char *source)
+{
+    VLOG_DBG("%s(%s): role transition: %s --> %s", func, source,
+             raft_role_to_string(raft->role), raft_role_to_string(role));
+    raft->role = role;
+}
+
 static void
 raft_become_leader(struct raft *raft)
 {
@@ -2911,7 +2938,7 @@ raft_become_leader(struct raft *raft)
                  raft->n_votes, hmap_count(&raft->servers));
 
     ovs_assert(raft->role != RAFT_LEADER);
-    raft->role = RAFT_LEADER;
+    raft_role_transition(raft, RAFT_LEADER);
     raft->election_won = time_msec();
     raft_set_leader(raft, &raft->sid);
     raft_reset_election_timer(raft);
@@ -3372,7 +3399,7 @@ raft_update_leader(struct raft *raft, const struct uuid *sid)
          * least as large as the candidate's current term, then the
          * candidate recognizes the leader as legitimate and returns to
          * follower state. */
-        raft->role = RAFT_FOLLOWER;
+        raft_role_transition(raft, RAFT_FOLLOWER);
     }
     return true;
 }
@@ -4882,11 +4909,7 @@ raft_unixctl_status(struct unixctl_conn *conn,
         }
     }
 
-    ds_put_format(&s, "Role: %s\n",
-                  raft->role == RAFT_LEADER ? "leader"
-                  : raft->role == RAFT_CANDIDATE ? "candidate"
-                  : raft->role == RAFT_FOLLOWER ? "follower"
-                  : "<error>");
+    ds_put_format(&s, "Role: %s\n", raft_role_to_string(raft->role));
     ds_put_format(&s, "Term: %"PRIu64"\n", raft->term);
     raft_put_sid("Leader", &raft->leader_sid, raft, &s);
     raft_put_sid("Vote", &raft->vote, raft, &s);
