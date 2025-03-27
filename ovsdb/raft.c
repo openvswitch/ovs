@@ -2170,9 +2170,14 @@ raft_run(struct raft *raft)
         raft_reset_ping_timer(raft);
     }
 
-    uint64_t interval = raft->joining
-                        ? RAFT_JOIN_TIMEOUT_MS
-                        : RAFT_TIMER_THRESHOLD(raft->election_timer);
+    uint64_t interval = RAFT_TIMER_THRESHOLD(raft->election_timer);
+
+    if (raft->joining) {
+        interval = RAFT_JOIN_TIMEOUT_MS;
+    } else if (uuid_is_zero(&raft->leader_sid)) {
+        /* There are no heartbeats to handle when there is no leader. */
+        interval = raft->election_timer;
+    }
     cooperative_multitasking_set(
         &raft_run_cb, (void *) raft, time_msec(),
         interval + interval / 10, "raft_run");
