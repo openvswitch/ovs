@@ -36,6 +36,31 @@ Subject: Patch this is.
         AT_CHECK([$PYTHON3 $top_srcdir/utilities/checkpatch.py $3 -q test.patch])
     fi
 }
+
+# try_checkpatch_c_file SOURCE [ERRORS] [CHECKPATCH-ARGS]
+#
+# Runs checkpatch against test SOURCE expecting the set of specified
+# ERRORS (and warnings).  Optionally, sets [CHECKPATCH-ARGS]
+try_checkpatch_c_file() {
+   echo "$1" | sed 's/^    //' > test.c
+
+   # Take expected output from $2.
+   if test -n "$2"; then
+       echo "$2" | sed 's/^    //' > expout
+   else
+       : > expout
+   fi
+
+   if test -s expout; then
+       AT_CHECK([OVS_SRC_DIR=$top_srcdir $PYTHON3 \
+                   $top_srcdir/utilities/checkpatch.py $3 -q -f test.c],
+                [1], [stdout])
+       AT_CHECK([sed '/^Lines checked:/,$d' stdout], [0], [expout])
+   else
+       AT_CHECK([OVS_SRC_DIR=$top_srcdir $PYTHON3 \
+                   $top_srcdir/utilities/checkpatch.py $3 -q -f test.c])
+   fi
+}
 OVS_END_SHELL_HELPERS
 
 AT_SETUP([checkpatch - sign-offs])
@@ -654,4 +679,48 @@ try_checkpatch \
     "WARNING: Author 'A <a@a.com>' is not in the AUTHORS.rst file!" \
     "-a"
 
+AT_CLEANUP
+
+AT_SETUP([checkpatch - file contents checks - bare return])
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+    void foo() {
+        return;
+    }" \
+    "WARNING: Empty return followed by brace, consider omitting
+    test.c:6:
+    }
+    "
+AT_CLEANUP
+
+AT_SETUP([checkpatch - file contents checks - parenthesized constructs])
+
+for ctr in 'if' 'while' 'switch' 'HMAP_FOR_EACH' 'BITMAP_FOR_EACH_1'; do
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+    void foo() {
+       $ctr (check_node) {
+          something(check_node);
+       }
+    }
+    "
+
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+    void foo() {
+       $ctr ( first_run) {
+          something(check_node);
+       }
+    }" \
+    "ERROR: Improper whitespace around control block
+    test.c:5:
+       $ctr ( first_run) {
+    "
+done
 AT_CLEANUP

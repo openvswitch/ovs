@@ -1182,10 +1182,12 @@ def ovs_checkpatch_file(filename):
         else:
             mail.add_header('Subject', sys.argv[-1])
 
-        print("Subject missing! Your provisional subject is",
-              mail['Subject'])
+        if not checking_file:
+            print("Subject missing! Your provisional subject is",
+                  mail['Subject'])
 
-    if run_subject_checks('Subject: ' + mail['Subject'], spellcheck):
+    if not checking_file and run_subject_checks('Subject: ' + mail['Subject'],
+                                                spellcheck):
         result = True
 
     ovs_checkpatch_print_result()
