@@ -403,9 +403,10 @@ ALL_LOCAL += flake8-check
 #   W504 line break after binary operator
 # F*** -- warnings native to flake8
 #   F811 redefinition of unused <name> from line <N> (only from flake8 v2.0)
+#   F824 a `global` or `nonlocal` statement where the name is never reassigned
 # D*** -- warnings from flake8-docstrings plugin
 # H*** -- warnings from flake8 hacking plugin (custom style checks beyond PEP8)
-FLAKE8_IGNORE = E121,E123,E125,E126,E127,E128,E129,E131,E203,E722,W503,W504,F811,D,H,I
+FLAKE8_IGNORE = E121,E123,E125,E126,E127,E128,E129,E131,E203,E722,W503,W504,F811,F824,D,H,I
 flake8-check: $(FLAKE8_PYFILES)
 	$(FLAKE8_WERROR)$(AM_V_GEN) \
 	  src='$^' && \
