@@ -20,10 +20,10 @@
 # packets sent by the kernel to ovs-vswitchd. By default, it will show all
 # upcall events, which looks something like this:
 #
-# TIME               CPU  COMM      PID      DPIF_NAME          TYPE PKT_LEN...
-# 5952147.003848809  2    handler4  1381158  system@ovs-system  0    98     132
-# 5952147.003879643  2    handler4  1381158  system@ovs-system  0    70     160
-# 5952147.003914924  2    handler4  1381158  system@ovs-system  0    98     152
+# TIME               CPU  COMM      PID      PORT_NAME                TYPE ..
+# 5952147.003848809  2    handler4  1381158  eth0 (system@ovs-system)  0
+# 5952147.003879643  2    handler4  1381158  eth0 (system@ovs-system)  0
+# 5952147.003914924  2    handler4  1381158  eth0 (system@ovs-system)  0
 #
 # Also, upcalls dropped by the kernel (e.g: because the netlink buffer is full)
 # are reported. This requires the kernel version to be greater or equal to
@@ -71,7 +71,7 @@
 #
 #  $ ./upcall_monitor.py --packet-decode decode --flow-key-decode nlraw \
 #      --packet-size 128 --flow-key-size 256
-#  TIME               CPU  COMM             PID        DPIF_NAME          ...
+#  TIME               CPU  COMM             PID        PORT_NAME          ...
 #  5953013.333214231  2    handler4         1381158    system@ovs-system  ...
 #    Flow key size 132 bytes, size captured 132 bytes.
 #      nla_len 8, nla_type OVS_KEY_ATTR_RECIRC_ID[20], data: 00 00 00 00
@@ -120,6 +120,8 @@ from bcc import BPF, USDT, USDTException
 from os.path import exists, join
 from scapy.all import hexdump, wrpcap
 from scapy.layers.l2 import Ether
+
+from usdt_lib import DpPortMapping
 
 import argparse
 import psutil
@@ -277,7 +279,7 @@ int kretprobe__ovs_dp_upcall(struct pt_regs *ctx)
 #
 # print_key()
 #
-def print_key(event):
+def print_key(event, decode_dump):
     if event.key_size < options.flow_key_size:
         key_len = event.key_size
     else:
@@ -298,39 +300,48 @@ def print_key(event):
                                            dump=True),
                      flags=re.MULTILINE))
 
-    if options.flow_key_decode == 'nlraw':
-        nla = decode_nlm(bytes(event.key)[:key_len])
-    else:
-        nla = decode_nlm(bytes(event.key)[:key_len], dump=False)
-
-    if "OVS_KEY_ATTR_IN_PORT" in nla:
-        port = struct.unpack("=I", nla["OVS_KEY_ATTR_IN_PORT"])[0]
-    else:
-        port = "Unknown"
-
-    return port
+    if options.flow_key_decode == "nlraw":
+        for line in decode_dump:
+            print(line)
 
 
 #
 # print_event()
 #
 def print_event(ctx, data, size):
-    event = b['events'].event(data)
-    print("{:<18.9f} {:<4} {:<16} {:<10} {:<32} {:<4} {:<10} {:<12} {:<8}".
-          format(event.ts / 1000000000,
-                 event.cpu,
-                 event.comm.decode("utf-8"),
-                 event.pid,
-                 event.dpif_name.decode("utf-8"),
-                 event.upcall_type,
-                 event.pkt_size,
-                 event.key_size,
-                 event.result))
+    event = b["events"].event(data)
+    dp = event.dpif_name.decode("utf-8")
+
+    nla, key_dump = decode_nlm(
+        bytes(event.key)[: min(event.key_size, options.flow_key_size)]
+    )
+    if "OVS_KEY_ATTR_IN_PORT" in nla:
+        port_no = struct.unpack("=I", nla["OVS_KEY_ATTR_IN_PORT"])[0]
+        port = dp_map.get_port_name(dp.partition("@")[-1], port_no)
+        if not port:
+            port = str(port_no)
+    else:
+        port = "Unknown"
+
+    print(
+        "{:<18.9f} {:<4} {:<16} {:<10} {:<40} {:<4} {:<10} {:<12} {:<8}".
+        format(
+            event.ts / 1000000000,
+            event.cpu,
+            event.comm.decode("utf-8"),
+            event.pid,
+            "{} ({})".format(port, dp),
+            event.upcall_type,
+            event.pkt_size,
+            event.key_size,
+            event.result,
+        )
+    )
 
     #
     # Dump flow key information
     #
-    port = print_key(event)
+    print_key(event, key_dump)
 
     #
     # Decode packet only if there is data
@@ -369,23 +380,26 @@ def print_event(ctx, data, size):
 #
 # decode_nlm()
 #
-def decode_nlm(msg, indent=4, dump=True):
+def decode_nlm(msg, indent=4):
     bytes_left = len(msg)
     result = {}
+    dump = []
 
     while bytes_left:
         if bytes_left < 4:
-            if dump:
-                print("{}WARN: decode truncated; can't read header".format(
-                    ' ' * indent))
+            dump.append(
+                "{}WARN: decode truncated; can't read header".format(
+                    " " * indent
+                )
+            )
             break
 
         nla_len, nla_type = struct.unpack("=HH", msg[:4])
 
         if nla_len < 4:
-            if dump:
-                print("{}WARN: decode truncated; nla_len < 4".format(
-                    ' ' * indent))
+            dump.append(
+                "{}WARN: decode truncated; nla_len < 4".format(" " * indent)
+            )
             break
 
         nla_data = msg[4:nla_len]
@@ -397,16 +411,19 @@ def decode_nlm(msg, indent=4, dump=True):
         else:
             result[get_ovs_key_attr_str(nla_type)] = nla_data
 
-        if dump:
-            print("{}nla_len {}, nla_type {}[{}], data: {}{}".format(
+        dump.append(
+            "{}nla_len {}, nla_type {}[{}], data: {}{}".format(
                 ' ' * indent, nla_len, get_ovs_key_attr_str(nla_type),
                 nla_type,
-                "".join("{:02x} ".format(b) for b in nla_data), trunc))
+                "".join("{:02x} ".format(b) for b in nla_data), trunc)
+        )
 
         if trunc != "":
-            if dump:
-                print("{}WARN: decode truncated; nla_len > msg_len[{}] ".
-                      format(' ' * indent, bytes_left))
+            dump.append(
+                "{}WARN: decode truncated; nla_len > msg_len[{}] ".format(
+                    " " * indent, bytes_left
+                )
+            )
             break
 
         # update next offset, but make sure it's aligned correctly
@@ -414,7 +431,7 @@ def decode_nlm(msg, indent=4, dump=True):
         msg = msg[next_offset:]
         bytes_left -= next_offset
 
-    return result
+    return result, dump
 
 
 #
@@ -499,6 +516,9 @@ def main():
     #
     global b
     global options
+    global dp_map
+
+    dp_map = DpPortMapping()
 
     #
     # Argument parsing
@@ -628,8 +648,8 @@ def main():
     #
     # Print header
     #
-    print("{:<18} {:<4} {:<16} {:<10} {:<32} {:<4} {:<10} {:<12} {:<8}".format(
-        "TIME", "CPU", "COMM", "PID", "DPIF_NAME", "TYPE", "PKT_LEN",
+    print("{:<18} {:<4} {:<16} {:<10} {:<40} {:<4} {:<10} {:<12} {:<8}".format(
+        "TIME", "CPU", "COMM", "PID", "PORT_NAME", "TYPE", "PKT_LEN",
         "FLOW_KEY_LEN", "RESULT"))
 
     #

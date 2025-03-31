@@ -33,12 +33,26 @@ class DpPortMapping:
         """Override the internal cache map."""
         self.cache_map = cache_map
 
-    def get(self, dp, port_no):
-        """Get the portname from a port number."""
+    def get_port_name(self, dp, port_no):
+        """Get the port name from a port number."""
         if self.cache_map is None:
             self._get_mapping()
 
-        return self.cache_map.get(dp, {}).get(port_no, None)
+        if not self.cache_map.get(dp):
+            return None
+
+        for name, num in self.cache_map[dp].items():
+            if num == port_no:
+                return name
+
+        return None
+
+    def get_port_number(self, dp, port):
+        """Get the port number from a port name."""
+        if self.cache_map is None:
+            self._get_mapping()
+
+        return self.cache_map.get(dp, {}).get(port, None)
 
     def _get_mapping(self):
         """Get the datapath port mapping from the running OVS."""
