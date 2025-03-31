@@ -120,7 +120,6 @@ import psutil
 import re
 import struct
 import sys
-import time
 
 #
 # Actual eBPF source code
@@ -513,7 +512,6 @@ def main():
     while 1:
         try:
             b.ring_buffer_poll()
-            time.sleep(0.5)
         except KeyboardInterrupt:
             break
 

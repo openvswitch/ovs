@@ -65,7 +65,6 @@ import re
 import struct
 import subprocess
 import sys
-import time
 
 #
 # Global definitions
@@ -1587,7 +1586,6 @@ def main():
                 b.ring_buffer_poll()
                 if options.stop != 0 and events_received >= options.stop:
                     break
-                time.sleep(0.5)
             except KeyboardInterrupt:
                 break
 
