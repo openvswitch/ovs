@@ -118,9 +118,8 @@
 
 from bcc import BPF, USDT, USDTException
 from os.path import exists, join
-from scapy.all import hexdump, wrpcap
+from scapy import VERSION as scapy_version
 from scapy.layers.l2 import Ether
-
 from usdt_lib import DpPortMapping
 
 import argparse
@@ -128,6 +127,19 @@ import psutil
 import re
 import struct
 import sys
+
+(scapy_mayor, scapy_minor, _) = scapy_version.split(".", 2)
+(scapy_mayor, scapy_minor) = (int(scapy_mayor), int(scapy_minor))
+
+scapy_supports_pcap_iface = False
+if scapy_mayor < 2 or (scapy_mayor == 2 and scapy_minor) <= 4:
+    from scapy.all import hexdump, wrpcap
+else:
+    from scapy.all import hexdump, PcapNgWriter
+    if scapy_mayor > 2 or (scapy_mayor == 2 and scapy_minor >= 6):
+        # Support for setting the iface name in the pcapng file was added in:
+        # 56b4fa4a pcapng enhancements (idb,epb) and some fixes (#4342)
+        scapy_supports_pcap_iface = True
 
 #
 # Actual eBPF source code
@@ -282,40 +294,48 @@ int kretprobe__ovs_dp_upcall(struct pt_regs *ctx)
 #endif
 """
 
+pcap_writer = None
+
 
 #
-# print_key()
+# format_key()
 #
-def print_key(event, decode_dump):
+def format_key(event, decode_dump):
+    lines = []
     if event.key_size < options.flow_key_size:
         key_len = event.key_size
     else:
         key_len = options.flow_key_size
 
     if not key_len:
-        return
+        return []
 
     if options.flow_key_decode != 'none':
-        print("  Flow key size {} bytes, size captured {} bytes.".
-              format(event.key_size, key_len))
+        lines.append("  Flow key size {} bytes, size captured {} bytes.".
+                     format(event.key_size, key_len))
 
     if options.flow_key_decode == 'hex':
         #
         # Abuse scapy's hex dump to dump flow key
         #
-        print(re.sub('^', ' ' * 4, hexdump(Ether(bytes(event.key)[:key_len]),
-                                           dump=True),
-                     flags=re.MULTILINE))
+        lines.extend(re.sub('^', ' ' * 4,
+            hexdump(
+                Ether(bytes(event.key)[:key_len]),
+                dump=True),
+            flags=re.MULTILINE).split("\n"))
 
     if options.flow_key_decode == "nlraw":
-        for line in decode_dump:
-            print(line)
+        lines.extend(decode_dump)
+
+    return lines
 
 
 #
 # print_event()
 #
 def print_event(ctx, data, size):
+    global pcap_writer
+
     event = b["events"].event(data)
     dp = event.dpif_name.decode("utf-8")
 
@@ -350,7 +370,9 @@ def print_event(ctx, data, size):
     #
     # Dump flow key information
     #
-    print_key(event, key_dump)
+    key_lines = format_key(event, key_dump)
+    for line in key_lines:
+        print(line)
 
     #
     # Decode packet only if there is data
@@ -383,7 +405,27 @@ def print_event(ctx, data, size):
         print(re.sub('^', ' ' * 4, packet.show(dump=True), flags=re.MULTILINE))
 
     if options.pcap is not None:
-        wrpcap(options.pcap, packet, append=True, snaplen=options.packet_size)
+        try:
+            if pcap_writer is None:
+                pcap_writer = PcapNgWriter(options.pcap)
+
+            comment = "cpu={} comm={} pid={} upcall_type={} result={}". format(
+                event.cpu, event.comm.decode("utf-8"), event.pid,
+                event.upcall_type, event.result)
+
+            if options.flow_key_decode != 'none':
+                comment = comment + "\n" + "\n".join(key_lines)
+
+            if scapy_supports_pcap_iface:
+                packet.sniffed_on = "{} ({})".format(port, dp)
+            else:
+                comment = "iface={}({}) ".format(port, dp) + comment
+
+            packet.comment = comment
+            pcap_writer.write(packet)
+        except NameError:  # PcapNgWriter not found
+            wrpcap(options.pcap, packet, append=True,
+                   snaplen=options.packet_size)
 
 
 #
