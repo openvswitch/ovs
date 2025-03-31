@@ -58,12 +58,13 @@ from strenum import StrEnum
 from text_histogram3 import histogram
 from time import process_time
 
+from usdt_lib import DpPortMapping
+
 import argparse
 import ast
 import psutil
 import re
 import struct
-import subprocess
 import sys
 
 #
@@ -352,7 +353,7 @@ class DpUpcall(Event):
                  pkt_frag_len):
         super(DpUpcall, self).__init__(ts, pid, comm, cpu, EventType.DP_UPCALL)
         self.dpif_name = dpif_name
-        self.dp_port = get_dp_mapping(dpif_name, port)
+        self.dp_port = dp_map.get(dpif_name, port)
         if self.dp_port is None:
             #
             # As we only identify interfaces at startup, new interfaces could
@@ -445,13 +446,7 @@ class RecvUpcall(Event):
                 self.pkt_len)
 
     def get_system_dp_port(dpif_name):
-        dp_map = get_dp_mapping(dpif_name, "ovs-system", return_map=True)
-        if dpif_name not in dp_map:
-            return None
-        try:
-            return dp_map[dpif_name]["ovs-system"]
-        except KeyError:
-            return None
+        return dp_map.get_map().get(dpif_name, {}).get("ovs-system", None)
 
     def decode_nlm(msg, indent=4, dump=True):
         bytes_left = len(msg)
@@ -618,54 +613,6 @@ class OpFlowExecute(Event):
             print(event)
 
         return event
-
-
-#
-# get_dp_mapping()
-#
-def get_dp_mapping(dp, port, return_map=False, dp_map=None):
-    if options.unit_test:
-        return port
-
-    if dp_map is not None:
-        get_dp_mapping.dp_port_map_cache = dp_map
-
-    #
-    # Build a cache, so we do not have to execue the ovs command each time.
-    #
-    if not hasattr(get_dp_mapping, "dp_port_map_cache"):
-        try:
-            output = subprocess.check_output(['ovs-appctl', 'dpctl/show'],
-                                             encoding='utf8').split("\n")
-        except subprocess.CalledProcessError:
-            output = ""
-            pass
-
-        current_dp = None
-        get_dp_mapping.dp_port_map_cache = {}
-
-        for line in output:
-            match = re.match("^system@(.*):$", line)
-            if match is not None:
-                current_dp = match.group(1)
-
-            match = re.match("^  port ([0-9]+): ([^ /]*)", line)
-            if match is not None and current_dp is not None:
-                try:
-                    get_dp_mapping.dp_port_map_cache[
-                        current_dp][match.group(2)] = int(match.group(1))
-                except KeyError:
-                    get_dp_mapping.dp_port_map_cache[current_dp] = \
-                        {match.group(2): int(match.group(1))}
-
-    if return_map:
-        return get_dp_mapping.dp_port_map_cache
-
-    if dp not in get_dp_mapping.dp_port_map_cache or \
-       port not in get_dp_mapping.dp_port_map_cache[dp]:
-        return None
-
-    return get_dp_mapping.dp_port_map_cache[dp][port]
 
 
 #
@@ -1428,6 +1375,9 @@ def main():
     global events_received
     global event_count
     global export_file
+    global dp_map
+
+    dp_map = DpPortMapping()
 
     #
     # Argument parsing
@@ -1530,9 +1480,9 @@ def main():
     event_count = {'total': {}, 'valid': {}, 'miss': {}}
     if options.read_events is None:
         #
-        # Call get_dp_mapping() to prepare the cache
+        # Prepare the datapath port mapping cache
         #
-        dp_port_map = get_dp_mapping("ovs-system", "eth0", return_map=True)
+        dp_port_map = dp_map.get_map()
         if export_file is not None:
             export_file.write("dp_port_map = {}\n".format(dp_port_map))
 
@@ -1641,8 +1591,7 @@ def main():
                     if entry.startswith('dp_port_map = {'):
                         if not dp_port_mapping_valid:
                             dp_port_mapping_valid = True
-                            get_dp_mapping("", "",
-                                           dp_map=ast.literal_eval(entry[14:]))
+                            dp_map.set_map(ast.literal_eval(entry[14:]))
                     elif (entry.startswith('event = {') and
                           dp_port_mapping_valid):
                         event = ast.literal_eval(entry[8:])

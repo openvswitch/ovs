@@ -28,7 +28,8 @@ usdt_SCRIPTS += \
 	utilities/usdt-scripts/kernel_delay.rst \
 	utilities/usdt-scripts/reval_monitor.py \
 	utilities/usdt-scripts/upcall_cost.py \
-	utilities/usdt-scripts/upcall_monitor.py
+	utilities/usdt-scripts/upcall_monitor.py \
+	utilities/usdt-scripts/usdt_lib.py
 
 completion_SCRIPTS += \
 	utilities/ovs-appctl-bashcomp.bash \
@@ -78,7 +79,9 @@ EXTRA_DIST += \
 	utilities/usdt-scripts/kernel_delay.rst \
 	utilities/usdt-scripts/reval_monitor.py \
 	utilities/usdt-scripts/upcall_cost.py \
-	utilities/usdt-scripts/upcall_monitor.py
+	utilities/usdt-scripts/upcall_monitor.py \
+	utilities/usdt-scripts/usdt_lib.py
+
 MAN_ROOTS += \
 	utilities/ovs-testcontroller.8.in \
 	utilities/ovs-dpctl.8.in \
