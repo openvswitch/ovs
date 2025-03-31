@@ -25,6 +25,9 @@
 # 5952147.003879643  2    handler4  1381158  system@ovs-system  0    70     160
 # 5952147.003914924  2    handler4  1381158  system@ovs-system  0    98     152
 #
+# Also, upcalls dropped by the kernel (e.g: because the netlink buffer is full)
+# are reported. This requires the kernel version to be greater or equal to
+# 5.14.
 # In addition, the packet and flow key data can be dumped. This can be done
 # using the --packet-decode and --flow-key decode options (see below).
 #
@@ -125,12 +128,13 @@ import sys
 # Actual eBPF source code
 #
 ebpf_source = """
-#include <linux/sched.h>
+#include <linux/skbuff.h>
 
 #define MAX_PACKET <MAX_PACKET_VAL>
 #define MAX_KEY    <MAX_KEY_VAL>
 
 struct event_t {
+    int result;
     u32 cpu;
     u32 pid;
     u32 upcall_type;
@@ -145,23 +149,28 @@ struct event_t {
 BPF_RINGBUF_OUTPUT(events, <BUFFER_PAGE_CNT>);
 BPF_TABLE("percpu_array", uint32_t, uint64_t, dropcnt, 1);
 
+static
+void report_missed_event() {
+    uint32_t type = 0;
+    uint64_t *value = dropcnt.lookup(&type);
+    if (value)
+        __sync_fetch_and_add(value, 1);
+}
+
 int do_trace(struct pt_regs *ctx) {
     uint64_t addr;
     uint64_t size;
 
     struct event_t *event = events.ringbuf_reserve(sizeof(struct event_t));
     if (!event) {
-        uint32_t type = 0;
-        uint64_t *value = dropcnt.lookup(&type);
-        if (value)
-            __sync_fetch_and_add(value, 1);
-
+        report_missed_event();
         return 1;
     }
 
     event->ts = bpf_ktime_get_ns();
     event->cpu =  bpf_get_smp_processor_id();
     event->pid = bpf_get_current_pid_tgid();
+    event->result = 0;
     bpf_get_current_comm(&event->comm, sizeof(event->comm));
 
     bpf_usdt_readarg(1, ctx, &addr);
@@ -189,31 +198,86 @@ int do_trace(struct pt_regs *ctx) {
     events.ringbuf_submit(event, 0);
     return 0;
 };
+
+struct inflight_upcall {
+    u32 cpu;
+    u32 upcall_type;
+    u64 ts;
+    struct sk_buff *skb;
+    char dpif_name[32];
+};
+BPF_HASH(inflight_upcalls, u64, struct inflight_upcall);
+
+TRACEPOINT_PROBE(openvswitch, ovs_dp_upcall)
+{
+    u64 pid = bpf_get_current_pid_tgid();
+    struct inflight_upcall upcall = {};
+
+    upcall.cpu = bpf_get_smp_processor_id();
+    upcall.ts = bpf_ktime_get_ns();
+    upcall.upcall_type = args->upcall_cmd;
+    upcall.skb = args->skbaddr;
+    TP_DATA_LOC_READ_CONST(&upcall.dpif_name, dp_name,
+                           sizeof(upcall.dpif_name));
+
+    inflight_upcalls.insert(&pid, &upcall);
+    return 0;
+}
+
+int kretprobe__ovs_dp_upcall(struct pt_regs *ctx)
+{
+    u64 pid = bpf_get_current_pid_tgid();
+    struct inflight_upcall *upcall;
+    int ret = PT_REGS_RC(ctx);
+    u64 size;
+
+    upcall = inflight_upcalls.lookup(&pid);
+    inflight_upcalls.delete(&pid);
+    if (!upcall)
+        return 0;
+
+    /* Successfull upcalls are reported in the USDT probe. */
+    if (!ret)
+        return 0;
+
+    struct event_t *event = events.ringbuf_reserve(sizeof(struct event_t));
+    if (!event) {
+        report_missed_event();
+        return 1;
+    }
+
+    event->ts = upcall->ts;
+    event->cpu = upcall->cpu;
+    event->pid = pid;
+    event->result = ret;
+    __builtin_memcpy(&event->dpif_name, &upcall->dpif_name, 32);
+    bpf_get_current_comm(&event->comm, sizeof(event->comm));
+    event->pkt_size = upcall->skb->len;
+    event->upcall_type = upcall->upcall_type;
+    event->key_size = 0;
+
+    size = upcall->skb->len - upcall->skb->data_len;
+    if (size > MAX_PACKET)
+        size = MAX_PACKET;
+
+    bpf_probe_read_kernel(event->pkt, size, upcall->skb->data);
+    events.ringbuf_submit(event, 0);
+    return 0;
+}
 """
 
 
 #
-# print_event()
+# print_key()
 #
-def print_event(ctx, data, size):
-    event = b['events'].event(data)
-    print("{:<18.9f} {:<4} {:<16} {:<10} {:<32} {:<4} {:<10} {:<10}".
-          format(event.ts / 1000000000,
-                 event.cpu,
-                 event.comm.decode("utf-8"),
-                 event.pid,
-                 event.dpif_name.decode("utf-8"),
-                 event.upcall_type,
-                 event.pkt_size,
-                 event.key_size))
-
-    #
-    # Dump flow key information
-    #
+def print_key(event):
     if event.key_size < options.flow_key_size:
         key_len = event.key_size
     else:
         key_len = options.flow_key_size
+
+    if not key_len:
+        return
 
     if options.flow_key_decode != 'none':
         print("  Flow key size {} bytes, size captured {} bytes.".
@@ -236,6 +300,30 @@ def print_event(ctx, data, size):
         port = struct.unpack("=I", nla["OVS_KEY_ATTR_IN_PORT"])[0]
     else:
         port = "Unknown"
+
+    return port
+
+
+#
+# print_event()
+#
+def print_event(ctx, data, size):
+    event = b['events'].event(data)
+    print("{:<18.9f} {:<4} {:<16} {:<10} {:<32} {:<4} {:<10} {:<12} {:<8}".
+          format(event.ts / 1000000000,
+                 event.cpu,
+                 event.comm.decode("utf-8"),
+                 event.pid,
+                 event.dpif_name.decode("utf-8"),
+                 event.upcall_type,
+                 event.pkt_size,
+                 event.key_size,
+                 event.result))
+
+    #
+    # Dump flow key information
+    #
+    port = print_key(event)
 
     #
     # Decode packet only if there is data
@@ -501,9 +589,9 @@ def main():
     #
     # Print header
     #
-    print("{:<18} {:<4} {:<16} {:<10} {:<32} {:<4} {:<10} {:<10}".format(
+    print("{:<18} {:<4} {:<16} {:<10} {:<32} {:<4} {:<10} {:<12} {:<8}".format(
         "TIME", "CPU", "COMM", "PID", "DPIF_NAME", "TYPE", "PKT_LEN",
-        "FLOW_KEY_LEN"))
+        "FLOW_KEY_LEN", "RESULT"))
 
     #
     # Dump out all events
