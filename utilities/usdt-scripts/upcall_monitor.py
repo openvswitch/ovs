@@ -62,6 +62,9 @@
 #                            Set maximum packet size to capture, default 64
 #      -w PCAP_FILE, --pcap PCAP_FILE
 #                            Write upcall packets to specified pcap file.
+#      -r, --result {error,ok,any}
+#                            Display only events with the given result,
+#                            default: any
 #
 # The following is an example of how to use the script on the running
 # ovs-vswitchd process with a packet and flow key dump enabled:
@@ -114,7 +117,7 @@
 #
 
 from bcc import BPF, USDT, USDTException
-from os.path import exists
+from os.path import exists, join
 from scapy.all import hexdump, wrpcap
 from scapy.layers.l2 import Ether
 
@@ -157,6 +160,7 @@ void report_missed_event() {
         __sync_fetch_and_add(value, 1);
 }
 
+#if <INSTALL_OVS_UPCALL_RECV_PROBE>
 int do_trace(struct pt_regs *ctx) {
     uint64_t addr;
     uint64_t size;
@@ -198,7 +202,9 @@ int do_trace(struct pt_regs *ctx) {
     events.ringbuf_submit(event, 0);
     return 0;
 };
+#endif
 
+#if <INSTALL_OVS_UPCALL_DROP_PROBE>
 struct inflight_upcall {
     u32 cpu;
     u32 upcall_type;
@@ -264,6 +270,7 @@ int kretprobe__ovs_dp_upcall(struct pt_regs *ctx)
     events.ringbuf_submit(event, 0);
     return 0;
 }
+#endif
 """
 
 
@@ -526,8 +533,33 @@ def main():
     parser.add_argument("-w", "--pcap", metavar="PCAP_FILE",
                         help="Write upcall packets to specified pcap file.",
                         type=str, default=None)
+    parser.add_argument("-r", "--result",
+                        help="Display only events with the given result, "
+                        "default: any",
+                        choices=["error", "ok", "any"], default="any")
 
     options = parser.parse_args()
+
+    #
+    # Check if current kernel supports error reporting.
+    #
+    tracefs_paths = ("/sys/kernel/debug/tracing/", "/sys/kernel/tracing/")
+    upcall_tp_found = False
+    for tracefs in tracefs_paths:
+        if exists(join(tracefs, "events/openvswitch/ovs_dp_upcall")):
+            upcall_tp_found = True
+            break
+
+    if not upcall_tp_found:
+        if options.result == "error":
+            print("ERROR: Monitoring error upcalls is not supported by the "
+                  "running kernel (or the tracefs is not mounted).")
+            sys.exit(-1)
+        if options.result == "any":
+            print("WARN: Monitoring error upcalls is not supported by the "
+                  "running kernel (or the tracefs is not mounted). "
+                  "Only successful ones will be monitored.")
+            options.result = "ok"
 
     #
     # Find the PID of the ovs-vswitchd daemon if not specified.
@@ -560,20 +592,23 @@ def main():
     #
     # Attach the usdt probe
     #
-    u = USDT(pid=int(options.pid))
-    try:
-        u.enable_probe(probe="recv_upcall", fn_name="do_trace")
-    except USDTException as e:
-        print("ERROR: {}"
-              "ovs-vswitchd!".format(
-                  (re.sub('^', ' ' * 7, str(e), flags=re.MULTILINE)).strip().
-                  replace("--with-dtrace or --enable-dtrace",
-                          "--enable-usdt-probes")))
-        sys.exit(-1)
+    usdt = []
+    if options.result in ["ok", "any"]:
+        u = USDT(pid=int(options.pid))
+        try:
+            u.enable_probe(probe="recv_upcall", fn_name="do_trace")
+            usdt.append(u)
+        except USDTException as e:
+            print("ERROR: {}"
+                  "ovs-vswitchd!".format(
+                      (re.sub('^', ' ' * 7, str(e), flags=re.MULTILINE)).
+                      strip().replace("--with-dtrace or --enable-dtrace",
+                                      "--enable-usdt-probes")))
+            sys.exit(-1)
 
     #
     # Uncomment to see how arguments are decoded.
-    #   print(u.get_text())
+    #       print(u.get_text())
     #
 
     #
@@ -583,8 +618,12 @@ def main():
     source = source.replace("<MAX_KEY_VAL>", str(options.flow_key_size))
     source = source.replace("<BUFFER_PAGE_CNT>",
                             str(options.buffer_page_count))
+    source = source.replace("<INSTALL_OVS_UPCALL_RECV_PROBE>", "1"
+                            if options.result in ["ok", "any"] else "0")
+    source = source.replace("<INSTALL_OVS_UPCALL_DROP_PROBE>", "1"
+                            if options.result in ["error", "any"] else "0")
 
-    b = BPF(text=source, usdt_contexts=[u], debug=options.debug)
+    b = BPF(text=source, usdt_contexts=usdt, debug=options.debug)
 
     #
     # Print header
