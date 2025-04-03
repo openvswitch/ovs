@@ -796,7 +796,7 @@ class Idl(object):
         for table in self.tables.values():
             if table.rows:
                 changed = True
-                table.rows = custom_index.IndexedRows(table)
+                table.rows.clear()
 
         self.cond_seqno = 0
 
