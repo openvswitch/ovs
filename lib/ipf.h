@@ -47,7 +47,8 @@ void ipf_preprocess_conntrack(struct ipf *ipf, struct dp_packet_batch *pb,
                               uint32_t hash_basis);
 
 void ipf_postprocess_conntrack(struct ipf *ipf, struct dp_packet_batch *pb,
-                               long long now, ovs_be16 dl_type);
+                               long long now, ovs_be16 dl_type, uint16_t zone,
+                               odp_port_t in_port);
 
 int ipf_set_enabled(struct ipf *ipf, bool v6, bool enable);
 int ipf_set_min_frag(struct ipf *ipf, bool v6, uint32_t value);
