@@ -22,7 +22,6 @@
 #include <netinet/icmp6.h>
 #include <string.h>
 
-#include "bitmap.h"
 #include "conntrack.h"
 #include "conntrack-private.h"
 #include "conntrack-tp.h"
@@ -34,7 +33,9 @@
 #include "flow.h"
 #include "netdev.h"
 #include "odp-netlink.h"
+#include "odp-util.h"
 #include "openvswitch/hmap.h"
+#include "openvswitch/types.h"
 #include "openvswitch/vlog.h"
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
@@ -1338,11 +1339,20 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                   const struct nat_action_info_t *nat_action_info,
                   long long now, uint32_t tp_id)
 {
+    odp_port_t in_port = ODPP_LOCAL;
+    struct conn_lookup_ctx ctx;
+    struct dp_packet *packet;
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, pkt_batch) {
+        /* The ipf preprocess function may consume all packets from this batch,
+         * save an in_port. */
+        in_port = packet->md.in_port.odp_port;
+        break;
+    }
+
     ipf_preprocess_conntrack(ct->ipf, pkt_batch, now, dl_type, zone,
                              ct->hash_basis);
 
-    struct dp_packet *packet;
-    struct conn_lookup_ctx ctx;
 
     DP_PACKET_BATCH_FOR_EACH (i, packet, pkt_batch) {
         struct conn *conn = packet->md.conn;
@@ -1368,7 +1378,7 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
         }
     }
 
-    ipf_postprocess_conntrack(ct->ipf, pkt_batch, now, dl_type);
+    ipf_postprocess_conntrack(ct->ipf, pkt_batch, now, dl_type, zone, in_port);
 
     return 0;
 }
