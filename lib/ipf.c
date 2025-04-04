@@ -29,6 +29,7 @@
 #include "latch.h"
 #include "openvswitch/hmap.h"
 #include "openvswitch/poll-loop.h"
+#include "openvswitch/types.h"
 #include "openvswitch/vlog.h"
 #include "ovs-atomic.h"
 #include "packets.h"
@@ -1063,7 +1064,8 @@ ipf_send_frags_in_list(struct ipf *ipf, struct ipf_list *ipf_list,
  * cleans up the list context when it is empty.*/
 static void
 ipf_send_completed_frags(struct ipf *ipf, struct dp_packet_batch *pb,
-                         long long now, bool v6)
+                         long long now, bool v6, uint16_t zone,
+                         odp_port_t in_port)
 {
     if (ovs_list_is_empty(&ipf->frag_complete_list)) {
         return;
@@ -1073,9 +1075,21 @@ ipf_send_completed_frags(struct ipf *ipf, struct dp_packet_batch *pb,
     struct ipf_list *ipf_list;
 
     LIST_FOR_EACH_SAFE (ipf_list, list_node, &ipf->frag_complete_list) {
+
         if ((ipf_list->key.dl_type == htons(ETH_TYPE_IPV6)) != v6) {
             continue;
         }
+        if (ipf_list->key.zone != zone) {
+            continue;
+        }
+
+        /* Check that the batch's in_port matches. */
+        struct dp_packet *pkt
+            = ipf_list->frag_list[ipf_list->last_sent_idx + 1].pkt;
+        if (in_port != pkt->md.in_port.odp_port) {
+            continue;
+        }
+
         if (ipf_send_frags_in_list(ipf, ipf_list, pb, v6, now)) {
             ipf_completed_list_clean(&ipf->frag_lists, ipf_list);
         } else {
@@ -1263,12 +1277,13 @@ ipf_preprocess_conntrack(struct ipf *ipf, struct dp_packet_batch *pb,
  * with low priority.  Reassembled packets are freed. */
 void
 ipf_postprocess_conntrack(struct ipf *ipf, struct dp_packet_batch *pb,
-                          long long now, ovs_be16 dl_type)
+                          long long now, ovs_be16 dl_type, uint16_t zone,
+                          odp_port_t in_port)
 {
     if (ipf_get_enabled(ipf) || atomic_count_get(&ipf->nfrag)) {
         bool v6 = dl_type == htons(ETH_TYPE_IPV6);
         ipf_post_execute_reass_pkts(ipf, pb, v6);
-        ipf_send_completed_frags(ipf, pb, now, v6);
+        ipf_send_completed_frags(ipf, pb, now, v6, zone, in_port);
         ipf_delete_expired_frags(ipf, now);
     }
 }
