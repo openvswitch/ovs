@@ -5405,6 +5405,67 @@ recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,fr
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - fragment handling - reassembly])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 90
+
+AT_DATA([flows.txt], [dnl
+table=0 tcp actions=ct(commit, table=1)
+table=1 tcp actions=2
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 replace-flows br0 flows.txt])
+
+dnl Test frag expiry.
+AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 0014 0001 8192 40 06 3316 ac11370d ac11370b"])
+ovs-appctl time/warp 10000
+AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 0014 0001 8192 40 06 3316 ac11370d ac11370b"])
+
+dnl Test that no packets flow.
+AT_CHECK([ovs-appctl dpctl/dump-flows filter=in_port\(90\) | sed s'/recirc(.*)/recirc(X)/'], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:ct(commit),recirc(X)
+])
+
+dnl Expire second frag.
+ovs-appctl time/warp 10000
+
+dnl Test frag purge
+AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 0014 0002 8192 40 06 3315 ac11370d ac11370b"])
+ovs-appctl time/warp 33000
+AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 0014 0003 8192 40 06 3314 ac11370d ac11370b"])
+
+dnl Test that no packets flow.
+AT_CHECK([ovs-appctl dpctl/dump-flows filter=in_port\(90\) | sed s'/recirc(.*)/recirc(X)/'], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:ct(commit),recirc(X)
+])
+
+dnl Purge second frag
+ovs-appctl time/warp 33000
+
+dnl Make sure all four packets are counted properly in the coverage.
+AT_CHECK([ovs-appctl coverage/show | grep -c "^ipf.*total: 2"], [0], [2
+])
+
+zero1208=$(printf '0%.0s' $(seq 2416))
+dnl Test that reassembled packets flow.
+AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 04c4 0002 2000 40 06 8ff7 ac11370d ac11370b dnl
+0000 0001 00000000 00000000 50 10 8000 604c 0000 dnl
+$zero1208"])
+AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 04c4 0002 0096 40 06 af61 ac11370d ac11370b dnl
+$zero1208"])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/recirc[[^)]]*)/recirc()/g' | strip_used | sort], [0], [dnl
+flow-dump from the main thread:
+recirc(),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first), packets:0, bytes:0, used:never, actions:2
+recirc(),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first), packets:0, bytes:0, used:never, actions:ct(commit),recirc()
+recirc(),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:2
+recirc(),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:ct(commit),recirc()
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - handling of malformed TCP packets])
 OVS_VSWITCHD_START
 add_of_ports br0 1 90
