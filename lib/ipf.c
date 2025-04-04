@@ -35,6 +35,7 @@
 #include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(ipf);
+COVERAGE_DEFINE(ipf_stuck_frag_list_expired);
 COVERAGE_DEFINE(ipf_stuck_frag_list_purged);
 COVERAGE_DEFINE(ipf_l3csum_err);
 
@@ -77,7 +78,7 @@ enum {
 enum ipf_counter_type {
     IPF_NFRAGS_ACCEPTED,
     IPF_NFRAGS_COMPL_SENT,
-    IPF_NFRAGS_EXPD_SENT,
+    IPF_NFRAGS_EXPIRED,
     IPF_NFRAGS_TOO_SMALL,
     IPF_NFRAGS_OVERLAP,
     IPF_NFRAGS_PURGED,
@@ -1030,8 +1031,7 @@ ipf_purge_list_check(struct ipf *ipf, struct ipf_list *ipf_list,
  * with 'ipf_send_completed_frags()' and 'ipf_send_expired_frags()'. */
 static bool
 ipf_send_frags_in_list(struct ipf *ipf, struct ipf_list *ipf_list,
-                       struct dp_packet_batch *pb,
-                       enum ipf_list_type list_type, bool v6, long long now)
+                       struct dp_packet_batch *pb, bool v6, long long now)
     OVS_REQUIRES(ipf->ipf_lock)
 {
     if (ipf_purge_list_check(ipf, ipf_list, now)) {
@@ -1045,12 +1045,7 @@ ipf_send_frags_in_list(struct ipf *ipf, struct ipf_list *ipf_list,
             ipf_list->last_sent_idx++;
             atomic_count_dec(&ipf->nfrag);
 
-            if (list_type == IPF_FRAG_COMPLETED_LIST) {
-                ipf_count(ipf, v6, IPF_NFRAGS_COMPL_SENT);
-            } else {
-                ipf_count(ipf, v6, IPF_NFRAGS_EXPD_SENT);
-                pkt->md.ct_state = CS_INVALID;
-            }
+            ipf_count(ipf, v6, IPF_NFRAGS_COMPL_SENT);
 
             if (ipf_list->last_sent_idx == ipf_list->last_inuse_idx) {
                 return true;
@@ -1080,8 +1075,7 @@ ipf_send_completed_frags(struct ipf *ipf, struct dp_packet_batch *pb,
         if ((ipf_list->key.dl_type == htons(ETH_TYPE_IPV6)) != v6) {
             continue;
         }
-        if (ipf_send_frags_in_list(ipf, ipf_list, pb, IPF_FRAG_COMPLETED_LIST,
-                                   v6, now)) {
+        if (ipf_send_frags_in_list(ipf, ipf_list, pb, v6, now)) {
             ipf_completed_list_clean(&ipf->frag_lists, ipf_list);
         } else {
             break;
@@ -1091,12 +1085,9 @@ ipf_send_completed_frags(struct ipf *ipf, struct dp_packet_batch *pb,
     ovs_mutex_unlock(&ipf->ipf_lock);
 }
 
-/* Conservatively adds fragments associated with a expired fragment list to
- * a packet batch to be processed by the calling application, typically
- * conntrack. Also cleans up the list context when it is empty.*/
+/* Remove expired fragment lists and clean up the list context. */
 static void
-ipf_send_expired_frags(struct ipf *ipf, struct dp_packet_batch *pb,
-                       long long now, bool v6)
+ipf_delete_expired_frags(struct ipf *ipf, long long now)
 {
     enum {
         /* Very conservative, due to DOS probability. */
@@ -1113,21 +1104,23 @@ ipf_send_expired_frags(struct ipf *ipf, struct dp_packet_batch *pb,
     size_t lists_removed = 0;
 
     LIST_FOR_EACH_SAFE (ipf_list, list_node, &ipf->frag_exp_list) {
-        if ((ipf_list->key.dl_type == htons(ETH_TYPE_IPV6)) != v6) {
-            continue;
-        }
         if (now <= ipf_list->expiration ||
             lists_removed >= IPF_FRAG_LIST_MAX_EXPIRED) {
             break;
         }
 
-        if (ipf_send_frags_in_list(ipf, ipf_list, pb, IPF_FRAG_EXPIRY_LIST,
-                                   v6, now)) {
-            ipf_expiry_list_clean(&ipf->frag_lists, ipf_list);
-            lists_removed++;
-        } else {
-            break;
+        while (ipf_list->last_sent_idx < ipf_list->last_inuse_idx) {
+            struct dp_packet * pkt
+                = ipf_list->frag_list[ipf_list->last_sent_idx + 1].pkt;
+            dp_packet_delete(pkt);
+            atomic_count_dec(&ipf->nfrag);
+            COVERAGE_INC(ipf_stuck_frag_list_expired);
+            ipf_count(ipf, ipf_list->key.dl_type == htons(ETH_TYPE_IPV6),
+                      IPF_NFRAGS_EXPIRED);
+            ipf_list->last_sent_idx++;
         }
+        ipf_expiry_list_clean(&ipf->frag_lists, ipf_list);
+        lists_removed++;
     }
 
     ovs_mutex_unlock(&ipf->ipf_lock);
@@ -1275,7 +1268,7 @@ ipf_postprocess_conntrack(struct ipf *ipf, struct dp_packet_batch *pb,
         bool v6 = dl_type == htons(ETH_TYPE_IPV6);
         ipf_post_execute_reass_pkts(ipf, pb, v6);
         ipf_send_completed_frags(ipf, pb, now, v6);
-        ipf_send_expired_frags(ipf, pb, now, v6);
+        ipf_delete_expired_frags(ipf, now);
     }
 }
 
@@ -1448,7 +1441,7 @@ ipf_get_status(struct ipf *ipf, struct ipf_status *ipf_status)
                         &ipf_status->v4.nfrag_accepted);
     atomic_read_relaxed(&ipf->n4frag_cnt[IPF_NFRAGS_COMPL_SENT],
                         &ipf_status->v4.nfrag_completed_sent);
-    atomic_read_relaxed(&ipf->n4frag_cnt[IPF_NFRAGS_EXPD_SENT],
+    atomic_read_relaxed(&ipf->n4frag_cnt[IPF_NFRAGS_EXPIRED],
                         &ipf_status->v4.nfrag_expired_sent);
     atomic_read_relaxed(&ipf->n4frag_cnt[IPF_NFRAGS_TOO_SMALL],
                         &ipf_status->v4.nfrag_too_small);
@@ -1464,7 +1457,7 @@ ipf_get_status(struct ipf *ipf, struct ipf_status *ipf_status)
                         &ipf_status->v6.nfrag_accepted);
     atomic_read_relaxed(&ipf->n6frag_cnt[IPF_NFRAGS_COMPL_SENT],
                         &ipf_status->v6.nfrag_completed_sent);
-    atomic_read_relaxed(&ipf->n6frag_cnt[IPF_NFRAGS_EXPD_SENT],
+    atomic_read_relaxed(&ipf->n6frag_cnt[IPF_NFRAGS_EXPIRED],
                         &ipf_status->v6.nfrag_expired_sent);
     atomic_read_relaxed(&ipf->n6frag_cnt[IPF_NFRAGS_TOO_SMALL],
                         &ipf_status->v6.nfrag_too_small);
