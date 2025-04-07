@@ -538,14 +538,16 @@ def add_binding(binding, ls):
     patch_no = ovs_vsctl("get Interface %s ofport" % pbinding)
     vlan_ = vlan.lstrip('0')
     if vlan_:
-        ovs_ofctl("add-flow %s in_port=%s,dl_vlan=%s,action=strip_vlan,%s"
+        ovs_ofctl("add-flow %s priority=200,in_port=%s,dl_vlan=%s,"
+                  "action=strip_vlan,%s"
                   % (ps_name, port_no, vlan_, patch_no))
-        ovs_ofctl("add-flow %s in_port=%s,action=mod_vlan_vid:%s,%s"
+        ovs_ofctl("add-flow %s priority=200,in_port=%s,"
+                  "action=mod_vlan_vid:%s,%s"
                   % (ps_name, patch_no, vlan_, port_no))
     else:
-        ovs_ofctl("add-flow %s in_port=%s,action=%s"
+        ovs_ofctl("add-flow %s priority=100,in_port=%s,action=%s"
                   % (ps_name, port_no, patch_no))
-        ovs_ofctl("add-flow %s in_port=%s,action=%s"
+        ovs_ofctl("add-flow %s priority=100,in_port=%s,action=%s"
                   % (ps_name, patch_no, port_no))
 
     # Create a logical_bindings_stats record.
@@ -570,12 +572,15 @@ def del_binding(binding, ls):
     patch_no = ovs_vsctl("get Interface %s ofport" % pbinding)
     vlan_ = vlan.lstrip('0')
     if vlan_:
-        ovs_ofctl("del-flows %s in_port=%s,dl_vlan=%s"
+        ovs_ofctl("del-flows %s priority=200,in_port=%s,dl_vlan=%s"
                   % (ps_name, port_no, vlan_))
-        ovs_ofctl("del-flows %s in_port=%s" % (ps_name, patch_no))
+        ovs_ofctl("del-flows %s priority=200,in_port=%s"
+                  % (ps_name, patch_no))
     else:
-        ovs_ofctl("--strict del-flows %s in_port=%s" % (ps_name, port_no))
-        ovs_ofctl("--strict del-flows %s in_port=%s" % (ps_name, patch_no))
+        ovs_ofctl("--strict del-flows %s priority=100,in_port=%s"
+                  % (ps_name, port_no))
+        ovs_ofctl("--strict del-flows %s priority=100,in_port=%s"
+                  % (ps_name, patch_no))
 
     ls.del_lbinding(lbinding)
 
