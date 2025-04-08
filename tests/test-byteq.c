@@ -29,6 +29,7 @@ static void test_byteq_main(int argc, char *argv[]);
 static void test_byteq_put_get(void);
 static void test_byteq_putn_get(void);
 static void test_byteq_put_string(void);
+static void test_byteq_fast_forward(void);
 static void test_byteq_write_read(void);
 
 #define SIZE 256
@@ -78,6 +79,36 @@ test_byteq_put_string(void)
     for (int i = 0; i < input_len; i++) {
         ovs_assert(byteq_get(&bq) == input[i]);
     }
+}
+
+static void
+test_byteq_fast_forward(void)
+{
+    struct byteq bq;
+    uint8_t buffer[SIZE];
+    unsigned int head;
+    unsigned int tail;
+    const char *input = "Open vSwitch";
+    const int input_len = strlen(input);
+
+    byteq_init(&bq, buffer, SIZE);
+    byteq_putn(&bq, input, input_len);
+    for (int i = 0; i < input_len; i++) {
+        ovs_assert(byteq_get(&bq) == input[i]);
+    }
+
+    ovs_assert(byteq_is_empty(&bq));
+    ovs_assert(byteq_headroom(&bq) < SIZE);
+
+    head = bq.head;
+    tail = bq.tail;
+
+    byteq_fast_forward(&bq);
+
+    ovs_assert(byteq_headroom(&bq) == SIZE);
+    ovs_assert(bq.head > head);
+    ovs_assert(bq.tail > tail);
+    ovs_assert(bq.head == bq.tail);
 }
 
 static void
@@ -147,6 +178,7 @@ test_byteq_main(int argc, char *argv[])
         run_test(test_byteq_put_get);
         run_test(test_byteq_putn_get);
         run_test(test_byteq_put_string);
+        run_test(test_byteq_fast_forward);
         printf("\n");
     } else {
         ovs_fatal(0, "invalid argument\n"

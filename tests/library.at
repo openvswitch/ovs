@@ -90,7 +90,7 @@ AT_CLEANUP
 
 AT_SETUP([byteq - basic])
 AT_KEYWORDS([byteq])
-AT_CHECK([ovstest test-byteq basic], [0], [...
+AT_CHECK([ovstest test-byteq basic], [0], [....
 ])
 AT_CLEANUP
 

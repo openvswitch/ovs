@@ -46,5 +46,6 @@ void byteq_advance_head(struct byteq *, unsigned int n);
 int byteq_tailroom(const struct byteq *);
 const uint8_t *byteq_tail(const struct byteq *);
 void byteq_advance_tail(struct byteq *, unsigned int n);
+void byteq_fast_forward(struct byteq *);
 
 #endif /* byteq.h */

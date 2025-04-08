@@ -198,3 +198,21 @@ byteq_advance_head(struct byteq *q, unsigned int n)
     ovs_assert(byteq_headroom(q) >= n);
     q->head += n;
 }
+
+/* Move the head and tail pointers forward to have the most headroom available.
+ * Can only be used on an empty byteq.  This is equivalent to advancing both
+ * head and tail by the current headroom size.
+ * Previous pointers returned by byteq_tail() or byteq_head() are potentially
+ * invalid afterwards. */
+void
+byteq_fast_forward(struct byteq *q)
+{
+    ovs_assert(byteq_is_empty(q));
+    unsigned int pos = q->head & (q->size - 1);
+
+    if (pos) {
+        /* Only advance head if we are not already at a multiple of size. */
+        q->head += q->size - pos;
+        q->tail = q->head;
+    }
+}
