@@ -21,6 +21,7 @@
 #include <errno.h>
 
 #include "byteq.h"
+#include "coverage.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "openvswitch/json.h"
@@ -36,6 +37,8 @@
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(jsonrpc);
+
+COVERAGE_DEFINE(jsonrpc_recv_incomplete);
 
 struct jsonrpc {
     struct stream *stream;
@@ -384,6 +387,10 @@ jsonrpc_recv(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
             }
         }
     }
+
+    /* We tried hard but didn't get a complete JSON message within the above
+     * iterations.  We want to know how often we abort for this reason. */
+    COVERAGE_INC(jsonrpc_recv_incomplete);
 
     return EAGAIN;
 }
