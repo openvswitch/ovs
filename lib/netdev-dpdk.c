@@ -2332,7 +2332,6 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
     const char *new_devargs;
     const char *vf_mac;
     int err = 0;
-    int ret;
 
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
@@ -2396,10 +2395,15 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
         goto out;
     }
 
-    ret = rte_eth_dev_info_get(dev->port_id, &info);
+    err = -rte_eth_dev_info_get(dev->port_id, &info);
+    if (err) {
+        VLOG_WARN_BUF(errp, "%s: Failed to get device info: %s" ,
+                      netdev_get_name(netdev), rte_strerror(err));
+        goto out;
+    }
 
-    dpdk_process_queue_size(netdev, args, !ret ? &info : NULL, true);
-    dpdk_process_queue_size(netdev, args, !ret ? &info : NULL, false);
+    dpdk_process_queue_size(netdev, args, &info, true);
+    dpdk_process_queue_size(netdev, args, &info, false);
 
     vf_mac = smap_get(args, "dpdk-vf-mac");
     if (vf_mac) {
