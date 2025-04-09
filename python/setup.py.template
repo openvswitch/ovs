@@ -25,12 +25,18 @@ except ImportError:  # Needed for setuptools < 59.0
 import setuptools
 
 VERSION = "@VERSION@"
+README_PATH = os.path.abspath(
+    os.path.join(os.path.abspath(__file__), os.pardir, 'README.rst')
+)
 
 for x in ("version.py", "dirs.py"):
     if not os.path.exists(f"ovs/{x}"):
         print(f"Ensure {x} is created by running make python/ovs/{x}",
               file=sys.stderr)
         sys.exit(-1)
+
+with open(README_PATH) as fh:
+    long_description = fh.read()
 
 ext_errors = (CCompilerError, ExecError, PlatformError)
 if sys.platform == 'win32':
@@ -75,6 +81,8 @@ flow_extras_require = ['netaddr', 'pyparsing']
 setup_args = dict(
     name='ovs',
     description='Open vSwitch library',
+    long_description=long_description,
+    long_description_content_type='text/x-rst',
     version=VERSION,
     url='http://www.openvswitch.org/',
     author='Open vSwitch',
