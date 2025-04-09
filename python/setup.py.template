@@ -11,6 +11,7 @@
 # limitations under the License.
 
 import os
+import os.path
 import sys
 
 from setuptools.command.build_ext import build_ext
@@ -26,10 +27,7 @@ import setuptools
 VERSION = "@VERSION@"
 
 for x in ("version.py", "dirs.py"):
-    try:
-        # Try to open generated ovs/{version,dirs}.py
-        open(f"ovs/{x}")
-    except IOError:
+    if not os.path.exists(f"ovs/{x}"):
         print(f"Ensure {x} is created by running make python/ovs/{x}",
               file=sys.stderr)
         sys.exit(-1)
