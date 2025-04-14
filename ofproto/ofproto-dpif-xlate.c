@@ -455,12 +455,24 @@ const char *xlate_strerror(enum xlate_error error)
         return "Congestion Drop";
     case XLATE_FORWARDING_DISABLED:
         return "Forwarding is disabled";
+    case XLATE_TUNNEL_ROUTING_FAILED:
+        return "Native tunnel routing failed";
+    case XLATE_TUNNEL_OUTPUT_NO_ETHERNET:
+        return "Tunnel output device lacks Ethernet address";
+    case XLATE_TUNNEL_NEIGH_CACHE_MISS:
+        return "Tunnel neighbor cache miss";
+    case XLATE_TUNNEL_HEADER_BUILD_FAILED:
+        return "Native tunnel header build failed";
     case XLATE_MAX:
         break;
     }
     return "Unknown error";
 }
 
+static void put_cloned_drop_action(struct ofproto_dpif *ofproto,
+                                   struct ofpbuf *odp_actions,
+                                   enum xlate_error error,
+                                   bool cloned);
 static void xlate_action_set(struct xlate_ctx *ctx);
 static void xlate_commit_actions(struct xlate_ctx *ctx);
 
@@ -3893,6 +3905,8 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
 
     err = tnl_route_lookup_flow(ctx, flow, &d_ip6, &s_ip6, &out_dev);
     if (err) {
+        put_cloned_drop_action(ctx->xbridge->ofproto, ctx->odp_actions,
+                               XLATE_TUNNEL_ROUTING_FAILED, !is_last_action);
         xlate_report(ctx, OFT_WARN, "native tunnel routing failed");
         return err;
     }
@@ -3904,6 +3918,9 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
     /* Use mac addr of bridge port of the peer. */
     err = netdev_get_etheraddr(out_dev->netdev, &smac);
     if (err) {
+        put_cloned_drop_action(ctx->xbridge->ofproto, ctx->odp_actions,
+                               XLATE_TUNNEL_OUTPUT_NO_ETHERNET,
+                               !is_last_action);
         xlate_report(ctx, OFT_WARN,
                      "tunnel output device lacks Ethernet address");
         return err;
@@ -3918,6 +3935,9 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
     if (err) {
         struct in6_addr nh_s_ip6 = in6addr_any;
 
+        put_cloned_drop_action(ctx->xbridge->ofproto, ctx->odp_actions,
+                               XLATE_TUNNEL_NEIGH_CACHE_MISS,
+                               !is_last_action);
         xlate_report(ctx, OFT_DETAIL,
                      "neighbor cache miss for %s on bridge %s, "
                      "sending %s request",
@@ -3958,6 +3978,9 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
     netdev_init_tnl_build_header_params(&tnl_params, flow, &s_ip6, dmac, smac);
     err = tnl_port_build_header(xport->ofport, &tnl_push_data, &tnl_params);
     if (err) {
+        put_cloned_drop_action(ctx->xbridge->ofproto, ctx->odp_actions,
+                               XLATE_TUNNEL_HEADER_BUILD_FAILED,
+                               !is_last_action);
         xlate_report(ctx, OFT_WARN, "native tunnel header build failed");
         return err;
     }
@@ -6506,6 +6529,27 @@ put_drop_action(struct ofproto_dpif *ofproto, struct ofpbuf *odp_actions,
     }
 
     nl_msg_put_u32(odp_actions, OVS_ACTION_ATTR_DROP, error);
+}
+
+static void
+put_cloned_drop_action(struct ofproto_dpif *ofproto,
+                       struct ofpbuf *odp_actions,
+                       enum xlate_error error,
+                       bool cloned)
+{
+    size_t offset;
+
+    if (!ovs_explicit_drop_action_supported(ofproto)) {
+        return;
+    }
+
+    if (cloned) {
+        offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_CLONE);
+    }
+    nl_msg_put_u32(odp_actions, OVS_ACTION_ATTR_DROP, error);
+    if (cloned) {
+        nl_msg_end_nested(odp_actions, offset);
+    }
 }
 
 static void
