@@ -459,7 +459,7 @@ is, the first byte of the encapsulated frame immediately follows the
 same way for compatibility.
 
 For an earlier discussion, please see the thread archived at:
-https://mailman.stanford.edu/pipermail/openflow-discuss/2011-August/002604.html
+https://www.mail-archive.com/openflow-discuss@lists.stanford.edu/msg00663.html
 
 [*] The quoted definition is directly from OF1.1.  Definitions used inside OVS
 omit the 8-byte ``ofp_header`` members, so the sizes in this discussion are
