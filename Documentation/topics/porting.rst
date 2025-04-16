@@ -320,7 +320,7 @@ packet to software, slowing down not just UDPv6 but all IPv6 processing.
 
 .. [1] Aaron Rosen, "Modify packet fields extremely slow",
     openflow-discuss mailing list, June 26, 2011, archived at
-    https://mailman.stanford.edu/pipermail/openflow-discuss/2011-June/002386.html.
+    https://www.mail-archive.com/openflow-discuss@lists.stanford.edu/msg00447.html
 
 Questions
 ---------
