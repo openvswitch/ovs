@@ -148,7 +148,7 @@ situation.
 Some physical NICs can be programmed to put these protocols in a dedicated
 hardware Rx queue using the rte_flow__ API.
 
-__ https://doc.dpdk.org/guides-24.11/prog_guide/rte_flow.html
+__ https://doc.dpdk.org/guides-24.11/prog_guide/ethdev/flow_offload.html
 
 .. warning::
 
@@ -354,7 +354,7 @@ Representors are multi devices created on top of one PF.
 
 For more information, refer to the `DPDK documentation`__.
 
-__ https://doc.dpdk.org/guides-24.11/prog_guide/switch_representation.html#port-representors
+__ https://doc.dpdk.org/guides-24.11/prog_guide/ethdev/switch_representation.html#port-representors
 
 Prior to port representors there was a one-to-one relationship between the PF
 and the eth device. With port representors the relationship becomes one PF to
