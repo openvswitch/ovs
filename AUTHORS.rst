@@ -483,6 +483,7 @@ Tonghao Zhang                      xiangxia.m.yue@gmail.com
 Usman Ansari                       ua1422@gmail.com
 Valient Gough                      vgough@pobox.com
 Vasu Dasari                        vdasari@gmail.com
+Vasyl Saienko                      vsaienko@mirantis.com
 Venkata Anil Kommaddi              vkommadi@redhat.com
 Viacheslav Galaktionov             viacheslav.galaktionov@arknetworks.am
 Ville Skyttä                       ville.skytta@upcloud.com
