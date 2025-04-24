@@ -305,7 +305,7 @@ error:
 int
 uuid_is_partial_string(const char *s)
 {
-    static const char tmpl[UUID_LEN] = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+    const char *tmpl = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
     size_t i;
     for (i = 0; i < UUID_LEN; i++) {
         if (s[i] == '\0') {
