@@ -785,7 +785,8 @@ conn prevent_unencrypted_vxlan
         return self.get_conns_from_status(r"#\d+: .*\"(.*)\".*")
 
     def get_loaded_conns(self):
-        return self.get_conns_from_status(r"\"(.*)\": \d+.*(===|\.\.\.).*")
+        return self.get_conns_from_status(
+            r"\"(.*)\": [0-9a-f]+.*(===|\.\.\.).*")
 
     def get_conn_names(self, monitor, ifname):
         conns = []
