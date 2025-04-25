@@ -2838,8 +2838,7 @@ where_uuid_equals(const struct uuid *uuid)
                 json_string_create("=="),
                 json_array_create_2(
                     json_string_create("uuid"),
-                    json_string_create_nocopy(
-                        xasprintf(UUID_FMT, UUID_ARGS(uuid))))));
+                    json_string_create_uuid(uuid))));
 }
 
 static const struct ovsdb_idl_row *
@@ -3308,8 +3307,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                 struct json *value;
                 if (row->persist_uuid) {
                     uuid_json = "uuid";
-                    value = json_string_create_nocopy(
-                        xasprintf(UUID_FMT, UUID_ARGS(&row->uuid)));
+                    value = json_string_create_uuid(&row->uuid);
                 } else {
                     uuid_json = "uuid-name";
                     value = json_string_create_nocopy(

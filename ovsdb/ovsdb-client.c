@@ -1469,8 +1469,7 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
         break;
     case OVSDB_MONITOR_V3:
         method = "monitor_cond_since";
-        struct json *json_last_id = json_string_create_nocopy(
-                xasprintf(UUID_FMT, UUID_ARGS(last_id)));
+        struct json *json_last_id = json_string_create_uuid(last_id);
         json_array_add(monitor, json_last_id);
         break;
     case OVSDB_MONITOR_VERSION_MAX:

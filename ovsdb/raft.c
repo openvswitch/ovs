@@ -527,7 +527,7 @@ raft_create_cluster(const char *file_name, const char *name,
     };
     raft_entry_set_parsed_data(&h.snap, data);
     shash_add_nocopy(json_object(h.snap.servers),
-                     xasprintf(UUID_FMT, UUID_ARGS(&h.sid)),
+                     uuid_to_string(&h.sid),
                      json_string_create(local_address));
     error = ovsdb_log_write_and_free(log, raft_header_to_json(&h));
     raft_header_uninit(&h);
@@ -4846,7 +4846,7 @@ raft_unixctl_cid(struct unixctl_conn *conn,
     } else if (uuid_is_zero(&raft->cid)) {
         unixctl_command_reply_error(conn, "cluster id not yet known");
     } else {
-        char *uuid = xasprintf(UUID_FMT, UUID_ARGS(&raft->cid));
+        char *uuid = uuid_to_string(&raft->cid);
         unixctl_command_reply(conn, uuid);
         free(uuid);
     }
@@ -4861,7 +4861,7 @@ raft_unixctl_sid(struct unixctl_conn *conn,
     if (!raft) {
         unixctl_command_reply_error(conn, "unknown cluster");
     } else {
-        char *uuid = xasprintf(UUID_FMT, UUID_ARGS(&raft->sid));
+        char *uuid = uuid_to_string(&raft->sid);
         unixctl_command_reply(conn, uuid);
         free(uuid);
     }

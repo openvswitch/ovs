@@ -1546,9 +1546,7 @@ ovsdb_cs_send_monitor_request(struct ovsdb_cs *cs, struct ovsdb_cs_db *db,
                               json_clone(db->monitor_id),
                               mrs);
     if (version == 3) {
-        struct json *json_last_id = json_string_create_nocopy(
-            xasprintf(UUID_FMT, UUID_ARGS(&db->last_id)));
-        json_array_add(params, json_last_id);
+        json_array_add(params, json_string_create_uuid(&db->last_id));
     }
     ovsdb_cs_send_request(cs, jsonrpc_create_request(method, params, NULL));
 }

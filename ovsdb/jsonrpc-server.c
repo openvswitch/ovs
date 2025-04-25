@@ -1157,8 +1157,7 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
         const struct uuid *uuid = &s->up.server->uuid;
         struct json *result;
 
-        result = json_string_create_nocopy(xasprintf(UUID_FMT,
-                                                    UUID_ARGS(uuid)));
+        result = json_string_create_uuid(uuid);
         reply = jsonrpc_create_reply(result, request->id);
     } else if (!strcmp(request->method, "lock")) {
         reply = ovsdb_jsonrpc_session_lock(s, request, OVSDB_LOCK_WAIT);
@@ -1609,10 +1608,8 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     json = json ? json : json_object_create();
 
     if (m->version == OVSDB_MONITOR_V3) {
-        struct json *json_last_id = json_string_create_nocopy(
-                xasprintf(UUID_FMT,
-                          UUID_ARGS(ovsdb_monitor_get_last_txnid(
-                                  m->dbmon))));
+        struct json *json_last_id = json_string_create_uuid(
+            ovsdb_monitor_get_last_txnid(m->dbmon));
 
         struct json *json_found = json_boolean_create(!initial);
         json = json_array_create_3(json_found, json_last_id, json);
@@ -1752,10 +1749,8 @@ ovsdb_jsonrpc_monitor_cond_change(struct ovsdb_jsonrpc_session *s,
         struct jsonrpc_msg *msg;
         struct json *p;
         if (m->version == OVSDB_MONITOR_V3) {
-            struct json *json_last_id = json_string_create_nocopy(
-                    xasprintf(UUID_FMT,
-                              UUID_ARGS(ovsdb_monitor_get_last_txnid(
-                                      m->dbmon))));
+            struct json *json_last_id = json_string_create_uuid(
+                ovsdb_monitor_get_last_txnid(m->dbmon));
 
             p = json_array_create_3(json_clone(m->monitor_id), json_last_id,
                                     update_json);
@@ -1912,10 +1907,8 @@ ovsdb_jsonrpc_monitor_flush_all(struct ovsdb_jsonrpc_session *s)
             struct jsonrpc_msg *msg;
             struct json *params;
             if (m->version == OVSDB_MONITOR_V3) {
-                struct json *json_last_id = json_string_create_nocopy(
-                        xasprintf(UUID_FMT,
-                                  UUID_ARGS(ovsdb_monitor_get_last_txnid(
-                                          m->dbmon))));
+                struct json *json_last_id = json_string_create_uuid(
+                    ovsdb_monitor_get_last_txnid(m->dbmon));
                 params = json_array_create_3(json_clone(m->monitor_id),
                                              json_last_id, json);
             } else {

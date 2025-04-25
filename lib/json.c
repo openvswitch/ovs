@@ -189,6 +189,11 @@ json_string_create(const char *s)
     return json_string_create_nocopy(xstrdup(s));
 }
 
+struct json *json_string_create_uuid(const struct uuid *uuid)
+{
+    return json_string_create_nocopy(uuid_to_string(uuid));
+}
+
 struct json *
 json_serialized_object_create(const struct json *src)
 {
@@ -340,6 +345,12 @@ json_object_put_format(struct json *json,
     json_object_put(json, name,
                     json_string_create_nocopy(xvasprintf(format, args)));
     va_end(args);
+}
+
+void json_object_put_uuid(struct json *json,
+                          const char *name, const struct uuid *uuid)
+{
+    json_object_put(json, name, json_string_create_uuid(uuid));
 }
 
 const char *

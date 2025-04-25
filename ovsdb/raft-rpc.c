@@ -333,7 +333,7 @@ raft_vote_reply_to_jsonrpc(const struct raft_vote_reply *rpy,
                            struct json *args)
 {
     raft_put_uint64(args, "term", rpy->term);
-    json_object_put_format(args, "vote", UUID_FMT, UUID_ARGS(&rpy->vote));
+    json_object_put_uuid(args, "vote", &rpy->vote);
     if (rpy->is_prevote) {
         json_object_put(args, "is_prevote", json_boolean_create(true));
     }
@@ -476,8 +476,7 @@ raft_remove_server_reply_to_jsonrpc(const struct raft_remove_server_reply *rpy,
                                     struct json *args)
 {
     if (!uuid_is_zero(&rpy->target_sid)) {
-        json_object_put_format(args, "target_server",
-                               UUID_FMT, UUID_ARGS(&rpy->target_sid));
+        json_object_put_uuid(args, "target_server", &rpy->target_sid);
     }
     json_object_put(args, "success", json_boolean_create(rpy->success));
 }
@@ -524,8 +523,7 @@ raft_install_snapshot_request_to_jsonrpc(
     raft_put_uint64(args, "last_index", rq->last_index);
     raft_put_uint64(args, "last_term", rq->last_term);
     json_object_put(args, "last_servers", json_clone(rq->last_servers));
-    json_object_put_format(args, "last_eid",
-                           UUID_FMT, UUID_ARGS(&rq->last_eid));
+    json_object_put_uuid(args, "last_eid", &rq->last_eid);
     raft_put_uint64(args, "election_timer", rq->election_timer);
 
     json_object_put(args, "data", json_clone(rq->data));
@@ -636,7 +634,7 @@ static void
 raft_remove_server_request_to_jsonrpc(
     const struct raft_remove_server_request *rq, struct json *args)
 {
-    json_object_put_format(args, "server_id", UUID_FMT, UUID_ARGS(&rq->sid));
+    json_object_put_uuid(args, "server_id", &rq->sid);
 }
 
 static void
@@ -708,8 +706,8 @@ raft_execute_command_request_to_jsonrpc(
     const struct raft_execute_command_request *rq, struct json *args)
 {
     json_object_put(args, "data", json_clone(rq->data));
-    json_object_put_format(args, "prereq", UUID_FMT, UUID_ARGS(&rq->prereq));
-    json_object_put_format(args, "result", UUID_FMT, UUID_ARGS(&rq->result));
+    json_object_put_uuid(args, "prereq", &rq->prereq);
+    json_object_put_uuid(args, "result", &rq->result);
 }
 
 static void
@@ -751,7 +749,7 @@ static void
 raft_execute_command_reply_to_jsonrpc(
     const struct raft_execute_command_reply *rpy, struct json *args)
 {
-    json_object_put_format(args, "result", UUID_FMT, UUID_ARGS(&rpy->result));
+    json_object_put_uuid(args, "result", &rpy->result);
     json_object_put_string(args, "status",
                            raft_command_status_to_string(rpy->status));
     if (rpy->commit_index) {
@@ -833,13 +831,12 @@ raft_rpc_to_jsonrpc(const struct uuid *cid,
 {
     struct json *args = json_object_create();
     if (!uuid_is_zero(cid)) {
-        json_object_put_format(args, "cluster", UUID_FMT, UUID_ARGS(cid));
+        json_object_put_uuid(args, "cluster", cid);
     }
     if (!uuid_is_zero(&rpc->common.sid)) {
-        json_object_put_format(args, "to", UUID_FMT,
-                               UUID_ARGS(&rpc->common.sid));
+        json_object_put_uuid(args, "to", &rpc->common.sid);
     }
-    json_object_put_format(args, "from", UUID_FMT, UUID_ARGS(sid));
+    json_object_put_uuid(args, "from", sid);
     if (rpc->common.comment) {
         json_object_put_string(args, "comment", rpc->common.comment);
     }

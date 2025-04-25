@@ -483,8 +483,7 @@ ovsdb_atom_to_json__(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                                     : json_deep_clone(atom->s);
 
     case OVSDB_TYPE_UUID:
-        return wrap_json("uuid", json_string_create_nocopy(
-                             xasprintf(UUID_FMT, UUID_ARGS(&atom->uuid))));
+        return wrap_json("uuid", json_string_create_uuid(&atom->uuid));
 
     case OVSDB_N_TYPES:
     default:
@@ -753,7 +752,7 @@ ovsdb_atom_to_string(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         break;
 
     case OVSDB_TYPE_UUID:
-        ds_put_format(out, UUID_FMT, UUID_ARGS(&atom->uuid));
+        ds_put_uuid(out, &atom->uuid);
         break;
 
     case OVSDB_N_TYPES:

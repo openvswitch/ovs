@@ -80,6 +80,7 @@ struct json *json_null_create(void);
 struct json *json_boolean_create(bool);
 struct json *json_string_create(const char *);
 struct json *json_string_create_nocopy(char *);
+struct json *json_string_create_uuid(const struct uuid *);
 struct json *json_serialized_object_create(const struct json *);
 struct json *json_integer_create(long long int);
 struct json *json_real_create(double);
@@ -101,6 +102,8 @@ void json_object_put_string(struct json *,
 void json_object_put_format(struct json *,
                             const char *name, const char *format, ...)
     OVS_PRINTF_FORMAT(3, 4);
+void json_object_put_uuid(struct json *, const char *name,
+                          const struct uuid *);
 
 const char *json_string(const struct json *);
 const char *json_serialized_object(const struct json *);

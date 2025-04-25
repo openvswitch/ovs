@@ -1785,7 +1785,7 @@ cmd_create(struct ctl_context *ctx)
             return;
         }
     }
-    ds_put_format(&ctx->output, UUID_FMT, UUID_ARGS(&row->uuid));
+    ds_put_uuid(&ctx->output, &row->uuid);
 }
 
 /* This function may be used as the 'postprocess' function for commands that
@@ -1809,7 +1809,7 @@ post_create(struct ctl_context *ctx)
     real = ovsdb_idl_txn_get_insert_uuid(ctx->txn, &dummy);
     if (real) {
         ds_clear(&ctx->output);
-        ds_put_format(&ctx->output, UUID_FMT, UUID_ARGS(real));
+        ds_put_uuid(&ctx->output, real);
     }
     ds_put_char(&ctx->output, '\n');
 }
@@ -2153,7 +2153,7 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
         datum = ovsdb_idl_read(row, show->name_column);
         ovsdb_datum_to_string(datum, &show->name_column->type, &ctx->output);
     } else {
-        ds_put_format(&ctx->output, UUID_FMT, UUID_ARGS(&row->uuid));
+        ds_put_uuid(&ctx->output, &row->uuid);
     }
     ds_put_char(&ctx->output, '\n');
 
