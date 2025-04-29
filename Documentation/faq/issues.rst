@@ -407,9 +407,9 @@ keep changing internal ports MTU?
 
 Q: I just upgraded and I see a performance drop.  Why?
 
-    A: The OVS kernel datapath may have been updated to a newer version than
-    the OVS userspace components.  Sometimes new versions of OVS kernel module
-    add functionality that is backwards compatible with older userspace
+    A: The OVS kernel datapath may have been updated to a new version without
+    updating OVS userspace components. Sometimes new versions of OVS kernel
+    module add functionality that is backwards compatible with older userspace
     components but may cause a drop in performance with them.  Especially, if a
     kernel module from OVS 2.1 or newer is paired with OVS userspace 1.10 or
     older, there will be a performance drop for TCP traffic.
@@ -417,8 +417,18 @@ Q: I just upgraded and I see a performance drop.  Why?
     Updating the OVS userspace components to the latest released version should
     fix the performance degradation.
 
-    To get the best possible performance and functionality, it is recommended
-    to pair the same versions of the kernel module and OVS userspace.
+    The OVS kernel modules has been distributed with the upstream Linux kernel
+    since Linux 3.3. As of OVS 2.15 the use of the kernel module distributed
+    with OVS is deprecated in favour of the kernel module distributed with the
+    upstream Linux kernel. And as of OVS 3.0 the kernel module is no longer
+    part of the OVS distribution.
+
+    Accordingly, for OVS 2.15 and newer, to get the best possible performance
+    and functionality it is recommended to pair the latest released version of
+    OVS with the latest released version of the Linux kernel. While, for
+    releases of OVS prior to 2.15, is recommended to pair the same versions of
+    the kernel module and OVS userspace.
+
 
 Q: I can't unload the openvswitch kernel module.  Why?
 
