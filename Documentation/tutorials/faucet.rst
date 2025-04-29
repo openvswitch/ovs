@@ -768,11 +768,10 @@ way, performance would be terrible.  The key to getting high
 performance from this architecture is caching.  Open vSwitch includes
 a multi-level cache.  It works like this:
 
-1. A packet initially arrives at the datapath.  Some datapaths (such
-   as DPDK and the in-tree version of the OVS kernel module) have a
-   first-level cache called the "microflow cache".  The microflow
-   cache is the key to performance for relatively long-lived, high
-   packet rate flows.  If the datapath has a microflow cache, then it
+1. A packet initially arrives at the datapath.  Some datapaths, such
+   as DPDK, have a first-level cache called the "microflow cache".  The
+   microflow cache is the key to performance for relatively long-lived,
+   high packet rate flows.  If the datapath has a microflow cache, then it
    consults it and, if there is a cache hit, the datapath executes the
    associated actions.  Otherwise, it proceeds to step 2.
 
