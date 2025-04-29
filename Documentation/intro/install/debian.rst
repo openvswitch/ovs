@@ -101,11 +101,8 @@ any missing dependencies.
 .. important::
   You must be superuser to install Debian packages.
 
-1. Start by installing an Open vSwitch kernel module. See
-   ``debian/openvswitch-switch.README.Debian`` for the available options.
-
-2. Install the ``openvswitch-switch`` and ``openvswitch-common`` packages.
-   These packages include the core userspace components of the switch.
+Install the ``openvswitch-switch`` and ``openvswitch-common`` packages.
+These packages include the core userspace components of the switch.
 
 Open vSwitch ``.deb`` packages not mentioned above are rarely useful. Refer to
 their individual package descriptions to find out whether any of them are
