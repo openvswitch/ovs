@@ -36,6 +36,7 @@
 #include "dpif.h"
 #include "fatal-signal.h"
 #include "openvswitch/dynamic-string.h"
+#include "openvswitch/json.h"
 #include "netdev.h"
 #include "packets.h"
 #include "seq.h"
@@ -509,44 +510,122 @@ ovs_router_del(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
-ovs_router_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
-               const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+ovs_router_show_json(struct json **routes)
+{
+    int n_rules = classifier_count(&cls);
+    struct json **json_entries = NULL;
+    struct ovs_router_entry *rt;
+    struct ds ds;
+    int i = 0;
+
+    if (!n_rules) {
+        goto out;
+    }
+
+    json_entries = xmalloc(n_rules * sizeof *json_entries);
+    ds_init(&ds);
+
+    CLS_FOR_EACH (rt, cr, &cls) {
+        bool user = rt->priority != rt->plen && !rt->local;
+        struct json *json = json_object_create();
+        struct json *nh = json_object_create();
+        uint8_t plen = rt->plen;
+
+        if (i >= n_rules) {
+            break;
+        }
+
+        if (IN6_IS_ADDR_V4MAPPED(&rt->nw_addr)) {
+            plen -= 96;
+        }
+
+        json_object_put(json, "user", json_boolean_create(user));
+        json_object_put(json, "local", json_boolean_create(rt->local));
+        json_object_put(json, "priority", json_integer_create(rt->priority));
+        json_object_put(json, "prefix", json_integer_create(plen));
+        json_object_put_string(nh, "dev", rt->output_netdev);
+
+        ipv6_format_mapped(&rt->nw_addr, &ds);
+        json_object_put_string(json, "dst", ds_cstr_ro(&ds));
+        ds_clear(&ds);
+
+        ipv6_format_mapped(&rt->src_addr, &ds);
+        json_object_put_string(json, "prefsrc", ds_cstr_ro(&ds));
+        ds_clear(&ds);
+
+        if (rt->mark) {
+            json_object_put(json, "mark", json_integer_create(rt->mark));
+        }
+
+        if (ipv6_addr_is_set(&rt->gw)) {
+            ipv6_format_mapped(&rt->gw, &ds);
+            json_object_put_string(nh, "gateway", ds_cstr_ro(&ds));
+            ds_clear(&ds);
+        }
+
+        json_object_put(json, "nexthops", json_array_create_1(nh));
+        json_entries[i++] = json;
+    }
+
+    ds_destroy(&ds);
+
+out:
+    *routes = json_array_create(json_entries, i);
+}
+
+static void
+ovs_router_show_text(struct ds *ds)
 {
     struct ovs_router_entry *rt;
-    struct ds ds = DS_EMPTY_INITIALIZER;
 
-    ds_put_format(&ds, "Route Table:\n");
-    CLS_FOR_EACH(rt, cr, &cls) {
+    ds_put_format(ds, "Route Table:\n");
+    CLS_FOR_EACH (rt, cr, &cls) {
         uint8_t plen;
         if (rt->priority == rt->plen || rt->local) {
-            ds_put_format(&ds, "Cached: ");
+            ds_put_format(ds, "Cached: ");
         } else {
-            ds_put_format(&ds, "User: ");
+            ds_put_format(ds, "User: ");
         }
-        ipv6_format_mapped(&rt->nw_addr, &ds);
+        ipv6_format_mapped(&rt->nw_addr, ds);
         plen = rt->plen;
         if (IN6_IS_ADDR_V4MAPPED(&rt->nw_addr)) {
             plen -= 96;
         }
-        ds_put_format(&ds, "/%"PRIu8, plen);
+        ds_put_format(ds, "/%"PRIu8, plen);
         if (rt->mark) {
-            ds_put_format(&ds, " MARK %"PRIu32, rt->mark);
+            ds_put_format(ds, " MARK %"PRIu32, rt->mark);
         }
 
-        ds_put_format(&ds, " dev %s", rt->output_netdev);
+        ds_put_format(ds, " dev %s", rt->output_netdev);
         if (ipv6_addr_is_set(&rt->gw)) {
-            ds_put_format(&ds, " GW ");
-            ipv6_format_mapped(&rt->gw, &ds);
+            ds_put_format(ds, " GW ");
+            ipv6_format_mapped(&rt->gw, ds);
         }
-        ds_put_format(&ds, " SRC ");
-        ipv6_format_mapped(&rt->src_addr, &ds);
+        ds_put_format(ds, " SRC ");
+        ipv6_format_mapped(&rt->src_addr, ds);
         if (rt->local) {
-            ds_put_format(&ds, " local");
+            ds_put_format(ds, " local");
         }
-        ds_put_format(&ds, "\n");
+        ds_put_format(ds, "\n");
     }
-    unixctl_command_reply(conn, ds_cstr(&ds));
-    ds_destroy(&ds);
+}
+
+static void
+ovs_router_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+               const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    if (unixctl_command_get_output_format(conn) == UNIXCTL_OUTPUT_FMT_JSON) {
+        struct json *routes;
+
+        ovs_router_show_json(&routes);
+        unixctl_command_reply_json(conn, routes);
+    } else {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+
+        ovs_router_show_text(&ds);
+        unixctl_command_reply(conn, ds_cstr(&ds));
+        ds_destroy(&ds);
+    }
 }
 
 static void
@@ -619,7 +698,7 @@ ovs_router_init(void)
         fatal_signal_add_hook(ovs_router_flush_handler, NULL, NULL, true);
         classifier_init(&cls, NULL);
         unixctl_command_register("ovs/route/add",
-                                 "ip/plen output_netdev [gw] "
+                                 "ip/plen dev [gw] "
                                  "[pkt_mark=mark] [src=src_ip]",
                                  2, 5, ovs_router_add, NULL);
         unixctl_command_register("ovs/route/show", "", 0, 0,
