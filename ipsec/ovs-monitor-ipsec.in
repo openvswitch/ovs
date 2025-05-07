@@ -514,8 +514,7 @@ conn prevent_unencrypted_vxlan
         self.IPSEC_D = "sql:" + libreswan_root_prefix + ipsec_d
         self.IPSEC_CTL = libreswan_root_prefix + ipsec_ctl
         self.conf_file = None
-        self.conns_not_active = set()
-        self.last_refresh = time.time()
+        self.conns_not_active = {"added": {}, "started": {}}
         self.secrets_file = None
         self.use_default_conn = self.IPSEC_CONF == self.ROOT_IPSEC_CONF
         self.use_default_crypto = args.use_default_crypto
@@ -642,6 +641,9 @@ conn prevent_unencrypted_vxlan
             name = self.CERT_PREFIX + tunnel.conf["remote_name"]
             self._nss_delete_cert(name)
 
+    def conn_should_reconcile(self, timestamp):
+        return time.time() >= timestamp + RECONCILIATION_INTERVAL
+
     def refresh(self, monitor):
         vlog.info("Refreshing LibreSwan configuration")
         run_command(self.IPSEC_AUTO + ["--ctlsocket", self.IPSEC_CTL,
@@ -662,12 +664,18 @@ conn prevent_unencrypted_vxlan
             active = set(active_conns.get(name, dict()).keys())
 
             # Untrack connections that became active.
-            self.conns_not_active.difference_update(active)
+            for conn in active:
+                self.conns_not_active["added"].pop(conn, None)
+                self.conns_not_active["started"].pop(conn, None)
+
             # Remove connections that didn't become active after --start
-            # and another explicit --up.
-            for conn in self.conns_not_active & loaded:
-                self._delete_ipsec_connection(conn, "is defunct")
-                loaded.remove(conn)
+            # or an explicit --up.
+            for conn in list(loaded):
+                started = self.conns_not_active["started"].get(conn, None)
+
+                if started and self.conn_should_reconcile(started):
+                    self._delete_ipsec_connection(conn, "is defunct")
+                    loaded.remove(conn)
 
             # Remove all the loaded or active but not desired connections.
             for conn in loaded | active:
@@ -706,10 +714,11 @@ conn prevent_unencrypted_vxlan
                 # desired == loaded and desired >= loaded + active,
                 # so loaded >= active
                 for conn in loaded - active:
-                    vlog.info("Bringing up ipsec connection %s" % conn)
-                    # On failure to --up it will be removed from the set.
-                    self.conns_not_active.add(conn)
-                    self._start_ipsec_connection(conn, "up")
+                    added = self.conns_not_active["added"].get(conn, None)
+
+                    if added and self.conn_should_reconcile(added):
+                        vlog.info("Bringing up ipsec connection %s" % conn)
+                        self._start_ipsec_connection(conn, "up")
 
         # Update shunt policy if changed
         if monitor.conf_in_use["skb_mark"] != monitor.conf["skb_mark"]:
@@ -746,7 +755,13 @@ conn prevent_unencrypted_vxlan
                             "--delete",
                             "--asynchronous", "prevent_unencrypted_vxlan"])
             monitor.conf_in_use["skb_mark"] = monitor.conf["skb_mark"]
-        self.last_refresh = time.time()
+
+        if monitor.tunnels and \
+           not self.conns_not_active["added"] and \
+           not self.conns_not_active["started"]:
+            vlog.info("Connections for all(%d) configured tunnels are Up."
+                      % len(monitor.tunnels))
+
         vlog.info("Refreshing is done.")
 
     def get_conns_from_status(self, pattern):
@@ -809,31 +824,51 @@ conn prevent_unencrypted_vxlan
         return conns
 
     def need_to_reconcile(self, monitor):
-        if time.time() - self.last_refresh < RECONCILIATION_INTERVAL:
-            return False
+        timestamps = (
+            timestamp for group in ("added", "started")
+            for timestamp in self.conns_not_active[group].values()
+        )
+        earliest = min(timestamps, default=None)
+
+        if earliest and self.conn_should_reconcile(earliest):
+            vlog.dbg("Need to check the state of the following connections: %s"
+                     % self.conns_not_active)
+            return True
 
         conns_dict = self.get_active_conns()
         for ifname, tunnel in monitor.tunnels.items():
-            if ifname not in conns_dict:
-                vlog.info("Connection for port %s is not active, "
-                          "need to reconcile" % ifname)
-                return True
-
-            existing_conns = conns_dict.get(ifname)
+            existing_conns = set(conns_dict.get(ifname, dict()).keys())
             desired_conns = self.get_conn_names(monitor, ifname)
 
-            if set(existing_conns.keys()) != set(desired_conns):
+            for conn in existing_conns.symmetric_difference(desired_conns):
+                timestamp = None
+                for group in ("added", "started"):
+                    timestamp = self.conns_not_active[group].get(conn, None)
+                    if timestamp:
+                        break
+
+                # If connection is on one of the 'not_active' lists, it should
+                # not be reconciled, unless sufficient time have passed.
+                #
+                # If it's not on any of the lists, it means that one of the
+                # previously active connections somehow became non-active, and
+                # we need to reconcile.
+                if timestamp and not self.conn_should_reconcile(timestamp):
+                    continue
+
                 vlog.info("Active connections for port %s %s do not match "
                           "desired %s, need to reconcile"
-                          % (ifname, list(existing_conns.keys()),
-                             desired_conns))
+                          % (ifname, list(existing_conns), desired_conns))
                 return True
 
         return False
 
     def _delete_ipsec_connection(self, conn, reason):
         vlog.info("%s %s, removing" % (conn, reason))
-        self.conns_not_active.discard(conn)
+
+        self.conns_not_active["added"].pop(conn, None)
+        self.conns_not_active["started"].pop(conn, None)
+
         run_command(self.IPSEC_AUTO +
                     ["--ctlsocket", self.IPSEC_CTL,
                      "--config", self.ROOT_IPSEC_CONF,
@@ -858,6 +893,15 @@ conn prevent_unencrypted_vxlan
             # We don't know in which state the connection was left on
             # failure.  Try to clean it up.
             self._delete_ipsec_connection(conn, "--%s failed" % action)
+        else:
+            # Update timestamps, make sure the connection is only tracked
+            # in one of the 'not_active' lists.
+            if action == "add":
+                self.conns_not_active["added"][conn] = time.time()
+                self.conns_not_active["started"].pop(conn, None)
+            else:
+                self.conns_not_active["added"].pop(conn, None)
+                self.conns_not_active["started"][conn] = time.time()
 
     def _nss_clear_database(self):
         """Remove all OVS IPsec related state from the NSS database"""
