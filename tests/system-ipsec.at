@@ -535,6 +535,96 @@ AT_CHECK([grep -q -E "(ike|ikev2|esp)=" $ovs_base/right/custom.conf], [1])
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
 
+AT_SETUP([IPsec -- Libreswan - reconciliation interval is respected - ipv4])
+AT_KEYWORDS([ipsec libreswan ipv4 geneve psk reconciliation])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+m4_define([PSK_OPTIONS], [options:remote_ip=$1 options:psk=swordfish])
+dnl Set up only the left host.
+IPSEC_ADD_NODE_LEFT([10.1.1.1], [10.1.1.254])
+IPSEC_ADD_TUNNEL_LEFT([geneve], PSK_OPTIONS([10.1.1.2]))
+dnl Wait for the monitor to find the new connection.
+OVS_WAIT_UNTIL([grep -q 'tun appeared' left/ovs-monitor-ipsec.log])
+
+dnl Add a few more tunels waiting for the monitor to find them too.
+m4_for([id], [1], 5, [1], [
+  OVS_VSCTL([left], add-port br-ipsec tun-id \
+                    -- set Interface tun-id type=geneve PSK_OPTIONS(10.1.2.id))
+  OVS_WAIT_UNTIL(grep -q 'tun-id appeared' left/ovs-monitor-ipsec.log)
+])
+dnl And now remove all the extra tunnels.
+m4_for([id], [1], 5, [1], [
+  OVS_VSCTL([left], del-port tun-id)
+  OVS_WAIT_UNTIL(grep -q 'tun-id disappeared' left/ovs-monitor-ipsec.log)
+])
+
+dnl Check that none of the connections were marked for reconciliation yet.
+dnl It should take at least 15 seconds for this to happen.
+AT_CHECK([grep -E 'half-loaded|defunct' left/ovs-monitor-ipsec.log], [1])
+AT_CHECK([grep 'Bringing up' left/ovs-monitor-ipsec.log], [1])
+dnl But we should eventually attempt to reconcile the original 'tun' tunnel.
+OVS_WAIT_UNTIL([grep -qE 'Bringing up ipsec connection tun-[[io]]' \
+                         left/ovs-monitor-ipsec.log])
+dnl Now add the right host and check that connection works properly.
+IPSEC_ADD_NODE_RIGHT([10.1.1.2], [10.1.1.254])
+IPSEC_ADD_TUNNEL_RIGHT([geneve], PSK_OPTIONS([10.1.1.1]))
+
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan - reconciliation interval is respected - ipv6])
+AT_KEYWORDS([ipsec libreswan ipv6 geneve psk reconciliation])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+m4_define([PSK_OPTIONS], [options:remote_ip=$1 options:psk=swordfish])
+
+dnl Set up only the left host.
+IPSEC_ADD_NODE_LEFT([fd01::101], [fd01::254])
+IPSEC_ADD_TUNNEL_LEFT([geneve], PSK_OPTIONS([fd01::102]))
+dnl Wait for the monitor to find the new connection.
+OVS_WAIT_UNTIL([grep -q 'tun appeared' left/ovs-monitor-ipsec.log])
+
+dnl Add a few more tunels waiting for the monitor to find them too.
+m4_for([id], [1], 5, [1], [
+  OVS_VSCTL([left], add-port br-ipsec tun-id \
+                    -- set Interface tun-id type=geneve PSK_OPTIONS(fd02::id))
+  OVS_WAIT_UNTIL(grep -q 'tun-id appeared' left/ovs-monitor-ipsec.log)
+])
+dnl And now remove all the extra tunnels.
+m4_for([id], [1], 5, [1], [
+  OVS_VSCTL([left], del-port tun-id)
+  OVS_WAIT_UNTIL(grep -q 'tun-id disappeared' left/ovs-monitor-ipsec.log)
+])
+
+dnl Check that none of the connections were marked for reconciliation yet.
+dnl It should take at least 15 seconds for this to happen.
+AT_CHECK([grep -E 'half-loaded|defunct' left/ovs-monitor-ipsec.log], [1])
+AT_CHECK([grep 'Bringing up' left/ovs-monitor-ipsec.log], [1])
+dnl But we should eventually attempt to reconcile the original 'tun' tunnel.
+OVS_WAIT_UNTIL([grep -qE 'Bringing up ipsec connection tun-[[io]]' \
+                         left/ovs-monitor-ipsec.log])
+
+dnl Now add the right host and check that connection works properly.
+IPSEC_ADD_NODE_RIGHT([fd01::102], [fd01::254])
+IPSEC_ADD_TUNNEL_RIGHT([geneve], PSK_OPTIONS([fd01::101]))
+
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
 AT_SETUP([IPsec -- Libreswan - established conns survive new additions - ipv4])
 AT_KEYWORDS([ipsec libreswan ipv4 geneve psk persistence])
 dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
@@ -752,6 +842,10 @@ if test -s stderr; then
     auto=
 fi
 
+dnl Wait for the monitor to be done with all the connections.
+OVS_WAIT_UNTIL([grep -q 'all(19) configured tunnels are Up' \
+                    $ovs_base/node-1/ovs-monitor-ipsec.log])
+
 dnl Remove connections for two tunnels.  One fully and one partially.
 AT_CHECK([ipsec $auto --ctlsocket $ovs_base/node-1/pluto.ctl \
                       --config $ovs_base/node-1/ipsec.conf \
@@ -764,7 +858,7 @@ AT_CHECK([ipsec $auto --ctlsocket $ovs_base/node-1/pluto.ctl \
                       --delete tun-2-out-1], [0], [stdout])
 
 dnl Wait for the monitor to notice the missing connections.
-OVS_WAIT_UNTIL([grep -q 'tun-2.*need to reconcile' \
+OVS_WAIT_UNTIL([grep -qE 'tun-[[25]] .*need to reconcile' \
                     $ovs_base/node-1/ovs-monitor-ipsec.log])
 
 dnl Wait for all the connections to be loaded back.
