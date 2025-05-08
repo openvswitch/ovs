@@ -143,6 +143,7 @@ Dexia Li                           dexia.li@jaguarmicro.com
 Dima Chumak                        dchumak@nvidia.com
 Dincer Beken                       dbeken@blackned.de
 Dmitry Krivenok                    krivenok.dmitry@gmail.com
+Dmitry Porokh                      dporokh@nvidia.com
 Dominic Curran                     dominic.curran@citrix.com
 Dongdong                           dongdong1@huawei.com
 Dongjun                            dongj@dtdream.com
