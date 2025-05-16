@@ -37,6 +37,7 @@
 #include "command-line.h"
 #include "fatal-signal.h"
 #include "flow.h"
+#include "openvswitch/vlog.h"
 #include "ovstest.h"
 #include "ovs-atomic.h"
 #include "ovs-thread.h"
@@ -757,11 +758,22 @@ shuffle_u32s(uint32_t *p, size_t n)
         *q = tmp;
     }
 }
+
+static void
+shuffle_fields(enum mf_field_id *p, size_t n)
+{
+    for (; n > 1; n--, p++) {
+        enum mf_field_id *q = &p[random_range(n)];
+        enum mf_field_id tmp = *p;
+        *p = *q;
+        *q = tmp;
+    }
+}
 
 /* Classifier tests. */
 
-static enum mf_field_id trie_fields[2] = {
-    MFF_IPV4_DST, MFF_IPV4_SRC
+static enum mf_field_id trie_fields[4] = {
+    MFF_IPV4_DST, MFF_IPV4_SRC, MFF_IPV6_DST, MFF_IPV6_SRC,
 };
 
 static void
@@ -1286,7 +1298,7 @@ static int n_tables;            /* Number of subtables. */
 static int n_threads;           /* Number of threads to search and mutate. */
 static int n_lookups;           /* Number of lookups each thread performs. */
 
-static void benchmark(bool use_wc);
+static void benchmark(bool use_wc, bool stress_prefixes);
 
 static int
 elapsed(const struct timeval *start)
@@ -1337,9 +1349,29 @@ run_benchmarks(struct ovs_cmdl_context *ctx)
            n_rules, n_priorities, n_tables, n_threads, n_lookups);
 
     puts("\nWithout wildcards: \n");
-    benchmark(false);
+    benchmark(false, false);
     puts("\nWith wildcards: \n");
-    benchmark(true);
+    benchmark(true, false);
+}
+
+static void
+run_prefix_stress(struct ovs_cmdl_context *ctx OVS_UNUSED)
+{
+    vlog_set_levels(NULL, VLF_ANY_DESTINATION, VLL_OFF);
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
+
+    n_rules = 10000;
+    n_priorities = 2;
+    n_tables = 30;
+    n_threads = 2;
+    n_lookups = 2000000;
+
+    printf("\nStress testing prefixes with:\n"
+           "%d rules with %d priorities in %d tables, "
+           "%d threads doing %d lookups each\n",
+           n_rules, n_priorities, n_tables, n_threads, n_lookups);
+
+    benchmark(true, true);
 }
 
 struct cls_aux {
@@ -1347,6 +1379,7 @@ struct cls_aux {
     size_t n_lookup_flows;
     struct flow *lookup_flows;
     bool use_wc;
+    bool quiesce;
     atomic_int hits;
     atomic_int misses;
 };
@@ -1382,15 +1415,47 @@ lookup_classifier(void *aux_)
         } else {
             misses++;
         }
+        if (aux->quiesce) {
+            ovsrcu_quiesce();
+        }
     }
     atomic_add(&aux->hits, hits, &old_hits);
     atomic_add(&aux->misses, misses, &old_misses);
     return NULL;
 }
 
+struct prefix_aux {
+    struct classifier *cls;
+    atomic_bool running;
+    size_t n_updates;
+};
+
+static void *
+update_prefixes(void *aux_)
+{
+    struct prefix_aux *aux = aux_;
+    size_t n, n_updates = 0;
+    bool running = true;
+
+    random_set_seed(1);
+
+    while (running) {
+        n_updates++;
+
+        shuffle_fields(trie_fields, ARRAY_SIZE(trie_fields));
+        n = random_range(ARRAY_SIZE(trie_fields) + 1);
+        classifier_set_prefix_fields(aux->cls, trie_fields, n);
+        verify_tries(aux->cls);
+
+        atomic_read_relaxed(&aux->running, &running);
+    }
+    aux->n_updates = n_updates;
+    return NULL;
+}
+
 /* Benchmark classification. */
 static void
-benchmark(bool use_wc)
+benchmark(bool use_wc, bool stress_prefixes)
 {
     struct classifier cls;
     ovs_version_t version = OVS_VERSION_MIN;
@@ -1421,6 +1486,7 @@ benchmark(bool use_wc)
 
     /* Create lookup flows. */
     aux.use_wc = use_wc;
+    aux.quiesce = stress_prefixes;
     aux.cls = &cls;
     aux.n_lookup_flows = 2 * N_FLOW_VALUES;
     aux.lookup_flows = xzalloc(aux.n_lookup_flows * sizeof *aux.lookup_flows);
@@ -1465,6 +1531,18 @@ benchmark(bool use_wc)
         }
     }
 
+    pthread_t prefix_thread;
+    struct prefix_aux paux;
+
+    if (stress_prefixes) {
+        paux.cls = &cls;
+        paux.n_updates = 0;
+        atomic_init(&paux.running, true);
+
+        prefix_thread = ovs_thread_create("prefixes", update_prefixes, &paux);
+        ovsrcu_quiesce_start();
+    }
+
     /* Lookup. */
     xgettimeofday(&start);
     threads = xmalloc(n_threads * sizeof *threads);
@@ -1478,6 +1556,13 @@ benchmark(bool use_wc)
     int elapsed_msec = elapsed(&start);
 
     free(threads);
+
+    if (stress_prefixes) {
+        atomic_store_relaxed(&paux.running, false);
+        xpthread_join(prefix_thread, NULL);
+        printf("Prefixes updated %"PRIuSIZE" times.\n", paux.n_updates);
+        ovsrcu_quiesce_end();
+    }
 
     int hits, misses;
     atomic_read(&aux.hits, &hits);
@@ -1852,6 +1937,7 @@ static const struct ovs_cmdl_command commands[] = {
     {"many-rules-in-two-tables", NULL, 0, 0, test_many_rules_in_two_tables, OVS_RO },
     {"many-rules-in-five-tables", NULL, 0, 0, test_many_rules_in_five_tables, OVS_RO },
     {"benchmark", NULL, 0, 5, run_benchmarks, OVS_RO },
+    {"stress-prefixes", NULL, 0, 0, run_prefix_stress, OVS_RO },
 
     /* Miniflow and minimask tests. */
     {"miniflow", NULL, 0, 0, test_miniflow, OVS_RO },
