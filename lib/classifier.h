@@ -314,15 +314,13 @@ extern "C" {
 struct cls_subtable;
 struct cls_match;
 
-struct mf_field;
-typedef OVSRCU_TYPE(struct mf_field *) rcu_field_ptr;
 struct trie_node;
 typedef OVSRCU_TYPE(struct trie_node *) rcu_trie_ptr;
 
 /* Prefix trie for a 'field' */
 struct cls_trie {
-    rcu_field_ptr field;   /* Trie field, or NULL. */
-    rcu_trie_ptr root;     /* NULL if none. */
+    const struct mf_field *field; /* Trie field, or NULL. */
+    rcu_trie_ptr root;            /* NULL if none. */
 };
 
 enum {
@@ -340,7 +338,9 @@ struct classifier {
     struct pvector subtables;
     struct cmap partitions;         /* Contains "struct cls_partition"s. */
     struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
-    unsigned int n_tries;
+    atomic_uint32_t n_tries;        /* Number of tries.  Also serves as a
+                                     * memory synchronization point for trie
+                                     * configuration. */
     bool publish;                   /* Make changes visible to lookups? */
 };
 

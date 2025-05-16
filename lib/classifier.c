@@ -115,7 +115,7 @@ static const struct cls_match *find_match_wc(const struct cls_subtable *,
                                              ovs_version_t version,
                                              const struct flow *,
                                              struct trie_ctx *,
-                                             unsigned int n_tries,
+                                             uint32_t n_tries,
                                              struct flow_wildcards *);
 static struct cls_match *find_equal(const struct cls_subtable *,
                                     const struct miniflow *, uint32_t hash);
@@ -149,7 +149,7 @@ static unsigned int trie_lookup(const struct cls_trie *, const struct flow *,
 static unsigned int trie_lookup_value(const rcu_trie_ptr *,
                                       const ovs_be32 value[], ovs_be32 plens[],
                                       unsigned int value_bits);
-static void trie_destroy(rcu_trie_ptr *);
+static void trie_destroy(struct cls_trie *);
 static void trie_insert(struct cls_trie *, const struct cls_rule *, int mlen);
 static void trie_insert_prefix(rcu_trie_ptr *, const ovs_be32 *prefix,
                                int mlen);
@@ -334,10 +334,8 @@ classifier_init(struct classifier *cls, const uint8_t *flow_segments)
             cls->flow_segments[cls->n_flow_segments++] = *flow_segments++;
         }
     }
-    cls->n_tries = 0;
-    for (int i = 0; i < CLS_MAX_TRIES; i++) {
-        trie_init(cls, i, NULL);
-    }
+    memset(cls->tries, 0, sizeof cls->tries);
+    atomic_store_explicit(&cls->n_tries, 0, memory_order_release);
     cls->publish = true;
 }
 
@@ -349,10 +347,11 @@ classifier_destroy(struct classifier *cls)
 {
     if (cls) {
         struct cls_subtable *subtable;
-        int i;
+        uint32_t i, n_tries;
 
-        for (i = 0; i < cls->n_tries; i++) {
-            trie_destroy(&cls->tries[i].root);
+        atomic_read_relaxed(&cls->n_tries, &n_tries);
+        for (i = 0; i < n_tries; i++) {
+            trie_destroy(&cls->tries[i]);
         }
 
         CMAP_FOR_EACH (subtable, cmap_node, &cls->subtables_map) {
@@ -370,10 +369,13 @@ classifier_set_prefix_fields(struct classifier *cls,
                              const enum mf_field_id *trie_fields,
                              unsigned int n_fields)
 {
-    const struct mf_field * new_fields[CLS_MAX_TRIES];
+    const struct mf_field *new_fields[CLS_MAX_TRIES];
     struct mf_bitmap fields = MF_BITMAP_INITIALIZER;
-    int i, n_tries = 0;
+    uint32_t i, n_tries = 0, old_n_tries;
+    uint32_t first_changed = 0;
     bool changed = false;
+
+    atomic_read_relaxed(&cls->n_tries, &old_n_tries);
 
     for (i = 0; i < n_fields && n_tries < CLS_MAX_TRIES; i++) {
         const struct mf_field *field = mf_from_id(trie_fields[i]);
@@ -393,52 +395,47 @@ classifier_set_prefix_fields(struct classifier *cls,
         bitmap_set1(fields.bm, trie_fields[i]);
 
         new_fields[n_tries] = NULL;
-        const struct mf_field *cls_field
-            = ovsrcu_get(struct mf_field *, &cls->tries[n_tries].field);
-        if (n_tries >= cls->n_tries || field != cls_field) {
+        if (n_tries >= old_n_tries || field != cls->tries[n_tries].field) {
             new_fields[n_tries] = field;
+            if (!changed) {
+                first_changed = n_tries;
+            }
             changed = true;
         }
         n_tries++;
     }
 
-    if (changed || n_tries < cls->n_tries) {
-        struct cls_subtable *subtable;
-
-        /* Trie configuration needs to change.  Disable trie lookups
-         * for the tries that are changing and wait all the current readers
-         * with the old configuration to be done. */
-        changed = false;
-        CMAP_FOR_EACH (subtable, cmap_node, &cls->subtables_map) {
-            for (i = 0; i < cls->n_tries; i++) {
-                if ((i < n_tries && new_fields[i]) || i >= n_tries) {
-                    if (subtable->trie_plen[i]) {
-                        subtable->trie_plen[i] = 0;
-                        changed = true;
-                    }
-                }
-            }
+    if (changed || n_tries < old_n_tries) {
+        if (!changed) {
+            /* Threre are no new or changed fields, only removing a few. */
+            first_changed = n_tries;
         }
-        /* Synchronize if any readers were using tries.  The readers may
-         * temporarily function without the trie lookup based optimizations. */
-        if (changed) {
-            /* ovsrcu_synchronize() functions as a memory barrier, so it does
-             * not matter that subtable->trie_plen is not atomic. */
-            ovsrcu_synchronize();
-        }
+        /* Trie configuration needs to change.  Disable trie lookups and wait
+         * for all the current readers to be done with the old configuration.
+         * The readers may temporarily function without the trie lookup based
+         * optimizations.  Keeping the few first entries that didn't change
+         * accessible.
+         *
+         * This store can be relaxed because ovsrcu_synchronize() functions as
+         * a memory barrier. */
+        atomic_store_relaxed(&cls->n_tries, first_changed);
+        ovsrcu_synchronize();
 
-        /* Now set up the tries. */
-        for (i = 0; i < n_tries; i++) {
+        /* Now set up the tries for new and changed fields. */
+        for (i = first_changed; i < n_tries; i++) {
             if (new_fields[i]) {
+                trie_destroy(&cls->tries[i]);
                 trie_init(cls, i, new_fields[i]);
             }
         }
         /* Destroy the rest, if any. */
-        for (; i < cls->n_tries; i++) {
-            trie_init(cls, i, NULL);
+        for (; i < old_n_tries; i++) {
+            trie_destroy(&cls->tries[i]);
         }
 
-        cls->n_tries = n_tries;
+        /* Re-enable trie lookups.  Using release memory order, so all the
+         * previous stores are visible in the classifier_lookup(). */
+        atomic_store_explicit(&cls->n_tries, n_tries, memory_order_release);
         return true;
     }
 
@@ -451,18 +448,17 @@ trie_init(struct classifier *cls, int trie_idx, const struct mf_field *field)
     struct cls_trie *trie = &cls->tries[trie_idx];
     struct cls_subtable *subtable;
 
-    if (trie_idx < cls->n_tries) {
-        trie_destroy(&trie->root);
-    } else {
-        ovsrcu_set_hidden(&trie->root, NULL);
-    }
-    ovsrcu_set_hidden(&trie->field, CONST_CAST(struct mf_field *, field));
+    ovs_assert(field);
+    ovs_assert(!trie->field);
+
+    trie->field = field;
+    ovsrcu_set_hidden(&trie->root, NULL);
 
     /* Add existing rules to the new trie. */
     CMAP_FOR_EACH (subtable, cmap_node, &cls->subtables_map) {
         unsigned int plen;
 
-        plen = field ? minimask_get_prefix_len(&subtable->mask, field) : 0;
+        plen = minimask_get_prefix_len(&subtable->mask, field);
         if (plen) {
             struct cls_match *head;
 
@@ -470,9 +466,7 @@ trie_init(struct classifier *cls, int trie_idx, const struct mf_field *field)
                 trie_insert(trie, head->cls_rule, plen);
             }
         }
-        /* Initialize subtable's prefix length on this field.  This will
-         * allow readers to use the trie. */
-        atomic_thread_fence(memory_order_release);
+        /* Initialize subtable's prefix length on this field. */
         subtable->trie_plen[trie_idx] = plen;
     }
 }
@@ -527,10 +521,10 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
     struct cls_match *head;
     unsigned int mask_offset;
     size_t n_rules = 0;
+    uint32_t i, n_tries;
     uint8_t n_indices;
     uint32_t basis;
     uint32_t hash;
-    unsigned int i;
 
     /* 'new' is initially invisible to lookups. */
     new = cls_match_alloc(rule, version, conjs, n_conjs);
@@ -558,7 +552,8 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
          *
          * Concurrent readers might miss seeing the rule until this update,
          * which might require being fixed up by revalidation later. */
-        for (i = 0; i < cls->n_tries; i++) {
+        atomic_read_relaxed(&cls->n_tries, &n_tries);
+        for (i = 0; i < n_tries; i++) {
             if (subtable->trie_plen[i]) {
                 trie_insert(&cls->tries[i], rule, subtable->trie_plen[i]);
             }
@@ -715,9 +710,9 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
     struct cls_subtable *subtable;
     uint32_t basis = 0, hash, ihash[CLS_MAX_INDICES];
     unsigned int mask_offset;
+    uint32_t i, n_tries;
     uint8_t n_indices;
     size_t n_rules;
-    unsigned int i;
 
     rule = get_cls_match_protected(cls_rule);
     if (!rule) {
@@ -780,7 +775,8 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
         trie_remove_prefix(&subtable->ports_trie,
                            &masked_ports, subtable->ports_mask_len);
     }
-    for (i = 0; i < cls->n_tries; i++) {
+    atomic_read_relaxed(&cls->n_tries, &n_tries);
+    for (i = 0; i < n_tries; i++) {
         if (subtable->trie_plen[i]) {
             trie_remove(&cls->tries[i], cls_rule, subtable->trie_plen[i]);
         }
@@ -845,6 +841,7 @@ classifier_remove_assert(struct classifier *cls,
 struct trie_ctx {
     const struct cls_trie *trie;
     bool lookup_done;        /* Status of the lookup. */
+    uint8_t be32ofs;         /* U32 offset of the field in question. */
     unsigned int maskbits;   /* Prefix length needed to avoid false matches. */
     union trie_prefix match_plens;  /* Bitmask of prefix lengths with possible
                                      * matches. */
@@ -854,6 +851,7 @@ static void
 trie_ctx_init(struct trie_ctx *ctx, const struct cls_trie *trie)
 {
     ctx->trie = trie;
+    ctx->be32ofs = trie->field->flow_be32ofs;
     ctx->lookup_done = false;
 }
 
@@ -958,13 +956,18 @@ classifier_lookup__(const struct classifier *cls, ovs_version_t version,
     size_t n_soft = 0, allocated_soft = ARRAY_SIZE(soft_stub);
     int soft_pri = INT_MIN;    /* n_soft ? MAX(soft[*]->priority) : INT_MIN. */
 
-    /* Synchronize for cls->n_tries and subtable->trie_plen.  They can change
-     * when table configuration changes, which happens typically only on
-     * startup. */
-    atomic_thread_fence(memory_order_acquire);
+    uint32_t n_tries;
+
+    /* Using memory_order_acquire on cls->n_tries to make sure that all the
+     * configuration changes for these tries are fully visible after the read.
+     *
+     * Trie configuration changes typically happen on startup, but can also
+     * happen in runtime. */
+    atomic_read_explicit(&CONST_CAST(struct classifier *, cls)->n_tries,
+                         &n_tries, memory_order_acquire);
 
     /* Initialize trie contexts for find_match_wc(). */
-    for (int i = 0; i < cls->n_tries; i++) {
+    for (uint32_t i = 0; i < n_tries; i++) {
         trie_ctx_init(&trie_ctx[i], &cls->tries[i]);
     }
 
@@ -976,8 +979,7 @@ classifier_lookup__(const struct classifier *cls, ovs_version_t version,
 
         /* Skip subtables with no match, or where the match is lower-priority
          * than some certain match we've already found. */
-        match = find_match_wc(subtable, version, flow, trie_ctx, cls->n_tries,
-                              wc);
+        match = find_match_wc(subtable, version, flow, trie_ctx, n_tries, wc);
         if (!match || match->priority <= hard_pri) {
             continue;
         }
@@ -1496,8 +1498,8 @@ static struct cls_subtable *
 insert_subtable(struct classifier *cls, const struct minimask *mask)
 {
     uint32_t hash = minimask_hash(mask, 0);
+    uint32_t i, n_tries, index = 0;
     struct cls_subtable *subtable;
-    int i, index = 0;
     struct flowmap stage_map;
     uint8_t prev;
     size_t count = miniflow_n_values(&mask->masks);
@@ -1535,11 +1537,10 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     }
     *CONST_CAST(uint8_t *, &subtable->n_indices) = index;
 
-    for (i = 0; i < cls->n_tries; i++) {
-        const struct mf_field *field
-            = ovsrcu_get(struct mf_field *, &cls->tries[i].field);
-        subtable->trie_plen[i]
-            = field ? minimask_get_prefix_len(mask, field) : 0;
+    atomic_read_relaxed(&cls->n_tries, &n_tries);
+    for (i = 0; i < n_tries; i++) {
+        subtable->trie_plen[i] = minimask_get_prefix_len(mask,
+                                                         cls->tries[i].field);
     }
 
     /* Ports trie. */
@@ -1571,29 +1572,22 @@ static unsigned int be_get_bit_at(const ovs_be32 value[], unsigned int ofs);
 /* Return 'true' if can skip rest of the subtable based on the prefix trie
  * lookup results. */
 static inline bool
-check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
+check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], uint32_t n_tries,
             const unsigned int field_plen[CLS_MAX_TRIES],
             const struct flowmap range_map, const struct flow *flow,
             struct flow_wildcards *wc)
 {
-    int j;
+    uint32_t j;
 
     /* Check if we could avoid fully unwildcarding the next level of
      * fields using the prefix tries.  The trie checks are done only as
      * needed to avoid folding in additional bits to the wildcards mask. */
     for (j = 0; j < n_tries; j++) {
-        /* Is the trie field relevant for this subtable? */
-        if (field_plen[j]) {
-            struct trie_ctx *ctx = &trie_ctx[j];
-            const struct mf_field *ctx_field
-                = ovsrcu_get(struct mf_field *, &ctx->trie->field);
+        struct trie_ctx *ctx = &trie_ctx[j];
 
-            /* Is the trie field within the current range of fields? */
-            if (!ctx_field
-                || !flowmap_is_set(&range_map, ctx_field->flow_be32ofs / 2)) {
-                continue;
-            }
-
+        /* Is the trie field relevant for this subtable, and
+         * is the trie field within the current range of fields? */
+        if (field_plen[j] && flowmap_is_set(&range_map, ctx->be32ofs / 2)) {
             /* On-demand trie lookup. */
             if (!ctx->lookup_done) {
                 memset(&ctx->match_plens, 0, sizeof ctx->match_plens);
@@ -1614,16 +1608,14 @@ check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
                  * than this subtable would otherwise. */
                 if (ctx->maskbits <= field_plen[j]) {
                     /* Unwildcard the bits and skip the rest. */
-                    mask_set_prefix_bits(wc, ctx_field->flow_be32ofs,
-                                         ctx->maskbits);
+                    mask_set_prefix_bits(wc, ctx->be32ofs, ctx->maskbits);
                     /* Note: Prerequisite already unwildcarded, as the only
                      * prerequisite of the supported trie lookup fields is
                      * the ethertype, which is always unwildcarded. */
                     return true;
                 }
                 /* Can skip if the field is already unwildcarded. */
-                if (mask_prefix_bits_set(wc, ctx_field->flow_be32ofs,
-                                         ctx->maskbits)) {
+                if (mask_prefix_bits_set(wc, ctx->be32ofs, ctx->maskbits)) {
                     return true;
                 }
             }
@@ -1688,7 +1680,7 @@ find_match(const struct cls_subtable *subtable, ovs_version_t version,
 static const struct cls_match *
 find_match_wc(const struct cls_subtable *subtable, ovs_version_t version,
               const struct flow *flow, struct trie_ctx *trie_ctx,
-              unsigned int n_tries, struct flow_wildcards *wc)
+              uint32_t n_tries, struct flow_wildcards *wc)
 {
     if (OVS_UNLIKELY(!wc)) {
         return find_match(subtable, version, flow,
@@ -1701,7 +1693,7 @@ find_match_wc(const struct cls_subtable *subtable, ovs_version_t version,
     unsigned int mask_offset = 0;
     bool adjust_ports_mask = false;
     ovs_be32 ports_mask;
-    int i;
+    uint32_t i;
 
     /* Try to finish early by checking fields in segments. */
     for (i = 0; i < subtable->n_indices; i++) {
@@ -1911,16 +1903,27 @@ trie_node_rcu_realloc(const struct trie_node *node)
 }
 
 static void
-trie_destroy(rcu_trie_ptr *trie)
+trie_destroy__(rcu_trie_ptr *trie)
 {
     struct trie_node *node = ovsrcu_get_protected(struct trie_node *, trie);
 
     if (node) {
         ovsrcu_set_hidden(trie, NULL);
-        trie_destroy(&node->edges[0]);
-        trie_destroy(&node->edges[1]);
+        trie_destroy__(&node->edges[0]);
+        trie_destroy__(&node->edges[1]);
         trie_node_destroy(node);
     }
+}
+
+static void
+trie_destroy(struct cls_trie *trie)
+{
+    if (!trie) {
+        return;
+    }
+
+    trie_destroy__(&trie->root);
+    trie->field = NULL;
 }
 
 static bool
@@ -2031,12 +2034,12 @@ static unsigned int
 trie_lookup(const struct cls_trie *trie, const struct flow *flow,
             union trie_prefix *plens)
 {
-    const struct mf_field *mf = ovsrcu_get(struct mf_field *, &trie->field);
+    const struct mf_field *mf = trie->field;
 
     /* Check that current flow matches the prerequisites for the trie
      * field.  Some match fields are used for multiple purposes, so we
      * must check that the trie is relevant for this flow. */
-    if (mf && mf_are_prereqs_ok(mf, flow, NULL)) {
+    if (mf_are_prereqs_ok(mf, flow, NULL)) {
         return trie_lookup_value(&trie->root,
                                  &((ovs_be32 *)flow)[mf->flow_be32ofs],
                                  &plens->be32, mf->n_bits);
@@ -2083,9 +2086,8 @@ minimask_get_prefix_len(const struct minimask *minimask,
  * happened to be zeros.
  */
 static const ovs_be32 *
-minimatch_get_prefix(const struct minimatch *match, rcu_field_ptr *field)
+minimatch_get_prefix(const struct minimatch *match, const struct mf_field *mf)
 {
-    struct mf_field *mf = ovsrcu_get_protected(struct mf_field *, field);
     size_t u64_ofs = mf->flow_be32ofs / 2;
 
     return (OVS_FORCE const ovs_be32 *)miniflow_get__(match->flow, u64_ofs)
@@ -2099,7 +2101,7 @@ static void
 trie_insert(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
 {
     trie_insert_prefix(&trie->root,
-                       minimatch_get_prefix(&rule->match, &trie->field), mlen);
+                       minimatch_get_prefix(&rule->match, trie->field), mlen);
 }
 
 static void
@@ -2154,7 +2156,7 @@ static void
 trie_remove(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
 {
     trie_remove_prefix(&trie->root,
-                       minimatch_get_prefix(&rule->match, &trie->field), mlen);
+                       minimatch_get_prefix(&rule->match, trie->field), mlen);
 }
 
 /* 'mlen' must be the (non-zero) CIDR prefix length of the 'trie->field' mask

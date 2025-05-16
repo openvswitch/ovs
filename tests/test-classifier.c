@@ -418,6 +418,7 @@ compare_classifiers(struct classifier *cls, size_t n_invisible_rules,
         const struct cls_rule *cr0, *cr1, *cr2;
         struct flow flow;
         struct flow_wildcards wc;
+        uint32_t n_tries;
         unsigned int x;
 
         flow_wildcards_init_catchall(&wc);
@@ -439,7 +440,8 @@ compare_classifiers(struct classifier *cls, size_t n_invisible_rules,
         flow.nw_tos = nw_dscp_values[get_value(&x, N_NW_DSCP_VALUES)];
 
         /* This assertion is here to suppress a GCC 4.9 array-bounds warning */
-        ovs_assert(cls->n_tries <= CLS_MAX_TRIES);
+        atomic_read_relaxed(&cls->n_tries, &n_tries);
+        ovs_assert(n_tries <= CLS_MAX_TRIES);
 
         cr0 = classifier_lookup(cls, version, &flow, &wc);
         cr1 = tcls_lookup(tcls, &flow);
@@ -510,12 +512,12 @@ verify_tries(struct classifier *cls)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     unsigned int n_rules;
-    int i;
+    uint32_t i, n_tries;
 
-    for (i = 0; i < cls->n_tries; i++) {
-        const struct mf_field * cls_field
-            = ovsrcu_get(struct mf_field *, &cls->tries[i].field);
-        n_rules = trie_verify(&cls->tries[i].root, 0, cls_field->n_bits);
+    atomic_read_explicit(&cls->n_tries, &n_tries, memory_order_acquire);
+    for (i = 0; i < n_tries; i++) {
+        n_rules = trie_verify(&cls->tries[i].root, 0,
+                              cls->tries[i].field->n_bits);
         assert(n_rules <= cls->n_rules);
     }
 }
