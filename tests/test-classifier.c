@@ -509,15 +509,15 @@ static void
 verify_tries(struct classifier *cls)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    unsigned int n_rules = 0;
+    unsigned int n_rules;
     int i;
 
     for (i = 0; i < cls->n_tries; i++) {
         const struct mf_field * cls_field
             = ovsrcu_get(struct mf_field *, &cls->tries[i].field);
-        n_rules += trie_verify(&cls->tries[i].root, 0, cls_field->n_bits);
+        n_rules = trie_verify(&cls->tries[i].root, 0, cls_field->n_bits);
+        assert(n_rules <= cls->n_rules);
     }
-    assert(n_rules <= cls->n_rules);
 }
 
 static void
