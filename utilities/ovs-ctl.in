@@ -110,7 +110,7 @@ check_core_config () {
             ulimit -c unlimited
         fi
     elif test X"$FORCE_COREFILES" = Xyes; then
-        ulimit -c 67108864
+        ulimit -c $ULIMIT_CORE
     fi
 }
 
@@ -357,6 +357,7 @@ set_defaults () {
     OVSDB_SERVER_UMASK=
     OVS_VSWITCHD_UMASK=
     OOM_SCORE=
+    ULIMIT_CORE=67108864
 
     DB_FILE=$dbdir/conf.db
     DB_SOCK=$rundir/db.sock
@@ -450,6 +451,7 @@ Less important options for "start", "restart" and "force-reload-kmod":
   --no-record-hostname           do not attempt to determine/record system
                                  hostname as part of start command
   --oom-score=SCORE              Set oom-score after starting ovs daemon.
+  --ulimit-core=LIMIT            Set ulimit core file size.
 
 Debugging options for "start", "restart" and "force-reload-kmod":
   --ovsdb-server-wrapper=WRAPPER

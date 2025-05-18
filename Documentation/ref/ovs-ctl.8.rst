@@ -199,6 +199,11 @@ The following options are less important:
   Sets the Linux Out-Of-Memory (OOM) killer score for the OVS daemon
   after it's been started.
 
+* ``--ulimit-core=<LIMIT>``
+
+  Sets ulimit core file size for the OVS daemon after it's
+  been started.
+
 * ``--ovsdb-server-priority=<niceness>`` or
   ``--ovs-vswitchd-priority=<niceness>``
 

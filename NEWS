@@ -9,6 +9,8 @@ Post-v3.5.0
    - ovs-ctl:
      * Added a new option, --oom-score=<score>, to set the daemons' Linux
        Out-Of-Memory (OOM) killer score.
+     * Added a new option, --ulimit-core=<LIMIT>, to set the daemon's ulimit
+       core file size.
    - ovs-appctl:
      * Added JSON output support to the 'ovs/route/show' command.
    - SSL/TLS:
