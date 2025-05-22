@@ -71,6 +71,7 @@ perf_event_setup(void)
     pe.disabled = 1;
     pe.exclude_kernel = 1;
     pe.exclude_hv = 1;
+    pe.exclude_guest = 1;
 
     fd__ = perf_event_open(&pe, 0, -1, -1, 0);
     if (fd__ > 0) {
