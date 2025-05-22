@@ -527,13 +527,15 @@ ovs_router_show_json(struct json **routes)
 
     CLS_FOR_EACH (rt, cr, &cls) {
         bool user = rt->priority != rt->plen && !rt->local;
-        struct json *json = json_object_create();
-        struct json *nh = json_object_create();
         uint8_t plen = rt->plen;
+        struct json *json, *nh;
 
         if (i >= n_rules) {
             break;
         }
+
+        json = json_object_create();
+        nh = json_object_create();
 
         if (IN6_IS_ADDR_V4MAPPED(&rt->nw_addr)) {
             plen -= 96;
