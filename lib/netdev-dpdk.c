@@ -3728,15 +3728,12 @@ netdev_dpdk_vhost_get_custom_stats(const struct netdev *netdev,
         stat_offset += vhost_txq_stats_count;
     }
 
-    free(vhost_stats_names);
-    vhost_stats_names = NULL;
-    free(vhost_stats);
-    vhost_stats = NULL;
-
 out:
     ovs_mutex_unlock(&dev->mutex);
 
     custom_stats->size = stat_offset;
+    free(vhost_stats_names);
+    free(vhost_stats);
 
     return 0;
 }
