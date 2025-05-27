@@ -6,6 +6,7 @@ Post-v3.5.0
        have been moved to the DBG log level.
    - DPDK:
      * New debug appctl command 'dpdk/get-memzone-stats'.
+     * OVS validated with DPDK 24.11.2.
    - ovs-ctl:
      * Added a new option, --oom-score=<score>, to set the daemons' Linux
        Out-Of-Memory (OOM) killer score.
