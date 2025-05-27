@@ -1,5 +1,7 @@
 v3.4.3 - xx xxx xxxx
 --------------------
+   - DPDK:
+     * OVS validated with DPDK 23.11.4.
 
 v3.4.2 - 27 Feb 2025
 --------------------
