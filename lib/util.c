@@ -734,7 +734,7 @@ ctl_timeout_setup(unsigned int secs)
         char *env = getenv("OVS_CTL_TIMEOUT");
 
         if (env && env[0]) {
-            str_to_uint(env, 10, &secs);
+            ignore(str_to_uint(env, 10, &secs));
         }
     }
     if (secs) {
