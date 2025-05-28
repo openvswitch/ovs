@@ -27,7 +27,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "compiler.h"
-#include "util.h"
 #include "openvswitch/util.h"
 #if defined(__aarch64__) && __GNUC__ >= 6
 #include <arm_neon.h>
