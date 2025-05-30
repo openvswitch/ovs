@@ -1415,15 +1415,14 @@ AT_CLEANUP
 AT_SETUP([tunnel_push_pop - tunnel drop])
 OVS_VSWITCHD_START([dnl
     -- add-port br0 t1 -- set Interface t1 type=geneve \
-        options:remote_ip=1.1.1.1 \
-    -- add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 \
-    -- add-port br0 p1 -- set Interface p1 type=dummy ofport_request=2])
+                                           options:remote_ip=1.1.1.1])
+add_of_ports br0 1 2
 
-AT_CHECK([ovs-ofctl add-flow br0 in_port=p0,action=t1,p1])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=p1,action=t1,p2])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 in_port=p0], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace --names br0 in_port=p1], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: clone(drop),2
+  [Datapath actions: clone(drop),p2
 ])
 
 OVS_VSWITCHD_STOP
