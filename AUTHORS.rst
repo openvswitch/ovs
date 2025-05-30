@@ -513,6 +513,7 @@ Xiaojie Chen                       jackchanx@163.com
 xu rong                            xu.rong@zte.com.cn
 YAMAMOTO Takashi                   yamamoto@midokura.com
 Yalei Li                           liyl43@chinatelecom.cn
+Yang Yang                          yangyang92@baidu.com
 Yanqin Wei                         Yanqin.Wei@arm.com
 Yasuhito Takamiya                  yasuhito@gmail.com
 Yi Li                              yili@winhong.com
