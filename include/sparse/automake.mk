@@ -11,6 +11,7 @@ noinst_HEADERS += \
         include/sparse/netinet/in.h \
         include/sparse/netinet/ip6.h \
         include/sparse/netpacket/packet.h \
+        include/sparse/openssl/configuration.h \
         include/sparse/pthread.h \
         include/sparse/rte_memcpy.h \
         include/sparse/sys/socket.h \
