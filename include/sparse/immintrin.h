@@ -30,5 +30,17 @@
  * underscore.  We need both to keep compatibility between various GCC
  * versions. */
 #define _AVX512FP16INTRIN_H_INCLUDED
+/* GCC >= 15 adds AVX10 which introduced new types unknown to sparse. */
+#define __AVX10_2_512CONVERTINTRIN_H_INCLUDED
+#define _AVX10_2_512BF16INTRIN_H_INCLUDED
+#define _AVX10_2_512MEDIAINTRIN_H_INCLUDED
+#define _AVX10_2_512MINMAXINTRIN_H_INCLUDED
+#define _AVX10_2_512SATCVTINTRIN_H_INCLUDED
+#define _AVX10_2BF16INTRIN_H_INCLUDED
+#define _AVX10_2CONVERTINTRIN_H_INCLUDED
+#define _AVX10_2COPYINTRIN_H_INCLUDED
+#define _AVX10_2MEDIAINTRIN_H_INCLUDED
+#define _AVX10_2MINMAXINTRIN_H_INCLUDED
+#define _AVX10_2SATCVTINTRIN_H_INCLUDED
 
 #include_next <immintrin.h>
