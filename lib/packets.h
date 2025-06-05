@@ -736,6 +736,8 @@ IP_ECN_is_ce(uint8_t dsfield)
 #define IP_FRAG_OFF_MASK  0x1fff /* Fragment offset. */
 #define IP_IS_FRAGMENT(ip_frag_off) \
         ((ip_frag_off) & htons(IP_MORE_FRAGMENTS | IP_FRAG_OFF_MASK))
+#define IP_IS_LATER_FRAG(ip_frag_off) \
+        ((ip_frag_off) & htons(IP_FRAG_OFF_MASK))
 
 #define IP_HEADER_LEN 20
 struct ip_header {
