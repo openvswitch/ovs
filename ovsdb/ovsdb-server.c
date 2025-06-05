@@ -2747,6 +2747,7 @@ parse_options(int argc, char *argv[],
             break;
 
         case OPT_CONFIG_FILE:
+            free(config_file_path);
             config_file_path = abs_file_name(ovs_dbdir(), optarg);
             add_default_db = false;
             break;
