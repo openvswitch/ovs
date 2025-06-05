@@ -1261,7 +1261,8 @@ raft_record_note(struct raft *raft, const char *note,
         .comment = comment,
         .note = CONST_CAST(char *, note),
     };
-    ignore(ovsdb_log_write_and_free(raft->log, raft_record_to_json(&r)));
+    ovsdb_error_destroy(
+        ovsdb_log_write_and_free(raft->log, raft_record_to_json(&r)));
 
     free(comment);
 }
@@ -2996,7 +2997,8 @@ raft_become_leader(struct raft *raft)
         .term = raft->term,
         .sid = raft->sid,
     };
-    ignore(ovsdb_log_write_and_free(raft->log, raft_record_to_json(&r)));
+    ovsdb_error_destroy(
+        ovsdb_log_write_and_free(raft->log, raft_record_to_json(&r)));
 
     /* Initiate a no-op commit.  Otherwise we might never find out what's in
      * the log.  See section 6.4 item 1:
@@ -3224,7 +3226,8 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
         .type = RAFT_REC_COMMIT_INDEX,
         .commit_index = raft->commit_index,
     };
-    ignore(ovsdb_log_write_and_free(raft->log, raft_record_to_json(&r)));
+    ovsdb_error_destroy(
+        ovsdb_log_write_and_free(raft->log, raft_record_to_json(&r)));
     return true;
 }
 
@@ -3412,7 +3415,8 @@ raft_update_leader(struct raft *raft, const struct uuid *sid)
             .term = raft->term,
             .sid = *sid,
         };
-        ignore(ovsdb_log_write_and_free(raft->log, raft_record_to_json(&r)));
+        ovsdb_error_destroy
+            (ovsdb_log_write_and_free(raft->log, raft_record_to_json(&r)));
     }
     if (raft->role == RAFT_CANDIDATE) {
         /* Section 3.4: While waiting for votes, a candidate may
