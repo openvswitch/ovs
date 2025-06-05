@@ -405,6 +405,8 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
                     jsonrpc_msg_destroy(t->reply);
                     t->reply = NULL;
                     trigger_convert_error(t, error);
+                } else {
+                    OVS_NOT_REACHED();
                 }
             }
         } else {
