@@ -7055,6 +7055,8 @@ xlate_generic_encap_action(struct xlate_ctx *ctx,
         /* The actual encap datapath action will be generated at next commit. */
         ctx->pending_encap = true;
         ctx->encap_data = encap_data;
+    } else {
+        ofpbuf_delete(encap_data);
     }
 }
 
