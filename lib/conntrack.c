@@ -1558,7 +1558,7 @@ extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
         return false;
     }
 
-    if (IP_IS_FRAGMENT(ip->ip_frag_off)) {
+    if (IP_IS_LATER_FRAG(ip->ip_frag_off)) {
         return false;
     }
 
