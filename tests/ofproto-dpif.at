@@ -11597,6 +11597,38 @@ udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=4,dport=3),reply=(src=10.1.1.1,dst=10.
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - conntrack - related nat])
+OVS_VSWITCHD_START
+
+add_of_ports --pcap br0 1 2
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,arp,action=normal
+table=0,priority=10,ip,in_port=1,udp,action=ct(commit,table=1,nat(dst=1.2.3.4:10000-10000))
+table=0,priority=10,ip,in_port=2,action=ct(nat,table=1)
+table=0,priority=1,action=drop
+table=1,priority=10,in_port=1,ct_state=+trk,action=2
+table=1,priority=10,in_port=2,ct_state=+trk,action=1
+table=1,priority=1,action=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl 1. Send and UDP packet to port 5555.
+packet1=c6f94ecb72dbe64c473528c9080045000021317040004011b138ac100001ac100002a28e15b3000d20966369616f0a
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=$packet1 actions=resubmit(,0)"])
+
+dnl 2. Send an fragmented ICMP related reply from 1.2.3.4:10000.
+packet2=e64c473528c9c6f94ecb72db080045c000382e87000040019b6701020304ac1000010303ad2d000000004500001c317020004011794aac10000101020304a28e2710000d8623
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=$packet2 actions=resubmit(,0)"])
+
+dnl 3. Check that the inner packet is translated.
+packet3=e64c473528c9c6f94ecb72db080045c000382e8700004001f35aac100002ac1000010303553a000000004500001c317020004011d13dac100001ac100002a28e15b3000def73
+OVS_WAIT_UNTIL([ovs-pcap p1-tx.pcap | grep -q "$packet3"])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - conntrack - ipv6])
 OVS_VSWITCHD_START
 
