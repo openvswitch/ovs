@@ -183,6 +183,7 @@ test_aa_send(void)
         (lldp->lldpd == NULL) ||
         ovs_list_is_empty(&lldp->lldpd->g_hardware)) {
         printf("Error: unable to create dummy lldp instance");
+        lldp_destroy_dummy(lldp);
         return 1;
     }
 

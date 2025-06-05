@@ -971,18 +971,21 @@ lldp_destroy_dummy(struct lldp *lldp)
 
     cfg = lldp->lldpd;
 
-    LIST_FOR_EACH_SAFE (hw, h_entries, &cfg->g_hardware) {
-        ovs_list_remove(&hw->h_entries);
-        free(hw->h_lport.p_lastframe);
-        free(hw);
+    if (cfg) {
+        LIST_FOR_EACH_SAFE (hw, h_entries, &cfg->g_hardware) {
+            ovs_list_remove(&hw->h_entries);
+            free(hw->h_lport.p_lastframe);
+            free(hw);
+        }
+
+        LIST_FOR_EACH_SAFE (chassis, list, &cfg->g_chassis) {
+            ovs_list_remove(&chassis->list);
+            free(chassis);
+        }
+
+        free(lldp->lldpd);
     }
 
-    LIST_FOR_EACH_SAFE (chassis, list, &cfg->g_chassis) {
-        ovs_list_remove(&chassis->list);
-        free(chassis);
-    }
-
-    free(lldp->lldpd);
     free(lldp);
 }
 
