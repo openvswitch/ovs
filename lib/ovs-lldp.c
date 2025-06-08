@@ -101,21 +101,6 @@ static struct hmap *const all_mappings OVS_GUARDED_BY(mutex) = &all_mappings__;
 
 static struct lldp_aa_element_system_id system_id_null;
 
-/* Convert an LLDP chassis ID to a string.
- */
-static void
-chassisid_to_string(uint8_t *array, size_t len, char **str)
-{
-    unsigned int i;
-
-    *str = xmalloc(len * 3);
-
-    for (i = 0; i < len; i++) {
-        snprintf(&(*str)[i * 3], 4, "%02x:", array[i]);
-    }
-    (*str)[(i * 3) - 1] = '\0';
-}
-
 /* Find an Auto Attach mapping keyed by I-SID.
  */
 static struct aa_mapping_internal *
@@ -204,30 +189,31 @@ aa_print_element_status_port(struct ds *ds, struct lldpd_hardware *hw)
                    sizeof port->p_element.system_id)) {
             const char *none_str = "<None>";
             const char *descr = NULL;
-            char *id = NULL;
-            char *system;
+            struct ds id = DS_EMPTY_INITIALIZER;
+            struct ds system = DS_EMPTY_INITIALIZER;
 
             if (port->p_chassis) {
                 if (port->p_chassis->c_id_len > 0) {
-                    chassisid_to_string(port->p_chassis->c_id,
-                                        port->p_chassis->c_id_len, &id);
+                    ds_put_hex_with_delimiter(&id, port->p_chassis->c_id,
+                                   port->p_chassis->c_id_len, ":");
                 }
 
                 descr = port->p_chassis->c_descr;
             }
 
-            chassisid_to_string((uint8_t *) &port->p_element.system_id,
-                sizeof port->p_element.system_id, &system);
+            ds_put_hex_with_delimiter(&system,
+                                      (uint8_t *) &port->p_element.system_id,
+                                      sizeof port->p_element.system_id, ":");
 
             ds_put_format(ds, "  Auto Attach Primary Server Id: %s\n",
-                          id ? id : none_str);
+                          id.length ? ds_cstr_ro(&id) : none_str);
             ds_put_format(ds, "  Auto Attach Primary Server Descr: %s\n",
                           descr ? descr : none_str);
             ds_put_format(ds, "  Auto Attach Primary Server System Id: %s\n",
-                          system);
+                          id.length ? ds_cstr_ro(&system) : none_str);
 
-            free(id);
-            free(system);
+            ds_destroy(&id);
+            ds_destroy(&system);
         }
     }
 }
