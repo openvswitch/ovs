@@ -916,17 +916,6 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
     return error;
 }
 
-static void
-format_hex_arg(struct ds *s, const uint8_t *data, size_t len)
-{
-    for (size_t i = 0; i < len; i++) {
-        if (i) {
-            ds_put_char(s, '.');
-        }
-        ds_put_format(s, "%02"PRIx8, data[i]);
-    }
-}
-
 void
 ofputil_packet_in_private_format(struct ds *s,
                                  const struct ofputil_packet_in_private *pin,
@@ -973,7 +962,8 @@ ofputil_packet_in_private_format(struct ds *s,
 
     if (public->userdata_len) {
         ds_put_cstr(s, " userdata=");
-        format_hex_arg(s, pin->base.userdata, pin->base.userdata_len);
+        ds_put_hex_with_delimiter(s, pin->base.userdata,
+                                  pin->base.userdata_len, ".");
         ds_put_char(s, '\n');
     }
 
