@@ -389,6 +389,21 @@ ds_put_hex(struct ds *ds, const void *buf_, size_t size)
     }
 }
 
+void
+ds_put_hex_with_delimiter(struct ds *ds, const void *buf_, size_t size,
+                          char *delimiter)
+{
+    const uint8_t *buf = buf_;
+    size_t i;
+
+    for (i = 0; i < size; i++) {
+        if (i && delimiter) {
+            ds_put_format(ds, "%s", delimiter);
+        }
+        ds_put_format(ds, "%02" PRIx8, buf[i]);
+    }
+}
+
 static void
 ds_put_hex_dump__(struct ds *ds, const void *buf_, size_t size,
                   uintptr_t ofs, bool ascii, bool skip_zero_lines)

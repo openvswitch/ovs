@@ -1024,17 +1024,6 @@ parse_CONTROLLER(char *arg, const struct ofpact_parse_params *pp)
 }
 
 static void
-format_hex_arg(struct ds *s, const uint8_t *data, size_t len)
-{
-    for (size_t i = 0; i < len; i++) {
-        if (i) {
-            ds_put_char(s, '.');
-        }
-        ds_put_format(s, "%02"PRIx8, data[i]);
-    }
-}
-
-static void
 format_CONTROLLER(const struct ofpact_controller *a,
                   const struct ofpact_format_params *fp)
 {
@@ -1063,7 +1052,8 @@ format_CONTROLLER(const struct ofpact_controller *a,
         }
         if (a->userdata_len) {
             ds_put_format(fp->s, "%suserdata=%s", colors.param, colors.end);
-            format_hex_arg(fp->s, a->userdata, a->userdata_len);
+            ds_put_hex_with_delimiter(fp->s, a->userdata, a->userdata_len,
+                                      ".");
             ds_put_char(fp->s, ',');
         }
         if (a->pause) {
@@ -5960,7 +5950,7 @@ format_NOTE(const struct ofpact_note *a,
             const struct ofpact_format_params *fp)
 {
     ds_put_format(fp->s, "%snote:%s", colors.param, colors.end);
-    format_hex_arg(fp->s, a->data, a->length);
+    ds_put_hex_with_delimiter(fp->s, a->data, a->length, ".");
 }
 
 static enum ofperr

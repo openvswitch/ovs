@@ -59,6 +59,7 @@ void ds_put_format_valist(struct ds *, const char *, va_list)
     OVS_PRINTF_FORMAT(2, 0);
 void ds_put_printable(struct ds *, const char *, size_t);
 void ds_put_hex(struct ds *ds, const void *buf, size_t size);
+void ds_put_hex_with_delimiter(struct ds *, const void *, size_t, char *);
 void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
                      uintptr_t ofs, bool ascii);
 void ds_put_sparse_hex_dump(struct ds *ds, const void *buf_, size_t size,
