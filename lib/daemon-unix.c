@@ -915,8 +915,9 @@ daemon_become_new_user(bool access_datapath, bool access_hardware_ports)
 static size_t
 get_sysconf_buffer_size(void)
 {
-    size_t bufsize, pwd_bs = 0, grp_bs = 0;
     const size_t default_bufsize = 1024;
+    long pwd_bs = 0, grp_bs = 0;
+    size_t bufsize;
 
     errno = 0;
     if ((pwd_bs = sysconf(_SC_GETPW_R_SIZE_MAX)) == -1) {
@@ -924,14 +925,24 @@ get_sysconf_buffer_size(void)
             VLOG_FATAL("%s: Read initial passwordd struct size "
                        "failed (%s), aborting. ", pidfile,
                        ovs_strerror(errno));
+        } else {
+            /* As per API documentation, sysconf(_SC_GETPW_R_SIZE_MAX) may
+             * return -1 without setting errno, indicating no recommended
+             * size. In that case, fall back to the default buffer size. */
+            pwd_bs = default_bufsize;
         }
     }
 
+    errno = 0;
     if ((grp_bs = sysconf(_SC_GETGR_R_SIZE_MAX)) == -1) {
         if (errno) {
             VLOG_FATAL("%s: Read initial group struct size "
                        "failed (%s), aborting. ", pidfile,
                        ovs_strerror(errno));
+        } else {
+            /* See above comment on _SC_GETPW_R_SIZE_MAX, as the same applies
+             * to _SC_GETGR_R_SIZE_MAX. */
+            grp_bs = default_bufsize;
         }
     }
 
