@@ -7164,9 +7164,7 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
             vnet->gso_type = VIRTIO_NET_HDR_GSO_TCPV6;
         } else {
             VLOG_ERR_RL(&rl, "Unknown gso_type for TSO packet. "
-                        "Flags: %#"PRIx64", Offloads: %"PRIu32,
-                        (uint64_t) *dp_packet_ol_flags_ptr(b),
-                        b->offloads);
+                        "Offloads: %"PRIu32, b->offloads);
             return EINVAL;
         }
     } else {
@@ -7265,9 +7263,7 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
             /* This should only happen when a new L4 proto
              * is not covered in above checks. */
             VLOG_WARN_RL(&rl, "Unsupported L4 checksum offload. "
-                         "Flags: %"PRIu64", Offloads: %"PRIu32,
-                         (uint64_t)*dp_packet_ol_flags_ptr(b),
-                         b->offloads);
+                         "Offloads: %"PRIu32, b->offloads);
             vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
             vnet->flags = 0;
         }

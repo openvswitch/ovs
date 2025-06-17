@@ -49,14 +49,6 @@ enum OVS_PACKED_ENUM dp_packet_source {
 
 #define DP_PACKET_CONTEXT_SIZE 64
 
-#ifdef DPDK_NETDEV
-#define DEF_OL_FLAG(NAME, DPDK_DEF, GENERIC_DEF) NAME = DPDK_DEF
-#else
-#define DEF_OL_FLAG(NAME, DPDK_DEF, GENERIC_DEF) NAME = GENERIC_DEF
-#endif
-
-#define DP_PACKET_OL_SUPPORTED_MASK 0
-
 /* Bit masks for the 'offloads' member of the 'dp_packet' structure. */
 enum OVS_PACKED_ENUM dp_packet_offload_mask {
     /* Bad IP checksum in the packet. */
@@ -133,7 +125,6 @@ struct dp_packet {
     uint16_t allocated_;        /* Number of bytes allocated. */
     uint16_t data_ofs;          /* First byte actually in use. */
     uint32_t size_;             /* Number of bytes in use. */
-    uint32_t ol_flags;          /* Offloading flags. */
     uint32_t rss_hash;          /* Packet hash. */
     uint32_t flow_mark;         /* Packet flow mark. */
     uint16_t tso_segsz;         /* TCP segment size. */
@@ -623,12 +614,6 @@ dp_packet_get_nd_payload(const struct dp_packet *b)
 }
 
 #ifdef DPDK_NETDEV
-static inline uint64_t *
-dp_packet_ol_flags_ptr(const struct dp_packet *b)
-{
-    return CONST_CAST(uint64_t *, &b->mbuf.ol_flags);
-}
-
 static inline uint32_t *
 dp_packet_rss_ptr(const struct dp_packet *b)
 {
@@ -642,12 +627,6 @@ dp_packet_flow_mark_ptr(const struct dp_packet *b)
 }
 
 #else
-static inline uint32_t *
-dp_packet_ol_flags_ptr(const struct dp_packet *b)
-{
-    return CONST_CAST(uint32_t *, &b->ol_flags);
-}
-
 static inline uint32_t *
 dp_packet_rss_ptr(const struct dp_packet *b)
 {
@@ -1043,7 +1022,6 @@ dp_packet_rss_valid(const struct dp_packet *p)
 static inline void
 dp_packet_reset_offload(struct dp_packet *p)
 {
-    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_SUPPORTED_MASK;
     p->has_hash = p->has_mark = false;
     p->offloads = 0;
 }

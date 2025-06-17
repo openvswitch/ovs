@@ -56,11 +56,6 @@ dp_packet_gso_seg_new(const struct dp_packet *p, size_t hdr_len,
     seg->has_mark = p->has_mark;
     *dp_packet_flow_mark_ptr(seg) = *dp_packet_flow_mark_ptr(p);
 
-    /* The segment should inherit all the offloading flags from the
-     * original packet, except for the TCP segmentation, external
-     * buffer and indirect buffer flags. */
-    *dp_packet_ol_flags_ptr(seg) = *dp_packet_ol_flags_ptr(p)
-        & DP_PACKET_OL_SUPPORTED_MASK;
     seg->offloads = p->offloads;
 
     return seg;

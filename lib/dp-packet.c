@@ -198,9 +198,6 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
             sizeof(struct dp_packet) -
             offsetof(struct dp_packet, l2_pad_size));
 
-    *dp_packet_ol_flags_ptr(new_buffer) = *dp_packet_ol_flags_ptr(buffer);
-    *dp_packet_ol_flags_ptr(new_buffer) &= DP_PACKET_OL_SUPPORTED_MASK;
-
     dp_packet_set_tso_segsz(new_buffer, dp_packet_get_tso_segsz(buffer));
 
     if (dp_packet_rss_valid(buffer)) {
