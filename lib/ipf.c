@@ -618,7 +618,12 @@ ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
     bool bad_csum = dp_packet_ip_checksum_bad(pkt);
     if (OVS_UNLIKELY(!bad_csum && dp_packet_ip_checksum_unknown(pkt))) {
         COVERAGE_INC(ipf_l3csum_checked);
-        bad_csum = csum(l3, ip_hdr_len);
+        if (csum(l3, ip_hdr_len)) {
+            dp_packet_ip_checksum_set_bad(pkt);
+            bad_csum = true;
+        } else {
+            dp_packet_ip_checksum_set_good(pkt);
+        }
     }
     if (OVS_UNLIKELY(bad_csum)) {
         COVERAGE_INC(ipf_l3csum_err);

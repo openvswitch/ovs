@@ -125,8 +125,8 @@ reverse_icmp_type(uint8_t type);
 static uint8_t
 reverse_icmp6_type(uint8_t type);
 static inline bool
-extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
-                const char **new_data, bool validate_checksum);
+extract_l3_ipv4(struct dp_packet *pkt, struct conn_key *key, const void *data,
+                size_t size, const char **new_data);
 static inline bool
 extract_l3_ipv6(struct conn_key *key, const void *data, size_t size,
                 const char **new_data);
@@ -924,8 +924,8 @@ nat_inner_packet(struct dp_packet *pkt, struct conn_key *key,
      * 'extract_l4_icmp()'/'extract_l4_icmp6()'. */
     if (key->dl_type == htons(ETH_TYPE_IP)) {
         inner_l3 = (char *) l4 + sizeof(struct icmp_header);
-        extract_l3_ipv4(&inner_key, inner_l3, tail - ((char *) inner_l3) - pad,
-                        &inner_l4, false);
+        extract_l3_ipv4(NULL, &inner_key, inner_l3,
+                        tail - ((char *) inner_l3) - pad, &inner_l4);
     } else {
         inner_l3 = (char *) l4 + sizeof(struct icmp6_data_header);
         extract_l3_ipv6(&inner_key, inner_l3, tail - ((char *) inner_l3) - pad,
@@ -1688,8 +1688,8 @@ clean_thread_main(void *f_)
  * used to store a pointer to the first byte after the L3 header.  'Size' is
  * the size of the packet beyond the data pointer. */
 static inline bool
-extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
-                const char **new_data, bool validate_checksum)
+extract_l3_ipv4(struct dp_packet *pkt, struct conn_key *key, const void *data,
+                size_t size, const char **new_data)
 {
     if (OVS_UNLIKELY(size < IP_HEADER_LEN)) {
         return false;
@@ -1710,12 +1710,14 @@ extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
         return false;
     }
 
-    if (validate_checksum) {
+    if (pkt && dp_packet_ip_checksum_unknown(pkt)) {
         COVERAGE_INC(conntrack_l3csum_checked);
         if (csum(data, ip_len)) {
             COVERAGE_INC(conntrack_l3csum_err);
+            dp_packet_ip_checksum_set_bad(pkt);
             return false;
         }
+        dp_packet_ip_checksum_set_good(pkt);
     }
 
     if (new_data) {
@@ -1811,8 +1813,8 @@ sctp_checksum_valid(const void *data, size_t size)
 }
 
 static inline bool
-check_l4_tcp(const struct conn_key *key, const void *data, size_t size,
-             const void *l3, bool validate_checksum)
+check_l4_tcp(struct dp_packet *pkt, const struct conn_key *key,
+             const void *data, size_t size, const void *l3)
 {
     const struct tcp_header *tcp = data;
     if (size < sizeof *tcp) {
@@ -1824,12 +1826,20 @@ check_l4_tcp(const struct conn_key *key, const void *data, size_t size,
         return false;
     }
 
-    return validate_checksum ? checksum_valid(key, data, size, l3) : true;
+    if (pkt && dp_packet_l4_checksum_unknown(pkt)) {
+        if (!checksum_valid(key, data, size, l3)) {
+            dp_packet_l4_checksum_set_bad(pkt);
+            return false;
+        }
+        dp_packet_l4_checksum_set_good(pkt);
+        dp_packet_l4_proto_set_tcp(pkt);
+    }
+    return true;
 }
 
 static inline bool
-check_l4_udp(const struct conn_key *key, const void *data, size_t size,
-             const void *l3, bool validate_checksum)
+check_l4_udp(struct dp_packet *pkt, const struct conn_key *key,
+             const void *data, size_t size, const void *l3)
 {
     const struct udp_header *udp = data;
     if (size < sizeof *udp) {
@@ -1842,8 +1852,16 @@ check_l4_udp(const struct conn_key *key, const void *data, size_t size,
     }
 
     /* Validation must be skipped if checksum is 0 on IPv4 packets */
-    return (udp->udp_csum == 0 && key->dl_type == htons(ETH_TYPE_IP))
-           || (validate_checksum ? checksum_valid(key, data, size, l3) : true);
+    if (!(udp->udp_csum == 0 && key->dl_type == htons(ETH_TYPE_IP))
+        && (pkt && dp_packet_l4_checksum_unknown(pkt))) {
+        if (!checksum_valid(key, data, size, l3)) {
+            dp_packet_l4_checksum_set_bad(pkt);
+            return false;
+        }
+        dp_packet_l4_checksum_set_good(pkt);
+        dp_packet_l4_proto_set_udp(pkt);
+    }
+    return true;
 }
 
 static inline bool
@@ -1878,19 +1896,27 @@ sctp_check_len(const struct sctp_header *sh, size_t size)
 }
 
 static inline bool
-check_l4_sctp(const void *data, size_t size, bool validate_checksum)
+check_l4_sctp(struct dp_packet *pkt, const void *data, size_t size)
 {
     if (OVS_UNLIKELY(!sctp_check_len(data, size))) {
         return false;
     }
 
-    return validate_checksum ? sctp_checksum_valid(data, size) : true;
+    if (pkt && dp_packet_l4_checksum_unknown(pkt)) {
+        if (!sctp_checksum_valid(data, size)) {
+            dp_packet_l4_checksum_set_bad(pkt);
+            return false;
+        }
+        dp_packet_l4_checksum_set_good(pkt);
+        dp_packet_l4_proto_set_sctp(pkt);
+    }
+    return true;
 }
 
 static inline bool
-check_l4_icmp(const void *data, size_t size, bool validate_checksum)
+check_l4_icmp(struct dp_packet *pkt, const void *data, size_t size)
 {
-    if (validate_checksum) {
+    if (pkt) {
         COVERAGE_INC(conntrack_l4csum_checked);
         if (csum(data, size)) {
             COVERAGE_INC(conntrack_l4csum_err);
@@ -1902,10 +1928,10 @@ check_l4_icmp(const void *data, size_t size, bool validate_checksum)
 }
 
 static inline bool
-check_l4_icmp6(const struct conn_key *key, const void *data, size_t size,
-               const void *l3, bool validate_checksum)
+check_l4_icmp6(struct dp_packet *pkt, const struct conn_key *key,
+               const void *data, size_t size, const void *l3)
 {
-    return validate_checksum ? checksum_valid(key, data, size, l3) : true;
+    return pkt ? checksum_valid(key, data, size, l3) : true;
 }
 
 static inline bool
@@ -1955,9 +1981,9 @@ extract_l4_sctp(struct conn_key *key, const void *data, size_t size,
     return key->src.port && key->dst.port;
 }
 
-static inline bool extract_l4(struct conn_key *key, const void *data,
-                              size_t size, bool *related, const void *l3,
-                              bool validate_checksum, size_t *chk_len);
+static inline bool extract_l4(struct dp_packet *pkt, struct conn_key *key,
+                              const void *data, size_t size, bool *related,
+                              const void *l3, size_t *chk_len);
 
 static uint8_t
 reverse_icmp_type(uint8_t type)
@@ -2030,7 +2056,7 @@ extract_l4_icmp(struct conn_key *key, const void *data, size_t size,
 
         memset(&inner_key, 0, sizeof inner_key);
         inner_key.dl_type = htons(ETH_TYPE_IP);
-        bool ok = extract_l3_ipv4(&inner_key, l3, tail - l3, &l4, false);
+        bool ok = extract_l3_ipv4(NULL, &inner_key, l3, tail - l3, &l4);
         if (!ok) {
             return false;
         }
@@ -2044,7 +2070,7 @@ extract_l4_icmp(struct conn_key *key, const void *data, size_t size,
         key->nw_proto = inner_key.nw_proto;
         size_t check_len = ICMP_ERROR_DATA_L4_LEN;
 
-        ok = extract_l4(key, l4, tail - l4, NULL, l3, false, &check_len);
+        ok = extract_l4(NULL, key, l4, tail - l4, NULL, l3, &check_len);
         if (ok) {
             conn_key_reverse(key);
             *related = true;
@@ -2131,7 +2157,7 @@ extract_l4_icmp6(struct conn_key *key, const void *data, size_t size,
         key->dst = inner_key.dst;
         key->nw_proto = inner_key.nw_proto;
 
-        ok = extract_l4(key, l4, tail - l4, NULL, l3, false, NULL);
+        ok = extract_l4(NULL, key, l4, tail - l4, NULL, l3, NULL);
         if (ok) {
             conn_key_reverse(key);
             *related = true;
@@ -2159,28 +2185,25 @@ extract_l4_icmp6(struct conn_key *key, const void *data, size_t size,
  * in an ICMP error.  In this case, we skip the checksum and some length
  * validations. */
 static inline bool
-extract_l4(struct conn_key *key, const void *data, size_t size, bool *related,
-           const void *l3, bool validate_checksum, size_t *chk_len)
+extract_l4(struct dp_packet *pkt, struct conn_key *key, const void *data,
+           size_t size, bool *related, const void *l3, size_t *chk_len)
 {
     if (key->nw_proto == IPPROTO_TCP) {
-        return (!related || check_l4_tcp(key, data, size, l3,
-                validate_checksum))
+        return (!related || check_l4_tcp(pkt, key, data, size, l3))
                && extract_l4_tcp(key, data, size, chk_len);
     } else if (key->nw_proto == IPPROTO_UDP) {
-        return (!related || check_l4_udp(key, data, size, l3,
-                validate_checksum))
+        return (!related || check_l4_udp(pkt, key, data, size, l3))
                && extract_l4_udp(key, data, size, chk_len);
     } else if (key->nw_proto == IPPROTO_SCTP) {
-        return (!related || check_l4_sctp(data, size, validate_checksum))
+        return (!related || check_l4_sctp(pkt, data, size))
                && extract_l4_sctp(key, data, size, chk_len);
     } else if (key->dl_type == htons(ETH_TYPE_IP)
                && key->nw_proto == IPPROTO_ICMP) {
-        return (!related || check_l4_icmp(data, size, validate_checksum))
+        return (!related || check_l4_icmp(pkt, data, size))
                && extract_l4_icmp(key, data, size, related, chk_len);
     } else if (key->dl_type == htons(ETH_TYPE_IPV6)
                && key->nw_proto == IPPROTO_ICMPV6) {
-        return (!related || check_l4_icmp6(key, data, size, l3,
-                validate_checksum))
+        return (!related || check_l4_icmp6(pkt, key, data, size, l3))
                && extract_l4_icmp6(key, data, size, related);
     }
 
@@ -2246,8 +2269,8 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
         } else {
             /* Validate the checksum only when hwol is not supported and the
              * packet's checksum status is not known. */
-            ok = extract_l3_ipv4(&ctx->key, l3, dp_packet_l3_size(pkt), NULL,
-                                 dp_packet_ip_checksum_unknown(pkt));
+            ok = extract_l3_ipv4(pkt, &ctx->key, l3, dp_packet_l3_size(pkt),
+                                 NULL);
         }
     } else if (ctx->key.dl_type == htons(ETH_TYPE_IPV6)) {
         ok = extract_l3_ipv6(&ctx->key, l3, dp_packet_l3_size(pkt), NULL);
@@ -2258,10 +2281,8 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
     if (ok) {
         if (!dp_packet_l4_checksum_bad(pkt)) {
             /* Validate the checksum only when hwol is not supported. */
-            if (extract_l4(&ctx->key, l4, dp_packet_l4_size(pkt),
-                           &ctx->icmp_related, l3,
-                           dp_packet_l4_checksum_unknown(pkt),
-                           NULL)) {
+            if (extract_l4(pkt, &ctx->key, l4, dp_packet_l4_size(pkt),
+                           &ctx->icmp_related, l3, NULL)) {
                 ctx->hash = conn_key_hash(&ctx->key, ct->hash_basis);
                 return true;
             }

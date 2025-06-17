@@ -120,7 +120,12 @@ ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
          * csum already checked. In this case, skip the check. */
         if (OVS_UNLIKELY(!bad_csum && dp_packet_ip_checksum_unknown(packet))) {
             COVERAGE_INC(native_tnl_l3csum_checked);
-            bad_csum = csum(ip, IP_IHL(ip->ip_ihl_ver) * 4);
+            if (csum(ip, IP_IHL(ip->ip_ihl_ver) * 4)) {
+                dp_packet_ip_checksum_set_bad(packet);
+                bad_csum = true;
+            } else {
+                dp_packet_ip_checksum_set_good(packet);
+            }
         }
         if (OVS_UNLIKELY(bad_csum)) {
             COVERAGE_INC(native_tnl_l3csum_err);
@@ -246,7 +251,12 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
                                  ((const unsigned char *)udp -
                                   (const unsigned char *)dp_packet_eth(packet)
                                  ));
-            bad_csum = csum_finish(csum);
+            if (csum_finish(csum)) {
+                dp_packet_l4_checksum_set_bad(packet);
+                bad_csum = true;
+            } else {
+                dp_packet_l4_checksum_set_good(packet);
+            }
         }
         if (OVS_UNLIKELY(bad_csum)) {
             COVERAGE_INC(native_tnl_l4csum_err);
