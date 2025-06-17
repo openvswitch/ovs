@@ -2661,13 +2661,11 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     void *l3;
     void *l4;
 
-    const uint64_t all_inner_requests = RTE_MBUF_F_TX_TCP_SEG;
-
     if (!dp_packet_ip_checksum_partial(pkt)
         && !dp_packet_inner_ip_checksum_partial(pkt)
         && !dp_packet_l4_checksum_partial(pkt)
         && !dp_packet_inner_l4_checksum_partial(pkt)
-        && !(mbuf->ol_flags & all_inner_requests)) {
+        && !mbuf->tso_segsz) {
 
         uint64_t unexpected = mbuf->ol_flags & RTE_MBUF_F_TX_OFFLOAD_MASK;
         if (OVS_UNLIKELY(unexpected)) {
@@ -2683,7 +2681,7 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     if (dp_packet_tunnel(pkt)
         && (dp_packet_inner_ip_checksum_partial(pkt)
             || dp_packet_inner_l4_checksum_partial(pkt)
-            || (mbuf->ol_flags & all_inner_requests))) {
+            || mbuf->tso_segsz)) {
         if (dp_packet_ip_checksum_partial(pkt)
             || dp_packet_l4_checksum_partial(pkt)) {
             mbuf->outer_l2_len = (char *) dp_packet_l3(pkt) -
@@ -2775,7 +2773,7 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     mbuf->l2_len = (char *) l3 - (char *) l2;
     mbuf->l3_len = (char *) l4 - (char *) l3;
 
-    if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
+    if (mbuf->tso_segsz) {
         struct tcp_header *th = l4;
         uint16_t link_tso_segsz;
         int hdr_len;
@@ -2800,6 +2798,7 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
                          dev->max_packet_len);
             return false;
         }
+        mbuf->ol_flags |= RTE_MBUF_F_TX_TCP_SEG;
     }
 
     /* If L4 checksum is requested, IPv4 should be requested as well. */
@@ -3113,7 +3112,7 @@ netdev_dpdk_filter_packet_len(struct netdev_dpdk *dev, struct rte_mbuf **pkts,
     for (i = 0; i < pkt_cnt; i++) {
         pkt = pkts[i];
         if (OVS_UNLIKELY((pkt->pkt_len > dev->max_packet_len)
-            && !(pkt->ol_flags & RTE_MBUF_F_TX_TCP_SEG))) {
+            && !pkt->tso_segsz)) {
             VLOG_WARN_RL(&rl, "%s: Too big size %" PRIu32 " "
                          "max_packet_len %d", dev->up.name, pkt->pkt_len,
                          dev->max_packet_len);

@@ -63,8 +63,6 @@ dp_packet_gso_seg_new(const struct dp_packet *p, size_t hdr_len,
         & DP_PACKET_OL_SUPPORTED_MASK;
     seg->offloads = p->offloads;
 
-    dp_packet_hwol_reset_tcp_seg(seg);
-
     return seg;
 }
 

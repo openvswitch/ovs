@@ -816,7 +816,7 @@ netdev_send_tso(struct netdev *netdev, int qid,
      * the segmentation. */
     n_packets = 0;
     DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-        if (dp_packet_hwol_is_tso(packet)) {
+        if (dp_packet_get_tso_segsz(packet)) {
             n_packets += dp_packet_gso_nr_segs(packet);
         } else {
             n_packets++;
@@ -842,7 +842,7 @@ netdev_send_tso(struct netdev *netdev, int qid,
     size_t k;
     curr_batch = batches;
     DP_PACKET_BATCH_REFILL_FOR_EACH (k, size, packet, batch) {
-        if (dp_packet_hwol_is_tso(packet)) {
+        if (dp_packet_get_tso_segsz(packet)) {
             if (dp_packet_gso(packet, &curr_batch)) {
                 COVERAGE_INC(netdev_soft_seg_good);
             } else {
@@ -911,7 +911,7 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
     if (userspace_tso_enabled()) {
         if (!(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-                if (dp_packet_hwol_is_tso(packet)) {
+                if (dp_packet_get_tso_segsz(packet)) {
                     return netdev_send_tso(netdev, qid, batch, concurrent_txq);
                 }
             }
@@ -919,14 +919,14 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
                                      NETDEV_TX_GRE_TNL_TSO |
                                      NETDEV_TX_GENEVE_TNL_TSO))) {
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-                if (dp_packet_hwol_is_tso(packet)
+                if (dp_packet_get_tso_segsz(packet)
                     && dp_packet_tunnel(packet)) {
                     return netdev_send_tso(netdev, qid, batch, concurrent_txq);
                 }
             }
         } else if (!(netdev_flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM)) {
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-                if (dp_packet_hwol_is_tso(packet)
+                if (dp_packet_get_tso_segsz(packet)
                     && (dp_packet_tunnel_vxlan(packet)
                         || dp_packet_tunnel_geneve(packet))
                     && dp_packet_l4_checksum_partial(packet)) {
@@ -1013,7 +1013,7 @@ netdev_push_header(const struct netdev *netdev,
                          data->tnl_type != OVS_VPORT_TYPE_VXLAN &&
                          data->tnl_type != OVS_VPORT_TYPE_GRE &&
                          data->tnl_type != OVS_VPORT_TYPE_IP6GRE &&
-                         dp_packet_hwol_is_tso(packet))) {
+                         dp_packet_get_tso_segsz(packet))) {
             COVERAGE_INC(netdev_push_header_drops);
             dp_packet_delete(packet);
             VLOG_WARN_RL(&rl, "%s: Tunneling packets with TSO is not "
@@ -1026,7 +1026,7 @@ netdev_push_header(const struct netdev *netdev,
                 data->tnl_type != OVS_VPORT_TYPE_IP6GRE) {
                 dp_packet_ol_send_prepare(packet, 0);
             } else if (dp_packet_tunnel(packet)) {
-                if (dp_packet_hwol_is_tso(packet)) {
+                if (dp_packet_get_tso_segsz(packet)) {
                     COVERAGE_INC(netdev_push_header_drops);
                     dp_packet_delete(packet);
                     VLOG_WARN_RL(&rl, "%s: Tunneling packets with TSO is not "

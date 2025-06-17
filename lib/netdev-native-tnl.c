@@ -548,7 +548,7 @@ netdev_gre_push_header(const struct netdev *netdev,
     }
 
     if (greh->flags & htons(GRE_SEQ)) {
-        if (!dp_packet_hwol_is_tso(packet)) {
+        if (!dp_packet_get_tso_segsz(packet)) {
             /* Last 4 bytes are GRE seqno. */
             int seq_ofs = gre_header_len(greh->flags) - 4;
             ovs_16aligned_be32 *seq_opt =

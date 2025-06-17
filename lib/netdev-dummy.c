@@ -1223,7 +1223,6 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
 
     if (userspace_tso_enabled() && netdev->ol_tso_segsz) {
         dp_packet_set_tso_segsz(packet, netdev->ol_tso_segsz);
-        dp_packet_hwol_set_tcp_seg(packet);
     }
 
     if (VLOG_IS_DBG_ENABLED()) {
@@ -1312,7 +1311,7 @@ netdev_dummy_send(struct netdev *netdev, int qid,
             flags &= ~NETDEV_TX_OFFLOAD_UDP_CKSUM;
         }
         is_tso = userspace_tso_enabled() && dev->ol_tso_segsz &&
-                 dp_packet_hwol_is_tso(packet);
+                 dp_packet_get_tso_segsz(packet);
         ovs_mutex_unlock(&dev->mutex);
 
         if (!dp_packet_is_eth(packet)) {
@@ -1350,14 +1349,12 @@ netdev_dummy_send(struct netdev *netdev, int qid,
             ip_csum_bad = !!(packet->offloads & DP_PACKET_OL_IP_CKSUM_BAD);
             l4_csum_good = !!(packet->offloads & DP_PACKET_OL_L4_CKSUM_GOOD);
             l4_csum_bad = !!(packet->offloads & DP_PACKET_OL_L4_CKSUM_BAD);
-            VLOG_DBG("Tx: packet with csum IP %s, L4 %s, segsz %"PRIu16
-                     ", Tx flags %s",
+            VLOG_DBG("Tx: packet with csum IP %s, L4 %s, segsz %"PRIu16,
                      ip_csum_good ? (ip_csum_bad ? "partial" : "good")
                                   : (ip_csum_bad ? "bad" : "unknown"),
                      l4_csum_good ? (l4_csum_bad ? "partial" : "good")
                                   : (l4_csum_bad ? "bad" : "unknown"),
-                     dp_packet_get_tso_segsz(packet),
-                     dp_packet_hwol_is_tso(packet) ? "tso" : "none");
+                     dp_packet_get_tso_segsz(packet));
         }
 
         if (dp_packet_ip_checksum_partial(packet)

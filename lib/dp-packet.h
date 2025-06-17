@@ -55,16 +55,7 @@ enum OVS_PACKED_ENUM dp_packet_source {
 #define DEF_OL_FLAG(NAME, DPDK_DEF, GENERIC_DEF) NAME = GENERIC_DEF
 #endif
 
-/* Bit masks for the 'ol_flags' member of the 'dp_packet' structure. */
-enum {
-    /* Value 0 is not used. */
-    /* TCP Segmentation Offload. */
-    DEF_OL_FLAG(DP_PACKET_OL_TX_TCP_SEG, RTE_MBUF_F_TX_TCP_SEG, 0x40),
-
-    /* Adding new field requires adding to DP_PACKET_OL_SUPPORTED_MASK. */
-};
-
-#define DP_PACKET_OL_SUPPORTED_MASK DP_PACKET_OL_TX_TCP_SEG
+#define DP_PACKET_OL_SUPPORTED_MASK 0
 
 /* Bit masks for the 'offloads' member of the 'dp_packet' structure. */
 enum OVS_PACKED_ENUM dp_packet_offload_mask {
@@ -1120,29 +1111,6 @@ static inline bool OVS_WARN_UNUSED_RESULT
 dp_packet_tunnel(const struct dp_packet *b)
 {
     return !!(b->offloads & DP_PACKET_OL_TUNNEL_MASK);
-}
-
-/* Returns 'true' if packet 'b' is marked for TCP segmentation offloading. */
-static inline bool
-dp_packet_hwol_is_tso(const struct dp_packet *b)
-{
-    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_TCP_SEG);
-}
-
-/* Mark packet 'b' for TCP segmentation offloading.  It implies that
- * either the packet 'b' is marked for IPv4 or IPv6 checksum offloading
- * and also for TCP checksum offloading. */
-static inline void
-dp_packet_hwol_set_tcp_seg(struct dp_packet *b)
-{
-    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TCP_SEG;
-}
-
-/* Resets TCP Segmentation in packet 'p'. */
-static inline void
-dp_packet_hwol_reset_tcp_seg(struct dp_packet *p)
-{
-    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_TCP_SEG;
 }
 
 /* Marks packet 'p' with good IPv4 checksum. */
