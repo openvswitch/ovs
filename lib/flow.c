@@ -864,7 +864,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
     /* Initialize packet's layer pointer and offsets. */
     frame = data;
-    tunneling = dp_packet_hwol_is_tunnel(packet);
+    tunneling = dp_packet_tunnel(packet);
     if (tunneling) {
         /* Preserve inner offsets from previous circulation. */
         dp_packet_reset_outer_offsets(packet);

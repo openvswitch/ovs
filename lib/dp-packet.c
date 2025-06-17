@@ -561,7 +561,7 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
         return;
     }
 
-    if (!dp_packet_hwol_is_tunnel(p)) {
+    if (!dp_packet_tunnel(p)) {
         if (dp_packet_hwol_tx_ip_csum(p)) {
             if (dp_packet_ip_checksum_good(p)) {
                 dp_packet_hwol_reset_tx_ip_csum(p);
@@ -599,8 +599,8 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
         return;
     }
 
-    if (dp_packet_hwol_is_tunnel_geneve(p) ||
-        dp_packet_hwol_is_tunnel_vxlan(p)) {
+    if (dp_packet_tunnel_geneve(p)
+        || dp_packet_tunnel_vxlan(p)) {
 
         /* If the TX interface doesn't support UDP tunnel offload but does
          * support inner checksum offload and an outer UDP checksum is

@@ -919,17 +919,17 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
                                      NETDEV_TX_GRE_TNL_TSO |
                                      NETDEV_TX_GENEVE_TNL_TSO))) {
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-                if (dp_packet_hwol_is_tso(packet) &&
-                    dp_packet_hwol_is_tunnel(packet)) {
+                if (dp_packet_hwol_is_tso(packet)
+                    && dp_packet_tunnel(packet)) {
                     return netdev_send_tso(netdev, qid, batch, concurrent_txq);
                 }
             }
         } else if (!(netdev_flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM)) {
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-                if (dp_packet_hwol_is_tso(packet) &&
-                    (dp_packet_hwol_is_tunnel_vxlan(packet) ||
-                     dp_packet_hwol_is_tunnel_geneve(packet)) &&
-                    dp_packet_hwol_is_outer_udp_cksum(packet)) {
+                if (dp_packet_hwol_is_tso(packet)
+                    && (dp_packet_tunnel_vxlan(packet)
+                        || dp_packet_tunnel_geneve(packet))
+                    && dp_packet_hwol_is_outer_udp_cksum(packet)) {
                     return netdev_send_tso(netdev, qid, batch, concurrent_txq);
                 }
             }
@@ -1025,7 +1025,7 @@ netdev_push_header(const struct netdev *netdev,
                 data->tnl_type != OVS_VPORT_TYPE_GRE &&
                 data->tnl_type != OVS_VPORT_TYPE_IP6GRE) {
                 dp_packet_ol_send_prepare(packet, 0);
-            } else if (dp_packet_hwol_is_tunnel(packet)) {
+            } else if (dp_packet_tunnel(packet)) {
                 if (dp_packet_hwol_is_tso(packet)) {
                     COVERAGE_INC(netdev_push_header_drops);
                     dp_packet_delete(packet);

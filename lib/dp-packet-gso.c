@@ -76,7 +76,7 @@ dp_packet_gso_nr_segs(struct dp_packet *p)
     const char *data_tail;
     const char *data_pos;
 
-    if (dp_packet_hwol_is_tunnel(p)) {
+    if (dp_packet_tunnel(p)) {
         data_pos = dp_packet_get_inner_tcp_payload(p);
     } else {
         data_pos = dp_packet_get_tcp_payload(p);
@@ -108,9 +108,9 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
     bool outer_ipv4;
     int hdr_len;
     int seg_len;
-    bool udp_tnl = dp_packet_hwol_is_tunnel_vxlan(p) ||
-                   dp_packet_hwol_is_tunnel_geneve(p);
-    bool gre_tnl = dp_packet_hwol_is_tunnel_gre(p);
+    bool udp_tnl = dp_packet_tunnel_vxlan(p)
+                   || dp_packet_tunnel_geneve(p);
+    bool gre_tnl = dp_packet_tunnel_gre(p);
 
     tso_segsz = dp_packet_get_tso_segsz(p);
     if (!tso_segsz) {
