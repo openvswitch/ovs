@@ -2651,6 +2651,7 @@ static bool
 netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 {
     struct dp_packet *pkt = CONTAINER_OF(mbuf, struct dp_packet, mbuf);
+    uint64_t unexpected = mbuf->ol_flags & RTE_MBUF_F_TX_OFFLOAD_MASK;
     const struct ip_header *ip;
     bool is_sctp;
     bool l3_csum;
@@ -2661,20 +2662,20 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     void *l3;
     void *l4;
 
+    if (OVS_UNLIKELY(unexpected)) {
+        VLOG_WARN_RL(&rl, "%s: Unexpected Tx offload flags: %#"PRIx64,
+                     netdev_get_name(&dev->up), unexpected);
+        netdev_dpdk_mbuf_dump(netdev_get_name(&dev->up),
+                              "Packet with unexpected ol_flags", mbuf);
+        return false;
+    }
+
     if (!dp_packet_ip_checksum_partial(pkt)
         && !dp_packet_inner_ip_checksum_partial(pkt)
         && !dp_packet_l4_checksum_partial(pkt)
         && !dp_packet_inner_l4_checksum_partial(pkt)
         && !mbuf->tso_segsz) {
 
-        uint64_t unexpected = mbuf->ol_flags & RTE_MBUF_F_TX_OFFLOAD_MASK;
-        if (OVS_UNLIKELY(unexpected)) {
-            VLOG_WARN_RL(&rl, "%s: Unexpected Tx offload flags: %#"PRIx64,
-                         netdev_get_name(&dev->up), unexpected);
-            netdev_dpdk_mbuf_dump(netdev_get_name(&dev->up),
-                                  "Packet with unexpected ol_flags", mbuf);
-            return false;
-        }
         return true;
     }
 
@@ -6430,6 +6431,10 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
         if (vhost_postcopy_enabled) {
             vhost_flags |= RTE_VHOST_USER_POSTCOPY_SUPPORT;
         }
+
+        /* Use "compliant" ol_flags API so that the vhost library behaves
+         * like a DPDK ethdev driver. */
+        vhost_flags |= RTE_VHOST_USER_NET_COMPLIANT_OL_FLAGS;
 
         /* Enable External Buffers if TCP Segmentation Offload is enabled. */
         if (enable_tso) {
