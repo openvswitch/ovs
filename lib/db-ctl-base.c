@@ -260,6 +260,12 @@ record_id_equals(const union ovsdb_atom *name, enum ovsdb_atomic_type type,
         }
 
         return false;
+    } else if (type == OVSDB_TYPE_UUID) {
+        struct uuid record_uuid;
+        if (!uuid_from_string(&record_uuid, record_id)) {
+            return false;
+        }
+        return uuid_equals(&record_uuid, &name->uuid);
     } else {
         ovs_assert(type == OVSDB_TYPE_INTEGER);
         return name->integer == strtoll(record_id, NULL, 10);
@@ -293,12 +299,12 @@ get_row_by_id(struct ctl_context *ctx,
         name_type = value = id->name_column->type.value.type;
     }
 
-    /* We only support integer and string names (so far). */
+    /* We only support integer, UUID, and string names (so far). */
     if (name_type == OVSDB_TYPE_INTEGER) {
         if (!record_id[0] || record_id[strspn(record_id, "0123456789")]) {
             return NULL;
         }
-    } else {
+    } else if (name_type != OVSDB_TYPE_UUID) {
         ovs_assert(name_type == OVSDB_TYPE_STRING);
     }
 
