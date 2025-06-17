@@ -3303,10 +3303,12 @@ netdev_dpdk_common_send(struct netdev *netdev, struct dp_packet_batch *batch,
     stats->tx_mtu_exceeded_drops += pkt_cnt - cnt;
     pkt_cnt = cnt;
 
-    /* Prepare each mbuf for hardware offloading. */
-    cnt = netdev_dpdk_prep_hwol_batch(dev, pkts, pkt_cnt);
-    stats->tx_invalid_hwol_drops += pkt_cnt - cnt;
-    pkt_cnt = cnt;
+    if (netdev->ol_flags) {
+        /* Prepare each mbuf for hardware offloading. */
+        cnt = netdev_dpdk_prep_hwol_batch(dev, pkts, pkt_cnt);
+        stats->tx_invalid_hwol_drops += pkt_cnt - cnt;
+        pkt_cnt = cnt;
+    }
 
     /* Apply Quality of Service policy. */
     cnt = netdev_dpdk_qos_run(dev, pkts, pkt_cnt, true);
@@ -4910,6 +4912,10 @@ new_device(int vid)
                     dev->hw_ol_features |= NETDEV_TX_TCP_CKSUM_OFFLOAD;
                     dev->hw_ol_features |= NETDEV_TX_UDP_CKSUM_OFFLOAD;
                     dev->hw_ol_features |= NETDEV_TX_SCTP_CKSUM_OFFLOAD;
+
+                    /* There is no support in virtio net to offload IPv4 csum,
+                     * but the vhost library handles IPv4 csum offloading. */
+                    dev->hw_ol_features |= NETDEV_TX_IPV4_CKSUM_OFFLOAD;
                 }
 
                 if (userspace_tso_enabled()
@@ -4927,10 +4933,6 @@ new_device(int vid)
                     }
                 }
             }
-
-            /* There is no support in virtio net to offload IPv4 csum,
-             * but the vhost library handles IPv4 csum offloading fine. */
-            dev->hw_ol_features |= NETDEV_TX_IPV4_CKSUM_OFFLOAD;
 
             netdev_dpdk_update_netdev_flags(dev);
 
