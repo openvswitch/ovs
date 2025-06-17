@@ -281,7 +281,6 @@ bool dp_packet_compare_offsets(struct dp_packet *good,
                                struct dp_packet *test,
                                struct ds *err_str);
 void dp_packet_ol_send_prepare(struct dp_packet *, uint64_t);
-void dp_packet_tnl_outer_ol_send_prepare(struct dp_packet *, uint64_t);
 
 
 /* Frees memory that 'b' points to, as well as 'b' itself. */
