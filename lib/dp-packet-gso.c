@@ -51,7 +51,9 @@ dp_packet_gso_seg_new(const struct dp_packet *p, size_t hdr_len,
     seg->inner_l4_ofs = p->inner_l4_ofs;
 
     /* The protocol headers remain the same, so preserve hash and mark. */
+    seg->has_hash = p->has_hash;
     *dp_packet_rss_ptr(seg) = *dp_packet_rss_ptr(p);
+    seg->has_mark = p->has_mark;
     *dp_packet_flow_mark_ptr(seg) = *dp_packet_flow_mark_ptr(p);
 
     /* The segment should inherit all the offloading flags from the
@@ -59,6 +61,7 @@ dp_packet_gso_seg_new(const struct dp_packet *p, size_t hdr_len,
      * buffer and indirect buffer flags. */
     *dp_packet_ol_flags_ptr(seg) = *dp_packet_ol_flags_ptr(p)
         & DP_PACKET_OL_SUPPORTED_MASK;
+    seg->offloads = p->offloads;
 
     dp_packet_hwol_reset_tcp_seg(seg);
 

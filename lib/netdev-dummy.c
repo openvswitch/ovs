@@ -1226,13 +1226,13 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
         bool l4_csum_bad;
 
         ip_csum_good = !!(*dp_packet_ol_flags_ptr(packet)
-                          & DP_PACKET_OL_RX_IP_CKSUM_GOOD);
+                          & DP_PACKET_OL_IP_CKSUM_GOOD);
         ip_csum_bad = !!(*dp_packet_ol_flags_ptr(packet)
-                         & DP_PACKET_OL_RX_IP_CKSUM_BAD);
+                         & DP_PACKET_OL_IP_CKSUM_BAD);
         l4_csum_good = !!(*dp_packet_ol_flags_ptr(packet)
-                          & DP_PACKET_OL_RX_L4_CKSUM_GOOD);
+                          & DP_PACKET_OL_L4_CKSUM_GOOD);
         l4_csum_bad = !!(*dp_packet_ol_flags_ptr(packet)
-                         & DP_PACKET_OL_RX_L4_CKSUM_BAD);
+                         & DP_PACKET_OL_L4_CKSUM_BAD);
         VLOG_DBG("Rx: packet with csum IP %s, L4 %s, segsz %"PRIu16,
                  ip_csum_good ? (ip_csum_bad ? "good+bad" : "good")
                               : (ip_csum_bad ? "bad" : "unknown"),
@@ -1344,13 +1344,13 @@ netdev_dummy_send(struct netdev *netdev, int qid,
             bool l4_csum_bad;
 
             ip_csum_good = !!(*dp_packet_ol_flags_ptr(packet)
-                              & DP_PACKET_OL_RX_IP_CKSUM_GOOD);
+                              & DP_PACKET_OL_IP_CKSUM_GOOD);
             ip_csum_bad = !!(*dp_packet_ol_flags_ptr(packet)
-                             & DP_PACKET_OL_RX_IP_CKSUM_BAD);
+                             & DP_PACKET_OL_IP_CKSUM_BAD);
             l4_csum_good = !!(*dp_packet_ol_flags_ptr(packet)
-                              & DP_PACKET_OL_RX_L4_CKSUM_GOOD);
+                              & DP_PACKET_OL_L4_CKSUM_GOOD);
             l4_csum_bad = !!(*dp_packet_ol_flags_ptr(packet)
-                             & DP_PACKET_OL_RX_L4_CKSUM_BAD);
+                             & DP_PACKET_OL_L4_CKSUM_BAD);
             VLOG_DBG("Tx: packet with csum IP %s, L4 %s, segsz %"PRIu16
                      ", Tx flags %s, %s, %s",
                      ip_csum_good ? (ip_csum_bad ? "good+bad" : "good")

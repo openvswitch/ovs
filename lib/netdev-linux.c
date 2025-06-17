@@ -7099,7 +7099,7 @@ netdev_linux_parse_vnet_hdr(struct dp_packet *b)
                 || dp_packet_hwol_l4_is_sctp(b)) {
                 dp_packet_ol_set_l4_csum_good(b);
             } else {
-                *dp_packet_ol_flags_ptr(b) &= ~DP_PACKET_OL_RX_L4_CKSUM_MASK;
+                b->offloads &= ~DP_PACKET_OL_L4_CKSUM_MASK;
             }
         }
     }

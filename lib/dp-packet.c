@@ -193,7 +193,7 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
                                                     dp_packet_size(buffer),
                                                     headroom);
     /* Copy the following fields into the returned buffer: l2_pad_size,
-     * l2_5_ofs, l3_ofs, l4_ofs, cutlen, packet_type and md. */
+     * l2_5_ofs, l3_ofs, l4_ofs, cutlen, packet_type, offloads and md. */
     memcpy(&new_buffer->l2_pad_size, &buffer->l2_pad_size,
             sizeof(struct dp_packet) -
             offsetof(struct dp_packet, l2_pad_size));

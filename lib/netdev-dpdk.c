@@ -2627,6 +2627,24 @@ netdev_dpdk_rxq_dealloc(struct netdev_rxq *rxq)
     rte_free(rx);
 }
 
+static inline void
+netdev_dpdk_batch_init_packet_fields(struct dp_packet_batch *batch)
+{
+    struct dp_packet *packet;
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        dp_packet_reset_cutlen(packet);
+        packet->packet_type = htonl(PT_ETH);
+        packet->has_hash = !!(packet->mbuf.ol_flags & RTE_MBUF_F_RX_RSS_HASH);
+        packet->has_mark = !!(packet->mbuf.ol_flags & RTE_MBUF_F_RX_FDIR_ID);
+        packet->offloads =
+            packet->mbuf.ol_flags & (RTE_MBUF_F_RX_IP_CKSUM_BAD
+                                     | RTE_MBUF_F_RX_IP_CKSUM_GOOD
+                                     | RTE_MBUF_F_RX_L4_CKSUM_BAD
+                                     | RTE_MBUF_F_RX_L4_CKSUM_GOOD);
+    }
+}
+
 /* Prepare the packet for HWOL.
  * Return True if the packet is OK to continue. */
 static bool
@@ -2976,7 +2994,7 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
     }
 
     batch->count = nb_rx;
-    dp_packet_batch_init_packet_fields(batch);
+    netdev_dpdk_batch_init_packet_fields(batch);
 
     return 0;
 }
@@ -3027,7 +3045,7 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch,
     }
 
     batch->count = nb_rx;
-    dp_packet_batch_init_packet_fields(batch);
+    netdev_dpdk_batch_init_packet_fields(batch);
 
     if (qfill) {
         if (nb_rx == NETDEV_MAX_BURST) {
