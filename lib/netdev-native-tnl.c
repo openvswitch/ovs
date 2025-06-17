@@ -233,8 +233,7 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
     if (udp->udp_csum) {
         bool bad_csum = dp_packet_l4_checksum_bad(packet);
 
-        if (OVS_LIKELY(!bad_csum && !dp_packet_ol_l4_csum_partial(packet))
-            && OVS_UNLIKELY(!dp_packet_l4_checksum_good(packet))) {
+        if (OVS_UNLIKELY(!bad_csum && dp_packet_l4_checksum_unknown(packet))) {
             uint32_t csum;
             COVERAGE_INC(native_tnl_l4csum_checked);
             if (netdev_tnl_is_header_ipv6(dp_packet_data(packet))) {
@@ -308,16 +307,11 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
     udp->udp_src = udp_src;
     udp->udp_len = htons(ip_tot_size);
 
+    dp_packet_l4_proto_set_udp(packet);
     if (udp->udp_csum) {
-        dp_packet_ol_reset_l4_csum_good(packet);
-        if (dp_packet_tunnel_geneve(packet)
-            || dp_packet_tunnel_vxlan(packet)) {
-            dp_packet_hwol_set_outer_udp_csum(packet);
-        } else {
-            dp_packet_hwol_set_csum_udp(packet);
-        }
+        dp_packet_l4_checksum_set_partial(packet);
     } else {
-        dp_packet_ol_set_l4_csum_good(packet);
+        dp_packet_l4_checksum_set_good(packet);
     }
 
     if (l3_ofs != UINT16_MAX) {
@@ -880,8 +874,8 @@ netdev_gtpu_push_header(const struct netdev *netdev,
     udp->udp_src = udp_src;
     udp->udp_len = htons(ip_tot_size);
     /* Postpone checksum to the egress netdev. */
-    dp_packet_hwol_set_csum_udp(packet);
-    dp_packet_ol_reset_l4_csum_good(packet);
+    dp_packet_l4_proto_set_udp(packet);
+    dp_packet_l4_checksum_set_partial(packet);
 
     gtpuh = ALIGNED_CAST(struct gtpuhdr *, udp + 1);
 

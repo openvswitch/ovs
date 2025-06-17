@@ -60,30 +60,11 @@ enum {
     /* Value 0 is not used. */
     /* TCP Segmentation Offload. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_TCP_SEG, RTE_MBUF_F_TX_TCP_SEG, 0x40),
-    /* Offload TCP checksum. */
-    DEF_OL_FLAG(DP_PACKET_OL_TX_TCP_CKSUM, RTE_MBUF_F_TX_TCP_CKSUM, 0x200),
-    /* Offload UDP checksum. */
-    DEF_OL_FLAG(DP_PACKET_OL_TX_UDP_CKSUM, RTE_MBUF_F_TX_UDP_CKSUM, 0x400),
-    /* Offload SCTP checksum. */
-    DEF_OL_FLAG(DP_PACKET_OL_TX_SCTP_CKSUM, RTE_MBUF_F_TX_SCTP_CKSUM, 0x800),
-    /* Offload tunnel outer UDP checksum. */
-    DEF_OL_FLAG(DP_PACKET_OL_TX_OUTER_UDP_CKSUM,
-                RTE_MBUF_F_TX_OUTER_UDP_CKSUM, 0x20000),
 
     /* Adding new field requires adding to DP_PACKET_OL_SUPPORTED_MASK. */
 };
 
-#define DP_PACKET_OL_SUPPORTED_MASK (DP_PACKET_OL_TX_TCP_SEG         | \
-                                     DP_PACKET_OL_TX_TCP_CKSUM       | \
-                                     DP_PACKET_OL_TX_UDP_CKSUM       | \
-                                     DP_PACKET_OL_TX_SCTP_CKSUM      | \
-                                     DP_PACKET_OL_TX_OUTER_UDP_CKSUM)
-
-#define DP_PACKET_OL_TX_L4_MASK (DP_PACKET_OL_TX_TCP_CKSUM | \
-                                 DP_PACKET_OL_TX_UDP_CKSUM | \
-                                 DP_PACKET_OL_TX_SCTP_CKSUM)
-#define DP_PACKET_OL_TX_ANY_CKSUM (DP_PACKET_OL_TX_L4_MASK | \
-                                   DP_PACKET_OL_TX_OUTER_UDP_CKSUM)
+#define DP_PACKET_OL_SUPPORTED_MASK DP_PACKET_OL_TX_TCP_SEG
 
 /* Bit masks for the 'offloads' member of the 'dp_packet' structure. */
 enum OVS_PACKED_ENUM dp_packet_offload_mask {
@@ -97,6 +78,10 @@ enum OVS_PACKED_ENUM dp_packet_offload_mask {
     /* Valid L4 checksum in the packet. */
     DP_PACKET_OL_L4_CKSUM_GOOD = UINT16_C(1) << 8,
 
+    /* Protocol corresponding to above L4 checksums. */
+    DP_PACKET_OL_L4_PROTO_TCP = UINT16_C(1) << 9,
+    DP_PACKET_OL_L4_PROTO_UDP = UINT16_C(1) << 10,
+
     /* Bits for marking a packet as tunneled. */
     DP_PACKET_OL_TUNNEL_GENEVE = UINT16_C(1) << 11,
     DP_PACKET_OL_TUNNEL_VXLAN = UINT16_C(1) << 12,
@@ -108,6 +93,14 @@ enum OVS_PACKED_ENUM dp_packet_offload_mask {
         DP_PACKET_OL_IP_CKSUM_BAD << DP_PACKET_OL_SHIFT_COUNT,
     DP_PACKET_OL_INNER_IP_CKSUM_GOOD =
         DP_PACKET_OL_IP_CKSUM_GOOD << DP_PACKET_OL_SHIFT_COUNT,
+    DP_PACKET_OL_INNER_L4_CKSUM_BAD =
+        DP_PACKET_OL_L4_CKSUM_BAD << DP_PACKET_OL_SHIFT_COUNT,
+    DP_PACKET_OL_INNER_L4_CKSUM_GOOD =
+        DP_PACKET_OL_L4_CKSUM_GOOD << DP_PACKET_OL_SHIFT_COUNT,
+    DP_PACKET_OL_INNER_L4_PROTO_TCP =
+        DP_PACKET_OL_L4_PROTO_TCP << DP_PACKET_OL_SHIFT_COUNT,
+    DP_PACKET_OL_INNER_L4_PROTO_UDP =
+        DP_PACKET_OL_L4_PROTO_UDP << DP_PACKET_OL_SHIFT_COUNT,
 };
 
 #ifdef DPDK_NETDEV
@@ -125,8 +118,17 @@ BUILD_ASSERT_DECL(DP_PACKET_OL_L4_CKSUM_GOOD == RTE_MBUF_F_RX_L4_CKSUM_GOOD);
 #define DP_PACKET_OL_TUNNEL_MASK (DP_PACKET_OL_TUNNEL_GENEVE \
                                   | DP_PACKET_OL_TUNNEL_VXLAN)
 
+#define DP_PACKET_OL_L4_PROTO_MASK (DP_PACKET_OL_L4_PROTO_TCP \
+                                    | DP_PACKET_OL_L4_PROTO_UDP)
+
 #define DP_PACKET_OL_INNER_IP_CKSUM_MASK (DP_PACKET_OL_INNER_IP_CKSUM_GOOD \
                                           | DP_PACKET_OL_INNER_IP_CKSUM_BAD)
+
+#define DP_PACKET_OL_INNER_L4_CKSUM_MASK (DP_PACKET_OL_INNER_L4_CKSUM_GOOD \
+                                          | DP_PACKET_OL_INNER_L4_CKSUM_BAD)
+
+#define DP_PACKET_OL_INNER_L4_PROTO_MASK (DP_PACKET_OL_INNER_L4_PROTO_TCP \
+                                          | DP_PACKET_OL_INNER_L4_PROTO_UDP)
 
 /* Buffer for holding packet data.  A dp_packet is automatically reallocated
  * as necessary if it grows too large for the available memory.
@@ -1120,93 +1122,11 @@ dp_packet_tunnel(const struct dp_packet *b)
     return !!(b->offloads & DP_PACKET_OL_TUNNEL_MASK);
 }
 
-/* Returns the L4 cksum offload bitmask. */
-static inline uint64_t
-dp_packet_hwol_l4_mask(const struct dp_packet *b)
-{
-    return *dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_L4_MASK;
-}
-
-/* Return true if the packet 'b' requested L4 checksum offload. */
-static inline bool
-dp_packet_hwol_tx_l4_checksum(const struct dp_packet *b)
-{
-    return !!dp_packet_hwol_l4_mask(b);
-}
-
 /* Returns 'true' if packet 'b' is marked for TCP segmentation offloading. */
 static inline bool
 dp_packet_hwol_is_tso(const struct dp_packet *b)
 {
     return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_TCP_SEG);
-}
-
-/* Returns 'true' if packet 'b' is marked for TCP checksum offloading. */
-static inline bool
-dp_packet_hwol_l4_is_tcp(const struct dp_packet *b)
-{
-    return (*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_L4_MASK) ==
-            DP_PACKET_OL_TX_TCP_CKSUM;
-}
-
-/* Returns 'true' if packet 'b' is marked for UDP checksum offloading. */
-static inline bool
-dp_packet_hwol_l4_is_udp(struct dp_packet *b)
-{
-    return (*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_L4_MASK) ==
-            DP_PACKET_OL_TX_UDP_CKSUM;
-}
-
-/* Returns 'true' if packet 'b' is marked for SCTP checksum offloading. */
-static inline bool
-dp_packet_hwol_l4_is_sctp(struct dp_packet *b)
-{
-    return (*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_L4_MASK) ==
-            DP_PACKET_OL_TX_SCTP_CKSUM;
-}
-
-/* Returns 'true' if packet 'b' is marked for outer UDP checksum offload. */
-static inline bool
-dp_packet_hwol_is_outer_udp_cksum(struct dp_packet *b)
-{
-    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_OUTER_UDP_CKSUM);
-}
-
-/* Returns 'true' if packet 'b' is marked for any checksum offload. */
-static inline bool
-dp_packet_hwol_tx_is_any_csum(struct dp_packet *b)
-{
-    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_ANY_CKSUM);
-}
-
-static inline void
-dp_packet_hwol_reset_tx_l4_csum(struct dp_packet *p)
-{
-    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_L4_MASK;
-}
-
-/* Mark packet 'b' for TCP checksum offloading.  It implies that either
- * the packet 'b' is marked for IPv4 or IPv6 checksum offloading. */
-static inline void
-dp_packet_hwol_set_csum_tcp(struct dp_packet *b)
-{
-    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TCP_CKSUM;
-}
-
-/* Mark packet 'b' for UDP checksum offloading.  It implies that either
- * the packet 'b' is marked for IPv4 or IPv6 checksum offloading. */
-static inline void
-dp_packet_hwol_set_csum_udp(struct dp_packet *b)
-{
-    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_UDP_CKSUM;
-}
-
-/* Mark packet 'b' for SCTP checksum offloading.  It implies that either
- * the packet 'b' is marked for IPv4 or IPv6 checksum offloading. */
-static inline void
-dp_packet_hwol_set_csum_sctp(struct dp_packet *b)
-{
-    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_SCTP_CKSUM;
 }
 
 /* Mark packet 'b' for TCP segmentation offloading.  It implies that
@@ -1218,36 +1138,11 @@ dp_packet_hwol_set_tcp_seg(struct dp_packet *b)
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TCP_SEG;
 }
 
-static inline void
-dp_packet_hwol_reset_outer_udp_csum(struct dp_packet *p)
-{
-    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_OUTER_UDP_CKSUM;
-}
-
-/* Mark packet 'b' for csum offloading in outer UDP header. */
-static inline void
-dp_packet_hwol_set_outer_udp_csum(struct dp_packet *b)
-{
-    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_OUTER_UDP_CKSUM;
-}
-
-/* Resets TCP Segmentation in packet 'p' and adjust flags to indicate
- * L3 and L4 checksumming is now required. */
+/* Resets TCP Segmentation in packet 'p'. */
 static inline void
 dp_packet_hwol_reset_tcp_seg(struct dp_packet *p)
 {
-    uint64_t ol_flags = *dp_packet_ol_flags_ptr(p)
-                        | DP_PACKET_OL_TX_TCP_CKSUM;
-
-    ol_flags &= ~DP_PACKET_OL_TX_TCP_SEG;
-    p->offloads &= ~DP_PACKET_OL_L4_CKSUM_GOOD;
-
-    if (dp_packet_tunnel_geneve(p)
-        || dp_packet_tunnel_vxlan(p)) {
-        ol_flags |= DP_PACKET_OL_TX_OUTER_UDP_CKSUM;
-    }
-
-    *dp_packet_ol_flags_ptr(p) = ol_flags;
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_TCP_SEG;
 }
 
 /* Marks packet 'p' with good IPv4 checksum. */
@@ -1362,26 +1257,82 @@ dp_packet_ip_set_header_csum(struct dp_packet *p, bool inner)
     }
 }
 
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_l4_proto_tcp(const struct dp_packet *b)
+{
+    return (b->offloads & DP_PACKET_OL_L4_PROTO_MASK)
+            == DP_PACKET_OL_L4_PROTO_TCP;
+}
+
+static inline void
+dp_packet_l4_proto_set_tcp(struct dp_packet *b)
+{
+    b->offloads &= ~DP_PACKET_OL_L4_PROTO_UDP;
+    b->offloads |= DP_PACKET_OL_L4_PROTO_TCP;
+}
+
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_l4_proto_udp(const struct dp_packet *b)
+{
+    return (b->offloads & DP_PACKET_OL_L4_PROTO_MASK)
+            == DP_PACKET_OL_L4_PROTO_UDP;
+}
+
+static inline void
+dp_packet_l4_proto_set_udp(struct dp_packet *b)
+{
+    b->offloads &= ~DP_PACKET_OL_L4_PROTO_TCP;
+    b->offloads |= DP_PACKET_OL_L4_PROTO_UDP;
+}
+
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_l4_proto_sctp(const struct dp_packet *b)
+{
+    return (b->offloads & DP_PACKET_OL_L4_PROTO_MASK)
+            == DP_PACKET_OL_L4_PROTO_MASK;
+}
+
+static inline void
+dp_packet_l4_proto_set_sctp(struct dp_packet *b)
+{
+    b->offloads |= DP_PACKET_OL_L4_PROTO_MASK;
+}
+
 /* Returns 'true' if the packet 'p' has good integrity and the
  * checksum in it is correct. */
-static inline bool
+static inline bool OVS_WARN_UNUSED_RESULT
 dp_packet_l4_checksum_good(const struct dp_packet *p)
 {
     return (p->offloads & DP_PACKET_OL_L4_CKSUM_MASK)
             == DP_PACKET_OL_L4_CKSUM_GOOD;
 }
 
-static inline bool
+/* Marks packet 'p' with good L4 checksum. */
+static inline void
+dp_packet_l4_checksum_set_good(struct dp_packet *p)
+{
+    p->offloads &= ~DP_PACKET_OL_L4_CKSUM_BAD;
+    p->offloads |= DP_PACKET_OL_L4_CKSUM_GOOD;
+}
+
+static inline bool OVS_WARN_UNUSED_RESULT
 dp_packet_l4_checksum_bad(const struct dp_packet *p)
 {
     return (p->offloads & DP_PACKET_OL_L4_CKSUM_MASK)
             == DP_PACKET_OL_L4_CKSUM_BAD;
 }
 
+static inline void
+dp_packet_l4_checksum_set_bad(struct dp_packet *p)
+{
+    p->offloads &= ~DP_PACKET_OL_L4_CKSUM_GOOD;
+    p->offloads |= DP_PACKET_OL_L4_CKSUM_BAD;
+}
+
 /* Returns 'true' if the packet has good integrity though the
  * checksum in the packet 'p' is not complete. */
-static inline bool
-dp_packet_ol_l4_csum_partial(const struct dp_packet *p)
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_l4_checksum_partial(const struct dp_packet *p)
 {
     return (p->offloads & DP_PACKET_OL_L4_CKSUM_MASK)
             == DP_PACKET_OL_L4_CKSUM_MASK;
@@ -1390,33 +1341,81 @@ dp_packet_ol_l4_csum_partial(const struct dp_packet *p)
 /* Marks packet 'p' with good integrity though the checksum in the
  * packet is not complete. */
 static inline void
-dp_packet_ol_set_l4_csum_partial(struct dp_packet *p)
+dp_packet_l4_checksum_set_partial(struct dp_packet *p)
 {
     p->offloads |= DP_PACKET_OL_L4_CKSUM_MASK;
 }
 
-/* Marks packet 'p' with good L4 checksum. */
-static inline void
-dp_packet_ol_set_l4_csum_good(struct dp_packet *p)
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_l4_checksum_unknown(const struct dp_packet *p)
 {
-    p->offloads &= ~DP_PACKET_OL_L4_CKSUM_BAD;
-    p->offloads |= DP_PACKET_OL_L4_CKSUM_GOOD;
-}
-
-/* Marks packet 'p' with good L4 checksum as modified. */
-static inline void
-dp_packet_ol_reset_l4_csum_good(struct dp_packet *p)
-{
-    if (!dp_packet_ol_l4_csum_partial(p)) {
-        p->offloads &= ~DP_PACKET_OL_L4_CKSUM_GOOD;
-    }
+    return !(p->offloads & DP_PACKET_OL_L4_CKSUM_MASK);
 }
 
 static inline void
-dp_packet_ol_set_l4_csum_bad(struct dp_packet *p)
+dp_packet_l4_checksum_set_unknown(struct dp_packet *p)
 {
-    p->offloads &= ~DP_PACKET_OL_L4_CKSUM_GOOD;
-    p->offloads |= DP_PACKET_OL_L4_CKSUM_BAD;
+    p->offloads &= ~DP_PACKET_OL_L4_CKSUM_MASK;
+}
+
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_l4_checksum_valid(const struct dp_packet *p)
+{
+    return !!(p->offloads & DP_PACKET_OL_L4_CKSUM_GOOD);
+}
+
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_inner_l4_proto_tcp(const struct dp_packet *p)
+{
+    return (p->offloads & DP_PACKET_OL_INNER_L4_PROTO_MASK)
+            == DP_PACKET_OL_INNER_L4_PROTO_TCP;
+}
+
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_inner_l4_proto_udp(const struct dp_packet *p)
+{
+    return (p->offloads & DP_PACKET_OL_INNER_L4_PROTO_MASK)
+            == DP_PACKET_OL_INNER_L4_PROTO_UDP;
+}
+
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_inner_l4_proto_sctp(const struct dp_packet *p)
+{
+    return (p->offloads & DP_PACKET_OL_INNER_L4_PROTO_MASK)
+            == DP_PACKET_OL_INNER_L4_PROTO_MASK;
+}
+
+/* Returns 'true' if the inner L4 header has good integrity and the
+ * checksum in it is complete. */
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_inner_l4_checksum_good(const struct dp_packet *p)
+{
+    return (p->offloads & DP_PACKET_OL_INNER_L4_CKSUM_MASK)
+            == DP_PACKET_OL_INNER_L4_CKSUM_GOOD;
+}
+
+/* Marks packet 'p' as having a valid inner l4 header, but no checksum. */
+static inline void
+dp_packet_inner_l4_checksum_set_good(struct dp_packet *p)
+{
+    p->offloads &= ~DP_PACKET_OL_INNER_L4_CKSUM_BAD;
+    p->offloads |= DP_PACKET_OL_INNER_L4_CKSUM_GOOD;
+}
+
+/* Returns 'true' if the inner L4 header has good integrity but the
+ * checksum in it is incomplete. */
+static inline bool OVS_WARN_UNUSED_RESULT
+dp_packet_inner_l4_checksum_partial(const struct dp_packet *p)
+{
+    return (p->offloads & DP_PACKET_OL_INNER_L4_CKSUM_MASK)
+            == DP_PACKET_OL_INNER_L4_CKSUM_MASK;
+}
+
+/* Marks packet 'p' as having a valid inner l4 header, but no checksum. */
+static inline void
+dp_packet_inner_l4_checksum_set_partial(struct dp_packet *p)
+{
+    p->offloads |= DP_PACKET_OL_INNER_L4_CKSUM_MASK;
 }
 
 static inline void

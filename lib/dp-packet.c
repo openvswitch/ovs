@@ -557,8 +557,9 @@ void
 dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
 {
     if (!dp_packet_ip_checksum_partial(p)
+        && !dp_packet_l4_checksum_partial(p)
         && !dp_packet_inner_ip_checksum_partial(p)
-        && !dp_packet_hwol_tx_is_any_csum(p)) {
+        && !dp_packet_inner_l4_checksum_partial(p)) {
         /* Only checksumming needs actions. */
         return;
     }
@@ -569,27 +570,20 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
             dp_packet_ip_set_header_csum(p, false);
         }
 
-        if (dp_packet_hwol_tx_l4_checksum(p)) {
-            if (dp_packet_l4_checksum_good(p)) {
-                dp_packet_hwol_reset_tx_l4_csum(p);
-                return;
-            }
-
-            if (dp_packet_hwol_l4_is_tcp(p)
-                && !(flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
-                packet_tcp_complete_csum(p, false);
-                dp_packet_ol_set_l4_csum_good(p);
-                dp_packet_hwol_reset_tx_l4_csum(p);
-            } else if (dp_packet_hwol_l4_is_udp(p)
-                       && !(flags & NETDEV_TX_OFFLOAD_UDP_CKSUM)) {
-                packet_udp_complete_csum(p, false);
-                dp_packet_ol_set_l4_csum_good(p);
-                dp_packet_hwol_reset_tx_l4_csum(p);
-            } else if (!(flags & NETDEV_TX_OFFLOAD_SCTP_CKSUM)
-                       && dp_packet_hwol_l4_is_sctp(p)) {
-                packet_sctp_complete_csum(p, false);
-                dp_packet_ol_set_l4_csum_good(p);
-                dp_packet_hwol_reset_tx_l4_csum(p);
+        if (dp_packet_l4_checksum_partial(p)) {
+            if (dp_packet_l4_proto_tcp(p)) {
+                if (!(flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
+                    packet_tcp_complete_csum(p, false);
+                }
+            } else if (dp_packet_l4_proto_udp(p)) {
+                if (!(flags & NETDEV_TX_OFFLOAD_UDP_CKSUM)) {
+                    packet_udp_complete_csum(p, false);
+                }
+            } else {
+                ovs_assert(dp_packet_l4_proto_sctp(p));
+                if (!(flags & NETDEV_TX_OFFLOAD_SCTP_CKSUM)) {
+                    packet_sctp_complete_csum(p, false);
+                }
             }
         }
 
@@ -603,8 +597,8 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
          * support inner checksum offload and an outer UDP checksum is
          * required, then we can't offload inner checksum either. As that would
          * invalidate the outer checksum. */
-        if (!(flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM) &&
-                dp_packet_hwol_is_outer_udp_cksum(p)) {
+        if (!(flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM)
+            && dp_packet_l4_checksum_partial(p)) {
             flags &= ~(NETDEV_TX_OFFLOAD_TCP_CKSUM |
                        NETDEV_TX_OFFLOAD_UDP_CKSUM |
                        NETDEV_TX_OFFLOAD_SCTP_CKSUM |
@@ -617,22 +611,20 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
         dp_packet_ip_set_header_csum(p, true);
     }
 
-    if (dp_packet_hwol_tx_l4_checksum(p)) {
-        if (dp_packet_hwol_l4_is_tcp(p)
-            && !(flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
-            packet_tcp_complete_csum(p, true);
-            dp_packet_ol_set_l4_csum_good(p);
-            dp_packet_hwol_reset_tx_l4_csum(p);
-        } else if (dp_packet_hwol_l4_is_udp(p)
-                   && !(flags & NETDEV_TX_OFFLOAD_UDP_CKSUM)) {
-            packet_udp_complete_csum(p, true);
-            dp_packet_ol_set_l4_csum_good(p);
-            dp_packet_hwol_reset_tx_l4_csum(p);
-        } else if (!(flags & NETDEV_TX_OFFLOAD_SCTP_CKSUM)
-                   && dp_packet_hwol_l4_is_sctp(p)) {
-            packet_sctp_complete_csum(p, true);
-            dp_packet_ol_set_l4_csum_good(p);
-            dp_packet_hwol_reset_tx_l4_csum(p);
+    if (dp_packet_inner_l4_checksum_partial(p)) {
+        if (dp_packet_inner_l4_proto_tcp(p)) {
+            if (!(flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
+                packet_tcp_complete_csum(p, true);
+            }
+        } else if (dp_packet_inner_l4_proto_udp(p)) {
+            if (!(flags & NETDEV_TX_OFFLOAD_UDP_CKSUM)) {
+                packet_udp_complete_csum(p, true);
+            }
+        } else {
+            ovs_assert(dp_packet_inner_l4_proto_sctp(p));
+            if (!(flags & NETDEV_TX_OFFLOAD_SCTP_CKSUM)) {
+                packet_sctp_complete_csum(p, true);
+            }
         }
     }
 
@@ -641,13 +633,10 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
         dp_packet_ip_set_header_csum(p, false);
     }
 
-    if (!dp_packet_hwol_is_outer_udp_cksum(p)) {
-        return;
-    }
-
-    if (!(flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM)) {
-        packet_udp_complete_csum(p, false);
-        dp_packet_ol_set_l4_csum_good(p);
-        dp_packet_hwol_reset_outer_udp_csum(p);
+    if (dp_packet_l4_checksum_partial(p)) {
+        ovs_assert(dp_packet_l4_proto_udp(p));
+        if (!(flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM)) {
+            packet_udp_complete_csum(p, false);
+        }
     }
 }

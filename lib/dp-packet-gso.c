@@ -160,6 +160,7 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
 
             tnl_hdr = dp_packet_l4(seg);
             tnl_hdr->udp_len = htons(dp_packet_l4_size(seg));
+            dp_packet_l4_checksum_set_partial(seg);
         }
 
         if (udp_tnl || gre_tnl) {
@@ -198,8 +199,10 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
         /* Update L4 header. */
         if (udp_tnl || gre_tnl) {
             tcp_hdr = dp_packet_inner_l4(seg);
+            dp_packet_inner_l4_checksum_set_partial(seg);
         } else {
             tcp_hdr = dp_packet_l4(seg);
+            dp_packet_l4_checksum_set_partial(seg);
         }
         put_16aligned_be32(&tcp_hdr->tcp_seq, htonl(tcp_seq));
         tcp_seq += seg_len;

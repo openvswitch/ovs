@@ -7066,19 +7066,16 @@ netdev_linux_parse_vnet_hdr(struct dp_packet *b)
             return EINVAL;
         }
 
-        /* Chicken/egg situation, report L4 checksum as partial so that
-         * L4 extraction works. */
-        dp_packet_ol_set_l4_csum_partial(b);
         parse_tcp_flags(b, NULL, NULL, NULL);
 
         if (csum_start == b->l4_ofs
             && ((csum_offset == offsetof(struct tcp_header, tcp_csum)
-                 && dp_packet_hwol_l4_is_tcp(b))
+                 && dp_packet_l4_proto_tcp(b))
                 || (csum_offset == offsetof(struct udp_header, udp_csum)
-                    && dp_packet_hwol_l4_is_udp(b))
+                    && dp_packet_l4_proto_udp(b))
                 || (csum_offset == offsetof(struct sctp_header, sctp_csum)
-                    && dp_packet_hwol_l4_is_sctp(b)))) {
-            /* Nothing to do, L4 csum is already marked as partial. */
+                    && dp_packet_l4_proto_sctp(b)))) {
+            dp_packet_l4_checksum_set_partial(b);
         } else {
             ovs_be16 *csum_l4;
             void *l4;
@@ -7094,12 +7091,10 @@ netdev_linux_parse_vnet_hdr(struct dp_packet *b)
             l4 = dp_packet_at(b, csum_start, dp_packet_size(b) - csum_start);
             *csum_l4 = csum(l4, dp_packet_size(b) - csum_start);
 
-            if (dp_packet_hwol_l4_is_tcp(b)
-                || dp_packet_hwol_l4_is_udp(b)
-                || dp_packet_hwol_l4_is_sctp(b)) {
-                dp_packet_ol_set_l4_csum_good(b);
-            } else {
-                b->offloads &= ~DP_PACKET_OL_L4_CKSUM_MASK;
+            if (dp_packet_l4_proto_tcp(b)
+                || dp_packet_l4_proto_udp(b)
+                || dp_packet_l4_proto_sctp(b)) {
+                dp_packet_l4_checksum_set_good(b);
             }
         }
     }
@@ -7170,8 +7165,9 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
             vnet->gso_type = VIRTIO_NET_HDR_GSO_TCPV6;
         } else {
             VLOG_ERR_RL(&rl, "Unknown gso_type for TSO packet. "
-                        "Flags: %#"PRIx64,
-                        (uint64_t) *dp_packet_ol_flags_ptr(b));
+                        "Flags: %#"PRIx64", Offloads: %"PRIu32,
+                        (uint64_t) *dp_packet_ol_flags_ptr(b),
+                        b->offloads);
             return EINVAL;
         }
     } else {
@@ -7180,26 +7176,38 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
         vnet->gso_type = VIRTIO_NET_HDR_GSO_NONE;
     }
 
-    bool l4_is_good = dp_packet_l4_checksum_good(b);
-
-    if ((dp_packet_tunnel_vxlan(b)
-         || dp_packet_tunnel_geneve(b))
-        && dp_packet_hwol_tx_l4_checksum(b)) {
-        /* This condition is needed because dp-packet doesn't currently track
-         * outer and inner checksum statuses seperately. In the case of these
-         * two tunnel types we can end up setting outer l4 as good but still
-         * need to complete the inner l4. */
-        l4_is_good = !(dp_packet_hwol_l4_is_tcp(b) ||
-                       dp_packet_hwol_l4_is_udp(b));
-    }
-
-    if (l4_is_good) {
+    if (dp_packet_l4_checksum_good(b)
+        && (!dp_packet_tunnel(b)
+            || dp_packet_inner_l4_checksum_good(b))) {
         /* The packet has good L4 checksum. No need to validate again. */
         vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
         vnet->flags = VIRTIO_NET_HDR_F_DATA_VALID;
-    } else if (dp_packet_hwol_tx_l4_checksum(b)) {
+    } else if (dp_packet_l4_checksum_partial(b)
+               || dp_packet_inner_l4_checksum_partial(b)) {
+        const struct ip_header *ip_hdr;
+        void *l3_off;
+        void *l4_off;
+        bool is_sctp;
+        bool is_tcp;
+        bool is_udp;
+
+        if (dp_packet_inner_l4_checksum_partial(b)) {
+            l3_off = dp_packet_inner_l3(b);
+            l4_off = dp_packet_inner_l4(b);
+            is_tcp = dp_packet_inner_l4_proto_tcp(b);
+            is_udp = dp_packet_inner_l4_proto_udp(b);
+            is_sctp = dp_packet_inner_l4_proto_sctp(b);
+        } else {
+            l3_off = dp_packet_l3(b);
+            l4_off = dp_packet_l4(b);
+            is_tcp = dp_packet_l4_proto_tcp(b);
+            is_udp = dp_packet_l4_proto_udp(b);
+            is_sctp = dp_packet_l4_proto_sctp(b);
+        }
+        ip_hdr = l3_off;
+
         /* The csum calculation is offloaded. */
-        if (dp_packet_hwol_l4_is_tcp(b)) {
+        if (is_tcp) {
             /* Virtual I/O Device (VIRTIO) Version 1.1
              * 5.1.6.2 Packet Transmission
              * If the driver negotiated VIRTIO_NET_F_CSUM, it can skip
@@ -7214,17 +7222,9 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
              * the TCP pseudo header, so that replacing it by the ones
              * complement checksum of the TCP header and body will give
              * the correct result. */
-            void *l3_off = dp_packet_inner_l3(b);
-            void *l4_off = dp_packet_inner_l4(b);
-
-            if (!l3_off || !l4_off) {
-                l3_off = dp_packet_l3(b);
-                l4_off = dp_packet_l4(b);
-            }
-
-            const struct ip_header *ip_hdr = l3_off;
             struct tcp_header *tcp_hdr = l4_off;
             ovs_be16 csum = 0;
+
             if (IP_VER(ip_hdr->ip_ihl_ver) == 4) {
                 csum = ~csum_finish(packet_csum_pseudoheader(ip_hdr));
             } else if (IP_VER(ip_hdr->ip_ihl_ver) == 6) {
@@ -7238,19 +7238,10 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
                                     (char *) dp_packet_data(b));
             vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
                                     struct tcp_header, tcp_csum);
-        } else if (dp_packet_hwol_l4_is_udp(b)) {
-            /* Favour the inner packet when indicating checksum offsets. */
-            void *l3_off = dp_packet_inner_l3(b);
-            void *l4_off = dp_packet_inner_l4(b);
-
-            if (!l3_off || !l4_off) {
-                l3_off = dp_packet_l3(b);
-                l4_off = dp_packet_l4(b);
-            }
-
-            const struct ip_header *ip_hdr = l3_off;
+        } else if (is_udp) {
             struct udp_header *udp_hdr = l4_off;
             ovs_be16 csum = 0;
+
             if (IP_VER(ip_hdr->ip_ihl_ver) == 4) {
                 csum = ~csum_finish(packet_csum_pseudoheader(ip_hdr));
             } else if (IP_VER(ip_hdr->ip_ihl_ver) == 6) {
@@ -7264,7 +7255,7 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
                                     (char *) dp_packet_data(b));;
             vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
                                     struct udp_header, udp_csum);
-        } else if (dp_packet_hwol_l4_is_sctp(b)) {
+        } else if (is_sctp) {
             /* The Linux kernel networking stack only supports csum_start
              * and csum_offset when SCTP GSO is enabled.  See kernel's
              * skb_csum_hwoffload_help(). Currently there is no SCTP
@@ -7272,11 +7263,12 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
             vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
             vnet->flags = 0;
         } else {
-            /* This should only happen when DP_PACKET_OL_TX_L4_MASK includes
-             * a new flag that is not covered in above checks. */
+            /* This should only happen when a new L4 proto
+             * is not covered in above checks. */
             VLOG_WARN_RL(&rl, "Unsupported L4 checksum offload. "
-                         "Flags: %"PRIu64,
-                         (uint64_t)*dp_packet_ol_flags_ptr(b));
+                         "Flags: %"PRIu64", Offloads: %"PRIu32,
+                         (uint64_t)*dp_packet_ol_flags_ptr(b),
+                         b->offloads);
             vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
             vnet->flags = 0;
         }

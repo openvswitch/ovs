@@ -1201,8 +1201,6 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
     netdev->custom_stats[0].value++;
     netdev->custom_stats[1].value++;
 
-    *dp_packet_ol_flags_ptr(packet) &= ~DP_PACKET_OL_TX_ANY_CKSUM;
-
     if (netdev->ol_ip_rx_csum_set_good) {
         dp_packet_ip_checksum_set_good(packet);
     } else if (netdev->ol_ip_rx_csum_set_bad) {
@@ -1214,13 +1212,13 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
     }
 
     if (netdev->ol_l4_rx_csum_set_good) {
-        dp_packet_ol_set_l4_csum_good(packet);
+        dp_packet_l4_checksum_set_good(packet);
     } else if (netdev->ol_l4_rx_csum_set_bad) {
-        dp_packet_ol_set_l4_csum_bad(packet);
+        dp_packet_l4_checksum_set_bad(packet);
     } else if (netdev->ol_l4_rx_csum_set_partial) {
-        dp_packet_ol_set_l4_csum_partial(packet);
+        dp_packet_l4_checksum_set_partial(packet);
     } else {
-        dp_packet_ol_reset_l4_csum_good(packet);
+        dp_packet_l4_checksum_set_unknown(packet);
     }
 
     if (userspace_tso_enabled() && netdev->ol_tso_segsz) {
@@ -1236,10 +1234,8 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
 
         ip_csum_good = !!(packet->offloads & DP_PACKET_OL_IP_CKSUM_GOOD);
         ip_csum_bad = !!(packet->offloads & DP_PACKET_OL_IP_CKSUM_BAD);
-        l4_csum_good = !!(*dp_packet_ol_flags_ptr(packet)
-                          & DP_PACKET_OL_L4_CKSUM_GOOD);
-        l4_csum_bad = !!(*dp_packet_ol_flags_ptr(packet)
-                         & DP_PACKET_OL_L4_CKSUM_BAD);
+        l4_csum_good = !!(packet->offloads & DP_PACKET_OL_L4_CKSUM_GOOD);
+        l4_csum_bad = !!(packet->offloads & DP_PACKET_OL_L4_CKSUM_BAD);
         VLOG_DBG("Rx: packet with csum IP %s, L4 %s, segsz %"PRIu16,
                  ip_csum_good ? (ip_csum_bad ? "partial" : "good")
                               : (ip_csum_bad ? "bad" : "unknown"),
@@ -1352,31 +1348,20 @@ netdev_dummy_send(struct netdev *netdev, int qid,
 
             ip_csum_good = !!(packet->offloads & DP_PACKET_OL_IP_CKSUM_GOOD);
             ip_csum_bad = !!(packet->offloads & DP_PACKET_OL_IP_CKSUM_BAD);
-            l4_csum_good = !!(*dp_packet_ol_flags_ptr(packet)
-                              & DP_PACKET_OL_L4_CKSUM_GOOD);
-            l4_csum_bad = !!(*dp_packet_ol_flags_ptr(packet)
-                             & DP_PACKET_OL_L4_CKSUM_BAD);
+            l4_csum_good = !!(packet->offloads & DP_PACKET_OL_L4_CKSUM_GOOD);
+            l4_csum_bad = !!(packet->offloads & DP_PACKET_OL_L4_CKSUM_BAD);
             VLOG_DBG("Tx: packet with csum IP %s, L4 %s, segsz %"PRIu16
-                     ", Tx flags %s, %s",
+                     ", Tx flags %s",
                      ip_csum_good ? (ip_csum_bad ? "partial" : "good")
                                   : (ip_csum_bad ? "bad" : "unknown"),
                      l4_csum_good ? (l4_csum_bad ? "partial" : "good")
                                   : (l4_csum_bad ? "bad" : "unknown"),
                      dp_packet_get_tso_segsz(packet),
-                     dp_packet_hwol_tx_l4_checksum(packet) ? "l4_csum"
-                                                           : "none",
                      dp_packet_hwol_is_tso(packet) ? "tso" : "none");
         }
 
-        if (dp_packet_ip_checksum_partial(packet)) {
-            dp_packet_ol_send_prepare(packet, flags);
-        }
-        if (dp_packet_hwol_l4_is_tcp(packet)
-            && !dp_packet_l4_checksum_good(packet)) {
-            dp_packet_ol_send_prepare(packet, flags);
-        }
-        if (dp_packet_hwol_l4_is_udp(packet)
-            && !dp_packet_l4_checksum_good(packet)) {
+        if (dp_packet_ip_checksum_partial(packet)
+            || dp_packet_l4_checksum_partial(packet)) {
             dp_packet_ol_send_prepare(packet, flags);
         }
 

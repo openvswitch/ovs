@@ -498,8 +498,8 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
 
             if (nh->ip_proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
                 struct udp_header *uh = dp_packet_l4(packet);
-                if (dp_packet_hwol_l4_is_udp(packet)) {
-                    dp_packet_ol_reset_l4_csum_good(packet);
+                if (dp_packet_l4_checksum_valid(packet)) {
+                    dp_packet_l4_checksum_set_partial(packet);
                 } else if (uh->udp_csum) {
                     /* New UDP checksum. */
                     uint16_t old_udp_checksum = ~uh->udp_csum;
@@ -514,8 +514,8 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
                 }
             } else if (nh->ip_proto == IPPROTO_TCP &&
                        l4_size >= TCP_HEADER_LEN) {
-                if (dp_packet_hwol_l4_is_tcp(packet)) {
-                    dp_packet_ol_reset_l4_csum_good(packet);
+                if (dp_packet_l4_checksum_valid(packet)) {
+                    dp_packet_l4_checksum_set_partial(packet);
                 } else {
                     /* New TCP checksum. */
                     struct tcp_header *th = dp_packet_l4(packet);
@@ -691,8 +691,8 @@ action_avx512_set_ipv6(struct dp_packet_batch *batch, const struct nlattr *a)
 
             if (proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
                 struct udp_header *uh = dp_packet_l4(packet);
-                if (dp_packet_hwol_l4_is_udp(packet)) {
-                    dp_packet_ol_reset_l4_csum_good(packet);
+                if (dp_packet_l4_checksum_valid(packet)) {
+                    dp_packet_l4_checksum_set_partial(packet);
                 } else if (uh->udp_csum) {
                     delta_checksum = avx512_ipv6_addr_csum_delta(v_packet,
                                                                  v_new_hdr,
@@ -711,8 +711,8 @@ action_avx512_set_ipv6(struct dp_packet_batch *batch, const struct nlattr *a)
                 }
 
             } else if (proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
-                if (dp_packet_hwol_l4_is_tcp(packet)) {
-                    dp_packet_ol_reset_l4_csum_good(packet);
+                if (dp_packet_l4_checksum_valid(packet)) {
+                    dp_packet_l4_checksum_set_partial(packet);
                 } else {
                     delta_checksum = avx512_ipv6_addr_csum_delta(v_packet,
                                                                  v_new_hdr,

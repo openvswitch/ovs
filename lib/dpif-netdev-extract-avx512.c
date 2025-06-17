@@ -758,24 +758,6 @@ mfex_check_tcp_data_offset(const struct tcp_header *tcp)
     return ret;
 }
 
-static void
-mfex_tcp_set_hwol(struct dp_packet *pkt)
-{
-    if (dp_packet_l4_checksum_good(pkt)
-        || dp_packet_ol_l4_csum_partial(pkt)) {
-        dp_packet_hwol_set_csum_tcp(pkt);
-    }
-}
-
-static void
-mfex_udp_set_hwol(struct dp_packet *pkt)
-{
-    if (dp_packet_l4_checksum_good(pkt)
-        || dp_packet_ol_l4_csum_partial(pkt)) {
-        dp_packet_hwol_set_csum_udp(pkt);
-    }
-}
-
 /* Generic loop to process any mfex profile. This code is specialized into
  * multiple actual MFEX implementation functions. Its marked ALWAYS_INLINE
  * to ensure the compiler specializes each instance. The code is marked "hot"
@@ -877,7 +859,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 const struct tcp_header *tcp = (void *)&pkt[38];
                 mfex_handle_tcp_flags(tcp, &blocks[7]);
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
-                mfex_tcp_set_hwol(packet);
+                dp_packet_l4_proto_set_tcp(packet);
             } break;
 
         case PROFILE_ETH_VLAN_IPV4_UDP: {
@@ -890,7 +872,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
-                mfex_udp_set_hwol(packet);
+                dp_packet_l4_proto_set_udp(packet);
             } break;
 
         case PROFILE_ETH_IPV4_TCP: {
@@ -906,7 +888,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
-                mfex_tcp_set_hwol(packet);
+                dp_packet_l4_proto_set_tcp(packet);
             } break;
 
         case PROFILE_ETH_IPV4_UDP: {
@@ -918,7 +900,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
-                mfex_udp_set_hwol(packet);
+                dp_packet_l4_proto_set_udp(packet);
             } break;
 
         case PROFILE_ETH_IPV6_UDP: {
@@ -937,7 +919,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 /* Process UDP header. */
                 mfex_handle_ipv6_l4((void *)&pkt[54], &blocks[9]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
-                mfex_udp_set_hwol(packet);
+                dp_packet_l4_proto_set_udp(packet);
             } break;
 
         case PROFILE_ETH_IPV6_TCP: {
@@ -961,7 +943,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 }
                 mfex_handle_tcp_flags(tcp, &blocks[9]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
-                mfex_tcp_set_hwol(packet);
+                dp_packet_l4_proto_set_tcp(packet);
             } break;
 
         case PROFILE_ETH_VLAN_IPV6_TCP: {
@@ -988,7 +970,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 }
                 mfex_handle_tcp_flags(tcp, &blocks[10]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
-                mfex_tcp_set_hwol(packet);
+                dp_packet_l4_proto_set_tcp(packet);
             } break;
 
         case PROFILE_ETH_VLAN_IPV6_UDP: {
@@ -1010,7 +992,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 /* Process UDP header. */
                 mfex_handle_ipv6_l4((void *)&pkt[58], &blocks[10]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
-                mfex_udp_set_hwol(packet);
+                dp_packet_l4_proto_set_udp(packet);
             } break;
 
         case PROFILE_ETH_IPV4_NVGRE: {
@@ -1021,7 +1003,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4(packet);
-                mfex_udp_set_hwol(packet);
+                dp_packet_l4_proto_set_udp(packet);
             } break;
 
         default:

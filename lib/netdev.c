@@ -929,7 +929,7 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
                 if (dp_packet_hwol_is_tso(packet)
                     && (dp_packet_tunnel_vxlan(packet)
                         || dp_packet_tunnel_geneve(packet))
-                    && dp_packet_hwol_is_outer_udp_cksum(packet)) {
+                    && dp_packet_l4_checksum_partial(packet)) {
                     return netdev_send_tso(netdev, qid, batch, concurrent_txq);
                 }
             }

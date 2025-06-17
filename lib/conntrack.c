@@ -914,7 +914,6 @@ nat_inner_packet(struct dp_packet *pkt, struct conn_key *key,
     const char *inner_l4 = NULL;
     uint16_t orig_l3_ofs = pkt->l3_ofs;
     uint16_t orig_l4_ofs = pkt->l4_ofs;
-    uint64_t orig_ol_flags = *dp_packet_ol_flags_ptr(pkt);
     uint32_t orig_offloads = pkt->offloads;
 
     void *l3 = dp_packet_l3(pkt);
@@ -936,8 +935,8 @@ nat_inner_packet(struct dp_packet *pkt, struct conn_key *key,
     pkt->l4_ofs += inner_l4 - (char *) l4;
     /* Drop any offloads to force below helpers to calculate checksums
      * if needed. */
-    *dp_packet_ol_flags_ptr(pkt) &= ~DP_PACKET_OL_TX_ANY_CKSUM;
     dp_packet_ip_checksum_set_unknown(pkt);
+    dp_packet_l4_checksum_set_unknown(pkt);
 
     /* Reverse the key for inner packet. */
     struct conn_key rev_key = *key;
@@ -963,7 +962,6 @@ nat_inner_packet(struct dp_packet *pkt, struct conn_key *key,
 
     pkt->l3_ofs = orig_l3_ofs;
     pkt->l4_ofs = orig_l4_ofs;
-    *dp_packet_ol_flags_ptr(pkt) = orig_ol_flags;
     pkt->offloads = orig_offloads;
 }
 
@@ -2262,8 +2260,7 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
             /* Validate the checksum only when hwol is not supported. */
             if (extract_l4(&ctx->key, l4, dp_packet_l4_size(pkt),
                            &ctx->icmp_related, l3,
-                           !dp_packet_l4_checksum_good(pkt) &&
-                           !dp_packet_hwol_tx_l4_checksum(pkt),
+                           dp_packet_l4_checksum_unknown(pkt),
                            NULL)) {
                 ctx->hash = conn_key_hash(&ctx->key, ct->hash_basis);
                 return true;
@@ -3702,8 +3699,8 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
             adj_seqnum(&th->tcp_seq, ec->seq_skew);
     }
 
-    if (dp_packet_hwol_tx_l4_checksum(pkt)) {
-        dp_packet_ol_reset_l4_csum_good(pkt);
+    if (dp_packet_l4_checksum_valid(pkt)) {
+        dp_packet_l4_checksum_set_partial(pkt);
     } else {
         th->tcp_csum = 0;
         if (ctx->key.dl_type == htons(ETH_TYPE_IPV6)) {
