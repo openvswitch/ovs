@@ -337,11 +337,7 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
         } else {
             dp_packet_hwol_set_csum_udp(packet);
         }
-    }
-
-    if (packet->csum_start && packet->csum_offset) {
-        dp_packet_ol_set_l4_csum_partial(packet);
-    } else if (!udp->udp_csum) {
+    } else {
         dp_packet_ol_set_l4_csum_good(packet);
     }
 

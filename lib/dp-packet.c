@@ -39,9 +39,6 @@ dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source so
     dp_packet_init_specific(b);
     /* By default assume the packet type to be Ethernet. */
     b->packet_type = htonl(PT_ETH);
-    /* Reset csum start and offset. */
-    b->csum_start = 0;
-    b->csum_offset = 0;
 }
 
 static void

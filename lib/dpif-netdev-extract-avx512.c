@@ -776,7 +776,6 @@ mfex_ipv6_set_hwol(struct dp_packet *pkt)
 static void
 mfex_tcp_set_hwol(struct dp_packet *pkt)
 {
-    dp_packet_ol_l4_csum_check_partial(pkt);
     if (dp_packet_l4_checksum_good(pkt)
         || dp_packet_ol_l4_csum_partial(pkt)) {
         dp_packet_hwol_set_csum_tcp(pkt);
@@ -786,7 +785,6 @@ mfex_tcp_set_hwol(struct dp_packet *pkt)
 static void
 mfex_udp_set_hwol(struct dp_packet *pkt)
 {
-    dp_packet_ol_l4_csum_check_partial(pkt);
     if (dp_packet_l4_checksum_good(pkt)
         || dp_packet_ol_l4_csum_partial(pkt)) {
         dp_packet_hwol_set_csum_udp(pkt);

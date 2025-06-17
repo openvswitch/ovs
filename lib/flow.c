@@ -1080,7 +1080,6 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                     } else if (dl_type == htons(ETH_TYPE_IPV6)) {
                         dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
                     }
-                    dp_packet_ol_l4_csum_check_partial(packet);
                     if (dp_packet_l4_checksum_good(packet)
                         || dp_packet_ol_l4_csum_partial(packet)) {
                         dp_packet_hwol_set_csum_tcp(packet);
@@ -1100,7 +1099,6 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 } else if (dl_type == htons(ETH_TYPE_IPV6)) {
                     dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
                 }
-                dp_packet_ol_l4_csum_check_partial(packet);
                 if (dp_packet_l4_checksum_good(packet)
                     || dp_packet_ol_l4_csum_partial(packet)) {
                     if (tunneling) {
@@ -1118,7 +1116,6 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 miniflow_push_be16(mf, tp_dst, sctp->sctp_dst);
                 miniflow_push_be16(mf, ct_tp_src, ct_tp_src);
                 miniflow_push_be16(mf, ct_tp_dst, ct_tp_dst);
-                dp_packet_ol_l4_csum_check_partial(packet);
                 if (dp_packet_l4_checksum_good(packet)
                     || dp_packet_ol_l4_csum_partial(packet)) {
                     dp_packet_hwol_set_csum_sctp(packet);
@@ -1309,20 +1306,17 @@ parse_tcp_flags(struct dp_packet *packet,
         if (nw_proto == IPPROTO_TCP && size >= TCP_HEADER_LEN) {
             const struct tcp_header *tcp = data;
 
-            dp_packet_ol_l4_csum_check_partial(packet);
             if (dp_packet_l4_checksum_good(packet)
                 || dp_packet_ol_l4_csum_partial(packet)) {
                 dp_packet_hwol_set_csum_tcp(packet);
             }
             return TCP_FLAGS(tcp->tcp_ctl);
         } else if (nw_proto == IPPROTO_UDP && size >= UDP_HEADER_LEN) {
-            dp_packet_ol_l4_csum_check_partial(packet);
             if (dp_packet_l4_checksum_good(packet)
                 || dp_packet_ol_l4_csum_partial(packet)) {
                 dp_packet_hwol_set_csum_udp(packet);
             }
         } else if (nw_proto == IPPROTO_SCTP && size >= SCTP_HEADER_LEN) {
-            dp_packet_ol_l4_csum_check_partial(packet);
             if (dp_packet_l4_checksum_good(packet)
                 || dp_packet_ol_l4_csum_partial(packet)) {
                 dp_packet_hwol_set_csum_sctp(packet);

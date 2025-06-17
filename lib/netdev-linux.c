@@ -89,6 +89,8 @@ COVERAGE_DEFINE(netdev_get_hwaddr);
 COVERAGE_DEFINE(netdev_set_hwaddr);
 COVERAGE_DEFINE(netdev_get_ethtool);
 COVERAGE_DEFINE(netdev_set_ethtool);
+COVERAGE_DEFINE(netdev_linux_invalid_l4_csum);
+COVERAGE_DEFINE(netdev_linux_unknown_l4_csum);
 
 
 #ifndef IFLA_IF_NETNSID
@@ -7055,16 +7057,51 @@ netdev_linux_parse_vnet_hdr(struct dp_packet *b)
     }
 
     if (vnet->flags == VIRTIO_NET_HDR_F_NEEDS_CSUM) {
-        /* The packet has offloaded checksum. However, there is no
-         * additional information like the protocol used, so it would
-         * require to parse the packet here. The checksum starting point
-         * and offset are going to be verified when the packet headers
-         * are parsed during miniflow extraction. */
-        b->csum_start = (OVS_FORCE uint16_t) vnet->csum_start;
-        b->csum_offset = (OVS_FORCE uint16_t) vnet->csum_offset;
-    } else {
-        b->csum_start = 0;
-        b->csum_offset = 0;
+        uint16_t csum_offset = (OVS_FORCE uint16_t) vnet->csum_offset;
+        uint16_t csum_start = (OVS_FORCE uint16_t) vnet->csum_start;
+
+        if (csum_start >= dp_packet_size(b)
+            || csum_start + csum_offset >= dp_packet_size(b)) {
+            COVERAGE_INC(netdev_linux_invalid_l4_csum);
+            return EINVAL;
+        }
+
+        /* Chicken/egg situation, report L4 checksum as partial so that
+         * L4 extraction works. */
+        dp_packet_ol_set_l4_csum_partial(b);
+        parse_tcp_flags(b, NULL, NULL, NULL);
+
+        if (csum_start == b->l4_ofs
+            && ((csum_offset == offsetof(struct tcp_header, tcp_csum)
+                 && dp_packet_hwol_l4_is_tcp(b))
+                || (csum_offset == offsetof(struct udp_header, udp_csum)
+                    && dp_packet_hwol_l4_is_udp(b))
+                || (csum_offset == offsetof(struct sctp_header, sctp_csum)
+                    && dp_packet_hwol_l4_is_sctp(b)))) {
+            /* Nothing to do, L4 csum is already marked as partial. */
+        } else {
+            ovs_be16 *csum_l4;
+            void *l4;
+
+            COVERAGE_INC(netdev_linux_unknown_l4_csum);
+
+            csum_l4 = dp_packet_at(b, csum_start + csum_offset,
+                                   sizeof *csum_l4);
+            if (!csum_l4) {
+                return EINVAL;
+            }
+
+            l4 = dp_packet_at(b, csum_start, dp_packet_size(b) - csum_start);
+            *csum_l4 = csum(l4, dp_packet_size(b) - csum_start);
+
+            if (dp_packet_hwol_l4_is_tcp(b)
+                || dp_packet_hwol_l4_is_udp(b)
+                || dp_packet_hwol_l4_is_sctp(b)) {
+                dp_packet_ol_set_l4_csum_good(b);
+            } else {
+                *dp_packet_ol_flags_ptr(b) &= ~DP_PACKET_OL_RX_L4_CKSUM_MASK;
+            }
+        }
     }
 
     int ret = 0;
