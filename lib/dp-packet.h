@@ -74,10 +74,6 @@ enum dp_packet_offload_mask {
                 0x20),
     /* TCP Segmentation Offload. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_TCP_SEG, RTE_MBUF_F_TX_TCP_SEG, 0x40),
-    /* Offloaded packet is IPv4. */
-    DEF_OL_FLAG(DP_PACKET_OL_TX_IPV4, RTE_MBUF_F_TX_IPV4, 0x80),
-    /* Offloaded packet is IPv6. */
-    DEF_OL_FLAG(DP_PACKET_OL_TX_IPV6, RTE_MBUF_F_TX_IPV6, 0x100),
     /* Offload TCP checksum. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_TCP_CKSUM, RTE_MBUF_F_TX_TCP_CKSUM, 0x200),
     /* Offload UDP checksum. */
@@ -92,18 +88,12 @@ enum dp_packet_offload_mask {
     /* Offload packet is tunnel VXLAN. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_TUNNEL_VXLAN,
                 RTE_MBUF_F_TX_TUNNEL_VXLAN, 0x4000),
-    /* Offload tunnel packet, outer header is IPv4. */
-    DEF_OL_FLAG(DP_PACKET_OL_TX_OUTER_IPV4,
-                RTE_MBUF_F_TX_OUTER_IPV4, 0x8000),
     /* Offload tunnel outer IPv4 checksum. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_OUTER_IP_CKSUM,
                 RTE_MBUF_F_TX_OUTER_IP_CKSUM, 0x10000),
     /* Offload tunnel outer UDP checksum. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_OUTER_UDP_CKSUM,
                 RTE_MBUF_F_TX_OUTER_UDP_CKSUM, 0x20000),
-    /* Offload tunnel packet, outer header is IPv6. */
-    DEF_OL_FLAG(DP_PACKET_OL_TX_OUTER_IPV6,
-                RTE_MBUF_F_TX_OUTER_IPV6, 0x40000),
     /* Offload packet is GRE tunnel. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_TUNNEL_GRE,
                 RTE_MBUF_F_TX_TUNNEL_GRE, 0x80000),
@@ -118,8 +108,6 @@ enum dp_packet_offload_mask {
                                      DP_PACKET_OL_RX_L4_CKSUM_GOOD   | \
                                      DP_PACKET_OL_RX_IP_CKSUM_GOOD   | \
                                      DP_PACKET_OL_TX_TCP_SEG         | \
-                                     DP_PACKET_OL_TX_IPV4            | \
-                                     DP_PACKET_OL_TX_IPV6            | \
                                      DP_PACKET_OL_TX_TCP_CKSUM       | \
                                      DP_PACKET_OL_TX_UDP_CKSUM       | \
                                      DP_PACKET_OL_TX_SCTP_CKSUM      | \
@@ -127,10 +115,8 @@ enum dp_packet_offload_mask {
                                      DP_PACKET_OL_TX_TUNNEL_GENEVE   | \
                                      DP_PACKET_OL_TX_TUNNEL_VXLAN    | \
                                      DP_PACKET_OL_TX_TUNNEL_GRE      | \
-                                     DP_PACKET_OL_TX_OUTER_IPV4      | \
                                      DP_PACKET_OL_TX_OUTER_IP_CKSUM  | \
-                                     DP_PACKET_OL_TX_OUTER_UDP_CKSUM | \
-                                     DP_PACKET_OL_TX_OUTER_IPV6)
+                                     DP_PACKET_OL_TX_OUTER_UDP_CKSUM)
 
 #define DP_PACKET_OL_TX_L4_MASK (DP_PACKET_OL_TX_TCP_CKSUM | \
                                  DP_PACKET_OL_TX_UDP_CKSUM | \
@@ -1113,20 +1099,6 @@ dp_packet_hwol_is_tso(const struct dp_packet *b)
     return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_TCP_SEG);
 }
 
-/* Returns 'true' if packet 'b' is marked for IPv4 checksum offloading. */
-static inline bool
-dp_packet_hwol_is_ipv4(const struct dp_packet *b)
-{
-    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_IPV4);
-}
-
-/* Returns 'true' if packet 'p' is marked as IPv6. */
-static inline bool
-dp_packet_hwol_tx_ipv6(const struct dp_packet *p)
-{
-    return !!(*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_TX_IPV6);
-}
-
 /* Returns 'true' if packet 'b' is marked for TCP checksum offloading. */
 static inline bool
 dp_packet_hwol_l4_is_tcp(const struct dp_packet *b)
@@ -1149,20 +1121,6 @@ dp_packet_hwol_l4_is_sctp(struct dp_packet *b)
 {
     return (*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_L4_MASK) ==
             DP_PACKET_OL_TX_SCTP_CKSUM;
-}
-
-/* Returns 'true' if packet 'b' is marked as having an outer IPv6 header. */
-static inline bool
-dp_packet_hwol_is_outer_ipv6(const struct dp_packet *b)
-{
-    return *dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_OUTER_IPV6;
-}
-
-/* Returns 'true' if packet 'b' is marked as having an outer IPv4 header. */
-static inline bool
-dp_packet_hwol_is_outer_ipv4(const struct dp_packet *b)
-{
-    return *dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_OUTER_IPV4;
 }
 
 /* Returns 'true' if packet 'b' is marked for tunnel GENEVE
@@ -1190,7 +1148,7 @@ dp_packet_hwol_is_tunnel_gre(struct dp_packet *b)
 
 /* Returns true if packet 'b' has any offloadable tunnel type. */
 static inline bool
-dp_packet_hwol_is_tunnel(struct dp_packet *b)
+dp_packet_hwol_is_tunnel(const struct dp_packet *b)
 {
     return !!(*dp_packet_ol_flags_ptr(b) & (DP_PACKET_OL_TX_TUNNEL_VXLAN |
                                             DP_PACKET_OL_TX_TUNNEL_GRE |
@@ -1222,30 +1180,6 @@ static inline void
 dp_packet_hwol_reset_tx_l4_csum(struct dp_packet *p)
 {
     *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_L4_MASK;
-}
-
-/* Mark packet 'p' as IPv4. */
-static inline void
-dp_packet_hwol_set_tx_ipv4(struct dp_packet *p)
-{
-    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_IPV6;
-    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_TX_IPV4;
-}
-
-/* Mark packet 'a' as IPv6. */
-static inline void
-dp_packet_hwol_set_tx_ipv6(struct dp_packet *a)
-{
-    *dp_packet_ol_flags_ptr(a) &= ~DP_PACKET_OL_TX_IPV4;
-    *dp_packet_ol_flags_ptr(a) |= DP_PACKET_OL_TX_IPV6;
-}
-
-/* Mark packet 'a' as a tunnel packet with outer IPv6 header. */
-static inline void
-dp_packet_hwol_set_tx_outer_ipv6(struct dp_packet *a)
-{
-    *dp_packet_ol_flags_ptr(a) &= ~DP_PACKET_OL_TX_OUTER_IPV4;
-    *dp_packet_ol_flags_ptr(a) |= DP_PACKET_OL_TX_OUTER_IPV6;
 }
 
 /* Returns 'true' if packet 'p' is marked for IPv4 checksum offloading. */
@@ -1322,13 +1256,6 @@ dp_packet_hwol_set_tunnel_gre(struct dp_packet *b)
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TUNNEL_GRE;
 }
 
-/* Mark packet 'b' as a tunnel packet with outer IPv4 header. */
-static inline void
-dp_packet_hwol_set_tx_outer_ipv4(struct dp_packet *b)
-{
-    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_OUTER_IPV4;
-}
-
 /* Mark packet 'b' for csum offloading in outer IPv4 header. */
 static inline void
 dp_packet_hwol_set_tx_outer_ipv4_csum(struct dp_packet *b)
@@ -1362,24 +1289,31 @@ dp_packet_hwol_reset_tcp_seg(struct dp_packet *p)
 {
     uint64_t ol_flags = *dp_packet_ol_flags_ptr(p)
                         | DP_PACKET_OL_TX_TCP_CKSUM;
+    const struct ip_header *ip_hdr;
 
     ol_flags = ol_flags & ~(DP_PACKET_OL_TX_TCP_SEG
                             | DP_PACKET_OL_RX_L4_CKSUM_GOOD
                             | DP_PACKET_OL_RX_IP_CKSUM_GOOD);
 
-    if (ol_flags & DP_PACKET_OL_TX_IPV4) {
+    if (dp_packet_hwol_is_tunnel(p)) {
+        ip_hdr = dp_packet_inner_l3(p);
+    } else {
+        ip_hdr = dp_packet_l3(p);
+    }
+    if (IP_VER(ip_hdr->ip_ihl_ver) == 4) {
         ol_flags |= DP_PACKET_OL_TX_IP_CKSUM;
     }
 
-    if (ol_flags & (DP_PACKET_OL_TX_TUNNEL_VXLAN |
-                    DP_PACKET_OL_TX_TUNNEL_GENEVE)) {
-        if (ol_flags & DP_PACKET_OL_TX_OUTER_IPV4) {
+    if (dp_packet_hwol_is_tunnel(p)) {
+        ip_hdr = dp_packet_l3(p);
+        if (IP_VER(ip_hdr->ip_ihl_ver) == 4) {
             ol_flags |= DP_PACKET_OL_TX_OUTER_IP_CKSUM;
         }
-        ol_flags |= DP_PACKET_OL_TX_OUTER_UDP_CKSUM;
-    } else if (ol_flags & DP_PACKET_OL_TX_TUNNEL_GRE &&
-               ol_flags & DP_PACKET_OL_TX_OUTER_IPV4) {
-        ol_flags |= DP_PACKET_OL_TX_OUTER_IP_CKSUM;
+
+        if (dp_packet_hwol_is_tunnel_geneve(p)
+            || dp_packet_hwol_is_tunnel_vxlan(p)) {
+            ol_flags |= DP_PACKET_OL_TX_OUTER_UDP_CKSUM;
+        }
     }
 
     *dp_packet_ol_flags_ptr(p) = ol_flags;
@@ -1430,9 +1364,14 @@ dp_packet_ol_set_ip_csum_bad(struct dp_packet *p)
 static inline bool
 dp_packet_hwol_l3_csum_ipv4_ol(const struct dp_packet *b)
 {
-    if (dp_packet_hwol_is_outer_ipv4(b)) {
-        return dp_packet_hwol_is_outer_ipv4_cksum(b);
-    } else if (!dp_packet_hwol_is_outer_ipv6(b)) {
+    const struct ip_header *ip_hdr;
+
+    if (dp_packet_hwol_is_tunnel(b)) {
+        ip_hdr = dp_packet_l3(b);
+        if (IP_VER(ip_hdr->ip_ihl_ver) == 4) {
+            return dp_packet_hwol_is_outer_ipv4_cksum(b);
+        }
+    } else {
         return dp_packet_hwol_tx_ip_csum(b) &&
                !dp_packet_ip_checksum_good(b);
     }
@@ -1446,9 +1385,12 @@ dp_packet_hwol_l3_csum_ipv4_ol(const struct dp_packet *b)
 static inline bool
 dp_packet_hwol_l3_ipv4(const struct dp_packet *b)
 {
-    if (dp_packet_hwol_is_outer_ipv4(b)) {
-        return true;
-    } else if (!dp_packet_hwol_is_outer_ipv6(b)) {
+    const struct ip_header *ip_hdr;
+
+    if (dp_packet_hwol_is_tunnel(b)) {
+        ip_hdr = dp_packet_l3(b);
+        return IP_VER(ip_hdr->ip_ihl_ver) == 4;
+    } else {
         return dp_packet_hwol_tx_ip_csum(b);
     }
     return false;

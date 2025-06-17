@@ -761,16 +761,9 @@ mfex_check_tcp_data_offset(const struct tcp_header *tcp)
 static void
 mfex_ipv4_set_hwol(struct dp_packet *pkt)
 {
-    dp_packet_hwol_set_tx_ipv4(pkt);
     if (dp_packet_ip_checksum_good(pkt)) {
         dp_packet_hwol_set_tx_ip_csum(pkt);
     }
-}
-
-static void
-mfex_ipv6_set_hwol(struct dp_packet *pkt)
-{
-    dp_packet_hwol_set_tx_ipv6(pkt);
 }
 
 static void
@@ -956,7 +949,6 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 /* Process UDP header. */
                 mfex_handle_ipv6_l4((void *)&pkt[54], &blocks[9]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
-                mfex_ipv6_set_hwol(packet);
                 mfex_udp_set_hwol(packet);
             } break;
 
@@ -981,7 +973,6 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 }
                 mfex_handle_tcp_flags(tcp, &blocks[9]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
-                mfex_ipv6_set_hwol(packet);
                 mfex_tcp_set_hwol(packet);
             } break;
 
@@ -1009,7 +1000,6 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 }
                 mfex_handle_tcp_flags(tcp, &blocks[10]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
-                mfex_ipv6_set_hwol(packet);
                 mfex_tcp_set_hwol(packet);
             } break;
 
@@ -1032,7 +1022,6 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 /* Process UDP header. */
                 mfex_handle_ipv6_l4((void *)&pkt[58], &blocks[10]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
-                mfex_ipv6_set_hwol(packet);
                 mfex_udp_set_hwol(packet);
             } break;
 

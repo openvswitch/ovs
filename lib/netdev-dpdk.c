@@ -2633,6 +2633,7 @@ static bool
 netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 {
     struct dp_packet *pkt = CONTAINER_OF(mbuf, struct dp_packet, mbuf);
+    const struct ip_header *ip;
     void *l2;
     void *l3;
     void *l4;
@@ -2643,12 +2644,8 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     const uint64_t all_outer_requests = (RTE_MBUF_F_TX_OUTER_IP_CKSUM |
                                          RTE_MBUF_F_TX_OUTER_UDP_CKSUM);
     const uint64_t all_requests = all_inner_requests | all_outer_requests;
-    const uint64_t all_inner_marks = (RTE_MBUF_F_TX_IPV4 |
-                                      RTE_MBUF_F_TX_IPV6);
-    const uint64_t all_outer_marks = (RTE_MBUF_F_TX_OUTER_IPV4 |
-                                      RTE_MBUF_F_TX_OUTER_IPV6 |
-                                      RTE_MBUF_F_TX_TUNNEL_MASK);
-    const uint64_t all_marks = all_inner_marks | all_outer_marks;
+    const uint64_t all_outer_marks = RTE_MBUF_F_TX_TUNNEL_MASK;
+    const uint64_t all_marks = all_outer_marks;
 
     if (!(mbuf->ol_flags & all_requests)) {
         /* No offloads requested, no marks should be set. */
@@ -2684,6 +2681,11 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
             mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
                                  (char *) dp_packet_l3(pkt);
 
+            ip = dp_packet_l3(pkt);
+            mbuf->ol_flags |= IP_VER(ip->ip_ihl_ver) == 4
+                              ? RTE_MBUF_F_TX_OUTER_IPV4
+                              : RTE_MBUF_F_TX_OUTER_IPV6;
+
             /* Inner L2 length must account for the tunnel header length. */
             l2 = dp_packet_l4(pkt);
             l3 = dp_packet_inner_l3(pkt);
@@ -2703,17 +2705,13 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
         if (tunnel_type) {
             /* No inner offload is requested, fallback to non tunnel
              * checksum offloads. */
-            mbuf->ol_flags &= ~all_inner_marks;
             if (mbuf->ol_flags & RTE_MBUF_F_TX_OUTER_IP_CKSUM) {
                 mbuf->ol_flags |= RTE_MBUF_F_TX_IP_CKSUM;
-                mbuf->ol_flags |= RTE_MBUF_F_TX_IPV4;
             }
             if (mbuf->ol_flags & RTE_MBUF_F_TX_OUTER_UDP_CKSUM) {
                 mbuf->ol_flags |= RTE_MBUF_F_TX_UDP_CKSUM;
-                mbuf->ol_flags |= mbuf->ol_flags & RTE_MBUF_F_TX_OUTER_IPV4
-                                  ? RTE_MBUF_F_TX_IPV4 : RTE_MBUF_F_TX_IPV6;
             }
-            mbuf->ol_flags &= ~(all_outer_requests | all_outer_marks);
+            mbuf->ol_flags &= ~all_outer_requests;
         }
         mbuf->outer_l2_len = 0;
         mbuf->outer_l3_len = 0;
@@ -2724,6 +2722,10 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     }
 
     ovs_assert(l4);
+
+    ip = l3;
+    mbuf->ol_flags |= IP_VER(ip->ip_ihl_ver) == 4
+                      ? RTE_MBUF_F_TX_IPV4 : RTE_MBUF_F_TX_IPV6;
 
     mbuf->l2_len = (char *) l3 - (char *) l2;
     mbuf->l3_len = (char *) l4 - (char *) l3;

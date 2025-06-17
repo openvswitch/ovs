@@ -950,12 +950,10 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         nw_frag = ipv4_get_nw_frag(nh);
         data_pull(&data, &size, ip_len);
         if (tunneling) {
-            dp_packet_hwol_set_tx_outer_ipv4(packet);
             if (dp_packet_ip_checksum_good(packet)) {
                 dp_packet_hwol_set_tx_outer_ipv4_csum(packet);
             }
         } else {
-            dp_packet_hwol_set_tx_ipv4(packet);
             if (dp_packet_ip_checksum_good(packet)) {
                 dp_packet_hwol_set_tx_ip_csum(packet);
             }
@@ -972,12 +970,6 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
             goto out;
         }
         data_pull(&data, &size, sizeof *nh);
-
-        if (tunneling) {
-            dp_packet_hwol_set_tx_outer_ipv6(packet);
-        } else {
-            dp_packet_hwol_set_tx_ipv6(packet);
-        }
         plen = ntohs(nh->ip6_plen);
         dp_packet_set_l2_pad_size(packet, size - plen);
         size = plen;   /* Never pull padding. */
@@ -1268,7 +1260,6 @@ parse_tcp_flags(struct dp_packet *packet,
 
         size = tot_len;   /* Never pull padding. */
         data_pull(&data, &size, ip_len);
-        dp_packet_hwol_set_tx_ipv4(packet);
         if (dp_packet_ip_checksum_good(packet)) {
             dp_packet_hwol_set_tx_ip_csum(packet);
         }
@@ -1284,7 +1275,6 @@ parse_tcp_flags(struct dp_packet *packet,
         }
         data_pull(&data, &size, sizeof *nh);
 
-        dp_packet_hwol_set_tx_ipv6(packet);
         plen = ntohs(nh->ip6_plen); /* Never pull padding. */
         dp_packet_set_l2_pad_size(packet, size - plen);
         size = plen;

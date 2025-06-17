@@ -1999,7 +1999,6 @@ packet_tcp_complete_csum(struct dp_packet *p, bool inner)
     struct tcp_header *tcp;
     size_t tcp_sz;
     void *ip_hdr;
-    bool is_v4;
 
     if (inner) {
         tcp = dp_packet_inner_l4(p);
@@ -2014,20 +2013,8 @@ packet_tcp_complete_csum(struct dp_packet *p, bool inner)
     ovs_assert(tcp);
     ovs_assert(ip_hdr);
 
-    if (!inner && dp_packet_hwol_is_outer_ipv6(p)) {
-        is_v4 = false;
-    } else if (!inner && dp_packet_hwol_is_outer_ipv4(p)) {
-        is_v4 = true;
-    } else if (dp_packet_hwol_is_ipv4(p)) {
-        is_v4 = true;
-    } else if (dp_packet_hwol_tx_ipv6(p)) {
-        is_v4 = false;
-    } else {
-        OVS_NOT_REACHED();
-    }
-
     tcp->tcp_csum = 0;
-    if (is_v4) {
+    if (IP_VER(((const struct ip_header *) ip_hdr)->ip_ihl_ver) == 4) {
         struct ip_header *ip = ip_hdr;
 
         tcp->tcp_csum = csum_finish(csum_continue(packet_csum_pseudoheader(ip),
@@ -2048,7 +2035,6 @@ packet_udp_complete_csum(struct dp_packet *p, bool inner)
     struct udp_header *udp;
     size_t udp_sz;
     void *ip_hdr;
-    bool is_v4;
 
     if (inner) {
         udp = dp_packet_inner_l4(p);
@@ -2068,20 +2054,8 @@ packet_udp_complete_csum(struct dp_packet *p, bool inner)
         return;
     }
 
-    if (!inner && dp_packet_hwol_is_outer_ipv6(p)) {
-        is_v4 = false;
-    } else if (!inner && dp_packet_hwol_is_outer_ipv4(p)) {
-        is_v4 = true;
-    } else if (dp_packet_hwol_is_ipv4(p)) {
-        is_v4 = true;
-    } else if (dp_packet_hwol_tx_ipv6(p)) {
-        is_v4 = false;
-    } else {
-        OVS_NOT_REACHED();
-    }
-
     udp->udp_csum = 0;
-    if (is_v4) {
+    if (IP_VER(((const struct ip_header *) ip_hdr)->ip_ihl_ver) == 4) {
         struct ip_header *ip = ip_hdr;
 
         udp->udp_csum = csum_finish(csum_continue(packet_csum_pseudoheader(ip),

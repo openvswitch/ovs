@@ -81,16 +81,12 @@ Rules
 5) The ingress packet parser can only set ``DP_PACKET_OL_TX_IP_CKSUM`` if the
    packet has ``DP_PACKET_OL_RX_IP_CKSUM_GOOD`` to not violate rule #2.
 
-6) Packet with flag ``DP_PACKET_OL_TX_IPV4`` is an IPv4 packet.
-
-7) Packet with flag ``DP_PACKET_OL_TX_IPV6`` is an IPv6 packet.
-
-8) Packet with flag ``DP_PACKET_OL_TX_IP_CKSUM`` tells the datapath to skip
+6) Packet with flag ``DP_PACKET_OL_TX_IP_CKSUM`` tells the datapath to skip
    updating the IP checksum if the packet is modified. The IP checksum will be
    calculated by the egress interface if that supports IP checksum offload,
    otherwise the IP checksum will be performed in software before handing over
    the packet to the interface.
 
-9) When there are modifications to the packet that requires a checksum update,
+7) When there are modifications to the packet that requires a checksum update,
    the datapath needs to remove the ``DP_PACKET_OL_RX_IP_CKSUM_GOOD`` flag,
    otherwise the checksum is assumed to be good in the packet.
