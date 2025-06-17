@@ -915,6 +915,7 @@ nat_inner_packet(struct dp_packet *pkt, struct conn_key *key,
     uint16_t orig_l3_ofs = pkt->l3_ofs;
     uint16_t orig_l4_ofs = pkt->l4_ofs;
     uint64_t orig_ol_flags = *dp_packet_ol_flags_ptr(pkt);
+    uint32_t orig_offloads = pkt->offloads;
 
     void *l3 = dp_packet_l3(pkt);
     void *l4 = dp_packet_l4(pkt);
@@ -936,6 +937,7 @@ nat_inner_packet(struct dp_packet *pkt, struct conn_key *key,
     /* Drop any offloads to force below helpers to calculate checksums
      * if needed. */
     *dp_packet_ol_flags_ptr(pkt) &= ~DP_PACKET_OL_TX_ANY_CKSUM;
+    dp_packet_ip_checksum_set_unknown(pkt);
 
     /* Reverse the key for inner packet. */
     struct conn_key rev_key = *key;
@@ -962,6 +964,7 @@ nat_inner_packet(struct dp_packet *pkt, struct conn_key *key,
     pkt->l3_ofs = orig_l3_ofs;
     pkt->l4_ofs = orig_l4_ofs;
     *dp_packet_ol_flags_ptr(pkt) = orig_ol_flags;
+    pkt->offloads = orig_offloads;
 }
 
 static void
@@ -2246,8 +2249,7 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
             /* Validate the checksum only when hwol is not supported and the
              * packet's checksum status is not known. */
             ok = extract_l3_ipv4(&ctx->key, l3, dp_packet_l3_size(pkt), NULL,
-                                 !dp_packet_hwol_l3_csum_ipv4_ol(pkt)
-                                 && !dp_packet_ip_checksum_good(pkt));
+                                 dp_packet_ip_checksum_unknown(pkt));
         }
     } else if (ctx->key.dl_type == htons(ETH_TYPE_IPV6)) {
         ok = extract_l3_ipv6(&ctx->key, l3, dp_packet_l3_size(pkt), NULL);
@@ -3677,8 +3679,8 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
                 }
                 if (seq_skew) {
                     ip_len = ntohs(l3_hdr->ip_tot_len) + seq_skew;
-                    if (dp_packet_hwol_tx_ip_csum(pkt)) {
-                        dp_packet_ol_reset_ip_csum_good(pkt);
+                    if (dp_packet_ip_checksum_valid(pkt)) {
+                        dp_packet_ip_checksum_set_partial(pkt);
                     } else {
                         l3_hdr->ip_csum = recalc_csum16(l3_hdr->ip_csum,
                                                         l3_hdr->ip_tot_len,

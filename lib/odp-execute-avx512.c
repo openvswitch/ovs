@@ -473,8 +473,8 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
          * (v_pkt_masked). */
         __m256i v_new_hdr = _mm256_or_si256(v_key_shuf, v_pkt_masked);
 
-        if (dp_packet_hwol_l3_ipv4(packet)) {
-            dp_packet_ol_reset_ip_csum_good(packet);
+        if (dp_packet_ip_checksum_valid(packet)) {
+            dp_packet_ip_checksum_set_partial(packet);
         } else {
             ovs_be16 old_csum = ~nh->ip_csum;
 

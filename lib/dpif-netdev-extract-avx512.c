@@ -759,14 +759,6 @@ mfex_check_tcp_data_offset(const struct tcp_header *tcp)
 }
 
 static void
-mfex_ipv4_set_hwol(struct dp_packet *pkt)
-{
-    if (dp_packet_ip_checksum_good(pkt)) {
-        dp_packet_hwol_set_tx_ip_csum(pkt);
-    }
-}
-
-static void
 mfex_tcp_set_hwol(struct dp_packet *pkt)
 {
     if (dp_packet_l4_checksum_good(pkt)
@@ -885,7 +877,6 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 const struct tcp_header *tcp = (void *)&pkt[38];
                 mfex_handle_tcp_flags(tcp, &blocks[7]);
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
-                mfex_ipv4_set_hwol(packet);
                 mfex_tcp_set_hwol(packet);
             } break;
 
@@ -899,7 +890,6 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
-                mfex_ipv4_set_hwol(packet);
                 mfex_udp_set_hwol(packet);
             } break;
 
@@ -916,7 +906,6 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
-                mfex_ipv4_set_hwol(packet);
                 mfex_tcp_set_hwol(packet);
             } break;
 
@@ -929,7 +918,6 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
-                mfex_ipv4_set_hwol(packet);
                 mfex_udp_set_hwol(packet);
             } break;
 
@@ -1033,7 +1021,6 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4(packet);
-                mfex_ipv4_set_hwol(packet);
                 mfex_udp_set_hwol(packet);
             } break;
 

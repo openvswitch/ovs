@@ -556,20 +556,17 @@ dp_packet_compare_offsets(struct dp_packet *b1, struct dp_packet *b2,
 void
 dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
 {
-    if (!dp_packet_hwol_tx_is_any_csum(p)) {
+    if (!dp_packet_ip_checksum_partial(p)
+        && !dp_packet_inner_ip_checksum_partial(p)
+        && !dp_packet_hwol_tx_is_any_csum(p)) {
         /* Only checksumming needs actions. */
         return;
     }
 
     if (!dp_packet_tunnel(p)) {
-        if (dp_packet_hwol_tx_ip_csum(p)) {
-            if (dp_packet_ip_checksum_good(p)) {
-                dp_packet_hwol_reset_tx_ip_csum(p);
-            } else if (!(flags & NETDEV_TX_OFFLOAD_IPV4_CKSUM)) {
-                dp_packet_ip_set_header_csum(p, false);
-                dp_packet_ol_set_ip_csum_good(p);
-                dp_packet_hwol_reset_tx_ip_csum(p);
-            }
+        if (dp_packet_ip_checksum_partial(p)
+            && !(flags & NETDEV_TX_OFFLOAD_IPV4_CKSUM)) {
+            dp_packet_ip_set_header_csum(p, false);
         }
 
         if (dp_packet_hwol_tx_l4_checksum(p)) {
@@ -615,14 +612,9 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
         }
     }
 
-    if (dp_packet_hwol_tx_ip_csum(p)) {
-        if (dp_packet_ip_checksum_good(p)) {
-            dp_packet_hwol_reset_tx_ip_csum(p);
-        } else if (!(flags & NETDEV_TX_OFFLOAD_IPV4_CKSUM)) {
-            dp_packet_ip_set_header_csum(p, true);
-            dp_packet_ol_set_ip_csum_good(p);
-            dp_packet_hwol_reset_tx_ip_csum(p);
-        }
+    if (dp_packet_inner_ip_checksum_partial(p)
+        && !(flags & NETDEV_TX_OFFLOAD_IPV4_CKSUM)) {
+        dp_packet_ip_set_header_csum(p, true);
     }
 
     if (dp_packet_hwol_tx_l4_checksum(p)) {
@@ -644,12 +636,9 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
         }
     }
 
-    if (dp_packet_hwol_is_outer_ipv4_cksum(p)) {
-        if (!(flags & NETDEV_TX_OFFLOAD_OUTER_IP_CKSUM)) {
-            dp_packet_ip_set_header_csum(p, false);
-            dp_packet_ol_set_ip_csum_good(p);
-            dp_packet_hwol_reset_outer_ipv4_csum(p);
-        }
+    if (dp_packet_ip_checksum_partial(p)
+        && !(flags & NETDEV_TX_OFFLOAD_OUTER_IP_CKSUM)) {
+        dp_packet_ip_set_header_csum(p, false);
     }
 
     if (!dp_packet_hwol_is_outer_udp_cksum(p)) {

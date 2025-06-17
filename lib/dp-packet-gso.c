@@ -169,6 +169,7 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
                 ip_hdr->ip_tot_len = htons(dp_packet_inner_l3_size(seg));
                 ip_hdr->ip_id = htons(inner_ip_id);
                 ip_hdr->ip_csum = 0;
+                dp_packet_inner_ip_checksum_set_partial(seg);
                 inner_ip_id++;
             } else {
                 struct ovs_16aligned_ip6_hdr *ip6_hdr;
@@ -185,6 +186,7 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
             ip_hdr->ip_tot_len = htons(dp_packet_l3_size(seg));
             ip_hdr->ip_id = htons(outer_ip_id);
             ip_hdr->ip_csum = 0;
+            dp_packet_ip_checksum_set_partial(seg);
             outer_ip_id++;
         } else {
             struct ovs_16aligned_ip6_hdr *ip6_hdr = dp_packet_l3(seg);

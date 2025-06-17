@@ -118,8 +118,7 @@ ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
 
         /* A packet coming from a network device might have the
          * csum already checked. In this case, skip the check. */
-        if (OVS_UNLIKELY(!bad_csum
-                         && !dp_packet_hwol_l3_csum_ipv4_ol(packet))) {
+        if (OVS_UNLIKELY(!bad_csum && dp_packet_ip_checksum_unknown(packet))) {
             COVERAGE_INC(native_tnl_l3csum_checked);
             bad_csum = csum(ip, IP_IHL(ip->ip_ihl_ver) * 4);
         }
@@ -202,23 +201,20 @@ netdev_tnl_push_ip_header(struct dp_packet *packet, const void *header,
         *ip_tot_size -= IPV6_HEADER_LEN;
         ip6->ip6_plen = htons(*ip_tot_size);
         packet_set_ipv6_flow_label(&ip6->ip6_flow, ipv6_label);
+        dp_packet_ip_checksum_set_unknown(packet);
+
         packet->l4_ofs = dp_packet_size(packet) - *ip_tot_size;
 
-        dp_packet_ol_reset_ip_csum_good(packet);
         return ip6 + 1;
     } else {
         ip = netdev_tnl_ip_hdr(eth);
         ip->ip_tot_len = htons(*ip_tot_size);
-        /* Postpone checksum to when the packet is pushed to the port. */
-        if (dp_packet_tunnel(packet)) {
-            dp_packet_hwol_set_tx_outer_ipv4_csum(packet);
-        } else {
-            dp_packet_hwol_set_tx_ip_csum(packet);
-        }
-
-        dp_packet_ol_reset_ip_csum_good(packet);
         *ip_tot_size -= IP_HEADER_LEN;
+        /* Postpone checksum to when the packet is pushed to the port. */
+        dp_packet_ip_checksum_set_partial(packet);
+
         packet->l4_ofs = dp_packet_size(packet) - *ip_tot_size;
+
         return ip + 1;
     }
 }
@@ -267,24 +263,10 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
 }
 
 static void
-dp_packet_tnl_ol_process(struct dp_packet *packet,
-                         const struct ovs_action_push_tnl *data)
+tnl_ol_push(struct dp_packet *packet,
+            const struct ovs_action_push_tnl *data)
 {
-    struct ip_header *ip = NULL;
-
-    if (dp_packet_hwol_l4_mask(packet)) {
-        ip = dp_packet_l3(packet);
-
-        if (data->tnl_type == OVS_VPORT_TYPE_GENEVE ||
-            data->tnl_type == OVS_VPORT_TYPE_VXLAN ||
-            data->tnl_type == OVS_VPORT_TYPE_GRE ||
-            data->tnl_type == OVS_VPORT_TYPE_IP6GRE) {
-
-            if (IP_VER(ip->ip_ihl_ver) == 4) {
-                dp_packet_hwol_set_tx_ip_csum(packet);
-            }
-        }
-    }
+    packet->offloads <<= DP_PACKET_OL_SHIFT_COUNT;
 
     if (data->tnl_type == OVS_VPORT_TYPE_GENEVE) {
         dp_packet_tunnel_set_geneve(packet);
@@ -294,6 +276,14 @@ dp_packet_tnl_ol_process(struct dp_packet *packet,
                data->tnl_type == OVS_VPORT_TYPE_IP6GRE) {
         dp_packet_tunnel_set_gre(packet);
     }
+}
+
+static void
+tnl_ol_pop(struct dp_packet *packet, int off)
+{
+    packet->offloads >>= DP_PACKET_OL_SHIFT_COUNT;
+
+    dp_packet_reset_packet(packet, off);
 }
 
 void
@@ -311,7 +301,7 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
      * modifying the packet. */
     udp_src = netdev_tnl_get_src_port(packet);
 
-    dp_packet_tnl_ol_process(packet, data);
+    tnl_ol_push(packet, data);
     udp = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
                                     &ip_tot_size, 0);
 
@@ -524,7 +514,7 @@ netdev_gre_pop_header(struct dp_packet *packet)
         goto err;
     }
 
-    dp_packet_reset_packet(packet, hlen);
+    tnl_ol_pop(packet, hlen);
 
     return packet;
 err:
@@ -543,7 +533,7 @@ netdev_gre_push_header(const struct netdev *netdev,
     struct gre_base_hdr *greh;
     int ip_tot_size;
 
-    dp_packet_tnl_ol_process(packet, data);
+    tnl_ol_push(packet, data);
 
     greh = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
                                      &ip_tot_size, 0);
@@ -687,7 +677,7 @@ netdev_erspan_pop_header(struct dp_packet *packet)
         goto err;
     }
 
-    dp_packet_reset_packet(packet, hlen);
+    tnl_ol_pop(packet, hlen);
 
     return packet;
 err:
@@ -849,7 +839,7 @@ netdev_gtpu_pop_header(struct dp_packet *packet)
         } else {
             VLOG_WARN_RL(&err_rl, "GTP-U: Receive non-IP packet.");
         }
-        dp_packet_reset_packet(packet, hlen + gtpu_hlen);
+        tnl_ol_pop(packet, hlen + gtpu_hlen);
     } else {
         /* non-GPDU GTP-U messages, ex: echo request, end marker.
          * Users should redirect these packets to controller, or.
@@ -1087,7 +1077,7 @@ netdev_srv6_pop_header(struct dp_packet *packet)
         goto err;
     }
 
-    dp_packet_reset_packet(packet, hlen);
+    tnl_ol_pop(packet, hlen);
 
     return packet;
 err:
@@ -1154,7 +1144,7 @@ netdev_vxlan_pop_header(struct dp_packet *packet)
     tnl->flags |= FLOW_TNL_F_KEY;
 
     packet->packet_type = htonl(next_pt);
-    dp_packet_reset_packet(packet, hlen + VXLAN_HLEN);
+    tnl_ol_pop(packet, hlen + VXLAN_HLEN);
     if (next_pt != PT_ETH) {
         packet->l3_ofs = 0;
     }
@@ -1262,7 +1252,7 @@ netdev_geneve_pop_header(struct dp_packet *packet)
     tnl->flags |= FLOW_TNL_F_UDPIF;
 
     packet->packet_type = htonl(PT_ETH);
-    dp_packet_reset_packet(packet, hlen);
+    tnl_ol_pop(packet, hlen);
 
     return packet;
 err:

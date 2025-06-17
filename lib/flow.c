@@ -949,15 +949,6 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         nw_proto = nh->ip_proto;
         nw_frag = ipv4_get_nw_frag(nh);
         data_pull(&data, &size, ip_len);
-        if (tunneling) {
-            if (dp_packet_ip_checksum_good(packet)) {
-                dp_packet_hwol_set_tx_outer_ipv4_csum(packet);
-            }
-        } else {
-            if (dp_packet_ip_checksum_good(packet)) {
-                dp_packet_hwol_set_tx_ip_csum(packet);
-            }
-        }
     } else if (dl_type == htons(ETH_TYPE_IPV6)) {
         const struct ovs_16aligned_ip6_hdr *nh = data;
         ovs_be32 tc_flow;
@@ -1260,9 +1251,6 @@ parse_tcp_flags(struct dp_packet *packet,
 
         size = tot_len;   /* Never pull padding. */
         data_pull(&data, &size, ip_len);
-        if (dp_packet_ip_checksum_good(packet)) {
-            dp_packet_hwol_set_tx_ip_csum(packet);
-        }
     } else if (dl_type == htons(ETH_TYPE_IPV6)) {
         const struct ovs_16aligned_ip6_hdr *nh = data;
         uint16_t plen;
@@ -3315,12 +3303,7 @@ packet_expand(struct dp_packet *p, const struct flow *flow, size_t size)
             struct ip_header *ip = dp_packet_l3(p);
 
             ip->ip_tot_len = htons(p->l4_ofs - p->l3_ofs + l4_len);
-            if (dp_packet_hwol_tx_ip_csum(p)) {
-                dp_packet_ol_reset_ip_csum_good(p);
-            } else {
-                dp_packet_ip_set_header_csum(p, false);
-                dp_packet_ol_set_ip_csum_good(p);
-            }
+            dp_packet_ip_set_header_csum(p, false);
             pseudo_hdr_csum = packet_csum_pseudoheader(ip);
         } else { /* ETH_TYPE_IPV6 */
             struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(p);
@@ -3419,9 +3402,9 @@ flow_compose(struct dp_packet *p, const struct flow *flow,
              * bit.
              */
             ip->ip_csum ^= (OVS_FORCE ovs_be16) 0x1;
-            dp_packet_ol_set_ip_csum_bad(p);
+            dp_packet_ip_checksum_set_bad(p);
         } else {
-            dp_packet_ol_set_ip_csum_good(p);
+            dp_packet_ip_checksum_set_good(p);
         }
 
         pseudo_hdr_csum = packet_csum_pseudoheader(ip);

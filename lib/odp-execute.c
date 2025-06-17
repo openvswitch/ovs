@@ -187,8 +187,8 @@ odp_set_ipv4(struct dp_packet *packet, const struct ovs_key_ipv4 *key,
         new_tos = key->ipv4_tos | (nh->ip_tos & ~mask->ipv4_tos);
 
         if (nh->ip_tos != new_tos) {
-            if (dp_packet_hwol_tx_ip_csum(packet)) {
-                dp_packet_ol_reset_ip_csum_good(packet);
+            if (dp_packet_ip_checksum_valid(packet)) {
+                dp_packet_ip_checksum_set_partial(packet);
             } else {
                 nh->ip_csum = recalc_csum16(nh->ip_csum,
                                             htons((uint16_t) nh->ip_tos),
@@ -203,8 +203,8 @@ odp_set_ipv4(struct dp_packet *packet, const struct ovs_key_ipv4 *key,
         new_ttl = key->ipv4_ttl | (nh->ip_ttl & ~mask->ipv4_ttl);
 
         if (OVS_LIKELY(nh->ip_ttl != new_ttl)) {
-            if (dp_packet_hwol_tx_ip_csum(packet)) {
-                dp_packet_ol_reset_ip_csum_good(packet);
+            if (dp_packet_ip_checksum_valid(packet)) {
+                dp_packet_ip_checksum_set_partial(packet);
             } else {
                 nh->ip_csum = recalc_csum16(nh->ip_csum,
                                             htons(nh->ip_ttl << 8),

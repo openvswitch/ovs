@@ -437,8 +437,8 @@ ipf_reassemble_v4_frags(struct ipf_list *ipf_list)
     len += rest_len;
     l3 = dp_packet_l3(pkt);
     ovs_be16 new_ip_frag_off = l3->ip_frag_off & ~htons(IP_MORE_FRAGMENTS);
-    if (dp_packet_hwol_tx_ip_csum(pkt)) {
-        dp_packet_ol_reset_ip_csum_good(pkt);
+    if (dp_packet_ip_checksum_valid(pkt)) {
+        dp_packet_ip_checksum_set_partial(pkt);
     } else {
         l3->ip_csum = recalc_csum16(l3->ip_csum, l3->ip_frag_off,
                                     new_ip_frag_off);
@@ -616,7 +616,7 @@ ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
     }
 
     bool bad_csum = dp_packet_ip_checksum_bad(pkt);
-    if (OVS_UNLIKELY(!bad_csum && !dp_packet_ip_checksum_good(pkt))) {
+    if (OVS_UNLIKELY(!bad_csum && dp_packet_ip_checksum_unknown(pkt))) {
         COVERAGE_INC(ipf_l3csum_checked);
         bad_csum = csum(l3, ip_hdr_len);
     }
@@ -1216,8 +1216,8 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
                     } else {
                         struct ip_header *l3_frag = dp_packet_l3(frag_i->pkt);
                         struct ip_header *l3_reass = dp_packet_l3(pkt);
-                        if (dp_packet_hwol_tx_ip_csum(frag_i->pkt)) {
-                            dp_packet_ol_reset_ip_csum_good(frag_i->pkt);
+                        if (dp_packet_ip_checksum_valid(frag_i->pkt)) {
+                            dp_packet_ip_checksum_set_partial(frag_i->pkt);
                         } else {
                             ovs_be32 reass_ip =
                                 get_16aligned_be32(&l3_reass->ip_src);

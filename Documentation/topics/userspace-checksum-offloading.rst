@@ -71,22 +71,21 @@ Rules
 
 2) OVS must not correct a known bad packet checksum.
 
-3) Packet with flag ``DP_PACKET_OL_RX_IP_CKSUM_GOOD`` means that the IP
+3) Packet with only flag ``DP_PACKET_OL_RX_IP_CKSUM_GOOD`` means that the IP
    checksum is present in the packet and it is good.
 
-4) Packet with flag ``DP_PACKET_OL_RX_IP_CKSUM_BAD`` means that the IP
+4) Packet with only flag ``DP_PACKET_OL_RX_IP_CKSUM_BAD`` means that the IP
    checksum is present in the packet and it is bad. Extra care should be taken
    to not fix the packet during data path processing.
 
-5) The ingress packet parser can only set ``DP_PACKET_OL_TX_IP_CKSUM`` if the
-   packet has ``DP_PACKET_OL_RX_IP_CKSUM_GOOD`` to not violate rule #2.
+5) Packet with both ``DP_PACKET_OL_RX_IP_CKSUM_GOOD`` and
+   ``DP_PACKET_OL_RX_IP_CKSUM_BAD`` means that the IP header is valid, but the
+   checksum may not be set in the packet data. This is basically encountered
+   with some virtual drivers, or after OVS modified the IPv4 header content
+   of a not bad ("bad" as defined in 4)) packet.
 
-6) Packet with flag ``DP_PACKET_OL_TX_IP_CKSUM`` tells the datapath to skip
-   updating the IP checksum if the packet is modified. The IP checksum will be
-   calculated by the egress interface if that supports IP checksum offload,
-   otherwise the IP checksum will be performed in software before handing over
-   the packet to the interface.
-
-7) When there are modifications to the packet that requires a checksum update,
-   the datapath needs to remove the ``DP_PACKET_OL_RX_IP_CKSUM_GOOD`` flag,
-   otherwise the checksum is assumed to be good in the packet.
+6) Packet with neither ``DP_PACKET_OL_RX_IP_CKSUM_GOOD`` nor
+   ``DP_PACKET_OL_RX_IP_CKSUM_BAD`` means that the IP header status is unknown.
+   It may be a IPv4 packet, or not. It may have a valid IPv4 cheksum, or not.
+   This situation is encountered with virtual drivers that provide no
+   information about the IP header, and for IPv6 packets.
