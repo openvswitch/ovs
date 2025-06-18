@@ -962,7 +962,7 @@ class Idl(object):
 
                 if version in (OVSDB_UPDATE2, OVSDB_UPDATE3):
                     changes = self.__process_update2(table, uuid, row_update)
-                    if changes:
+                    if changes and tables is not self.server_tables:
                         notices.append(changes)
                         self.change_seqno += 1
                     continue
@@ -977,7 +977,7 @@ class Idl(object):
                                       '"new" members', row_update)
 
                 changes = self.__process_update(table, uuid, old, new)
-                if changes:
+                if changes and tables is not self.server_tables:
                     notices.append(changes)
                     self.change_seqno += 1
         for notice in notices:
