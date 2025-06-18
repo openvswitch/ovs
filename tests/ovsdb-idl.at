@@ -2012,13 +2012,11 @@ OVSDB_CHECK_IDL_NOTIFY([simple link idl verify notify],
        "uuid-name": "l2row",
        "row": {"i": 2, "l1": ["set", [["named-uuid", "l1row"]]]}}]']],
 [[000: empty
-000: event:create, row={}, uuid=<0>, updates=None
-000: event:create, row={}, uuid=<1>, updates=None
-001: {"error":null,"result":[{"uuid":["uuid","<2>"]},{"uuid":["uuid","<3>"]}]}
-002: event:create, row={i=1 l2=[<3>]}, uuid=<2>, updates=None
-002: event:create, row={i=2 l1=[<2>]}, uuid=<3>, updates=None
-002: table link1: i=1 k=1 ka=[] l2=2 uuid=<2>
-002: table link2: i=2 l1=1 uuid=<3>
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: event:create, row={i=1 l2=[<1>]}, uuid=<0>, updates=None
+002: event:create, row={i=2 l1=[<0>]}, uuid=<1>, updates=None
+002: table link1: i=1 k=1 ka=[] l2=2 uuid=<0>
+002: table link2: i=2 l1=1 uuid=<1>
 003: done
 ]])
 
@@ -2074,44 +2072,40 @@ OVSDB_CHECK_IDL_NOTIFY([simple idl verify notify],
        "where": [["i", "==", 0]]}]' \
     'reconnect']],
   [[000: empty
-000: event:create, row={}, uuid=<0>, updates=None
-000: event:create, row={}, uuid=<1>, updates=None
-001: {"error":null,"result":[{"uuid":["uuid","<2>"]},{"uuid":["uuid","<3>"]}]}
-002: event:create, row={i=0 r=0 b=false s= u=<4> ia=[] ra=[] ba=[] sa=[] ua=[]}, uuid=<3>, updates=None
-002: event:create, row={i=1 r=2 b=true s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>]}, uuid=<2>, updates=None
-002: table simple: i=0 r=0 b=false s= u=<4> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
-002: table simple: i=1 r=2 b=true s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>] uuid=<2>
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: event:create, row={i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[]}, uuid=<1>, updates=None
+002: event:create, row={i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>]}, uuid=<0>, updates=None
+002: table simple: i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+002: table simple: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
 003: {"error":null,"result":[{"count":2}]}
-004: event:update, row={i=1 r=2 b=false s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>]}, uuid=<2>, updates={b=true}
-004: table simple: i=0 r=0 b=false s= u=<4> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
-004: table simple: i=1 r=2 b=false s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>] uuid=<2>
+004: event:update, row={i=1 r=2 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>]}, uuid=<0>, updates={b=true}
+004: table simple: i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: table simple: i=1 r=2 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
 005: {"error":null,"result":[{"count":2}]}
-006: event:update, row={i=0 r=123.5 b=false s= u=<4> ia=[] ra=[] ba=[] sa=[] ua=[]}, uuid=<3>, updates={r=0}
-006: event:update, row={i=1 r=123.5 b=false s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>]}, uuid=<2>, updates={r=2}
-006: table simple: i=0 r=123.5 b=false s= u=<4> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
-006: table simple: i=1 r=123.5 b=false s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>] uuid=<2>
-007: {"error":null,"result":[{"uuid":["uuid","<8>"]}]}
-008: event:create, row={i=-1 r=125 b=false s= u=<4> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[]}, uuid=<8>, updates=None
-008: table simple: i=-1 r=125 b=false s= u=<4> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<8>
-008: table simple: i=0 r=123.5 b=false s= u=<4> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
-008: table simple: i=1 r=123.5 b=false s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>] uuid=<2>
+006: event:update, row={i=0 r=123.5 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[]}, uuid=<1>, updates={r=0}
+006: event:update, row={i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>]}, uuid=<0>, updates={r=2}
+006: table simple: i=0 r=123.5 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: table simple: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+007: {"error":null,"result":[{"uuid":["uuid","<6>"]}]}
+008: event:create, row={i=-1 r=125 b=false s= u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[]}, uuid=<6>, updates=None
+008: table simple: i=-1 r=125 b=false s= u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+008: table simple: i=0 r=123.5 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+008: table simple: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
 009: {"error":null,"result":[{"count":2}]}
-010: event:update, row={i=-1 r=125 b=false s=newstring u=<4> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[]}, uuid=<8>, updates={s=}
-010: event:update, row={i=0 r=123.5 b=false s=newstring u=<4> ia=[] ra=[] ba=[] sa=[] ua=[]}, uuid=<3>, updates={s=}
-010: table simple: i=-1 r=125 b=false s=newstring u=<4> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<8>
-010: table simple: i=0 r=123.5 b=false s=newstring u=<4> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
-010: table simple: i=1 r=123.5 b=false s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>] uuid=<2>
+010: event:update, row={i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[]}, uuid=<6>, updates={s=}
+010: event:update, row={i=0 r=123.5 b=false s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[]}, uuid=<1>, updates={s=}
+010: table simple: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+010: table simple: i=0 r=123.5 b=false s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+010: table simple: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
 011: {"error":null,"result":[{"count":1}]}
-012: event:delete, row={i=0 r=123.5 b=false s=newstring u=<4> ia=[] ra=[] ba=[] sa=[] ua=[]}, uuid=<3>, updates=None
-012: table simple: i=-1 r=125 b=false s=newstring u=<4> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<8>
-012: table simple: i=1 r=123.5 b=false s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>] uuid=<2>
+012: event:delete, row={i=0 r=123.5 b=false s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[]}, uuid=<1>, updates=None
+012: table simple: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+012: table simple: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
 013: reconnect
-014: event:create, row={i=-1 r=125 b=false s=newstring u=<4> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[]}, uuid=<8>, updates=None
-014: event:create, row={i=1 r=123.5 b=false s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>]}, uuid=<2>, updates=None
-014: event:create, row={}, uuid=<0>, updates=None
-014: event:create, row={}, uuid=<1>, updates=None
-014: table simple: i=-1 r=125 b=false s=newstring u=<4> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<8>
-014: table simple: i=1 r=123.5 b=false s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>] uuid=<2>
+014: event:create, row={i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[]}, uuid=<6>, updates=None
+014: event:create, row={i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>]}, uuid=<0>, updates=None
+014: table simple: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+014: table simple: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
 015: done
 ]])
 
@@ -2131,17 +2125,15 @@ OVSDB_CHECK_IDL_NOTIFY([indexed idl, modification and removal notify],
        "table": "indexed",
        "where": [["i", "==", 456]]}]']],
   [[000: empty
-000: event:create, row={}, uuid=<0>, updates=None
-000: event:create, row={}, uuid=<1>, updates=None
-001: {"error":null,"result":[{"uuid":["uuid","<2>"]}]}
-002: event:create, row={i=123}, uuid=<2>, updates=None
-002: table indexed: i=123 uuid=<2>
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
+002: event:create, row={i=123}, uuid=<0>, updates=None
+002: table indexed: i=123 uuid=<0>
 003: {"error":null,"result":[{"count":1}]}
-004: event:update, row={i=456}, uuid=<2>, updates={i=123}
-004: table indexed: i=456 uuid=<2>
+004: event:update, row={i=456}, uuid=<0>, updates={i=123}
+004: table indexed: i=456 uuid=<0>
 005: {"error":null,"result":[{"count":1}]}
 006: empty
-006: event:delete, row={i=456}, uuid=<2>, updates=None
+006: event:delete, row={i=456}, uuid=<0>, updates=None
 007: done
 ]])
 
