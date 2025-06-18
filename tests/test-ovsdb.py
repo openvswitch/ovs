@@ -214,6 +214,9 @@ def do_parse_schema(schema_string):
 
 
 def get_simple_printable_row_string(row, columns):
+    # NOTE(twilson):This turns out to be a particularly good place to test that
+    # Row object stringification doesn't crash on a large variety of row types.
+    assert str(row)
     s = ""
     for column in columns:
         if hasattr(row, column) and not (type(getattr(row, column))

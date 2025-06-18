@@ -1229,6 +1229,29 @@ def _row_to_uuid(value):
         return value
 
 
+def _rows_to_uuid_str(value):
+    if isinstance(value, collections.abc.Mapping):
+        try:
+            k, v = next(iter(value.items()))
+            # Pass through early without iterating if not Rows.
+            if isinstance(k, Row) or isinstance(v, Row):
+                return {str(_row_to_uuid(x)): str(_row_to_uuid(y))
+                        for x, y in value.items()}
+        except StopIteration:
+            # Empty, return default.
+            pass
+    elif (isinstance(value, collections.abc.Iterable)
+        and not isinstance(value, str)):
+        try:
+            # Pass through early without iterating if not Rows.
+            if value and isinstance(value[0], Row):
+                return type(value)(str(_row_to_uuid(x)) for x in value)
+        except TypeError:
+            # Weird Iterable, pass through.
+            pass
+    return str(_row_to_uuid(value))
+
+
 @functools.total_ordering
 class Row(object):
     """A row within an IDL.
@@ -1334,11 +1357,12 @@ class Row(object):
         return int(self.__dict__['uuid'])
 
     def __str__(self):
-        return "{table}({data})".format(
+        return "{table}(uuid={uuid}, {data})".format(
             table=self._table.name,
-            data=", ".join("{col}={val}".format(col=c, val=getattr(self, c))
-                           for c in sorted(self._table.columns)
-                           if hasattr(self, c)))
+            uuid=self.uuid,
+            data=", ".join("{col}={val}".format(
+                col=c, val=_rows_to_uuid_str(getattr(self, c)))
+                for c in sorted(self._table.columns) if hasattr(self, c)))
 
     def _uuid_to_row(self, atom, base):
         if base.ref_table:
