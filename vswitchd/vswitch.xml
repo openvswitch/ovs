@@ -3484,22 +3484,22 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       </column>
 
       <column name="options" key="n_rxq_desc"
-              type='{"type": "integer", "minInteger": 1, "maxInteger": 4096}'>
+              type='{"type": "integer", "minInteger": 1}'>
         <p>
           Specifies the rx queue size (number rx descriptors) for dpdk ports.
-          The value must be a power of 2, less than 4096 and supported
-          by the hardware of the device being configured.
+          The value must be a power of 2 and supported by the hardware of the
+          device being configured.
           If not specified or an incorrect value is specified, 2048 rx
           descriptors will be used by default.
         </p>
       </column>
 
       <column name="options" key="n_txq_desc"
-              type='{"type": "integer", "minInteger": 1, "maxInteger": 4096}'>
+              type='{"type": "integer", "minInteger": 1}'>
         <p>
           Specifies the tx queue size (number tx descriptors) for dpdk ports.
-          The value must be a power of 2, less than 4096 and supported
-          by the hardware of the device being configured.
+          The value must be a power of 2 and supported by the hardware of the
+          device being configured.
           If not specified or an incorrect value is specified, 2048 tx
           descriptors will be used by default.
         </p>

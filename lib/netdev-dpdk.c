@@ -133,8 +133,6 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF / MIN_NB_MBUF))
 #define NIC_PORT_DEFAULT_RXQ_SIZE 2048
 /* Default size of Physical NIC TXQ */
 #define NIC_PORT_DEFAULT_TXQ_SIZE 2048
-/* Maximum size of Physical NIC Queues */
-#define NIC_PORT_MAX_Q_SIZE 4096
 
 #define OVS_VHOST_MAX_QUEUE_NUM 1024  /* Maximum number of vHost TX queues. */
 #define OVS_VHOST_QUEUE_MAP_UNKNOWN (-1) /* Mapping not initialized. */
@@ -2252,9 +2250,7 @@ dpdk_process_queue_size(struct netdev *netdev, const struct smap *args,
 
     queue_size = new_requested_size;
 
-    /* Check for OVS limits. */
-    if (queue_size <= 0 || queue_size > NIC_PORT_MAX_Q_SIZE
-            || !is_pow2(queue_size)) {
+    if (queue_size <= 0 || !is_pow2(queue_size)) {
         queue_size = default_size;
     }
 
