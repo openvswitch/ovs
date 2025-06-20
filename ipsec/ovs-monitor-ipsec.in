@@ -88,7 +88,7 @@ RECONCILIATION_INTERVAL = 15  # seconds
 TIMEOUT_EXPIRED = 137  # Exit code for a SIGKILL (128 + 9).
 
 
-def run_command(args, description=None):
+def run_command(args, description=None, warn_on_failure=True):
     """ This function runs the process args[0] with args[1:] arguments
     and returns a tuple: return-code, stdout, stderr. """
 
@@ -110,7 +110,7 @@ def run_command(args, description=None):
         proc.kill()
         ret = TIMEOUT_EXPIRED
 
-    if proc.returncode or perr:
+    if (proc.returncode or perr) and warn_on_failure:
         vlog.warn("Failed to %s; exit code: %d"
                   % (description, proc.returncode))
         vlog.warn("cmdline: %s" % proc.args)
@@ -916,18 +916,85 @@ conn prevent_unencrypted_vxlan
             elif name.startswith(self.CERTKEY_PREFIX):
                 self._nss_delete_cert_and_key(name)
 
+    def _nss_get_cert(self, name):
+        """Obtains ASCII-formatted (PEM) certificate from the NSS database
+        by name.  If multiple certificates have the same name, all will be
+        returned together."""
+
+        ret, pout, perr = run_command(
+            ['certutil', '-L', '-d', self.IPSEC_D, '-a', '-n', name],
+            "get certificate %s from NSS" % name, warn_on_failure=False)
+        return None if ret else pout
+
+    def _pem_get_certs(self, pem_text):
+        """Returns a set of all base64-encoded certificates in the 'pem_text'.
+        Can be used to unify slightly different formats between different files
+        and NSS database dumps."""
+
+        pattern = r"--*BEGIN CERTIFICATE--*(.*?)--*END CERTIFICATE--*"
+        matches = re.findall(pattern, pem_text, re.DOTALL)
+        return {re.sub(r'[^A-Za-z0-9+/=]', '', body) for body in matches}
+
+    def _cert_check_and_remove_obsolete(self, cert, name):
+        """Looks up the certificate in the NSS database, removes all the
+        certificates that have the same 'name' but do not match the 'cert'.
+        Returns False if the 'cert' is not in the database in the end,
+        True otherwise."""
+
+        certs = set()
+        with open(cert) as f:
+            certs = self._pem_get_certs(f.read())
+
+        while True:
+            current = self._nss_get_cert(name)
+            if current is None:
+                # There are no certificates in the database.
+                return False
+
+            current_certs = self._pem_get_certs(current)
+            if certs == current_certs:
+                # The certificates are up to date.
+                return True
+
+            vlog.info(
+                "Mismatched certificate %s in the NSS database, removing."
+                % name
+            )
+
+            # Delete one certificate and try again.
+            res = 0
+            if name.startswith(self.CERT_PREFIX):
+                res = self._nss_delete_cert(name)
+            else:
+                res = self._nss_delete_cert_and_key(name)
+
+            if res != 0:
+                # We failed to remove the certificate.  Assume that the
+                # one we need is not there.
+                return False
+
     def _nss_import_cert(self, cert, name, cert_type):
         """Cert_type is 'CT,,' for the CA certificate and 'P,P,P' for the
         normal certificate."""
+
+        if self._cert_check_and_remove_obsolete(cert, name):
+            # Already in the database.
+            return
+
         run_command(['certutil', '-A', '-a', '-i', cert, '-d', self.IPSEC_D,
                      '-n', name, '-t', cert_type],
                     "import certificate %s into NSS" % name)
 
     def _nss_delete_cert(self, name):
-        run_command(['certutil', '-D', '-d', self.IPSEC_D, '-n', name],
-                    "delete certificate %s from NSS" % name)
+        return run_command(['certutil', '-D', '-d', self.IPSEC_D, '-n', name],
+                           "delete certificate %s from NSS" % name)[0]
 
     def _nss_import_cert_and_key(self, cert, key, name):
+        if self._cert_check_and_remove_obsolete(cert, name):
+            # Already in the database.  And if the cert is the same, the
+            # key must be the same as well.
+            return
+
         # Avoid deleting other files
         path = os.path.abspath('/tmp/%s.p12' % name)
         if not path.startswith('/tmp/'):
@@ -948,8 +1015,9 @@ conn prevent_unencrypted_vxlan
 
     def _nss_delete_cert_and_key(self, name):
         # Delete certificate and private key
-        run_command(['certutil', '-F', '-d', self.IPSEC_D, '-n', name],
-                    "delete certificate and private key for %s" % name)
+        return run_command(
+            ['certutil', '-F', '-d', self.IPSEC_D, '-n', name],
+            "delete certificate and private key for %s" % name)[0]
 
 
 class IPsecTunnel(object):
