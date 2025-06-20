@@ -68,7 +68,7 @@ m4_define([IPSEC_ADD_NODE],
         --log-file=$ovs_base/$1/ovs-monitor-ipsec.log \
         --ipsec-ctl=$ovs_base/$1/pluto.ctl \
         --no-restart-ike-daemon --detach ], [0], [], [stderr])
-  on_exit "kill `cat $ovs_base/$1/ovs-monitor-ipsec.pid`"
+  on_exit 'kill $(cat $ovs_base/$1/ovs-monitor-ipsec.pid)'
 
   dnl Set up OVS bridge
   NS_CHECK_EXEC([$1],
@@ -634,6 +634,111 @@ dnl Left SAs should be the same, but there will be new ones for the third conn.
 AT_CHECK([test $(grep -c ':' left/sa.after) -gt $(grep -c ':' left/sa.before)])
 AT_CHECK([head -n $(grep -c ':' left/sa.before) left/sa.after \
             | diff -u - left/sa.before])
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan - certificate update while the daemon is down])
+AT_KEYWORDS([ipsec libreswan geneve ca-cert])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up dummy hosts.
+IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
+IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
+
+dnl Create and set ca-signed certs.
+AT_CHECK([ovs-pki -b --dir=${ovs_base} -l ${ovs_base}/ovs-pki.log \
+            --force init], [0], [ignore], [ignore])
+AT_CHECK([ovs-pki -b --dir=${ovs_base} -l ${ovs_base}/ovs-pki.log \
+            req+sign -u left], [0], [ignore], [ignore])
+AT_CHECK([ovs-pki -b --dir=${ovs_base} -l ${ovs_base}/ovs-pki.log \
+            req+sign -u right], [0], [ignore], [ignore])
+
+OVS_VSCTL_LEFT(set Open_vSwitch . \
+      other_config:ca_cert=${ovs_base}/switchca/cacert.pem \
+      other_config:certificate=${ovs_base}/left-cert.pem \
+      other_config:private_key=${ovs_base}/left-privkey.pem)
+OVS_VSCTL_RIGHT(set Open_vSwitch . \
+      other_config:ca_cert=${ovs_base}/switchca/cacert.pem \
+      other_config:certificate=${ovs_base}/right-cert.pem \
+      other_config:private_key=${ovs_base}/right-privkey.pem)
+
+dnl Set up IPsec tunnel on 'left' host.
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 options:remote_name=right])
+
+dnl Set up IPsec tunnel on 'right' host.
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 options:remote_name=left])
+CHECK_ESP_TRAFFIC
+
+dnl Get the numbers of all the current SAs.
+IPSEC_SA_LIST([left], [left/sa.before])
+IPSEC_SA_LIST([right], [right/sa.before])
+
+dnl Kill the ovs-monitor-ipsec on the left host.
+AT_CHECK([kill $(cat ${ovs_base}/left/ovs-monitor-ipsec.pid)])
+OVS_WAIT_WHILE([kill -0 $(cat ${ovs_base}/left/ovs-monitor-ipsec.pid)])
+
+dnl Re-generate the certificates.
+AT_CHECK([rm -rf ${ovs_base}/switchca *.pem])
+AT_CHECK([ovs-pki -b --dir=${ovs_base} -l ${ovs_base}/ovs-pki.log \
+            --force init], [0], [ignore], [ignore])
+AT_CHECK([ovs-pki -b --dir=${ovs_base} -l ${ovs_base}/ovs-pki.log \
+            req+sign -u left], [0], [ignore], [ignore])
+AT_CHECK([ovs-pki -b --dir=${ovs_base} -l ${ovs_base}/ovs-pki.log \
+            req+sign -u right], [0], [ignore], [ignore])
+
+dnl Re-start ovs-monitor-ipsec with --no-restart-ike-daemon.
+NS_CHECK_EXEC([left], [ovs-monitor-ipsec unix:${OVS_RUNDIR}/left/db.sock \
+    --pidfile=${OVS_RUNDIR}/left/ovs-monitor-ipsec.pid \
+    --ike-daemon=libreswan \
+    --ipsec-conf=$ovs_base/left/ipsec.conf \
+    --ipsec-d=$ovs_base/left/ipsec.d \
+    --ipsec-secrets=$ovs_base/left/secrets \
+    --log-file=$ovs_base/left/ovs-monitor-ipsec-2.log \
+    --ipsec-ctl=$ovs_base/left/pluto.ctl \
+    --no-restart-ike-daemon --detach ], [0], [], [stderr])
+
+OVS_WAIT_UNTIL([grep -q 'Connections for all(1) configured tunnels are Up.' \
+                    $ovs_base/left/ovs-monitor-ipsec-2.log])
+
+dnl Check that the original left-right tunnel still works.
+NS_CHECK_EXEC([left], [ping -q -c 3 -i 0.1 -W 2 192.0.0.2 | FORMAT_PING], [0],
+              [3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([right], [ping -q -c 3 -i 0.1 -W 2 192.0.0.1 | FORMAT_PING], [0],
+              [3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Check that ovs-monitor-ipsec didn't touch the original tunnel.
+IPSEC_SA_LIST([left], [left/sa.after])
+IPSEC_SA_LIST([right], [right/sa.after])
+AT_CHECK([diff -u left/sa.before left/sa.after])
+AT_CHECK([diff -u right/sa.before right/sa.after])
+
+dnl Check that there are no extra certs in the NSS database.
+AT_CHECK([certutil -L -d $ovs_base/left/ipsec.d | grep -c ovs_cert], [0], [2
+])
+
+dnl Check that loaded certs are the new ones.  Using openssl for comparison
+dnl to ensure the same format (the file on disk and the dump from the NSS
+dnl database have slightly different formats).
+AT_CHECK([certutil -L -d $ovs_base/left/ipsec.d \
+            -a -n ovs_cert_cacert], [0], [stdout])
+AT_CHECK_UNQUOTED([openssl x509 -in stdout -text -noout], [0],
+                  [$(openssl x509 -in switchca/cacert.pem -text -noout)
+])
+AT_CHECK([certutil -L -d $ovs_base/left/ipsec.d \
+            -a -n ovs_certkey_left], [0], [stdout])
+AT_CHECK_UNQUOTED([openssl x509 -in stdout -text -noout], [0],
+                  [$(openssl x509 -in left-cert.pem -text -noout)
+])
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
