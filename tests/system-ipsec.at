@@ -94,8 +94,8 @@ m4_define([IPSEC_ADD_TUNNEL],
       dnl Wait for all expected connections to be loaded into Libreswan.
       dnl GRE creates 1 connection, all others create 2.
       m4_if($2, [gre],
-            [OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED($1)` -eq 1])],
-            [OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED($1)` -eq 2])])
+            [OVS_WAIT_UNTIL([test $(IPSEC_STATUS_N($1, loaded)) -eq 1])],
+            [OVS_WAIT_UNTIL([test $(IPSEC_STATUS_N($1, loaded)) -eq 2])])
       ])
 m4_define([IPSEC_ADD_TUNNEL_LEFT], [IPSEC_ADD_TUNNEL(left, $1, $2)])
 m4_define([IPSEC_ADD_TUNNEL_RIGHT], [IPSEC_ADD_TUNNEL(right, $1, $2)])
@@ -123,21 +123,13 @@ m4_define([IPSEC_SA_LIST], [
     AT_CHECK([mv stdout $2])
 ])
 
-dnl IPSEC_STATUS_LOADED([])
+dnl IPSEC_STATUS_N([namespace], [type])
 dnl
-dnl Get number of loaded connections from ipsec status
-m4_define([IPSEC_STATUS_LOADED], [
+dnl Get number of 'loaded' or 'active' connections from ipsec status.
+m4_define([IPSEC_STATUS_N], [
            ipsec --rundir $ovs_base/$1 status | \
            grep "Total IPsec connections" | \
-           sed 's/[[0-9]]* *Total IPsec connections: loaded \([[0-9]]*\), active \([[0-9]]*\).*/\1/m'])
-
-dnl IPSEC_STATUS_ACTIVE([])
-dnl
-dnl Get number of active connections from ipsec status
-m4_define([IPSEC_STATUS_ACTIVE], [
-           ipsec --rundir $ovs_base/$1 status | \
-           grep "Total IPsec connections" | \
-           sed 's/[[0-9]]* *Total IPsec connections: loaded \([[0-9]]*\), active \([[0-9]]*\).*/\2/m'])
+           sed 's/[[0-9]]* *Total IPsec connections:.*$2 \([[0-9]]*\).*/\1/m'])
 
 dnl CHECK_ESP_TRAFFIC()
 dnl
@@ -155,8 +147,10 @@ m4_define([CHECK_ESP_TRAFFIC],
       OVS_DAEMONIZE([tcpdump -l -nn -i ovs-p1 esp > $ovs_base/right/tcpdump.log], [tcpdump1.pid])
 
       dnl Wait for all loaded connections to be active
-      OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(left)` -eq `IPSEC_STATUS_ACTIVE(left)`])
-      OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(right)` -eq `IPSEC_STATUS_ACTIVE(right)`])
+      OVS_WAIT_UNTIL([test $(IPSEC_STATUS_N(left, loaded)) \
+                       -eq $(IPSEC_STATUS_N(left, active))])
+      OVS_WAIT_UNTIL([test $(IPSEC_STATUS_N(right, loaded)) \
+                       -eq $(IPSEC_STATUS_N(right, active))])
 
       dnl Ping over IPsec tunnel
       NS_CHECK_EXEC([left], [ping -q -c 3 -i 0.3 -W 2 192.0.0.2 | FORMAT_PING], [0], [dnl
@@ -543,13 +537,13 @@ OVS_VSCTL([left], add-port br-ipsec tun3 \
                    -- set Interface tun3 type=geneve PSK_OPTIONS([10.1.1.3]))
 dnl Wait for all the expected connections to be loaded into Libreswan.
 dnl 2 tunnels == 4 connections.
-OVS_WAIT_UNTIL([test $(IPSEC_STATUS_LOADED(left)) -eq 4])
+OVS_WAIT_UNTIL([test $(IPSEC_STATUS_N(left, loaded)) -eq 4])
 
 dnl Wait for tunnels to become active.
-OVS_WAIT_UNTIL([test $(IPSEC_STATUS_LOADED(left)) \
-                 -eq $(IPSEC_STATUS_ACTIVE(left))])
-OVS_WAIT_UNTIL([test $(IPSEC_STATUS_LOADED(third)) \
-                 -eq $(IPSEC_STATUS_ACTIVE(third))])
+OVS_WAIT_UNTIL([test $(IPSEC_STATUS_N(left, loaded)) \
+                 -eq $(IPSEC_STATUS_N(left, active))])
+OVS_WAIT_UNTIL([test $(IPSEC_STATUS_N(third, loaded)) \
+                 -eq $(IPSEC_STATUS_N(third, active))])
 
 dnl Check that the original left-right tunnel still works.
 NS_CHECK_EXEC([left], [ping -q -c 3 -i 0.1 -W 2 192.0.0.2 | FORMAT_PING], [0],
@@ -607,13 +601,13 @@ OVS_VSCTL([left], add-port br-ipsec tun3 \
                    -- set Interface tun3 type=geneve PSK_OPTIONS([fd01::103]))
 dnl Wait for all the expected connections to be loaded into Libreswan.
 dnl 2 tunnels == 4 connections.
-OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(left)` -eq 4])
+OVS_WAIT_UNTIL([test $(IPSEC_STATUS_N(left, loaded)) -eq 4])
 
 dnl Wait for tunnels to become active.
-OVS_WAIT_UNTIL([test $(IPSEC_STATUS_LOADED(left)) \
-                 -eq $(IPSEC_STATUS_ACTIVE(left))])
-OVS_WAIT_UNTIL([test $(IPSEC_STATUS_LOADED(third)) \
-                 -eq $(IPSEC_STATUS_ACTIVE(third))])
+OVS_WAIT_UNTIL([test $(IPSEC_STATUS_N(left, loaded)) \
+                 -eq $(IPSEC_STATUS_N(left, active))])
+OVS_WAIT_UNTIL([test $(IPSEC_STATUS_N(third, loaded)) \
+                 -eq $(IPSEC_STATUS_N(third, active))])
 
 dnl Check that the original left-right tunnel still works.
 NS_CHECK_EXEC([left], [ping -q -c 3 -i 0.1 -W 2 192.0.0.2 | FORMAT_PING], [0],
@@ -804,9 +798,9 @@ m4_define([WAIT_FOR_LOADED_CONNS], [
         echo "node-id: Pluto died, restarting..."
         START_PLUTO([node-id])
       else
-        loaded=$(IPSEC_STATUS_LOADED(node-id))
+        loaded=$(IPSEC_STATUS_N(node-id, loaded))
         m4_if([$1], [active],
-              [active=$(IPSEC_STATUS_ACTIVE(node-id))], [active=$loaded])
+              [active=$(IPSEC_STATUS_N(node-id, active))], [active=$loaded])
       fi
       if test "$loaded" -ne "$(( (NODES - 1) * 2 ))" -o \
               "$loaded" -ne "$active"; then
