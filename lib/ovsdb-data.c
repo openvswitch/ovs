@@ -264,7 +264,7 @@ unwrap_json(const struct json *json, const char *name,
     if (json->type != JSON_ARRAY
         || json->array.n != 2
         || json->array.elems[0]->type != JSON_STRING
-        || (name && strcmp(json->array.elems[0]->string, name))
+        || (name && strcmp(json_string(json->array.elems[0]), name))
         || json->array.elems[1]->type != value_type)
     {
         *value = NULL;
@@ -1278,7 +1278,7 @@ ovsdb_datum_from_json__(struct ovsdb_datum *datum,
         || (json->type == JSON_ARRAY
             && json->array.n > 0
             && json->array.elems[0]->type == JSON_STRING
-            && !strcmp(json->array.elems[0]->string, "set"))) {
+            && !strcmp(json_string(json->array.elems[0]), "set"))) {
         bool is_map = ovsdb_type_is_map(type);
         const char *class = is_map ? "map" : "set";
         const struct json *inner;

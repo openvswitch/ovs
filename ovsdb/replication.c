@@ -220,7 +220,7 @@ replication_run_db(struct replication_db *rdb)
             if (msg->params->type == JSON_ARRAY
                 && msg->params->array.n == 2
                 && msg->params->array.elems[0]->type == JSON_STRING) {
-                char *db_name = msg->params->array.elems[0]->string;
+                const char *db_name = json_string(msg->params->array.elems[0]);
 
                 if (!strcmp(db_name, rdb->db->name)) {
                     struct ovsdb_error *error;

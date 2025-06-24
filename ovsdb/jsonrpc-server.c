@@ -900,7 +900,7 @@ ovsdb_jsonrpc_lookup_db(const struct ovsdb_jsonrpc_session *s,
         goto error;
     }
 
-    db_name = params->elems[0]->string;
+    db_name = json_string(params->elems[0]);
     db = shash_find_data(&s->up.server->dbs, db_name);
     if (!db) {
         error = ovsdb_syntax_error(
@@ -1447,7 +1447,7 @@ ovsdb_jsonrpc_parse_monitor_request(
                                           "array of column names expected");
             }
 
-            s = columns->array.elems[i]->string;
+            s = json_string(columns->array.elems[i]);
             column = shash_find_data(&table->schema->columns, s);
             if (!column) {
                 return ovsdb_syntax_error(columns, NULL, "%s is not a valid "
@@ -1590,7 +1590,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
             goto error;
         }
         struct uuid txn_uuid;
-        if (!uuid_from_string(&txn_uuid, last_id->string)) {
+        if (!uuid_from_string(&txn_uuid, json_string(last_id))) {
             error = ovsdb_syntax_error(last_id, NULL,
                                        "last-txn-id must be UUID format.");
             goto error;

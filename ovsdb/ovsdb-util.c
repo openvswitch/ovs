@@ -111,13 +111,13 @@ ovsdb_util_read_map_string_column(const struct ovsdb_row *row,
 
     for (i = 0; i < datum->n; i++) {
         atom_key = &datum->keys[i];
-        if (!strcmp(atom_key->s->string, key)) {
+        if (!strcmp(json_string(atom_key->s), key)) {
             atom_value = &datum->values[i];
             break;
         }
     }
 
-    return atom_value ? atom_value->s->string : NULL;
+    return atom_value ? json_string(atom_value->s) : NULL;
 }
 
 /* Read string-uuid key-values from a map.  Returns the row associated with
@@ -143,7 +143,7 @@ ovsdb_util_read_map_string_uuid_column(const struct ovsdb_row *row,
     const struct ovsdb_datum *datum = &row->fields[column->index];
     for (size_t i = 0; i < datum->n; i++) {
         union ovsdb_atom *atom_key = &datum->keys[i];
-        if (!strcmp(atom_key->s->string, key)) {
+        if (!strcmp(json_string(atom_key->s), key)) {
             const union ovsdb_atom *atom_value = &datum->values[i];
             return ovsdb_table_get_row(ref_table, &atom_value->uuid);
         }
@@ -181,7 +181,7 @@ ovsdb_util_read_string_column(const struct ovsdb_row *row,
     const union ovsdb_atom *atom;
 
     atom = ovsdb_util_read_column(row, column_name, OVSDB_TYPE_STRING);
-    *stringp = atom ? atom->s->string : NULL;
+    *stringp = atom ? json_string(atom->s) : NULL;
     return atom != NULL;
 }
 

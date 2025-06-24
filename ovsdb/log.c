@@ -495,7 +495,7 @@ ovsdb_log_read(struct ovsdb_log *file, struct json **jsonp)
                                    "offset %lld are not valid JSON (%s)",
                                    file->display_name, data_length,
                                    (long long int) data_offset,
-                                   json->string);
+                                   json_string(json));
         goto error;
     }
     if (json->type != JSON_OBJECT) {

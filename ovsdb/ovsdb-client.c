@@ -501,7 +501,7 @@ parse_json(const char *s)
 {
     struct json *json = json_from_string(s);
     if (json->type == JSON_STRING) {
-        ovs_fatal(0, "\"%s\": %s", s, json->string);
+        ovs_fatal(0, "\"%s\": %s", s, json_string(json));
     }
     return json;
 }
@@ -596,7 +596,7 @@ fetch_dbs(struct jsonrpc *rpc, struct svec *dbs)
         if (name->type != JSON_STRING) {
             ovs_fatal(0, "list_dbs response %"PRIuSIZE" is not string", i);
         }
-        svec_add(dbs, name->string);
+        svec_add(dbs, json_string(name));
     }
     jsonrpc_msg_destroy(reply);
     svec_sort(dbs);

@@ -601,13 +601,17 @@ static void
             elif (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
                 print("")
                 print("    if (datum->n >= 1) {")
-                if not type.key.ref_table:
+                if type.key.type == ovs.db.types.StringType:
+                    print("        %s = CONST_CAST(char *, json_string(datum->keys[0].s));" % keyVar)
+                elif not type.key.ref_table:
                     print("        %s = datum->keys[0].%s;" % (keyVar, type.key.type.to_rvalue_string()))
                 else:
                     print("        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->keys[0].uuid));" % (keyVar, prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower()))
 
                 if valueVar:
-                    if not type.value.ref_table:
+                    if type.value.type == ovs.db.types.StringType:
+                        print("        %s = CONST_CAST(char *, json_string(datum->values[0].s));" % valueVar)
+                    elif not type.value.ref_table:
                         print("        %s = datum->values[0].%s;" % (valueVar, type.value.type.to_rvalue_string()))
                     else:
                         print("        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->values[0].uuid));" % (valueVar, prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower()))
@@ -635,6 +639,8 @@ static void
         }\
 """ % (prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower()))
                     keySrc = "keyRow"
+                elif type.key.type == ovs.db.types.StringType:
+                    keySrc = "CONST_CAST(char *, json_string(datum->keys[i].s))"
                 else:
                     keySrc = "datum->keys[i].%s" % type.key.type.to_rvalue_string()
                 if type.value and type.value.ref_table:
@@ -645,6 +651,8 @@ static void
         }\
 """ % (prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower()))
                     valueSrc = "valueRow"
+                elif valueVar and type.value.type == ovs.db.types.StringType:
+                    valueSrc = "CONST_CAST(char *, json_string(datum->values[i].s))"
                 elif valueVar:
                     valueSrc = "datum->values[i].%s" % type.value.type.to_rvalue_string()
                 print("        if (!row->n_%s) {" % (columnName))

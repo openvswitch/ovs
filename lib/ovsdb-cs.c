@@ -1878,7 +1878,7 @@ server_column_get_string(const struct server_row *row,
 {
     ovs_assert(server_columns[index].type.key.type == OVSDB_TYPE_STRING);
     const struct ovsdb_datum *d = &row->data[index];
-    return d->n == 1 ? d->keys[0].s->string : default_value;
+    return d->n == 1 ? json_string(d->keys[0].s) : default_value;
 }
 
 static bool

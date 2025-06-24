@@ -265,7 +265,7 @@ parse_json(const char *s)
 {
     struct json *json = json_from_string(s);
     if (json->type == JSON_STRING) {
-        ovs_fatal(0, "\"%s\": %s", s, json->string);
+        ovs_fatal(0, "\"%s\": %s", s, json_string(json));
     }
     return json;
 }
@@ -937,7 +937,7 @@ do_compare_rows(struct ovs_cmdl_context *ctx)
             ovs_fatal(0, "\"%s\" does not have expected form "
                       "[\"name\", {data}]", ctx->argv[i]);
         }
-        names[i] = xstrdup(json->array.elems[0]->string);
+        names[i] = xstrdup(json_string(json->array.elems[0]));
         check_ovsdb_error(ovsdb_row_from_json(rows[i], json->array.elems[1],
                                               NULL, NULL, false));
         json_destroy(json);
@@ -2385,7 +2385,8 @@ parse_uuids(const struct json *json, struct ovsdb_symbol_table *symtab,
 {
     struct uuid uuid;
 
-    if (json->type == JSON_STRING && uuid_from_string(&uuid, json->string)) {
+    if (json->type == JSON_STRING
+        && uuid_from_string(&uuid, json_string(json))) {
         char *name = xasprintf("#%"PRIuSIZE"#", *n);
         fprintf(stderr, "%s = "UUID_FMT"\n", name, UUID_ARGS(&uuid));
         ovsdb_symbol_table_put(symtab, name, &uuid, false);

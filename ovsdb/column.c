@@ -173,7 +173,7 @@ ovsdb_column_set_from_json(const struct json *json,
                 goto error;
             }
 
-            s = json->array.elems[i]->string;
+            s = json_string(json->array.elems[i]);
             column = shash_find_data(&schema->columns, s);
             if (!column) {
                 error = ovsdb_syntax_error(json, NULL, "%s is not a valid "

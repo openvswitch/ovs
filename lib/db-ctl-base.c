@@ -247,15 +247,17 @@ record_id_equals(const union ovsdb_atom *name, enum ovsdb_atomic_type type,
                  const char *record_id)
 {
     if (type == OVSDB_TYPE_STRING) {
-        if (!strcmp(name->s->string, record_id)) {
+        const char *name_str = json_string(name->s);
+
+        if (!strcmp(name_str, record_id)) {
             return true;
         }
 
         struct uuid uuid;
         size_t len = strlen(record_id);
         if (len >= 4
-            && uuid_from_string(&uuid, name->s->string)
-            && !strncmp(name->s->string, record_id, len)) {
+            && uuid_from_string(&uuid, name_str)
+            && !strncmp(name_str, record_id, len)) {
             return true;
         }
 

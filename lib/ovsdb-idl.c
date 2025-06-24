@@ -2865,8 +2865,8 @@ substitute_uuids(struct json *json, const struct ovsdb_idl_txn *txn)
         if (json->array.n == 2
             && json->array.elems[0]->type == JSON_STRING
             && json->array.elems[1]->type == JSON_STRING
-            && !strcmp(json->array.elems[0]->string, "uuid")
-            && uuid_from_string(&uuid, json->array.elems[1]->string)) {
+            && !strcmp(json_string(json->array.elems[0]), "uuid")
+            && uuid_from_string(&uuid, json_string(json->array.elems[1]))) {
             const struct ovsdb_idl_row *row;
 
             row = ovsdb_idl_txn_get_row(txn, &uuid);
@@ -4038,18 +4038,20 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
                 error = shash_find_data(json_object(op), "error");
                 if (error) {
                     if (error->type == JSON_STRING) {
-                        if (!strcmp(error->string, "timed out")) {
+                        const char *error_string = json_string(error);
+
+                        if (!strcmp(error_string, "timed out")) {
                             soft_errors++;
-                        } else if (!strcmp(error->string,
+                        } else if (!strcmp(error_string,
                                            "unknown database")) {
                             ovsdb_cs_flag_inconsistency(idl->cs);
                             soft_errors++;
-                        } else if (!strcmp(error->string, "not owner")) {
+                        } else if (!strcmp(error_string, "not owner")) {
                             lock_errors++;
-                        } else if (!strcmp(error->string, "not allowed")) {
+                        } else if (!strcmp(error_string, "not allowed")) {
                             hard_errors++;
                             ovsdb_idl_txn_set_error_json(txn, op);
-                        } else if (strcmp(error->string, "aborted")) {
+                        } else if (strcmp(error_string, "aborted")) {
                             hard_errors++;
                             ovsdb_idl_txn_set_error_json(txn, op);
                             VLOG_WARN_RL(&other_rl,

@@ -128,7 +128,7 @@ ovsdb_execute_compose(struct ovsdb *db, const struct ovsdb_session *session,
     if (params->type != JSON_ARRAY
         || !params->array.n
         || params->array.elems[0]->type != JSON_STRING
-        || strcmp(params->array.elems[0]->string, db->schema->name)) {
+        || strcmp(json_string(params->array.elems[0]), db->schema->name)) {
         if (params->type != JSON_ARRAY) {
             error = ovsdb_syntax_error(params, NULL, "array expected");
         } else {

@@ -476,7 +476,7 @@ ovsdb_base_type_from_json(struct ovsdb_base_type *base,
         if (refTable) {
             const struct json *refType;
 
-            base->uuid.refTableName = xstrdup(refTable->string);
+            base->uuid.refTableName = xstrdup(json_string(refTable));
 
             /* We can't set base->uuid.refTable here because we don't have
              * enough context (we might not even be running in ovsdb-server).
@@ -718,7 +718,7 @@ ovsdb_type_from_json(struct ovsdb_type *type, const struct json *json)
         }
 
         if (max && max->type == JSON_STRING
-            && !strcmp(max->string, "unlimited")) {
+            && !strcmp(json_string(max), "unlimited")) {
             type->n_max = UINT_MAX;
         } else {
             error = n_from_json(max, &type->n_max);

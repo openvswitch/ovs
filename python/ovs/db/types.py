@@ -50,7 +50,7 @@ class AtomicType(object):
 
     def to_rvalue_string(self):
         if self == StringType:
-            return 's->' + self.name
+            raise error.Error("can't convert string type to rvalue")
         return self.name
 
     def to_lvalue_string(self):

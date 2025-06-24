@@ -737,7 +737,7 @@ jsonrpc_msg_from_json(struct json *json, struct jsonrpc_msg **msgp)
     }
 
     msg = xzalloc(sizeof *msg);
-    msg->method = method ? xstrdup(method->string) : NULL;
+    msg->method = method ? xstrdup(json_string(method)) : NULL;
     msg->params = null_from_json_null(shash_find_and_delete(object, "params"));
     msg->result = null_from_json_null(shash_find_and_delete(object, "result"));
     msg->error = null_from_json_null(shash_find_and_delete(object, "error"));
@@ -1204,7 +1204,7 @@ jsonrpc_session_recv(struct jsonrpc_session *s)
                 jsonrpc_session_send(s, reply);
             } else if (msg->type == JSONRPC_REPLY
                        && msg->id && msg->id->type == JSON_STRING
-                       && !strcmp(msg->id->string, "echo")) {
+                       && !strcmp(json_string(msg->id), "echo")) {
                 /* It's a reply to our echo request.  Suppress it. */
             } else {
                 return msg;

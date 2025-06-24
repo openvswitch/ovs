@@ -135,7 +135,7 @@ json_to_python(struct json *json)
         return PyLong_FromLong((long) json->integer);
 
     case JSON_STRING:
-        return PyUnicode_FromString(json->string);
+        return PyUnicode_FromString(json_string(json));
     default:
         return NULL;
     }
