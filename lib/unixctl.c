@@ -385,7 +385,7 @@ process_command(struct unixctl_conn *conn, struct jsonrpc_msg *request)
     char *error = NULL;
 
     struct unixctl_command *command;
-    struct json_array *params;
+    const struct json *params;
 
     COVERAGE_INC(unixctl_received);
     conn->request_id = json_clone(request->id);
@@ -399,30 +399,32 @@ process_command(struct unixctl_conn *conn, struct jsonrpc_msg *request)
         free(id_s);
     }
 
-    params = json_array(request->params);
+    params = request->params;
     command = shash_find_data(&commands, request->method);
     if (!command) {
         error = xasprintf("\"%s\" is not a valid command (use "
                           "\"list-commands\" to see a list of valid commands)",
                           request->method);
-    } else if (params->n < command->min_args) {
+    } else if (json_array_size(params) < command->min_args) {
         error = xasprintf("\"%s\" command requires at least %d arguments",
                           request->method, command->min_args);
-    } else if (params->n > command->max_args) {
+    } else if (json_array_size(params) > command->max_args) {
         error = xasprintf("\"%s\" command takes at most %d arguments",
                           request->method, command->max_args);
     } else {
         struct svec argv = SVEC_EMPTY_INITIALIZER;
-        int  i;
+        int  i, n = json_array_size(params);
 
         svec_add(&argv, request->method);
-        for (i = 0; i < params->n; i++) {
-            if (params->elems[i]->type != JSON_STRING) {
+        for (i = 0; i < n; i++) {
+            const struct json *elem = json_array_at(params, i);
+
+            if (elem->type != JSON_STRING) {
                 error = xasprintf("\"%s\" command has non-string argument",
                                   request->method);
                 break;
             }
-            svec_add(&argv, json_string(params->elems[i]));
+            svec_add(&argv, json_string(elem));
         }
         svec_terminate(&argv);
 

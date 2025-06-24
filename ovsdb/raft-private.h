@@ -130,7 +130,8 @@ struct raft_entry {
 void raft_entry_clone(struct raft_entry *, const struct raft_entry *);
 void raft_entry_uninit(struct raft_entry *);
 struct json *raft_entry_to_json(const struct raft_entry *);
-struct ovsdb_error *raft_entry_from_json(struct json *, struct raft_entry *)
+struct ovsdb_error *raft_entry_from_json(const struct json *,
+                                         struct raft_entry *)
     OVS_WARN_UNUSED_RESULT;
 bool raft_entry_equals(const struct raft_entry *, const struct raft_entry *);
 bool raft_entry_has_data(const struct raft_entry *);

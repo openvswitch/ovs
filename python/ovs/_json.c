@@ -111,14 +111,14 @@ json_to_python(struct json *json)
             return dict;
         }
     case JSON_ARRAY:{
-            size_t i;
-            PyObject *arr = PyList_New(json->array.n);
+            size_t i, n = json_array_size(json);
+            PyObject *arr = PyList_New(n);
 
             if (arr == NULL) {
                 return PyErr_NoMemory();
             }
-            for (i = 0; i < json->array.n; i++) {
-                PyObject *item = json_to_python(json->array.elems[i]);
+            for (i = 0; i < n; i++) {
+                PyObject *item = json_to_python(json_array_at(json, i));
 
                 if (!item || PyList_SetItem(arr, i, item)) {
                     Py_XDECREF(arr);

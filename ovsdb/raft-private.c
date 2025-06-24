@@ -91,13 +91,14 @@ raft_addresses_from_json(const struct json *json, struct sset *addresses)
 {
     sset_init(addresses);
 
-    const struct json_array *array = json_array(json);
-    if (!array->n) {
+    size_t n = json_array_size(json);
+
+    if (!n) {
         return ovsdb_syntax_error(json, NULL,
                                   "at least one remote address is required");
     }
-    for (size_t i = 0; i < array->n; i++) {
-        const struct json *address = array->elems[i];
+    for (size_t i = 0; i < n; i++) {
+        const struct json *address = json_array_at(json, i);
         struct ovsdb_error *error = raft_address_validate_json(address);
         if (error) {
             sset_destroy(addresses);
@@ -325,7 +326,7 @@ raft_entry_to_json(const struct raft_entry *e)
 }
 
 struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-raft_entry_from_json(struct json *json, struct raft_entry *e)
+raft_entry_from_json(const struct json *json, struct raft_entry *e)
 {
     memset(e, 0, sizeof *e);
 

@@ -153,11 +153,13 @@ raft_append_request_from_jsonrpc(struct ovsdb_parser *p,
     if (!log) {
         return;
     }
-    const struct json_array *entries = json_array(log);
-    rq->entries = xmalloc(entries->n * sizeof *rq->entries);
+
+    size_t n = json_array_size(log);
+
+    rq->entries = xmalloc(n * sizeof *rq->entries);
     rq->n_entries = 0;
-    for (size_t i = 0; i < entries->n; i++) {
-        struct ovsdb_error *error = raft_entry_from_json(entries->elems[i],
+    for (size_t i = 0; i < n; i++) {
+        struct ovsdb_error *error = raft_entry_from_json(json_array_at(log, i),
                                                          &rq->entries[i]);
         if (error) {
             ovsdb_parser_put_error(p, error);
@@ -878,14 +880,14 @@ raft_rpc_from_jsonrpc(struct uuid *cidp, const struct uuid *sid,
         return ovsdb_error(NULL, "unknown method %s", msg->method);
     }
 
-    if (json_array(msg->params)->n != 1) {
+    if (json_array_size(msg->params) != 1) {
         return ovsdb_error(NULL,
                            "%s RPC has %"PRIuSIZE" parameters (expected 1)",
-                           msg->method, json_array(msg->params)->n);
+                           msg->method, json_array_size(msg->params));
     }
 
     struct ovsdb_parser p;
-    ovsdb_parser_init(&p, json_array(msg->params)->elems[0],
+    ovsdb_parser_init(&p, json_array_at(msg->params, 0),
                       "raft %s RPC", msg->method);
 
     bool is_hello = rpc->type == RAFT_RPC_HELLO_REQUEST;

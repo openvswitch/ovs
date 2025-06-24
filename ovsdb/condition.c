@@ -35,7 +35,6 @@ ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
                        struct ovsdb_symbol_table *symtab,
                        struct ovsdb_clause *clause)
 {
-    const struct json_array *array;
     struct ovsdb_error *error;
     const char *function_name;
     const char *column_name;
@@ -57,14 +56,13 @@ ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
     }
 
     if (json->type != JSON_ARRAY
-        || json->array.n != 3
-        || json->array.elems[0]->type != JSON_STRING
-        || json->array.elems[1]->type != JSON_STRING) {
+        || json_array_size(json) != 3
+        || json_array_at(json, 0)->type != JSON_STRING
+        || json_array_at(json, 1)->type != JSON_STRING) {
         return ovsdb_syntax_error(json, NULL, "Parse error in condition.");
     }
-    array = json_array(json);
 
-    column_name = json_string(array->elems[0]);
+    column_name = json_string(json_array_at(json, 0));
     clause->column = ovsdb_table_schema_get_column(ts, column_name);
     if (!clause->column) {
         return ovsdb_syntax_error(json, "unknown column",
@@ -74,7 +72,7 @@ ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
     clause->index = clause->column->index;
     type = clause->column->type;
 
-    function_name = json_string(array->elems[1]);
+    function_name = json_string(json_array_at(json, 1));
     error = ovsdb_function_from_string(function_name, &clause->function);
     if (error) {
         return error;
@@ -127,7 +125,8 @@ ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
     case OVSDB_F_FALSE:
         OVS_NOT_REACHED();
     }
-    return ovsdb_datum_from_json(&clause->arg, &type, array->elems[2], symtab);
+    return ovsdb_datum_from_json(&clause->arg, &type,
+                                 json_array_at(json, 2), symtab);
 }
 
 static void
@@ -246,15 +245,14 @@ ovsdb_condition_from_json(const struct ovsdb_table_schema *ts,
                           struct ovsdb_symbol_table *symtab,
                           struct ovsdb_condition *cnd)
 {
-    const struct json_array *array = json_array(json);
-    size_t i;
+    size_t i, n = json_array_size(json);
 
     ovsdb_condition_init(cnd);
-    cnd->clauses = xmalloc(array->n * sizeof *cnd->clauses);
+    cnd->clauses = xmalloc(n * sizeof *cnd->clauses);
 
-    for (i = 0; i < array->n; i++) {
+    for (i = 0; i < n; i++) {
         struct ovsdb_error *error;
-        error = ovsdb_clause_from_json(ts, array->elems[i], symtab,
+        error = ovsdb_clause_from_json(ts, json_array_at(json, i), symtab,
                                        &cnd->clauses[i]);
         if (error) {
             ovsdb_condition_destroy(cnd);

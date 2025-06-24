@@ -60,7 +60,7 @@ test_json_equal_object(const struct shash *a, const struct shash *b,
 }
 
 static void
-test_json_equal_array(const struct json_array *a, const struct json_array *b,
+test_json_equal_array(const struct json *a, const struct json *b,
                       bool allow_the_same)
 {
     ovs_assert(allow_the_same || a != b);
@@ -69,10 +69,12 @@ test_json_equal_array(const struct json_array *a, const struct json_array *b,
         return;
     }
 
-    ovs_assert(a->n == b->n);
+    size_t n = json_array_size(a);
+    ovs_assert(n == json_array_size(b));
 
-    for (size_t i = 0; i < a->n; i++) {
-        test_json_equal(a->elems[i], b->elems[i], allow_the_same);
+    for (size_t i = 0; i < n; i++) {
+        test_json_equal(json_array_at(a, i), json_array_at(b, i),
+                        allow_the_same);
     }
 }
 
@@ -96,7 +98,7 @@ test_json_equal(const struct json *a, const struct json *b,
         return;
 
     case JSON_ARRAY:
-        test_json_equal_array(&a->array, &b->array, allow_the_same);
+        test_json_equal_array(a, b, allow_the_same);
         return;
 
     case JSON_STRING:

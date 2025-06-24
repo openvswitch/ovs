@@ -843,15 +843,17 @@ static enum condition_type
 condition_classify(const struct json *condition)
 {
     if (condition) {
-        const struct json_array *a = json_array(condition);
-        switch (a->n) {
+        switch (json_array_size(condition)) {
         case 0:
             return COND_FALSE;
 
-        case 1:
-            return (a->elems[0]->type == JSON_FALSE ? COND_FALSE
-                    : a->elems[0]->type == JSON_TRUE ? COND_TRUE
+        case 1: {
+            const struct json *cond = json_array_at(condition, 0);
+
+            return (cond->type == JSON_FALSE ? COND_FALSE
+                    : cond->type == JSON_TRUE ? COND_TRUE
                     : COND_OTHER);
+        }
 
         default:
             return COND_OTHER;
@@ -1387,9 +1389,9 @@ ovsdb_cs_db_parse_lock_notify(struct ovsdb_cs_db *db,
 {
     if (db->lock_name
         && params->type == JSON_ARRAY
-        && json_array(params)->n > 0
-        && json_array(params)->elems[0]->type == JSON_STRING) {
-        const char *lock_name = json_string(json_array(params)->elems[0]);
+        && json_array_size(params) > 0
+        && json_array_at(params, 0)->type == JSON_STRING) {
+        const char *lock_name = json_string(json_array_at(params, 0));
 
         if (!strcmp(db->lock_name, lock_name)) {
             ovsdb_cs_db_update_has_lock(db, new_has_lock);
@@ -1523,12 +1525,12 @@ ovsdb_cs_send_monitor_request(struct ovsdb_cs *cs, struct ovsdb_cs_db *db,
                 ovs_assert(mr->type == JSON_ARRAY);
 
                 struct json *mr0;
-                if (json_array(mr)->n == 0) {
+                if (json_array_size(mr) == 0) {
                     mr0 = json_object_create();
                     json_object_put(mr0, "columns", json_array_create_empty());
                     json_array_add(mr, mr0);
                 } else {
-                    mr0 = json_array(mr)->elems[0];
+                    mr0 = CONST_CAST(struct json *, json_array_at(mr, 0));
                 }
                 ovs_assert(mr0->type == JSON_OBJECT);
 
@@ -1585,21 +1587,21 @@ ovsdb_cs_db_parse_monitor_reply(struct ovsdb_cs_db *db,
     const struct json *table_updates;
     bool clear;
     if (version == 3) {
-        if (result->type != JSON_ARRAY || result->array.n != 3
-            || (result->array.elems[0]->type != JSON_TRUE &&
-                result->array.elems[0]->type != JSON_FALSE)
-            || result->array.elems[1]->type != JSON_STRING
+        if (result->type != JSON_ARRAY || json_array_size(result) != 3
+            || (json_array_at(result, 0)->type != JSON_TRUE &&
+                json_array_at(result, 0)->type != JSON_FALSE)
+            || json_array_at(result, 1)->type != JSON_STRING
             || !uuid_from_string(&db->last_id,
-                                 json_string(result->array.elems[1]))) {
+                                 json_string(json_array_at(result, 1)))) {
             struct ovsdb_error *error = ovsdb_syntax_error(
                 result, NULL, "bad monitor_cond_since reply format");
             log_parse_update_error(error);
             return;
         }
 
-        bool found = json_boolean(result->array.elems[0]);
+        bool found = json_boolean(json_array_at(result, 0));
         clear = !found;
-        table_updates = result->array.elems[2];
+        table_updates = json_array_at(result, 2);
     } else {
         clear = true;
         table_updates = result;
@@ -1626,7 +1628,7 @@ ovsdb_cs_db_parse_update_rpc(struct ovsdb_cs_db *db,
 
     struct json *params = msg->params;
     int n = version == 3 ? 3 : 2;
-    if (params->type != JSON_ARRAY || params->array.n != n) {
+    if (params->type != JSON_ARRAY || json_array_size(params) != n) {
         struct ovsdb_error *error = ovsdb_syntax_error(
             params, NULL, "%s must be an array with %u elements.",
             msg->method, n);
@@ -1634,12 +1636,12 @@ ovsdb_cs_db_parse_update_rpc(struct ovsdb_cs_db *db,
         return false;
     }
 
-    if (!json_equal(params->array.elems[0], db->monitor_id)) {
+    if (!json_equal(json_array_at(params, 0), db->monitor_id)) {
         return false;
     }
 
     if (version == 3) {
-        const char *last_id = json_string(params->array.elems[1]);
+        const char *last_id = json_string(json_array_at(params, 1));
         if (!uuid_from_string(&db->last_id, last_id)) {
             struct ovsdb_error *error = ovsdb_syntax_error(
                 params, NULL, "Last-id %s is not in UUID format.", last_id);
@@ -1648,7 +1650,8 @@ ovsdb_cs_db_parse_update_rpc(struct ovsdb_cs_db *db,
         }
     }
 
-    struct json *table_updates = params->array.elems[version == 3 ? 2 : 1];
+    const struct json *table_updates = json_array_at(params,
+                                                     version == 3 ? 2 : 1);
     ovsdb_cs_db_add_update(db, table_updates, version, false, false);
     return true;
 }
@@ -1661,8 +1664,8 @@ ovsdb_cs_handle_monitor_canceled(struct ovsdb_cs *cs,
     if (msg->type != JSONRPC_NOTIFY
         || strcmp(msg->method, "monitor_canceled")
         || msg->params->type != JSON_ARRAY
-        || msg->params->array.n != 1
-        || !json_equal(msg->params->array.elems[0], db->monitor_id)) {
+        || json_array_size(msg->params) != 1
+        || !json_equal(json_array_at(msg->params, 0), db->monitor_id)) {
         return false;
     }
 

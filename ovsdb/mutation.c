@@ -79,20 +79,18 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
                          struct ovsdb_symbol_table *symtab,
                          struct ovsdb_mutation *m)
 {
-    const struct json_array *array;
     struct ovsdb_error *error;
     const char *mutator_name;
     const char *column_name;
 
     if (json->type != JSON_ARRAY
-        || json->array.n != 3
-        || json->array.elems[0]->type != JSON_STRING
-        || json->array.elems[1]->type != JSON_STRING) {
+        || json_array_size(json) != 3
+        || json_array_at(json, 0)->type != JSON_STRING
+        || json_array_at(json, 1)->type != JSON_STRING) {
         return ovsdb_syntax_error(json, NULL, "Parse error in mutation.");
     }
-    array = json_array(json);
 
-    column_name = json_string(array->elems[0]);
+    column_name = json_string(json_array_at(json, 0));
     m->column = ovsdb_table_schema_get_column(ts, column_name);
     if (!m->column) {
         return ovsdb_syntax_error(json, "unknown column",
@@ -107,7 +105,7 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
 
     ovsdb_type_clone(&m->type, &m->column->type);
 
-    mutator_name = json_string(array->elems[1]);
+    mutator_name = json_string(json_array_at(json, 1));
     error = ovsdb_mutator_from_string(mutator_name, &m->mutator);
     if (error) {
         goto exit;
@@ -129,8 +127,8 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
         }
         ovsdb_base_type_clear_constraints(&m->type.key);
         m->type.n_min = m->type.n_max = 1;
-        error = ovsdb_datum_from_json(&m->arg, &m->type, array->elems[2],
-                                      symtab);
+        error = ovsdb_datum_from_json(&m->arg, &m->type,
+                                      json_array_at(json, 2), symtab);
         break;
 
     case OVSDB_M_INSERT:
@@ -142,16 +140,16 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
         if (m->mutator == OVSDB_M_DELETE) {
             m->type.n_max = UINT_MAX;
         }
-        error = ovsdb_datum_from_json(&m->arg, &m->type, array->elems[2],
-                                      symtab);
+        error = ovsdb_datum_from_json(&m->arg, &m->type,
+                                      json_array_at(json, 2), symtab);
         if (error && ovsdb_type_is_map(&m->type)
             && m->mutator == OVSDB_M_DELETE) {
             ovsdb_error_destroy(error);
             ovsdb_base_type_destroy(&m->type.value);
             m->type.value.enum_ = NULL;
             m->type.value.type = OVSDB_TYPE_VOID;
-            error = ovsdb_datum_from_json(&m->arg, &m->type, array->elems[2],
-                                          symtab);
+            error = ovsdb_datum_from_json(&m->arg, &m->type,
+                                          json_array_at(json, 2), symtab);
         }
         break;
 
@@ -179,14 +177,13 @@ ovsdb_mutation_set_from_json(const struct ovsdb_table_schema *ts,
                              struct ovsdb_symbol_table *symtab,
                              struct ovsdb_mutation_set *set)
 {
-    const struct json_array *array = json_array(json);
-    size_t i;
+    size_t i, n = json_array_size(json);
 
-    set->mutations = xmalloc(array->n * sizeof *set->mutations);
+    set->mutations = xmalloc(n * sizeof *set->mutations);
     set->n_mutations = 0;
-    for (i = 0; i < array->n; i++) {
+    for (i = 0; i < n; i++) {
         struct ovsdb_error *error;
-        error = ovsdb_mutation_from_json(ts, array->elems[i], symtab,
+        error = ovsdb_mutation_from_json(ts, json_array_at(json, i), symtab,
                                          &set->mutations[i]);
         if (error) {
             ovsdb_mutation_set_destroy(set);

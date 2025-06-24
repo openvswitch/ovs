@@ -59,8 +59,8 @@ const char *json_type_to_string(enum json_type);
 
 /* A JSON array. */
 struct json_array {
-    size_t n, n_allocated;
-    struct json **elems;
+    size_t size, allocated;
+    struct json **elements;
 };
 
 /* Maximum string length that can be stored inline ('\0' is not included). */
@@ -99,6 +99,8 @@ struct json *json_real_create(double);
 
 struct json *json_array_create_empty(void);
 void json_array_add(struct json *, struct json *element);
+void json_array_set(struct json *, size_t index, struct json *element);
+struct json *json_array_pop(struct json *);
 void json_array_trim(struct json *);
 struct json *json_array_create(struct json **, size_t n);
 struct json *json_array_create_1(struct json *);
@@ -119,7 +121,8 @@ void json_object_put_uuid(struct json *, const char *name,
 
 const char *json_string(const struct json *);
 const char *json_serialized_object(const struct json *);
-struct json_array *json_array(const struct json *);
+size_t json_array_size(const struct json *);
+const struct json *json_array_at(const struct json *, size_t index);
 struct shash *json_object(const struct json *);
 bool json_boolean(const struct json *);
 double json_real(const struct json *);

@@ -126,9 +126,9 @@ ovsdb_execute_compose(struct ovsdb *db, const struct ovsdb_session *session,
         *forwarding_needed = false;
     }
     if (params->type != JSON_ARRAY
-        || !params->array.n
-        || params->array.elems[0]->type != JSON_STRING
-        || strcmp(json_string(params->array.elems[0]), db->schema->name)) {
+        || !json_array_size(params)
+        || json_array_at(params, 0)->type != JSON_STRING
+        || strcmp(json_string(json_array_at(params, 0)), db->schema->name)) {
         if (params->type != JSON_ARRAY) {
             error = ovsdb_syntax_error(params, NULL, "array expected");
         } else {
@@ -152,10 +152,10 @@ ovsdb_execute_compose(struct ovsdb *db, const struct ovsdb_session *session,
     results = NULL;
 
     results = json_array_create_empty();
-    n_operations = params->array.n - 1;
+    n_operations = json_array_size(params) - 1;
     error = NULL;
     for (i = 1; i <= n_operations; i++) {
-        struct json *operation = params->array.elems[i];
+        const struct json *operation = json_array_at(params, i);
         struct ovsdb_error *parse_error;
         struct ovsdb_parser parser;
         struct json *result;
@@ -219,7 +219,7 @@ ovsdb_execute_compose(struct ovsdb *db, const struct ovsdb_session *session,
         }
         json_array_add(results, result);
     }
-    while (json_array(results)->n < n_operations) {
+    while (json_array_size(results) < n_operations) {
         json_array_add(results, json_null_create());
     }
 
@@ -745,7 +745,7 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     struct ovsdb_error *error;
     struct wait_auxdata aux;
     long long int timeout_msec = 0;
-    size_t i;
+    size_t i, n;
 
     timeout = ovsdb_parser_member(parser, "timeout", OP_INTEGER | OP_OPTIONAL);
     where = ovsdb_parser_member(parser, "where", OP_ARRAY);
@@ -786,11 +786,13 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     if (!error) {
         /* Parse "rows" into 'expected'. */
         ovsdb_row_hash_init(&expected, &columns);
-        for (i = 0; i < rows->array.n; i++) {
+
+        n = json_array_size(rows);
+        for (i = 0; i < n; i++) {
             struct ovsdb_row *row;
 
             row = ovsdb_row_create(table);
-            error = ovsdb_row_from_json(row, rows->array.elems[i], x->symtab,
+            error = ovsdb_row_from_json(row, json_array_at(rows, i), x->symtab,
                                         NULL, false);
             if (error) {
                 ovsdb_row_destroy(row);

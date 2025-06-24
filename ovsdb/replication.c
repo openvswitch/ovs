@@ -40,11 +40,11 @@ VLOG_DEFINE_THIS_MODULE(replication);
 
 static struct uuid server_uuid;
 
-static struct ovsdb_error *process_notification(struct json *, struct ovsdb *);
-static struct ovsdb_error *process_table_update(struct json *table_update,
-                                                const char *table_name,
-                                                struct ovsdb *database,
-                                                struct ovsdb_txn *txn);
+static struct ovsdb_error *process_notification(const struct json *,
+                                                struct ovsdb *);
+static struct ovsdb_error *process_table_update(
+    const struct json *table_update, const char *table_name,
+    struct ovsdb *database, struct ovsdb_txn *txn);
 
 enum ovsdb_replication_state {
     RPL_S_INIT,
@@ -218,13 +218,14 @@ replication_run_db(struct replication_db *rdb)
         if (msg->type == JSONRPC_NOTIFY && rdb->state != RPL_S_ERR
             && !strcmp(msg->method, "update")) {
             if (msg->params->type == JSON_ARRAY
-                && msg->params->array.n == 2
-                && msg->params->array.elems[0]->type == JSON_STRING) {
-                const char *db_name = json_string(msg->params->array.elems[0]);
+                && json_array_size(msg->params) == 2
+                && json_array_at(msg->params, 0)->type == JSON_STRING) {
+                const char *db_name = json_string(
+                                        json_array_at(msg->params, 0));
 
                 if (!strcmp(db_name, rdb->db->name)) {
                     struct ovsdb_error *error;
-                    error = process_notification(msg->params->array.elems[1],
+                    error = process_notification(json_array_at(msg->params, 1),
                                                  rdb->db);
                     if (error) {
                         ovsdb_error_assert(error);
@@ -592,7 +593,7 @@ add_monitored_table(struct ovsdb_table_schema *table,
 
 
 static struct ovsdb_error *
-process_notification(struct json *table_updates, struct ovsdb *db)
+process_notification(const struct json *table_updates, struct ovsdb *db)
 {
     struct ovsdb_error *error = NULL;
     struct ovsdb_txn *txn;
@@ -625,7 +626,7 @@ process_notification(struct json *table_updates, struct ovsdb *db)
 }
 
 static struct ovsdb_error *
-process_table_update(struct json *table_update, const char *table_name,
+process_table_update(const struct json *table_update, const char *table_name,
                      struct ovsdb *database, struct ovsdb_txn *txn)
 {
     struct ovsdb_table *table = ovsdb_get_table(database, table_name);

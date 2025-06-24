@@ -186,14 +186,14 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
     }
 
     if (indexes) {
-        size_t i;
+        size_t i, n = json_array_size(indexes);
 
-        ts->indexes = xmalloc(indexes->array.n * sizeof *ts->indexes);
-        for (i = 0; i < indexes->array.n; i++) {
+        ts->indexes = xmalloc(n * sizeof *ts->indexes);
+        for (i = 0; i < n; i++) {
             struct ovsdb_column_set *index = &ts->indexes[i];
             size_t j;
 
-            error = ovsdb_column_set_from_json(indexes->array.elems[i],
+            error = ovsdb_column_set_from_json(json_array_at(indexes, i),
                                                ts, index);
             if (error) {
                 goto error;

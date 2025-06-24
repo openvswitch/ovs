@@ -580,7 +580,7 @@ static void
 fetch_dbs(struct jsonrpc *rpc, struct svec *dbs)
 {
     struct jsonrpc_msg *request, *reply;
-    size_t i;
+    size_t i, n;
 
     request = jsonrpc_create_request("list_dbs", json_array_create_empty(),
                                      NULL);
@@ -590,8 +590,9 @@ fetch_dbs(struct jsonrpc *rpc, struct svec *dbs)
         ovs_fatal(0, "list_dbs response is not array");
     }
 
-    for (i = 0; i < reply->result->array.n; i++) {
-        const struct json *name = reply->result->array.elems[i];
+    n = json_array_size(reply->result);
+    for (i = 0; i < n; i++) {
+        const struct json *name = json_array_at(reply->result, i);
 
         if (name->type != JSON_STRING) {
             ovs_fatal(0, "list_dbs response %"PRIuSIZE" is not string", i);
@@ -663,14 +664,14 @@ parse_database_info_reply(const struct jsonrpc_msg *reply, const char *server,
 {
     const struct json *result = reply->result;
     if (result->type != JSON_ARRAY
-        || result->array.n != 1
-        || result->array.elems[0]->type != JSON_OBJECT) {
+        || json_array_size(result) != 1
+        || json_array_at(result, 0)->type != JSON_OBJECT) {
         VLOG_WARN("%s: unexpected reply to _Server request for %s",
                   server, database);
         return NULL;
     }
 
-    const struct json *op_result = result->array.elems[0];
+    const struct json *op_result = json_array_at(result, 0);
     const struct json *rows = shash_find_data(json_object(op_result), "rows");
     if (!rows || rows->type != JSON_ARRAY) {
         VLOG_WARN("%s: missing \"rows\" member in  _Server reply for %s",
@@ -678,8 +679,9 @@ parse_database_info_reply(const struct jsonrpc_msg *reply, const char *server,
         return NULL;
     }
 
-    for (size_t i = 0; i < rows->array.n; i++) {
-        const struct json *row = rows->array.elems[i];
+    size_t n = json_array_size(rows);
+    for (size_t i = 0; i < n; i++) {
+        const struct json *row = json_array_at(rows, i);
         if (row->type != JSON_OBJECT) {
             VLOG_WARN("%s: bad row in  _Server reply for %s",
                       server, database);
@@ -868,11 +870,11 @@ do_transact__(int argc, char *argv[], struct json *transaction)
 {
     struct jsonrpc_msg *request, *reply;
     if (transaction->type != JSON_ARRAY
-        || !transaction->array.n
-        || transaction->array.elems[0]->type != JSON_STRING) {
+        || !json_array_size(transaction)
+        || json_array_at(transaction, 0)->type != JSON_STRING) {
         ovs_fatal(0, "not a valid OVSDB query");
     }
-    const char *db_name = json_string(transaction->array.elems[0]);
+    const char *db_name = json_string(json_array_at(transaction, 0));
 
     struct jsonrpc *rpc;
     char *database = CONST_CAST(char *, db_name);
@@ -915,22 +917,21 @@ do_query(struct jsonrpc *rpc OVS_UNUSED, const char *database OVS_UNUSED,
     struct json *abort_op = json_object_create();
     json_object_put_string(abort_op, "op", "abort");
     json_array_add(transaction, abort_op);
-    size_t abort_idx = transaction->array.n - 2;
+    size_t abort_idx = json_array_size(transaction) - 2;
 
     /* Run query. */
     struct json *result = do_transact__(argc, argv, transaction);
 
     /* If the "abort" operation ended the transaction, remove its result. */
     if (result->type == JSON_ARRAY
-        && result->array.n == abort_idx + 1
-        && result->array.elems[abort_idx]->type == JSON_OBJECT) {
-        struct json *op_result = result->array.elems[abort_idx];
+        && json_array_size(result) == abort_idx + 1
+        && json_array_at(result, abort_idx)->type == JSON_OBJECT) {
+        const struct json *op_result = json_array_at(result, abort_idx);
         struct json *error = shash_find_data(json_object(op_result), "error");
         if (error
             && error->type == JSON_STRING
             && !strcmp(json_string(error), "aborted")) {
-            result->array.n--;
-            json_destroy(op_result);
+            json_destroy(json_array_pop(result));
         }
     }
 
@@ -946,7 +947,7 @@ struct monitored_table {
 };
 
 static void
-monitor_print_row(struct json *row, const char *type, const char *uuid,
+monitor_print_row(const struct json *row, const char *type, const char *uuid,
                   const struct ovsdb_column_set *columns, struct table *t)
 {
     size_t i;
@@ -1024,7 +1025,7 @@ monitor_print_table(struct json *table_update,
 }
 
 static void
-monitor_print(struct json *table_updates,
+monitor_print(const struct json *table_updates,
               const struct monitored_table *mts, size_t n_mts,
               bool initial)
 {
@@ -1048,7 +1049,7 @@ monitor_print(struct json *table_updates,
 }
 
 static void
-monitor2_print_row(struct json *row, const char *type, const char *uuid,
+monitor2_print_row(const struct json *row, const char *type, const char *uuid,
                    const struct ovsdb_column_set *columns, struct table *t)
 {
     if (!strcmp(type, "delete")) {
@@ -1070,8 +1071,8 @@ monitor2_print_row(struct json *row, const char *type, const char *uuid,
 }
 
 static void
-monitor2_print_table(struct json *table_update2,
-                    const struct monitored_table *mt, char *caption)
+monitor2_print_table(const struct json *table_update2,
+                     const struct monitored_table *mt, char *caption)
 {
     const struct ovsdb_table_schema *table = mt->table;
     const struct ovsdb_column_set *columns = &mt->columns;
@@ -1119,7 +1120,7 @@ monitor2_print_table(struct json *table_update2,
 }
 
 static void
-monitor2_print(struct json *table_updates2,
+monitor2_print(const struct json *table_updates2,
                const struct monitored_table *mts, size_t n_mts)
 {
     size_t i;
@@ -1142,28 +1143,28 @@ monitor2_print(struct json *table_updates2,
 }
 
 static void
-monitor3_print(struct json *result,
+monitor3_print(const struct json *result,
                const struct monitored_table *mts, size_t n_mts)
 {
     if (result->type != JSON_ARRAY) {
         ovs_error(0, "<result> is not array");
     }
 
-    if (result->array.n != 3) {
+    if (json_array_size(result) != 3) {
         ovs_error(0, "<result> should have 3 elements, but has %"PRIuSIZE".",
-                  result->array.n);
+                  json_array_size(result));
     }
 
-    bool found = json_boolean(result->array.elems[0]);
-    const char *last_id = json_string(result->array.elems[1]);
+    bool found = json_boolean(json_array_at(result, 0));
+    const char *last_id = json_string(json_array_at(result, 1));
     printf("found: %s, last_id: %s\n", found ? "true" : "false", last_id);
 
-    struct json *table_updates2 = result->array.elems[2];
+    const struct json *table_updates2 = json_array_at(result, 2);
     monitor2_print(table_updates2, mts, n_mts);
 }
 
 static void
-monitor3_notify_print(const char *last_id, struct json *table_updates2,
+monitor3_notify_print(const char *last_id, const struct json *table_updates2,
                       const struct monitored_table *mts, size_t n_mts)
 {
     printf("\nlast_id: %s", last_id);
@@ -1220,7 +1221,7 @@ parse_monitor_columns(char *arg, const char *server, const char *database,
         }
     }
 
-    if (columns_json->array.n == 0) {
+    if (json_array_size(columns_json) == 0) {
         const struct shash_node **nodes;
         size_t i, n;
 
@@ -1520,9 +1521,9 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
                        && !strcmp(msg->method, "update")) {
                 struct json *params = msg->params;
                 if (params->type == JSON_ARRAY
-                    && params->array.n == 2
-                    && params->array.elems[0]->type == JSON_NULL) {
-                    monitor_print(params->array.elems[1], mts, n_mts, false);
+                    && json_array_size(params) == 2
+                    && json_array_at(params, 0)->type == JSON_NULL) {
+                    monitor_print(json_array_at(params, 1), mts, n_mts, false);
                     fflush(stdout);
                 }
             } else if (msg->type == JSONRPC_NOTIFY
@@ -1530,9 +1531,9 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
                        && !strcmp(msg->method, "update2")) {
                 struct json *params = msg->params;
                 if (params->type == JSON_ARRAY
-                    && params->array.n == 2
-                    && params->array.elems[0]->type == JSON_NULL) {
-                    monitor2_print(params->array.elems[1], mts, n_mts);
+                    && json_array_size(params) == 2
+                    && json_array_at(params, 0)->type == JSON_NULL) {
+                    monitor2_print(json_array_at(params, 1), mts, n_mts);
                     fflush(stdout);
                 }
             } else if (msg->type == JSONRPC_NOTIFY
@@ -1540,10 +1541,11 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
                        && !strcmp(msg->method, "update3")) {
                 struct json *params = msg->params;
                 if (params->type == JSON_ARRAY
-                    && params->array.n == 3
-                    && params->array.elems[0]->type == JSON_NULL) {
-                    monitor3_notify_print(json_string(params->array.elems[1]),
-                                          params->array.elems[2], mts, n_mts);
+                    && json_array_size(params) == 3
+                    && json_array_at(params, 0)->type == JSON_NULL) {
+                    monitor3_notify_print(
+                        json_string(json_array_at(params, 1)),
+                        json_array_at(params, 2), mts, n_mts);
                     fflush(stdout);
                 }
             } else if (msg->type == JSONRPC_NOTIFY
@@ -1759,7 +1761,7 @@ compare_columns(const void *a_, const void *b_)
 
 static void
 dump_table(const char *table_name, const struct shash *cols,
-           struct json_array *rows)
+           const struct json *rows)
 {
     const struct ovsdb_column **columns;
     size_t n_columns;
@@ -1769,7 +1771,7 @@ dump_table(const char *table_name, const struct shash *cols,
     struct dump_table_aux aux;
     struct shash_node *node;
     struct table t;
-    size_t x, y;
+    size_t x, y, n;
 
     /* Sort columns by name, for reproducibility. */
     columns = xmalloc(shash_count(cols) * sizeof *columns);
@@ -1783,15 +1785,17 @@ dump_table(const char *table_name, const struct shash *cols,
     qsort(columns, n_columns, sizeof *columns, compare_columns);
 
     /* Extract data from table. */
-    data = xmalloc(rows->n * sizeof *data);
-    for (y = 0; y < rows->n; y++) {
+    n = json_array_size(rows);
+    data = xmalloc(n * sizeof *data);
+    for (y = 0; y < n; y++) {
+        const struct json *elem = json_array_at(rows, y);
         struct shash *row;
 
-        if (rows->elems[y]->type != JSON_OBJECT) {
+        if (elem->type != JSON_OBJECT) {
             ovs_fatal(0,  "row %"PRIuSIZE" in table %s response is not a JSON object: "
-                      "%s", y, table_name, json_to_string(rows->elems[y], 0));
+                      "%s", y, table_name, json_to_string(elem, 0));
         }
-        row = json_object(rows->elems[y]);
+        row = json_object(elem);
 
         data[y] = xmalloc(n_columns * sizeof **data);
         for (x = 0; x < n_columns; x++) {
@@ -1810,7 +1814,7 @@ dump_table(const char *table_name, const struct shash *cols,
     aux.data = data;
     aux.columns = columns;
     aux.n_columns = n_columns;
-    sort(rows->n, compare_rows, swap_rows, &aux);
+    sort(n, compare_rows, swap_rows, &aux);
 
     /* Add column headings. */
     table_init(&t);
@@ -1820,7 +1824,7 @@ dump_table(const char *table_name, const struct shash *cols,
     }
 
     /* Print rows. */
-    for (y = 0; y < rows->n; y++) {
+    for (y = 0; y < n; y++) {
         table_add_row(&t);
         for (x = 0; x < n_columns; x++) {
             struct cell *cell = table_add_cell(&t);
@@ -1911,13 +1915,13 @@ do_dump(struct jsonrpc *rpc, const char *database,
 
     /* Print database contents. */
     if (reply->result->type != JSON_ARRAY
-        || reply->result->array.n != n_tables) {
+        || json_array_size(reply->result) != n_tables) {
         ovs_fatal(0, "reply is not array of %"PRIuSIZE" elements: %s",
                   n_tables, json_to_string(reply->result, 0));
     }
     for (i = 0; i < n_tables; i++) {
         const struct ovsdb_table_schema *ts = tables[i]->data;
-        const struct json *op_result = reply->result->array.elems[i];
+        const struct json *op_result = json_array_at(reply->result, i);
         struct json *rows;
 
         if (op_result->type != JSON_OBJECT
@@ -1929,9 +1933,9 @@ do_dump(struct jsonrpc *rpc, const char *database,
         }
 
         if (argc > 1) {
-            dump_table(tables[i]->name, &custom_columns, &rows->array);
+            dump_table(tables[i]->name, &custom_columns, rows);
         } else {
-            dump_table(tables[i]->name, &ts->columns, &rows->array);
+            dump_table(tables[i]->name, &ts->columns, rows);
         }
     }
 
@@ -2025,7 +2029,7 @@ do_backup(struct jsonrpc *rpc, const char *database,
 
     /* Print database transaction record. */
     if (reply->result->type != JSON_ARRAY
-        || reply->result->array.n != shash_count(&schema->tables)) {
+        || json_array_size(reply->result) != shash_count(&schema->tables)) {
         ovs_fatal(0, "reply is not array of %"PRIuSIZE" elements: %s",
                   shash_count(&schema->tables),
                   json_to_string(reply->result, 0));
@@ -2036,7 +2040,7 @@ do_backup(struct jsonrpc *rpc, const char *database,
     SHASH_FOR_EACH (node, &schema->tables) {
         const char *table_name = node->name;
         const struct ovsdb_table_schema *table = node->data;
-        const struct json *op_result = reply->result->array.elems[i++];
+        const struct json *op_result = json_array_at(reply->result, i++);
         struct json *rows;
 
         if (op_result->type != JSON_OBJECT
@@ -2047,13 +2051,14 @@ do_backup(struct jsonrpc *rpc, const char *database,
                       table->name, json_to_string(op_result, 0));
         }
 
-        if (!rows->array.n) {
+        size_t n = json_array_size(rows);
+        if (!n) {
             continue;
         }
 
         struct json *output_rows = json_object_create();
-        for (size_t j = 0; j < rows->array.n; j++) {
-            struct json *row = rows->array.elems[j];
+        for (size_t j = 0; j < n; j++) {
+            const struct json *row = json_array_at(rows, j);
             if (row->type != JSON_OBJECT) {
                 ovs_fatal(0, "%s table reply row is not an object: %s",
                           table_name, json_to_string(row, 0));
@@ -2092,8 +2097,8 @@ check_transaction_reply(struct jsonrpc_msg *reply)
     if (reply->result->type != JSON_ARRAY) {
         ovs_fatal(0, "result is not array");
     }
-    for (size_t i = 0; i < json_array(reply->result)->n; i++) {
-        struct json *json = json_array(reply->result)->elems[i];
+    for (size_t i = 0; i < json_array_size(reply->result); i++) {
+        const struct json *json = json_array_at(reply->result, i);
         if (json->type != JSON_OBJECT) {
             ovs_fatal(0, "result array element is not object");
         }

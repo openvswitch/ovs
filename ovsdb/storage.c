@@ -264,21 +264,24 @@ ovsdb_storage_read(struct ovsdb_storage *storage,
         *txnid = UUID_ZERO;
     }
 
+    const struct json *schema_json = NULL;
+    const struct json *txn_json = NULL;
     struct json *json;
-    struct json *schema_json = NULL;
-    struct json *txn_json = NULL;
+
     if (storage->raft) {
         json = raft_next_entry(storage->raft, txnid);
         if (!json) {
             return NULL;
-        } else if (json->type != JSON_ARRAY || json->array.n != 2) {
+        } else if (json->type != JSON_ARRAY || json_array_size(json) != 2) {
             json_destroy(json);
             return ovsdb_error(NULL, "invalid commit format");
         }
 
-        struct json **e = json->array.elems;
-        schema_json = e[0]->type != JSON_NULL ? e[0] : NULL;
-        txn_json = e[1]->type != JSON_NULL ? e[1] : NULL;
+        const struct json *e0 = json_array_at(json, 0);
+        const struct json *e1 = json_array_at(json, 1);
+
+        schema_json = e0->type != JSON_NULL ? e0 : NULL;
+        txn_json = e1->type != JSON_NULL ? e1 : NULL;
     } else if (storage->log) {
         struct ovsdb_error *error = ovsdb_log_read(storage->log, &json);
         if (error || !json) {
@@ -286,7 +289,7 @@ ovsdb_storage_read(struct ovsdb_storage *storage,
         }
 
         unsigned int n = storage->n_read++;
-        struct json **jsonp = !n ? &schema_json : &txn_json;
+        const struct json **jsonp = !n ? &schema_json : &txn_json;
         *jsonp = json;
         if (n == 1) {
             ovsdb_log_mark_base(storage->log);

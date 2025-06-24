@@ -2862,11 +2862,11 @@ substitute_uuids(struct json *json, const struct ovsdb_idl_txn *txn)
         struct uuid uuid;
         size_t i;
 
-        if (json->array.n == 2
-            && json->array.elems[0]->type == JSON_STRING
-            && json->array.elems[1]->type == JSON_STRING
-            && !strcmp(json_string(json->array.elems[0]), "uuid")
-            && uuid_from_string(&uuid, json_string(json->array.elems[1]))) {
+        if (json_array_size(json) == 2
+            && json_array_at(json, 0)->type == JSON_STRING
+            && json_array_at(json, 1)->type == JSON_STRING
+            && !strcmp(json_string(json_array_at(json, 0)), "uuid")
+            && uuid_from_string(&uuid, json_string(json_array_at(json, 1)))) {
             const struct ovsdb_idl_row *row;
 
             row = ovsdb_idl_txn_get_row(txn, &uuid);
@@ -2882,9 +2882,11 @@ substitute_uuids(struct json *json, const struct ovsdb_idl_txn *txn)
             }
         }
 
-        for (i = 0; i < json->array.n; i++) {
-            json->array.elems[i] = substitute_uuids(json->array.elems[i],
-                                                      txn);
+        for (i = 0; i < json_array_size(json); i++) {
+            json_array_set(
+                json, i,
+                substitute_uuids(
+                    CONST_CAST(struct json *, json_array_at(json, i)), txn));
         }
     } else if (json->type == JSON_OBJECT) {
         struct shash_node *node;
@@ -3318,7 +3320,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
 
                 insert = xmalloc(sizeof *insert);
                 insert->dummy = row->uuid;
-                insert->op_index = operations->array.n - 1;
+                insert->op_index = json_array_size(operations) - 1;
                 uuid_zero(&insert->real);
                 hmap_insert(&txn->inserted_rows, &insert->hmap_node,
                             uuid_hash(&insert->dummy));
@@ -3388,7 +3390,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     /* Add increment. */
     if (txn->inc_table && (any_updates || txn->inc_force)) {
         any_updates = true;
-        txn->inc_index = operations->array.n - 1;
+        txn->inc_index = json_array_size(operations) - 1;
 
         struct json *op = json_object_create();
         json_object_put_string(op, "op", "mutate");
@@ -3903,21 +3905,21 @@ check_json_type(const struct json *json, enum json_type type, const char *name)
 
 static bool
 ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
-                                const struct json_array *results)
+                                const struct json *results)
 {
-    struct json *count, *rows, *row, *column;
+    const struct json *count, *rows, *row, *column;
     struct shash *mutate, *select;
 
-    if (txn->inc_index + 2 > results->n) {
+    if (txn->inc_index + 2 > json_array_size(results)) {
         VLOG_WARN_RL(&syntax_rl, "reply does not contain enough operations "
                      "for increment (has %"PRIuSIZE", needs %u)",
-                     results->n, txn->inc_index + 2);
+                     json_array_size(results), txn->inc_index + 2);
         return false;
     }
 
     /* We know that this is a JSON object because the loop in
      * ovsdb_idl_txn_process_reply() checked. */
-    mutate = json_object(results->elems[txn->inc_index]);
+    mutate = json_object(json_array_at(results, txn->inc_index));
     count = shash_find_data(mutate, "count");
     if (!check_json_type(count, JSON_INTEGER, "\"mutate\" reply \"count\"")) {
         return false;
@@ -3929,18 +3931,18 @@ ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
         return false;
     }
 
-    select = json_object(results->elems[txn->inc_index + 1]);
+    select = json_object(json_array_at(results, txn->inc_index + 1));
     rows = shash_find_data(select, "rows");
     if (!check_json_type(rows, JSON_ARRAY, "\"select\" reply \"rows\"")) {
         return false;
     }
-    if (rows->array.n != 1) {
+    if (json_array_size(rows) != 1) {
         VLOG_WARN_RL(&syntax_rl, "\"select\" reply \"rows\" has %"PRIuSIZE" elements "
                      "instead of 1",
-                     rows->array.n);
+                     json_array_size(rows));
         return false;
     }
-    row = rows->array.elems[0];
+    row = json_array_at(rows, 0);
     if (!check_json_type(row, JSON_OBJECT, "\"select\" reply row")) {
         return false;
     }
@@ -3955,7 +3957,7 @@ ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
 
 static bool
 ovsdb_idl_txn_process_insert_reply(struct ovsdb_idl_txn_insert *insert,
-                                   const struct json_array *results)
+                                   const struct json *results)
 {
     static const struct ovsdb_base_type uuid_type = OVSDB_BASE_UUID_INIT;
     struct ovsdb_error *error;
@@ -3963,16 +3965,16 @@ ovsdb_idl_txn_process_insert_reply(struct ovsdb_idl_txn_insert *insert,
     union ovsdb_atom uuid;
     struct shash *reply;
 
-    if (insert->op_index >= results->n) {
+    if (insert->op_index >= json_array_size(results)) {
         VLOG_WARN_RL(&syntax_rl, "reply does not contain enough operations "
                      "for insert (has %"PRIuSIZE", needs %u)",
-                     results->n, insert->op_index);
+                     json_array_size(results), insert->op_index);
         return false;
     }
 
     /* We know that this is a JSON object because the loop in
      * ovsdb_idl_txn_process_reply() checked. */
-    reply = json_object(results->elems[insert->op_index]);
+    reply = json_object(json_array_at(results, insert->op_index));
     json_uuid = shash_find_data(reply, "uuid");
     if (!check_json_type(json_uuid, JSON_ARRAY, "\"insert\" reply \"uuid\"")) {
         return false;
@@ -4019,14 +4021,15 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
         status = TXN_ERROR;
         ovsdb_idl_txn_set_error_json(txn, msg->result);
     } else {
-        struct json_array *ops = &msg->result->array;
+        const struct json *ops = msg->result;
         int hard_errors = 0;
         int soft_errors = 0;
         int lock_errors = 0;
-        size_t i;
+        size_t i, n;
 
-        for (i = 0; i < ops->n; i++) {
-            struct json *op = ops->elems[i];
+        n = json_array_size(ops);
+        for (i = 0; i < n; i++) {
+            const struct json *op = json_array_at(ops, i);
 
             if (op->type == JSON_NULL) {
                 /* This isn't an error in itself but indicates that some prior

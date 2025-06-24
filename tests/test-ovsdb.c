@@ -273,9 +273,8 @@ parse_json(const char *s)
 static struct json *
 unbox_json(struct json *json)
 {
-    if (json->type == JSON_ARRAY && json->array.n == 1) {
-        struct json *inner = json->array.elems[0];
-        json->array.elems[0] = NULL;
+    if (json->type == JSON_ARRAY && json_array_size(json) == 1) {
+        struct json *inner = json_array_pop(json);
         json_destroy(json);
         return inner;
     } else {
@@ -788,11 +787,11 @@ do_sort_atoms(struct ovs_cmdl_context *ctx)
     }
 
     /* Convert JSON atoms to internal representation. */
-    n_atoms = json->array.n;
+    n_atoms = json_array_size(json);
     atoms = xmalloc(n_atoms * sizeof *atoms);
     for (i = 0; i < n_atoms; i++) {
         check_ovsdb_error(ovsdb_atom_from_json(&atoms[i], &base,
-                                               json->array.elems[i], NULL));
+                                               json_array_at(json, i), NULL));
     }
     json_destroy(json);
 
@@ -932,13 +931,13 @@ do_compare_rows(struct ovs_cmdl_context *ctx)
         rows[i] = ovsdb_row_create(table);
 
         json = parse_json(ctx->argv[i + 2]);
-        if (json->type != JSON_ARRAY || json->array.n != 2
-            || json->array.elems[0]->type != JSON_STRING) {
+        if (json->type != JSON_ARRAY || json_array_size(json) != 2
+            || json_array_at(json, 0)->type != JSON_STRING) {
             ovs_fatal(0, "\"%s\" does not have expected form "
                       "[\"name\", {data}]", ctx->argv[i]);
         }
-        names[i] = xstrdup(json_string(json->array.elems[0]));
-        check_ovsdb_error(ovsdb_row_from_json(rows[i], json->array.elems[1],
+        names[i] = xstrdup(json_string(json_array_at(json, 0)));
+        check_ovsdb_error(ovsdb_row_from_json(rows[i], json_array_at(json, 1),
                                               NULL, NULL, false));
         json_destroy(json);
     }
@@ -1034,10 +1033,10 @@ do_evaluate_condition__(struct ovs_cmdl_context *ctx, int mode)
     if (json->type != JSON_ARRAY) {
         ovs_fatal(0, "CONDITION argument is not JSON array");
     }
-    n_conditions = json->array.n;
+    n_conditions = json_array_size(json);
     conditions = xmalloc(n_conditions * sizeof *conditions);
     for (i = 0; i < n_conditions; i++) {
-        check_ovsdb_error(ovsdb_condition_from_json(ts, json->array.elems[i],
+        check_ovsdb_error(ovsdb_condition_from_json(ts, json_array_at(json, i),
                                                     NULL, &conditions[i]));
     }
     json_destroy(json);
@@ -1047,11 +1046,11 @@ do_evaluate_condition__(struct ovs_cmdl_context *ctx, int mode)
     if (json->type != JSON_ARRAY) {
         ovs_fatal(0, "ROW argument is not JSON array");
     }
-    n_rows = json->array.n;
+    n_rows = json_array_size(json);
     rows = xmalloc(n_rows * sizeof *rows);
     for (i = 0; i < n_rows; i++) {
         rows[i] = ovsdb_row_create(table);
-        check_ovsdb_error(ovsdb_row_from_json(rows[i], json->array.elems[i],
+        check_ovsdb_error(ovsdb_row_from_json(rows[i], json_array_at(json, i),
                                               NULL, NULL, false));
     }
     json_destroy(json);
@@ -1123,11 +1122,11 @@ do_compare_conditions(struct ovs_cmdl_context *ctx)
     if (json->type != JSON_ARRAY) {
         ovs_fatal(0, "CONDITION argument is not JSON array");
     }
-    n_conditions = json->array.n;
+    n_conditions = json_array_size(json);
     conditions = xmalloc(n_conditions * sizeof *conditions);
 
     for (i = 0; i < n_conditions; i++) {
-        check_ovsdb_error(ovsdb_condition_from_json(ts, json->array.elems[i],
+        check_ovsdb_error(ovsdb_condition_from_json(ts, json_array_at(json, i),
                                                     NULL, &conditions[i]));
     }
     json_destroy(json);
@@ -1207,11 +1206,11 @@ do_execute_mutations(struct ovs_cmdl_context *ctx)
     if (json->type != JSON_ARRAY) {
         ovs_fatal(0, "MUTATION argument is not JSON array");
     }
-    n_sets = json->array.n;
+    n_sets = json_array_size(json);
     sets = xmalloc(n_sets * sizeof *sets);
     for (i = 0; i < n_sets; i++) {
         check_ovsdb_error(ovsdb_mutation_set_from_json(ts,
-                                                       json->array.elems[i],
+                                                       json_array_at(json, i),
                                                        NULL, &sets[i]));
     }
     json_destroy(json);
@@ -1221,11 +1220,11 @@ do_execute_mutations(struct ovs_cmdl_context *ctx)
     if (json->type != JSON_ARRAY) {
         ovs_fatal(0, "ROW argument is not JSON array");
     }
-    n_rows = json->array.n;
+    n_rows = json_array_size(json);
     rows = xmalloc(n_rows * sizeof *rows);
     for (i = 0; i < n_rows; i++) {
         rows[i] = ovsdb_row_create(table);
-        check_ovsdb_error(ovsdb_row_from_json(rows[i], json->array.elems[i],
+        check_ovsdb_error(ovsdb_row_from_json(rows[i], json_array_at(json, i),
                                               NULL, NULL, false));
     }
     json_destroy(json);
@@ -1333,13 +1332,13 @@ do_query(struct ovs_cmdl_context *ctx)
     if (json->type != JSON_ARRAY) {
         ovs_fatal(0, "ROW argument is not JSON array");
     }
-    cbdata.n_rows = json->array.n;
+    cbdata.n_rows = json_array_size(json);
     cbdata.row_uuids = xmalloc(cbdata.n_rows * sizeof *cbdata.row_uuids);
     cbdata.counts = xmalloc(cbdata.n_rows * sizeof *cbdata.counts);
     for (i = 0; i < cbdata.n_rows; i++) {
         struct ovsdb_row *row = ovsdb_row_create(table);
         uuid_generate(ovsdb_row_get_uuid_rw(row));
-        check_ovsdb_error(ovsdb_row_from_json(row, json->array.elems[i],
+        check_ovsdb_error(ovsdb_row_from_json(row, json_array_at(json, i),
                                               NULL, NULL, false));
         if (ovsdb_table_get_row(table, ovsdb_row_get_uuid(row))) {
             ovs_fatal(0, "duplicate UUID "UUID_FMT" in table",
@@ -1355,11 +1354,11 @@ do_query(struct ovs_cmdl_context *ctx)
     if (json->type != JSON_ARRAY) {
         ovs_fatal(0, "CONDITION argument is not JSON array");
     }
-    for (i = 0; i < json->array.n; i++) {
+    for (i = 0; i < json_array_size(json); i++) {
         struct ovsdb_condition cnd;
         size_t j;
 
-        check_ovsdb_error(ovsdb_condition_from_json(ts, json->array.elems[i],
+        check_ovsdb_error(ovsdb_condition_from_json(ts, json_array_at(json, i),
                                                     NULL, &cnd));
 
         memset(cbdata.counts, 0, cbdata.n_rows * sizeof *cbdata.counts);
@@ -1435,7 +1434,7 @@ do_query_distinct(struct ovs_cmdl_context *ctx)
     if (json->type != JSON_ARRAY) {
         ovs_fatal(0, "ROW argument is not JSON array");
     }
-    n_rows = json->array.n;
+    n_rows = json_array_size(json);
     rows = xmalloc(n_rows * sizeof *rows);
     classes = xmalloc(n_rows * sizeof *classes);
     n_classes = 0;
@@ -1446,7 +1445,7 @@ do_query_distinct(struct ovs_cmdl_context *ctx)
         /* Parse row. */
         row = ovsdb_row_create(table);
         uuid_generate(ovsdb_row_get_uuid_rw(row));
-        check_ovsdb_error(ovsdb_row_from_json(row, json->array.elems[i],
+        check_ovsdb_error(ovsdb_row_from_json(row, json_array_at(json, i),
                                               NULL, NULL, false));
 
         /* Initialize row and find equivalence class. */
@@ -1479,12 +1478,12 @@ do_query_distinct(struct ovs_cmdl_context *ctx)
     if (json->type != JSON_ARRAY) {
         ovs_fatal(0, "CONDITION argument is not JSON array");
     }
-    for (i = 0; i < json->array.n; i++) {
+    for (i = 0; i < json_array_size(json); i++) {
         struct ovsdb_row_set results;
         struct ovsdb_condition cnd;
         size_t j;
 
-        check_ovsdb_error(ovsdb_condition_from_json(ts, json->array.elems[i],
+        check_ovsdb_error(ovsdb_condition_from_json(ts, json_array_at(json, i),
                                                     NULL, &cnd));
 
         for (j = 0; j < n_classes; j++) {
@@ -1646,11 +1645,11 @@ do_trigger(struct ovs_cmdl_context *ctx)
     for (i = 2; i < ctx->argc; i++) {
         struct json *params = parse_json(ctx->argv[i]);
         if (params->type == JSON_ARRAY
-            && json_array(params)->n == 2
-            && json_array(params)->elems[0]->type == JSON_STRING
-            && !strcmp(json_string(json_array(params)->elems[0]), "advance")
-            && json_array(params)->elems[1]->type == JSON_INTEGER) {
-            now += json_integer(json_array(params)->elems[1]);
+            && json_array_size(params) == 2
+            && json_array_at(params, 0)->type == JSON_STRING
+            && !strcmp(json_string(json_array_at(params, 0)), "advance")
+            && json_array_at(params, 1)->type == JSON_INTEGER) {
+            now += json_integer(json_array_at(params, 1));
             json_destroy(params);
         } else {
             struct test_trigger *t = xmalloc(sizeof *t);
@@ -1885,10 +1884,10 @@ do_transact(struct ovs_cmdl_context *ctx)
                       "with at least 1 element", i);
         }
 
-        n_args = command->array.n;
+        n_args = json_array_size(command);
         args = xmalloc((n_args + 1) * sizeof *args);
         for (j = 0; j < n_args; j++) {
-            struct json *s = command->array.elems[j];
+            const struct json *s = json_array_at(command, j);
             if (s->type != JSON_STRING) {
                 ovs_fatal(0, "transaction %d argument %d must be JSON string",
                           i, j);
@@ -2395,8 +2394,8 @@ parse_uuids(const struct json *json, struct ovsdb_symbol_table *symtab,
     } else if (json->type == JSON_ARRAY) {
         size_t i;
 
-        for (i = 0; i < json->array.n; i++) {
-            parse_uuids(json->array.elems[i], symtab, n);
+        for (i = 0; i < json_array_size(json); i++) {
+            parse_uuids(json_array_at(json, i), symtab, n);
         }
     } else if (json->type == JSON_OBJECT) {
         const struct shash_node *node;
@@ -2422,10 +2421,11 @@ substitute_uuids(struct json *json, const struct ovsdb_symbol_table *symtab)
             json->str_ptr = xasprintf(UUID_FMT, UUID_ARGS(&symbol->uuid));
         }
     } else if (json->type == JSON_ARRAY) {
-        size_t i;
+        size_t i, n = json_array_size(json);
 
-        for (i = 0; i < json->array.n; i++) {
-            substitute_uuids(json->array.elems[i], symtab);
+        for (i = 0; i < n; i++) {
+            substitute_uuids(CONST_CAST(struct json *, json_array_at(json, i)),
+                             symtab);
         }
     } else if (json->type == JSON_OBJECT) {
         const struct shash_node *node;
@@ -2728,25 +2728,26 @@ update_conditions(struct ovsdb_idl *idl, char *commands, int step)
         }
 
         struct ovsdb_idl_condition cond = OVSDB_IDL_CONDITION_INIT(&cond);
-        for (i = 0; i < json->array.n; i++) {
-            const struct json *clause = json->array.elems[i];
+        for (i = 0; i < json_array_size(json); i++) {
+            const struct json *clause = json_array_at(json, i);
             if (clause->type == JSON_TRUE) {
                 ovsdb_idl_condition_add_clause_true(&cond);
-            } else if (clause->type != JSON_ARRAY || clause->array.n != 3
-                       || clause->array.elems[0]->type != JSON_STRING
-                       || clause->array.elems[1]->type != JSON_STRING) {
+            } else if (clause->type != JSON_ARRAY
+                       || json_array_size(clause) != 3
+                       || json_array_at(clause, 0)->type != JSON_STRING
+                       || json_array_at(clause, 1)->type != JSON_STRING) {
                 ovs_fatal(0, "Error parsing condition");
             } else {
                 enum ovsdb_function function;
-                const char *function_s = json_string(clause->array.elems[1]);
+                const char *function_s = json_string(json_array_at(clause, 1));
                 struct ovsdb_error *error = ovsdb_function_from_string(
                     function_s, &function);
                 if (error) {
                     ovs_fatal(0, "unknown clause function %s", function_s);
                 }
 
-                const char *column = json_string(clause->array.elems[0]);
-                const struct json *arg = clause->array.elems[2];
+                const char *column = json_string(json_array_at(clause, 0));
+                const struct json *arg = json_array_at(clause, 2);
                 if (!strcmp(table_name, "simple")) {
                     parse_simple_json_clause(&cond, function, column, arg);
                 } else if (!strcmp(table_name, "link1")) {

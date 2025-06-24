@@ -3033,16 +3033,18 @@ db_config_from_json(const char *name, const struct json *json)
         sync_exclude = ovsdb_parser_member(&parser, "exclude-tables",
                                            OP_ARRAY | OP_OPTIONAL);
         if (sync_exclude) {
-            const struct json_array *exclude = json_array(sync_exclude);
             struct sset set = SSET_INITIALIZER(&set);
+            size_t n = json_array_size(sync_exclude);
 
-            for (size_t i = 0; i < exclude->n; i++) {
-                if (exclude->elems[i]->type != JSON_STRING) {
+            for (size_t i = 0; i < n; i++) {
+                const struct json *exclude = json_array_at(sync_exclude, i);
+
+                if (exclude->type != JSON_STRING) {
                     ovsdb_parser_raise_error(&parser,
                         "'exclude-tables' must contain strings");
                     break;
                 }
-                sset_add(&set, json_string(exclude->elems[i]));
+                sset_add(&set, json_string(exclude));
             }
             conf->ab.sync_exclude = sset_join(&set, ",", "");
             sset_destroy(&set);

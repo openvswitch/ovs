@@ -874,12 +874,12 @@ print_data(const char *prefix, const struct json *data,
         return;
     }
 
-    if (json_array(data)->n != 2) {
+    if (json_array_size(data) != 2) {
         printf(" ***invalid data***\n");
         return;
     }
 
-    const struct json *schema_json = json_array(data)->elems[0];
+    const struct json *schema_json = json_array_at(data, 0);
     if (schema_json->type != JSON_NULL) {
         struct ovsdb_schema *schema;
 
@@ -891,7 +891,7 @@ print_data(const char *prefix, const struct json *data,
         *schemap = schema;
     }
 
-    print_change_record(json_array(data)->elems[1], *schemap, names);
+    print_change_record(json_array_at(data, 1), *schemap, names);
 }
 
 static void
@@ -977,12 +977,11 @@ raft_header_to_standalone_log(const struct raft_header *h,
     if (h->snap_index) {
         const struct json *data = raft_entry_get_parsed_data(&h->snap);
 
-        if (!data || json_array(data)->n != 2) {
+        if (!data || json_array_size(data) != 2) {
             ovs_fatal(0, "Incorrect raft header data array length");
         }
 
-        struct json_array *pa = json_array(data);
-        struct json *schema_json = pa->elems[0];
+        const struct json *schema_json = json_array_at(data, 0);
         struct ovsdb_error *error = NULL;
 
         if (schema_json->type != JSON_NULL) {
@@ -993,7 +992,8 @@ raft_header_to_standalone_log(const struct raft_header *h,
         }
 
         if (!error) {
-            struct json *data_json = pa->elems[1];
+            const struct json *data_json = json_array_at(data, 1);
+
             if (!data_json || data_json->type != JSON_OBJECT) {
                 ovs_fatal(0, "Invalid raft header data");
             }
@@ -1014,14 +1014,15 @@ raft_record_to_standalone_log(const char *db_file_name,
         if (!r->entry.data) {
             return;
         }
-        struct json_array *pa = json_array(r->entry.data);
+        const struct json *pa = r->entry.data;
 
-        if (pa->n != 2) {
+        if (json_array_size(pa) != 2) {
             ovs_fatal(0, "Incorrect raft record array length");
         }
 
-        struct json *schema_json = pa->elems[0];
-        struct json *data_json = pa->elems[1];
+        const struct json *schema_json = json_array_at(pa, 0);
+        const struct json *data_json = json_array_at(pa, 1);
+        struct json *new_data = NULL;
 
         if (schema_json->type != JSON_NULL) {
             /* This is a database conversion record.  Reset the log and
@@ -1041,12 +1042,10 @@ raft_record_to_standalone_log(const char *db_file_name,
                 check_ovsdb_error(ovsdb_convert(old_db, schema, &new_db));
                 ovsdb_destroy(old_db);
 
-                pa->elems[1] = ovsdb_to_txn_json(
+                new_data = ovsdb_to_txn_json(
                                     new_db, "converted by ovsdb-tool", true);
                 ovsdb_destroy(new_db);
-
-                json_destroy(data_json);
-                data_json = pa->elems[1];
+                data_json = new_data;
             }
 
             ovsdb_schema_destroy(schema);
@@ -1056,6 +1055,7 @@ raft_record_to_standalone_log(const char *db_file_name,
         if (data_json->type != JSON_NULL) {
             check_ovsdb_error(ovsdb_log_write(db_log_data, data_json));
         }
+        json_destroy(new_data);
     }
 }
 
