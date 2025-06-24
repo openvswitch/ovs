@@ -179,14 +179,26 @@ struct json *
 json_string_create_nocopy(char *s)
 {
     struct json *json = json_create(JSON_STRING);
-    json->string = s;
+    json->storage_type = JSON_STRING_DYNAMIC;
+    json->str_ptr = s;
     return json;
 }
 
 struct json *
 json_string_create(const char *s)
 {
-    return json_string_create_nocopy(xstrdup(s));
+    struct json *json = json_create(JSON_STRING);
+    size_t length = strlen(s);
+
+    if (length <= JSON_STRING_INLINE_LEN) {
+        json->storage_type = JSON_STRING_INLINE;
+        memcpy(json->str, s, length);
+        json->str[length] = '\0';
+    } else {
+        json->storage_type = JSON_STRING_DYNAMIC;
+        json->str_ptr = xmemdup0(s, length);
+    }
+    return json;
 }
 
 struct json *json_string_create_uuid(const struct uuid *uuid)
@@ -198,7 +210,7 @@ struct json *
 json_serialized_object_create(const struct json *src)
 {
     struct json *json = json_create(JSON_SERIALIZED_OBJECT);
-    json->string = json_to_string(src, JSSF_SORT);
+    json->str_ptr = json_to_string(src, JSSF_SORT);
     return json;
 }
 
@@ -206,7 +218,7 @@ struct json *
 json_serialized_object_create_with_yield(const struct json *src)
 {
     struct json *json = json_create(JSON_SERIALIZED_OBJECT);
-    json->string = json_to_string(src, JSSF_SORT | JSSF_YIELD);
+    json->str_ptr = json_to_string(src, JSSF_SORT | JSSF_YIELD);
     return json;
 }
 
@@ -357,14 +369,15 @@ const char *
 json_string(const struct json *json)
 {
     ovs_assert(json->type == JSON_STRING);
-    return json->string;
+    return json->storage_type == JSON_STRING_DYNAMIC
+           ? json->str_ptr : json->str;
 }
 
 const char *
 json_serialized_object(const struct json *json)
 {
     ovs_assert(json->type == JSON_SERIALIZED_OBJECT);
-    return json->string;
+    return json->str_ptr;
 }
 
 struct json_array *
@@ -419,11 +432,13 @@ json_destroy__(struct json *json, bool yield)
         break;
 
     case JSON_STRING:
-        free(json->string);
+        if (json->storage_type == JSON_STRING_DYNAMIC) {
+            free(json->str_ptr);
+        }
         break;
 
     case JSON_SERIALIZED_OBJECT:
-        free(json->string);
+        free(json->str_ptr);
         break;
 
     case JSON_NULL:
@@ -1007,7 +1022,8 @@ json_string_escape(const char *in, struct ds *out)
 {
     struct json json = {
         .type = JSON_STRING,
-        .string = CONST_CAST(char *, in),
+        .storage_type = JSON_STRING_DYNAMIC,
+        .str_ptr = CONST_CAST(char *, in),
     };
     json_to_ds(&json, 0, out);
 }

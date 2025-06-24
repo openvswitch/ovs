@@ -63,16 +63,28 @@ struct json_array {
     struct json **elems;
 };
 
+/* Maximum string length that can be stored inline ('\0' is not included). */
+#define JSON_STRING_INLINE_LEN (sizeof(struct json_array) - 1)
+
+enum json_storage_type {
+    JSON_STRING_DYNAMIC = 0, /* JSON_STRING is stored via 'str_ptr'. */
+    JSON_STRING_INLINE,      /* JSON_STRING is stored in 'str' array. */
+};
+
 /* A JSON value. */
 struct json {
     enum json_type type;
+    enum json_storage_type storage_type;
     size_t count;
     union {
         struct shash *object;   /* Contains "struct json *"s. */
         struct json_array array;
         long long int integer;
         double real;
-        char *string; /* JSON_STRING or JSON_SERIALIZED_OBJECT. */
+        union {
+            char str[JSON_STRING_INLINE_LEN + 1];
+            char *str_ptr;
+        }; /* JSON_STRING or JSON_SERIALIZED_OBJECT. */
     };
 };
 

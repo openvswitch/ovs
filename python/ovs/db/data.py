@@ -573,7 +573,8 @@ class Datum(object):
                   % (name, n)]
             for key in sorted(self.values):
                 s += ['    { .type = JSON_STRING, '
-                      '.string = "%s", .count = 2 },'
+                      '.storage_type = JSON_STRING_DYNAMIC, '
+                      '.str_ptr = "%s", .count = 2 },'
                       % escapeCString(key.value)]
             s += ["};"]
             s += ["static union ovsdb_atom %s_keys[%d] = {" % (name, n)]
@@ -592,7 +593,8 @@ class Datum(object):
                       % (name, n)]
                 for k, v in sorted(self.values):
                     s += ['    { .type = JSON_STRING, '
-                          '.string = "%s", .count = 2 },'
+                          '.storage_type = JSON_STRING_DYNAMIC, '
+                          '.str_ptr = "%s", .count = 2 },'
                           % escapeCString(v.value)]
                 s += ["};"]
                 s += ["static union ovsdb_atom %s_values[%d] = {" % (name, n)]

@@ -2413,10 +2413,13 @@ substitute_uuids(struct json *json, const struct ovsdb_symbol_table *symtab)
     if (json->type == JSON_STRING) {
         const struct ovsdb_symbol *symbol;
 
-        symbol = ovsdb_symbol_table_get(symtab, json->string);
+        symbol = ovsdb_symbol_table_get(symtab, json_string(json));
         if (symbol) {
-            free(json->string);
-            json->string = xasprintf(UUID_FMT, UUID_ARGS(&symbol->uuid));
+            if (json->storage_type == JSON_STRING_DYNAMIC) {
+                free(json->str_ptr);
+            }
+            json->storage_type = JSON_STRING_DYNAMIC;
+            json->str_ptr = xasprintf(UUID_FMT, UUID_ARGS(&symbol->uuid));
         }
     } else if (json->type == JSON_ARRAY) {
         size_t i;
