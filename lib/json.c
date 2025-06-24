@@ -226,6 +226,7 @@ struct json *
 json_array_create_empty(void)
 {
     struct json *json = json_create(JSON_ARRAY);
+    json->storage_type = JSON_ARRAY_DYNAMIC;
     json->array.elements = NULL;
     json->array.size = 0;
     json->array.allocated = 0;
@@ -235,6 +236,39 @@ json_array_create_empty(void)
 void
 json_array_add(struct json *array_, struct json *element)
 {
+    switch (array_->storage_type) {
+    case JSON_ARRAY_DYNAMIC:
+        if (!array_->array.size) {
+            array_->storage_type = JSON_ARRAY_INLINE_1;
+            array_->elements[0] = element;
+            return;
+        }
+        break;
+
+    case JSON_ARRAY_INLINE_1:
+    case JSON_ARRAY_INLINE_2:
+        array_->elements[array_->storage_type - JSON_ARRAY_DYNAMIC] = element;
+        array_->storage_type++;
+        return;
+
+    case JSON_ARRAY_INLINE_3: {
+        struct json **elements = xmalloc(4 * sizeof *elements);
+
+        memcpy(elements, array_->elements, 3 * sizeof array_->elements[0]);
+        array_->array.elements = elements;
+        array_->array.elements[3] = element;
+        array_->array.size = 4;
+        array_->array.allocated = 4;
+        array_->storage_type = JSON_ARRAY_DYNAMIC;
+        return;
+    }
+
+    case JSON_STRING_DYNAMIC:
+    case JSON_STRING_INLINE:
+    default:
+        OVS_NOT_REACHED();
+    }
+
     struct json_array *array = &array_->array;
     if (array->size >= array->allocated) {
         array->elements = x2nrealloc(array->elements, &array->allocated,
@@ -247,18 +281,43 @@ void
 json_array_set(struct json *json, size_t index, struct json *element)
 {
     ovs_assert(json_array_size(json) > index);
-    json->array.elements[index] = element;
+    if (json->storage_type == JSON_ARRAY_DYNAMIC) {
+        json->array.elements[index] = element;
+    } else {
+        json->elements[index] = element;
+    }
 }
 
 struct json *
 json_array_pop(struct json *json)
 {
-    return json->array.size ? json->array.elements[--json->array.size] : NULL;
+    if (!json_array_size(json)) {
+        return NULL;
+    }
+    if (json->storage_type == JSON_ARRAY_DYNAMIC) {
+        return json->array.elements[--json->array.size];
+    }
+    if (json->storage_type > JSON_ARRAY_INLINE_1) {
+        return json->elements[--json->storage_type - JSON_ARRAY_DYNAMIC];
+    }
+
+    /* Need to fall back to an empty array in case it's the last
+     * inline element. */
+    struct json *element = json->elements[0];
+    json->storage_type = JSON_ARRAY_DYNAMIC;
+    json->array.elements = NULL;
+    json->array.size = 0;
+    json->array.allocated = 0;
+    return element;
 }
 
 void
 json_array_trim(struct json *array_)
 {
+    if (array_->storage_type != JSON_ARRAY_DYNAMIC) {
+        return;
+    }
+
     struct json_array *array = &array_->array;
     if (array->size < array->allocated) {
         array->allocated = array->size;
@@ -271,6 +330,7 @@ struct json *
 json_array_create(struct json **elements, size_t n)
 {
     struct json *json = json_create(JSON_ARRAY);
+    json->storage_type = JSON_ARRAY_DYNAMIC;
     json->array.elements = elements;
     json->array.size = n;
     json->array.allocated = n;
@@ -280,28 +340,37 @@ json_array_create(struct json **elements, size_t n)
 struct json *
 json_array_create_1(struct json *elem0)
 {
-    struct json **elements = xmalloc(sizeof *elements);
-    elements[0] = elem0;
-    return json_array_create(elements, 1);
+    struct json *json = json_create(JSON_ARRAY);
+
+    json->storage_type = JSON_ARRAY_INLINE_1;
+    json->elements[0] = elem0;
+
+    return json;
 }
 
 struct json *
 json_array_create_2(struct json *elem0, struct json *elem1)
 {
-    struct json **elements = xmalloc(2 * sizeof *elements);
-    elements[0] = elem0;
-    elements[1] = elem1;
-    return json_array_create(elements, 2);
+    struct json *json = json_create(JSON_ARRAY);
+
+    json->storage_type = JSON_ARRAY_INLINE_2;
+    json->elements[0] = elem0;
+    json->elements[1] = elem1;
+
+    return json;
 }
 
 struct json *
 json_array_create_3(struct json *elem0, struct json *elem1, struct json *elem2)
 {
-    struct json **elements = xmalloc(3 * sizeof *elements);
-    elements[0] = elem0;
-    elements[1] = elem1;
-    elements[2] = elem2;
-    return json_array_create(elements, 3);
+    struct json *json = json_create(JSON_ARRAY);
+
+    json->storage_type = JSON_ARRAY_INLINE_3;
+    json->elements[0] = elem0;
+    json->elements[1] = elem1;
+    json->elements[2] = elem2;
+
+    return json;
 }
 
 bool
@@ -398,14 +467,28 @@ size_t
 json_array_size(const struct json *json)
 {
     ovs_assert(json->type == JSON_ARRAY);
-    return json->array.size;
+    if (json->storage_type == JSON_ARRAY_DYNAMIC) {
+        return json->array.size;
+    }
+    return json->storage_type - JSON_ARRAY_DYNAMIC;
 }
 
 const struct json *
 json_array_at(const struct json *json, size_t index)
 {
     ovs_assert(json->type == JSON_ARRAY);
-    return (json->array.size > index) ? json->array.elements[index] : NULL;
+
+    if (json->storage_type == JSON_ARRAY_DYNAMIC) {
+        if (json->array.size <= index) {
+            return NULL;
+        }
+        return json->array.elements[index];
+    }
+
+    if (json->storage_type - JSON_ARRAY_DYNAMIC <= index) {
+        return NULL;
+    }
+    return json->elements[index];
 }
 
 struct shash *
@@ -515,7 +598,9 @@ json_destroy_array(struct json *json, bool yield)
             json_destroy(CONST_CAST(struct json *, json_array_at(json, i)));
         }
     }
-    free(json->array.elements);
+    if (json->storage_type == JSON_ARRAY_DYNAMIC) {
+        free(json->array.elements);
+    }
 }
 
 static struct json *json_deep_clone_object(const struct shash *object);

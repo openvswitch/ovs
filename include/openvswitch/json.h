@@ -32,6 +32,7 @@
 
 #include <stdio.h>
 #include "openvswitch/shash.h"
+#include "openvswitch/util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -66,9 +67,19 @@ struct json_array {
 /* Maximum string length that can be stored inline ('\0' is not included). */
 #define JSON_STRING_INLINE_LEN (sizeof(struct json_array) - 1)
 
+#define JSON_ARRAY_INLINE_LEN 3
+BUILD_ASSERT_DECL(sizeof(struct json_array) / sizeof(struct json *)
+                    >= JSON_ARRAY_INLINE_LEN);
+
 enum json_storage_type {
-    JSON_STRING_DYNAMIC = 0, /* JSON_STRING is stored via 'str_ptr'. */
-    JSON_STRING_INLINE,      /* JSON_STRING is stored in 'str' array. */
+    /* JSON_STRING storage types. */
+    JSON_STRING_DYNAMIC = 0, /* Stored via 'str_ptr'. */
+    JSON_STRING_INLINE,      /* Stored in 'str' array. */
+    /* JSON_ARRAY storage types.*/
+    JSON_ARRAY_DYNAMIC,      /* 'elements' is a dynamically allocated array. */
+    JSON_ARRAY_INLINE_1,     /* Static 'elements' with exactly 1 element. */
+    JSON_ARRAY_INLINE_2,     /* Static 'elements' with exactly 2 elements. */
+    JSON_ARRAY_INLINE_3,     /* Static 'elements' with exactly 3 elements. */
 };
 
 /* A JSON value. */
@@ -78,7 +89,10 @@ struct json {
     size_t count;
     union {
         struct shash *object;   /* Contains "struct json *"s. */
-        struct json_array array;
+        union {
+            struct json *elements[JSON_ARRAY_INLINE_LEN];
+            struct json_array array;
+        }; /* JSON_ARRAY. */
         long long int integer;
         double real;
         union {
