@@ -143,7 +143,9 @@ enum {
     AF_NETLINK,
     PF_NETLINK = AF_NETLINK,
     AF_PACKET,
-    PF_PACKET = AF_PACKET
+    PF_PACKET = AF_PACKET,
+    AF_BRIDGE,
+    PF_BRIDGE = AF_BRIDGE,
 };
 
 enum {
