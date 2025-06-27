@@ -204,6 +204,9 @@ extern "C" {
 %(hDecls)s''' % {'prefix': prefix.upper(),
                 'hDecls': schema.hDecls})
 
+    print("struct ovsdb_type;")
+    print("")
+
     for tableName, table in sorted(schema.tables.items()):
         structName = "%s%s" % (prefix, tableName.lower())
 
@@ -239,6 +242,9 @@ extern "C" {
 
         for columnName in table.columns:
             print("bool %(p)sserver_has_%(t)s_table_col_%(c)s(const struct ovsdb_idl *); " % {
+                'p': prefix, 't': tableName.lower(),
+                'c': columnName})
+            print("const struct ovsdb_type *%(p)s%(t)s_%(c)s_server_type(const struct ovsdb_idl *); " % {
                 'p': prefix, 't': tableName.lower(),
                 'c': columnName})
 
@@ -519,6 +525,12 @@ bool
 %(p)sserver_has_%(t)s_table_col_%(c)s(const struct ovsdb_idl *idl)
 {
     return ovsdb_idl_server_has_column(idl, &%(s)s_col_%(c)s);
+}
+
+const struct ovsdb_type *
+%(p)s%(t)s_%(c)s_server_type(const struct ovsdb_idl *idl)
+{
+    return ovsdb_idl_server_column_type(idl, &%(s)s_col_%(c)s);
 }
 ''' % {'s': structName, 'p': prefix, 't': tableName.lower(),
        'P': prefix.upper(), 'T': tableName.upper(),

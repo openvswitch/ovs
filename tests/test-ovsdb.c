@@ -3605,20 +3605,37 @@ do_idl_table_column_check(struct ovs_cmdl_context *ctx)
                ctx->argv[r], has_table ? "has" : "doesn't have");
 
         bool has_col = idltest_server_has_simple5_table_col_irefmap(idl);
-        printf("%s remote %s col irefmap in table simple5\n",
-               ctx->argv[r], has_col ? "has" : "doesn't have");
+        const struct ovsdb_type *type =
+            idltest_simple5_irefmap_server_type(idl);
+        char *type_s = type ? ovsdb_type_to_english(type) : NULL;
+        printf("%s remote %s col irefmap in table simple5%s%s\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have",
+               type ? ", type: " : "", type ? type_s : "");
+        free(type_s);
 
         has_col = idltest_server_has_link1_table_col_l2(idl);
-        printf("%s remote %s col l2 in table link1\n",
-               ctx->argv[r], has_col ? "has" : "doesn't have");
+        type = idltest_link1_l2_server_type(idl);
+        type_s = type ? ovsdb_type_to_english(type) : NULL;
+        printf("%s remote %s col l2 in table link1%s%s\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have",
+               type ? ", type: " : "", type ? type_s : "");
+        free(type_s);
 
         has_col = idltest_server_has_link1_table_col_i(idl);
-        printf("%s remote %s col i in table link1\n",
-               ctx->argv[r], has_col ? "has" : "doesn't have");
+        type = idltest_link1_i_server_type(idl);
+        type_s = type ? ovsdb_type_to_english(type) : NULL;
+        printf("%s remote %s col i in table link1%s%s\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have",
+               type ? ", type: " : "", type ? type_s : "");
+        free(type_s);
 
         has_col = idltest_server_has_simple7_table_col_id(idl);
-        printf("%s remote %s col id in table simple7\n",
-               ctx->argv[r], has_col ? "has" : "doesn't have");
+        type = idltest_simple7_id_server_type(idl);
+        type_s = type ? ovsdb_type_to_english(type) : NULL;
+        printf("%s remote %s col id in table simple7%s%s\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have",
+               type ? ", type: " : "", type ? type_s : "");
+        free(type_s);
 
         printf("--- remote %s done ---\n", ctx->argv[r]);
     }

@@ -55,6 +55,7 @@ struct ovsdb_idl_row;
 struct ovsdb_idl_column;
 struct ovsdb_idl_table;
 struct ovsdb_idl_table_class;
+struct ovsdb_type;
 struct simap;
 struct uuid;
 
@@ -103,6 +104,8 @@ bool ovsdb_idl_server_has_table(const struct ovsdb_idl *,
                                 const struct ovsdb_idl_table_class *);
 bool ovsdb_idl_server_has_column(const struct ovsdb_idl *,
                                  const struct ovsdb_idl_column *);
+const struct ovsdb_type *ovsdb_idl_server_column_type(
+    const struct ovsdb_idl *, const struct ovsdb_idl_column *);
 
 /* Choosing columns and tables to replicate.
  *

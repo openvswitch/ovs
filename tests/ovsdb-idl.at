@@ -2708,17 +2708,17 @@ unix:socket remote doesn't have table link2
 unix:socket remote doesn't have table simple5
 unix:socket remote doesn't have col irefmap in table simple5
 unix:socket remote doesn't have col l2 in table link1
-unix:socket remote has col i in table link1
+unix:socket remote has col i in table link1, type: integer
 unix:socket remote doesn't have col id in table simple7
 --- remote unix:socket done ---
 unix:socket2 remote has table simple
 unix:socket2 remote has table link1
 unix:socket2 remote has table link2
 unix:socket2 remote has table simple5
-unix:socket2 remote has col irefmap in table simple5
-unix:socket2 remote has col l2 in table link1
-unix:socket2 remote has col i in table link1
-unix:socket2 remote has col id in table simple7
+unix:socket2 remote has col irefmap in table simple5, type: map of (integer, uuid) pairs
+unix:socket2 remote has col l2 in table link1, type: set of up to 1 uuids
+unix:socket2 remote has col i in table link1, type: integer
+unix:socket2 remote has col id in table simple7, type: string
 --- remote unix:socket2 done ---
 ], [stderr])
 

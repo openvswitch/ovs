@@ -33,7 +33,6 @@
 #include "ovsdb-parser.h"
 #include "ovsdb-session.h"
 #include "ovsdb-types.h"
-#include "sset.h"
 #include "svec.h"
 #include "util.h"
 #include "uuid.h"
@@ -2053,7 +2052,7 @@ ovsdb_cs_compose_server_monitor_request(const struct json *schema_json,
     struct json *monitor_requests = json_object_create();
 
     const char *table_name = "Database";
-    const struct sset *table_schema
+    const struct shash *table_schema
         = schema ? shash_find_data(schema, table_name) : NULL;
     if (!table_schema) {
         VLOG_WARN("%s database lacks %s table "
@@ -2065,7 +2064,7 @@ ovsdb_cs_compose_server_monitor_request(const struct json *schema_json,
         for (size_t j = 0; j < N_SERVER_COLUMNS; j++) {
             const struct server_column *column = &server_columns[j];
             bool db_has_column = (table_schema &&
-                                  sset_contains(table_schema, column->name));
+                                  shash_find(table_schema, column->name));
             if (table_schema && !db_has_column) {
                 VLOG_WARN("%s table in %s database lacks %s column "
                           "(database needs upgrade?)",
@@ -2099,9 +2098,9 @@ log_error(struct ovsdb_error *error)
 
 /* Parses 'schema_json', an OVSDB schema in JSON format as described in RFC
  * 7047, to obtain the names of its rows and columns.  If successful, returns
- * an shash whose keys are table names and whose values are ssets, where each
- * sset contains the names of its table's columns.  On failure (due to a parse
- * error), returns NULL.
+ * an shash whose keys are table names and whose values are shashes, where each
+ * shash contains the names of its table's columns as keys and an ovsdb_type as
+ * data.  On failure (due to a parse error), returns NULL.
  *
  * It would also be possible to use the general-purpose OVSDB schema parser in
  * ovsdb-server, but that's overkill, possibly too strict for the current use
@@ -2112,9 +2111,9 @@ ovsdb_cs_parse_schema(const struct json *schema_json)
 {
     struct ovsdb_parser parser;
     const struct json *tables_json;
+    struct shash *schema = NULL;
     struct ovsdb_error *error;
     struct shash_node *node;
-    struct shash *schema;
 
     ovsdb_parser_init(&parser, schema_json, "database schema");
     tables_json = ovsdb_parser_member(&parser, "tables", OP_OBJECT);
@@ -2136,22 +2135,49 @@ ovsdb_cs_parse_schema(const struct json *schema_json)
         columns_json = ovsdb_parser_member(&parser, "columns", OP_OBJECT);
         error = ovsdb_parser_destroy(&parser);
         if (error) {
-            log_error(error);
-            ovsdb_cs_free_schema(schema);
-            return NULL;
+            goto error;
         }
 
-        struct sset *columns = xmalloc(sizeof *columns);
-        sset_init(columns);
+        struct shash *columns = xmalloc(sizeof *columns);
+        shash_init(columns);
 
         struct shash_node *node2;
         SHASH_FOR_EACH (node2, json_object(columns_json)) {
+            const struct json *column_json = node2->data;
             const char *column_name = node2->name;
-            sset_add(columns, column_name);
+            const struct json *type_json;
+            struct ovsdb_type *type;
+
+            ovsdb_parser_init(&parser, column_json,
+                              "schema for column %s", column_name);
+            type_json = ovsdb_parser_member(&parser, "type",
+                                            OP_STRING | OP_OBJECT);
+            error = ovsdb_parser_destroy(&parser);
+            if (error) {
+                goto error;
+            }
+
+            type = xzalloc(sizeof *type);
+            error = ovsdb_type_from_json(type, type_json);
+            if (error) {
+                free(type);
+                goto error;
+            }
+
+            if (!shash_add_once(columns, column_name, type)) {
+                /* Should never happen, but just in case. */
+                ovsdb_type_destroy(type);
+                free(type);
+            }
         }
         shash_add(schema, table_name, columns);
     }
     return schema;
+
+error:
+    log_error(error);
+    ovsdb_cs_free_schema(schema);
+    return NULL;
 }
 
 /* Frees 'schema', which is in the format returned by
@@ -2163,9 +2189,15 @@ ovsdb_cs_free_schema(struct shash *schema)
         struct shash_node *node;
 
         SHASH_FOR_EACH_SAFE (node, schema) {
-            struct sset *sset = node->data;
-            sset_destroy(sset);
-            free(sset);
+            struct shash *columns = node->data;
+            struct shash_node *node2;
+
+            SHASH_FOR_EACH (node2, columns) {
+                ovsdb_type_destroy(node2->data);
+            }
+            shash_destroy_free_data(columns);
+            free(columns);
+
             shash_delete(schema, node);
         }
         shash_destroy(schema);

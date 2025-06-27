@@ -8,6 +8,11 @@ Post-v3.5.0
      * New debug appctl command 'dpdk/get-memzone-stats'.
      * Removed upper limit for the number of rx/tx descriptors (n_r/txq_desc).
      * OVS validated with DPDK 24.11.2.
+   - OVSDB-IDL:
+     * New functions <db>_<table>_<column>_server_type() that allow checking
+       the server-side type of a particular column.  Can be used for checking
+       type constraints when the server schema is older or newer than that of
+       the client.
    - ovs-ctl:
      * Added a new option, --oom-score=<score>, to set the daemons' Linux
        Out-Of-Memory (OOM) killer score.
