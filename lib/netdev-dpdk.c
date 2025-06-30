@@ -154,17 +154,6 @@ typedef uint16_t dpdk_port_t;
 
 #define IF_NAME_SZ (PATH_MAX > IFNAMSIZ ? PATH_MAX : IFNAMSIZ)
 
-/* List of required flags advertised by the hardware that will be used
- * if TSO is enabled. Ideally this should include
- * RTE_ETH_TX_OFFLOAD_SCTP_CKSUM. However, very few drivers support that
- * at the moment and SCTP is not a widely used protocol like TCP and UDP,
- * so it's optional. */
-#define DPDK_TX_TSO_OFFLOAD_FLAGS (RTE_ETH_TX_OFFLOAD_TCP_TSO        \
-                                   | RTE_ETH_TX_OFFLOAD_TCP_CKSUM    \
-                                   | RTE_ETH_TX_OFFLOAD_UDP_CKSUM    \
-                                   | RTE_ETH_TX_OFFLOAD_IPV4_CKSUM)
-
-
 static const struct rte_eth_conf port_conf = {
     .rxmode = {
         .offloads = 0,
