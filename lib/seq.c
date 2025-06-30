@@ -163,9 +163,14 @@ seq_read(const struct seq *seq)
     return value;
 }
 
+/* poll_immediate_wake_at() must not be called while holding seq_mutex
+ * in order to avoid potential deadlock with time_init() that calls
+ * seq_create() if the timeval module is not initialized yet.  */
+void poll_immediate_wake_at(const char *where) OVS_EXCLUDED(seq_mutex);
+
 static void
 seq_wait__(struct seq *seq, uint64_t value, const char *where)
-    OVS_REQUIRES(seq_mutex)
+    OVS_RELEASES(seq_mutex)
 {
     unsigned int id = ovsthread_id_self();
     uint32_t hash = hash_int(id, 0);
@@ -176,9 +181,11 @@ seq_wait__(struct seq *seq, uint64_t value, const char *where)
             if (waiter->value != value) {
                 /* The current value is different from the value we've already
                  * waited for, */
+                ovs_mutex_unlock(&seq_mutex);
                 poll_immediate_wake_at(where);
             } else {
                 /* Already waiting on 'value', nothing more to do. */
+                ovs_mutex_unlock(&seq_mutex);
             }
             return;
         }
@@ -196,6 +203,7 @@ seq_wait__(struct seq *seq, uint64_t value, const char *where)
         latch_wait_at(&waiter->thread->latch, where);
         waiter->thread->waiting = true;
     }
+    ovs_mutex_unlock(&seq_mutex);
 }
 
 /* Causes the following poll_block() to wake up when 'seq''s sequence number
@@ -219,9 +227,9 @@ seq_wait_at(const struct seq *seq_, uint64_t value, const char *where)
     if (value == seq_read(seq_)) {
         seq_wait__(seq, value, where);
     } else {
+        ovs_mutex_unlock(&seq_mutex);
         poll_immediate_wake_at(where);
     }
-    ovs_mutex_unlock(&seq_mutex);
 }
 
 /* Called by poll_block() just before it returns, this function destroys any
