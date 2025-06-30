@@ -27,6 +27,9 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
    _OVS_VSWITCHD_START([], [-- set Open_vSwitch . other_config:hw-offload=true $3])
    dnl Add bridges, ports, etc.
    AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
+
+   dnl Start retis capture if requested.
+   RETIS_CHECK_AND_RUN()
 ])
 
 # Macro to exclude tests that will fail with TC offload enabled.

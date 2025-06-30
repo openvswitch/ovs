@@ -455,6 +455,28 @@ datapath testsuite.
 
   https://git.kernel.org/pub/scm/network/iproute2/iproute2.git
 
+It is also possible to run `retis`_ capture along with the `check-kernel` and
+`check-offloads` tests by setting `OVS_TEST_WITH_RETIS` environment variable
+to 'yes'.  This can be useful for debugging the test cases.  For example, the
+following command can be used to run the test 167 under `retis`::
+
+    $ make check-kernel OVS_TEST_WITH_RETIS=yes TESTSUITEFLAGS='167 -d'
+
+After the test is completed, the following data will be available in the test
+directory:
+
+* `retis.err` - standard error stream of the `retis collect`.
+* `retis.log` - standard output of the `retis collect`, contains all captured
+  events in the order they appeared.
+* `retis.data` - raw events collected by retis, `retis sort` or other commands
+  can be used on this file for further analysis.
+* `retis.sorted` - text file containing the output of `retis sort` executed on
+  the `retis.data`, for convenience.
+
+Requires retis version 1.5 or newer.
+
+.. _retis: https://github.com/retis-org/retis
+
 .. _testing-static-analysis:
 
 Static Code Analysis

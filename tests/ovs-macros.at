@@ -360,6 +360,16 @@ m4_ifndef([AT_FAIL_IF],
     [AT_CHECK([($1) \
     && exit 99 || exit 0], [0], [ignore], [ignore])])])
 
+dnl Start retis to track all the traffic passing through OVS.
+m4_define([RETIS_CHECK_AND_RUN],
+  [if test "$OVS_TEST_WITH_RETIS" = yes && retis --version > /dev/null; then
+       on_exit 'retis sort --utc retis.data > retis.sorted'
+       OVS_DAEMONIZE([retis -p ifdump collect --utc --allow-system-changes \
+                          --ovs-track --out --print 2>retis.err 1>retis.log],
+                     [retis.pid])
+       OVS_WAIT_UNTIL([grep -q 'loaded' retis.err])
+   fi])
+
 dnl Add a rule to always accept the traffic.
 dnl The first argument to this macro should be the command to run:
 dnl iptables or ip6tables

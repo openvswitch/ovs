@@ -29,6 +29,9 @@ Post-v3.5.0
    - ovs-tcpdump:
      * Update the --mirror-to option, adding support for specifying an
        existing port as a mirror interface.
+   - Added support for running tests from 'check-kernel' and 'check-offloads'
+     system test targets under retis by setting OVS_TEST_WITH_RETIS=yes.
+     See the 'Testing' section of the documentation for more details.
    - Updated documentation to remove most documentation of kernel module
      that was previously part of the OVS distribution. It was removed from
      the OVS distribution in the 3.0 release and is no longer present in
