@@ -979,6 +979,8 @@ union ovs_16aligned_in6_addr {
     ovs_be16 be16[8];
     ovs_16aligned_be32 be32[4];
 };
+BUILD_ASSERT_DECL(sizeof(union ovs_16aligned_in6_addr)
+                  == sizeof(struct in6_addr));
 
 /* Like struct ip6_hdr, but whereas that struct requires 32-bit alignment, this
  * one only requires 16-bit alignment. */
