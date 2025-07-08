@@ -230,6 +230,8 @@ struct upcall {
     uint16_t mru;                  /* If !0, Maximum receive unit of
                                       fragmented IP packet */
     uint64_t hash;
+    uint32_t pid;                  /* Socket PID this upcall was received from,
+                                    * or zero. */
 
     enum upcall_type type;         /* Type of the upcall. */
     const struct nlattr *actions;  /* Flow actions in DPIF_UC_ACTION Upcalls. */
@@ -932,6 +934,7 @@ recv_upcalls(struct handler *handler)
         upcall->key_len = dupcall->key_len;
         upcall->ufid = &dupcall->ufid;
         upcall->hash = hash;
+        upcall->pid = dupcall->pid;
 
         upcall->out_tun_key = dupcall->out_tun_key;
         upcall->actions = dupcall->actions;
@@ -1271,6 +1274,7 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
     upcall->key = NULL;
     upcall->key_len = 0;
     upcall->mru = mru;
+    upcall->pid = 0;
 
     upcall->out_tun_key = NULL;
     upcall->actions = NULL;
@@ -1730,6 +1734,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op->dop.execute.probe = false;
             op->dop.execute.mtu = upcall->mru;
             op->dop.execute.hash = upcall->hash;
+            op->dop.execute.upcall_pid = upcall->pid;
         }
     }
 

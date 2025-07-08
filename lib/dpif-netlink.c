@@ -2021,6 +2021,10 @@ dpif_netlink_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
     if (d_exec->hash) {
         nl_msg_put_u64(buf, OVS_PACKET_ATTR_HASH, d_exec->hash);
     }
+
+    if (d_exec->upcall_pid) {
+        nl_msg_put_u32(buf, OVS_PACKET_ATTR_UPCALL_PID, d_exec->upcall_pid);
+    }
 }
 
 /* Executes, against 'dpif', up to the first 'n_ops' operations in 'ops'.
@@ -2987,6 +2991,7 @@ dpif_netlink_recv_windows(struct dpif_netlink *dpif, uint32_t handler_id,
 
             error = parse_odp_packet(buf, upcall, &dp_ifindex);
             if (!error && dp_ifindex == dpif->dp_ifindex) {
+                upcall->pid = 0;
                 return 0;
             } else if (error) {
                 return error;
@@ -3037,6 +3042,7 @@ dpif_netlink_recv_cpu_dispatch(struct dpif_netlink *dpif, uint32_t handler_id,
 
         error = parse_odp_packet(buf, upcall, &dp_ifindex);
         if (!error && dp_ifindex == dpif->dp_ifindex) {
+            upcall->pid = nl_sock_pid(handler->sock);
             return 0;
         } else if (error) {
             return error;
@@ -3113,6 +3119,7 @@ dpif_netlink_recv_vport_dispatch(struct dpif_netlink *dpif,
 
             error = parse_odp_packet(buf, upcall, &dp_ifindex);
             if (!error && dp_ifindex == dpif->dp_ifindex) {
+                upcall->pid = nl_sock_pid(ch->sock);
                 return 0;
             } else if (error) {
                 return error;
