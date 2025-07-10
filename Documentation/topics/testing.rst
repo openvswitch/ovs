@@ -473,7 +473,8 @@ directory:
 * `retis.sorted` - text file containing the output of `retis sort` executed on
   the `retis.data`, for convenience.
 
-Requires retis version 1.5 or newer.
+Requires retis version 1.5 or newer and enabling support for
+:doc:`/topics/usdt-probes`.
 
 .. _retis: https://github.com/retis-org/retis
 
