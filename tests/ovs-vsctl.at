@@ -1620,7 +1620,11 @@ cat >experr <<EOF
 ovs-vsctl: Error detected while setting up 'reserved_name'.  See ovs-vswitchd log for details.
 ovs-vsctl: The default log directory is "$OVS_RUNDIR".
 EOF
-AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [experr])
+if test "$IS_WIN32" = "yes"; then
+AT_CHECK([ovs-vsctl add-port br0 reserved_name], [160], [], [experr])
+else
+AT_CHECK([ovs-vsctl add-port br0 reserved_name], [65], [], [experr])
+fi
 # Prevent race.
 OVS_WAIT_UNTIL([test `grep -- "|WARN|" ovs-vswitchd.log | wc -l` -ge 1])
 # Detect the warning log message
@@ -1655,7 +1659,11 @@ cat >experr <<EOF
 ovs-vsctl: Error detected while setting up 'reserved_name'.  See ovs-vswitchd log for details.
 ovs-vsctl: The default log directory is "$OVS_RUNDIR".
 EOF
-AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [experr])
+if test "$IS_WIN32" = "yes"; then
+AT_CHECK([ovs-vsctl add-port br0 reserved_name], [160], [], [experr])
+else
+AT_CHECK([ovs-vsctl add-port br0 reserved_name], [65], [], [experr])
+fi
 # Prevent race.
 OVS_WAIT_UNTIL([test `grep -- "|WARN|" ovs-vswitchd.log | wc -l` -ge 1])
 # Detect the warning log message
@@ -1830,4 +1838,24 @@ name=tst1 -- add open . bridges @a
 AT_CHECK([ovs-vsctl --no-wait --bare --columns _uuid,name list bridge tst1], [0], [ignore])
 
 OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([ovs-vsctl -- return error if OVSDB reload issues are reported])
+OVS_VSWITCHD_START
+
+cat >experr << EOF
+ovs-vsctl: Error detected while setting up 'gre0': gre0: bad ip6gre 'remote_ip'
+gre0: ip6gre type requires valid 'remote_ip' argument.  See ovs-vswitchd log for details.
+ovs-vsctl: The default log directory is "$OVS_RUNDIR".
+EOF
+if test "$IS_WIN32" = "yes"; then
+AT_CHECK([ovs-vsctl add-port br0 gre0 -- set interface gre0 type=ip6gre \
+options:key=100 options:remote_ip=192.168.0.300], [160], [], [experr])
+else
+AT_CHECK([ovs-vsctl add-port br0 gre0 -- set interface gre0 type=ip6gre \
+options:key=100 options:remote_ip=192.168.0.300], [65], [], [experr])
+fi
+OVS_VSWITCHD_STOP(["/is not a valid IP address/d
+/netdev_vport|WARN|gre0: bad ip6gre 'remote_ip'/d
+/netdev|WARN|gre0: could not set configuration/d"])
 AT_CLEANUP

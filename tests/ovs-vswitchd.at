@@ -222,7 +222,11 @@ cat >experr <<EOF
 ovs-vsctl: Error detected while setting up 'b/c'.  See ovs-vswitchd log for details.
 ovs-vsctl: The default log directory is "$OVS_RUNDIR".
 EOF
-AT_CHECK([ovs-vsctl add-br b/c -- set bridge b/c datapath-type=dummy], [0], [], [experr])
+if test "$IS_WIN32" = "yes"; then
+AT_CHECK([ovs-vsctl add-br b/c -- set bridge b/c datapath-type=dummy], [160], [], [experr])
+else
+AT_CHECK([ovs-vsctl add-br b/c -- set bridge b/c datapath-type=dummy], [65], [], [experr])
+fi
 AT_CHECK([test ! -e b/c.mgmt])
 
 OVS_VSWITCHD_STOP(['/ignoring bridge with invalid name/d'])

@@ -1041,9 +1041,15 @@ AT_SETUP([tunnel - concomitant incompatible tunnels on the same port])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
                     options:remote_ip=flow ofport_request=1])
 
+if test "$IS_WIN32" = "yes"; then
 AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=vxlan \
-                    options:remote_ip=flow options:exts=gbp options:key=1 ofport_request=2], [0],
+                    options:remote_ip=flow options:exts=gbp options:key=1 ofport_request=2], [160],
   [], [ignore])
+else
+AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=vxlan \
+                    options:remote_ip=flow options:exts=gbp options:key=1 ofport_request=2], [65],
+  [], [ignore])
+fi
 
 AT_CHECK([grep 'p2: could not set configuration (File exists)' ovs-vswitchd.log | sed "s/^.*\(p2:.*\)$/\1/"], [0],
   [p2: could not set configuration (File exists)

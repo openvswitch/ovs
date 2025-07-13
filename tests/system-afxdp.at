@@ -12,7 +12,7 @@ ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
 AT_CHECK([ovs-vsctl del-port ovs-p0])
 AT_CHECK([ovs-vsctl add-port br0 ovs-p0 -- \
                     set interface ovs-p0 type=afxdp options:n_rxq=42],
-         [0], [], [stderr])
+         [65], [], [stderr])
 OVS_WAIT_UNTIL([grep "ovs-p0: could not set configuration" ovs-vswitchd.log])
 sleep 5
 AT_CHECK([grep "ovs-p0: could not set configuration" ovs-vswitchd.log | wc -l],

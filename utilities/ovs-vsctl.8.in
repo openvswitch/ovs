@@ -909,6 +909,17 @@ Usage, syntax, or configuration file error.
 .IP "2"
 The \fIbridge\fR argument to \fBbr\-exists\fR specified the name of a
 bridge that does not exist.
+.IP "65 (Linux and BSD) or 160 (Windows)"
+The database transaction was committed successfully, but \fBovs\-vsctl\fR failed
+while waiting for \fBovs\-vswitchd\fR to finish reconfiguring itself to reflect
+the changes.  This typically happens when \fB--no\-wait\fR is not specified and
+the daemon does not acknowledge the update in time or encounters an error
+applying it.
+.br
+.sp
+Note that the change remains recorded in the database and is not rolled back.
+This exit code is intended to signal that while the database was updated, the
+system configuration may not yet reflect the intended changes.
 .SH "SEE ALSO"
 .
 .BR ovsdb\-server (1),

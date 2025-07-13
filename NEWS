@@ -20,6 +20,12 @@ Post-v3.5.0
        core file size.
    - ovs-appctl:
      * Added JSON output support to the 'ovs/route/show' command.
+   - ovs-vsctl:
+     * Now exits with error code 160 (ERROR_BAD_ARGUMENTS) on Windows and
+       65 (EX_DATAERR) on other platforms if it fails while waiting for
+       ovs-vswitchd to finish reconfiguring itself after a successful
+       database transaction.  E.g., when ovs-vswitchd fails to add a new
+       port or a bridge.
    - SSL/TLS:
      * Support for deprecated TLSv1 and TLSv1.1 protocols on OpenFlow and
        database connections is now removed.
