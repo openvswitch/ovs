@@ -7817,6 +7817,12 @@ modify_group_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
         ofproto->n_groups[old_group->type]--;
         ofproto->n_groups[new_group->type]++;
     }
+
+    if (ofproto->ofproto_class->group_modify) {
+        /* XXX: OK to lose old group's stats? */
+        ofproto->ofproto_class->group_modify(new_group);
+    }
+
     return 0;
 
 out:
@@ -7981,15 +7987,6 @@ ofproto_group_mod_finish(struct ofproto *ofproto,
 {
     struct ofgroup *new_group = ogm->new_group;
     struct ofgroup *old_group;
-
-    if (new_group && group_collection_n(&ogm->old_groups) &&
-        ofproto->ofproto_class->group_modify) {
-        /* Modify a group. */
-        ovs_assert(group_collection_n(&ogm->old_groups) == 1);
-
-        /* XXX: OK to lose old group's stats? */
-        ofproto->ofproto_class->group_modify(new_group);
-    }
 
     /* Delete old groups. */
     GROUP_COLLECTION_FOR_EACH(old_group, &ogm->old_groups) {
