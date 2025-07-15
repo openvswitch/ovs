@@ -2143,14 +2143,40 @@ cmd_show_weak_ref(struct ctl_context *ctx, const struct cmd_show_table *show,
     }
 }
 
+static void
+table_filter(struct ctl_context *ctx,
+             const struct cmd_show_table *show,
+             const struct shash *filters, size_t base_length)
+{
+    if (!show || !show->table || shash_is_empty(filters)) {
+        return;
+    }
+
+    const char *table_name = show->table->name;
+    struct sset *table_filter = shash_find_data(filters, table_name);
+
+    if (table_filter) {
+        const char *output = &ctx->output.string[base_length];
+        const char *value;
+
+        SSET_FOR_EACH (value, table_filter) {
+            if (strcasestr(output, value)) {
+                return;
+            }
+        }
+        ds_truncate(&ctx->output, base_length);
+    }
+}
+
 /* 'shown' records the tables that has been displayed by the current
  * command to avoid duplicated prints.
  */
 static void
 cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
-             int level, struct sset *shown)
+             int level, struct sset *shown, const struct shash *filters)
 {
     const struct cmd_show_table *show = cmd_show_find_table_by_row(row);
+    size_t start_pos = ctx->output.length;
     size_t i;
 
     ds_put_char_multiple(&ctx->output, ' ', level * 4);
@@ -2194,7 +2220,7 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
                                                          ref_show->table,
                                                          &datum->keys[j].uuid);
                     if (ref_row) {
-                        cmd_show_row(ctx, ref_row, level + 1, shown);
+                        cmd_show_row(ctx, ref_row, level + 1, shown, filters);
                     }
                 }
                 continue;
@@ -2249,6 +2275,85 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
     }
     cmd_show_weak_ref(ctx, show, row, level);
     sset_find_and_delete_assert(shown, show->table->name);
+
+    table_filter(ctx, show, filters, start_pos);
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+init_filters(const char *filter_str,
+             const struct ovsdb_idl_table_class *top_table,
+             struct shash *filters)
+{
+    struct sset initialized_filters;
+    char *error = NULL;
+    const char *item;
+
+    sset_init(&initialized_filters);
+    sset_from_delimited_string(&initialized_filters, filter_str, ",");
+
+    SSET_FOR_EACH (item, &initialized_filters) {
+        const struct ovsdb_idl_table_class *table;
+        const char *ptr = strchr(item, '(');
+        size_t len = strlen(item);
+        char *table_name = NULL;
+        char *values = NULL;
+
+        struct sset parsed_values;
+        sset_init(&parsed_values);
+
+        if (ptr && item[len - 1] == ')') {
+            table_name = xmemdup0(item, ptr - item);
+            error = get_table(table_name, &table);
+            if (error) {
+                goto cleanup_item;
+            }
+            values = xmemdup0(ptr + 1, len - (ptr - item + 2));
+        } else if (!ptr) {
+            table = top_table;
+            values = xstrdup(item);
+        } else {
+            error = xasprintf("Malformed filter: missing closing ')'");
+            goto cleanup_item;
+        }
+
+        sset_from_delimited_string(&parsed_values, values, "|");
+
+        struct sset *value_set = shash_find_data(filters, table->name);
+        if (!value_set) {
+            value_set = xzalloc(sizeof *value_set);
+            sset_init(value_set);
+            shash_add(filters, table->name, value_set);
+        }
+
+        const char *v;
+        SSET_FOR_EACH (v, &parsed_values) {
+            sset_add(value_set, v);
+        }
+
+cleanup_item:
+        sset_destroy(&parsed_values);
+        free(table_name);
+        free(values);
+        if (error) {
+            goto cleanup;
+        }
+    }
+
+cleanup:
+    sset_destroy(&initialized_filters);
+    return error;
+}
+
+static void
+destroy_filters(struct shash *filters)
+{
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, filters) {
+        struct sset *value_set = node->data;
+        sset_destroy(value_set);
+        free(value_set);
+    }
+    shash_destroy(filters);
 }
 
 static void
@@ -2256,12 +2361,25 @@ cmd_show(struct ctl_context *ctx)
 {
     const struct ovsdb_idl_row *row;
     struct sset shown = SSET_INITIALIZER(&shown);
+    struct shash filters = SHASH_INITIALIZER(&filters);
+
+    char *filter_str = shash_find_data(&ctx->options, "--filter");
+    if (filter_str && *filter_str) {
+        char *error = init_filters(filter_str,
+                                   cmd_show_tables[0].table, &filters);
+        if (error) {
+            destroy_filters(&filters);
+            ctx->error = error;
+            return;
+        }
+    }
 
     for (row = ovsdb_idl_first_row(ctx->idl, cmd_show_tables[0].table);
          row; row = ovsdb_idl_next_row(row)) {
-        cmd_show_row(ctx, row, 0, &shown);
+        cmd_show_row(ctx, row, 0, &shown, &filters);
     }
 
+    destroy_filters(&filters);
     ovs_assert(sset_is_empty(&shown));
     sset_destroy(&shown);
 }
@@ -2556,7 +2674,7 @@ ctl_init__(const struct ovsdb_idl_class *idl_class_,
     cmd_show_tables = cmd_show_tables_;
     if (cmd_show_tables) {
         static const struct ctl_command_syntax show =
-            {"show", 0, 0, "", pre_cmd_show, cmd_show, NULL, "", RO};
+            {"show", 0, 0, "", pre_cmd_show, cmd_show, NULL, "--filter=", RO};
         ctl_register_command(&show);
     }
 }

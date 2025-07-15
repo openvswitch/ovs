@@ -26,6 +26,7 @@ Post-v3.5.0
        ovs-vswitchd to finish reconfiguring itself after a successful
        database transaction.  E.g., when ovs-vswitchd fails to add a new
        port or a bridge.
+     * Added '--filter' option to the 'show' command.
    - SSL/TLS:
      * Support for deprecated TLSv1 and TLSv1.1 protocols on OpenFlow and
        database connections is now removed.

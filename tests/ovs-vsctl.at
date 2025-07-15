@@ -1859,3 +1859,92 @@ OVS_VSWITCHD_STOP(["/is not a valid IP address/d
 /netdev_vport|WARN|gre0: bad ip6gre 'remote_ip'/d
 /netdev|WARN|gre0: could not set configuration/d"])
 AT_CLEANUP
+
+AT_SETUP([ovs-vsctl filter option usage])
+AT_KEYWORDS([ovs-vsctl filter option])
+
+OVS_VSWITCHD_START([dnl
+   add-port br0 p1 -- set Interface p1 type=internal ofport_request=1 -- \
+   add-port br0 tunnel_port \
+    -- set Interface tunnel_port type=geneve \
+           options:remote_ip=1.2.3.4 options:key=123 -- \
+   add-port br0 tunnel_port2 \
+    -- set Interface tunnel_port2 type=geneve \
+           options:remote_ip=1.2.3.5 options:key=125
+])
+
+m4_define([FILTER], [grep -E '(Port|Interface)' | sort])
+
+AT_CHECK([ovs-vsctl --filter='geneve,interface(1.2.3.5)' show | FILTER], [0], [dnl
+            Interface tunnel_port2
+        Port br0
+        Port p1
+        Port tunnel_port
+        Port tunnel_port2
+])
+
+AT_CHECK([ovs-vsctl --filter='interface(1.2.3.5),geneve' show | FILTER], [0], [dnl
+            Interface tunnel_port2
+        Port br0
+        Port p1
+        Port tunnel_port
+        Port tunnel_port2
+])
+
+AT_CHECK([ovs-vsctl --filter='interface(1.2.3.5)' show | FILTER], [0], [dnl
+            Interface tunnel_port2
+        Port br0
+        Port p1
+        Port tunnel_port
+        Port tunnel_port2
+])
+
+AT_CHECK([ovs-vsctl --filter='geneve' show | FILTER], [0], [dnl
+            Interface br0
+            Interface p1
+            Interface tunnel_port
+            Interface tunnel_port2
+        Port br0
+        Port p1
+        Port tunnel_port
+        Port tunnel_port2
+])
+
+AT_CHECK([ovs-vsctl --filter='port(geneve),interface(1.2.3.5)' show | FILTER], [0], [dnl
+            Interface tunnel_port2
+        Port tunnel_port2
+])
+
+AT_CHECK([ovs-vsctl --filter='port(geneve),interface(123|125)' show | FILTER], [0], [dnl
+            Interface tunnel_port
+            Interface tunnel_port2
+        Port tunnel_port
+        Port tunnel_port2
+])
+
+AT_CHECK([ovs-vsctl --filter='interface(geneve)' show | FILTER], [0], [dnl
+            Interface tunnel_port
+            Interface tunnel_port2
+        Port br0
+        Port p1
+        Port tunnel_port
+        Port tunnel_port2
+])
+
+AT_CHECK([ovs-vsctl --filter='interface(p1),interface(p2)' show | FILTER], [0], [dnl
+            Interface p1
+        Port br0
+        Port p1
+        Port tunnel_port
+        Port tunnel_port2
+])
+
+AT_CHECK([ovs-vsctl --filter='interface1(p1)' show], [1], [stdout], [dnl
+ovs-vsctl: unknown table "interface1"
+])
+
+AT_CHECK([ovs-vsctl  --filter=$'interface\x28p1' show], [1], [stdout], [dnl
+ovs-vsctl: Malformed filter: missing closing ')'
+])
+
+AT_CLEANUP

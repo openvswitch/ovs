@@ -150,8 +150,12 @@ Any successful \fBovs\-vsctl\fR command automatically initializes the
 Open vSwitch database if it is empty.  This command is provided to
 initialize the database without executing any other command.
 .
-.IP "\fBshow\fR"
-Prints a brief overview of the database contents.
+.IP "[\fB\-\-filter\fR=\fIfilter\-rule\fR[,\fIfilter\-rule\fR]...] \fBshow\fR"
+Prints a brief overview of the database contents.  If \fB\-\-filter\fR is
+specified, output is filtered according to the rules.  Each \fIfilter\-rule\fR
+has the form \fBtable\-name\fR(\fIfilter\fR[|\fIfilter\fR]...).  The row in
+this table is shown only if the printed version of it, including all the rows
+referenced from this one, contains one of the \fIfilter\fRs as a sub-string.
 .
 .IP "\fBemer\-reset\fR"
 Reset the configuration into a clean state.  It deconfigures OpenFlow
