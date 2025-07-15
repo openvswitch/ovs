@@ -6455,6 +6455,42 @@ This flow is handled by the userspace slow path because it:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - meter with slow-path action])
+
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-meter br0 \
+  'meter=1 pktps burst stats bands=type=drop rate=100 burst_size=100'])
+
+add_of_ports --pcap br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
+
+eth="eth_src=00:00:00:00:00:ec,eth_dst=ff:ff:ff:ff:ff:ff,arp"
+arp="arp_tpa=192.168.0.1,arp_spa=192.168.0.100,arp_op=1"
+packet=$(ovs-ofctl compose-packet --bare "$eth,$arp")
+
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-flow br0 \
+  "table=1,eth_type=0x0806,actions=meter:1,clone(set_field:2->arp_op,output(port=p2,max_len=128)),output:p1"])
+
+AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 CONTROLLER \
+  "meter:1,resubmit(,1)" "$packet"])
+
+dnl Verify the orinigal packet is received on port 1.
+OVS_WAIT_UNTIL([test $(ovs-pcap p1-tx.pcap | grep -c "$packet") -eq 1])
+
+dnl Verify the modified packet is received on port 2.
+arp="arp_tpa=192.168.0.1,arp_spa=192.168.0.100,arp_op=2"
+packet=$(ovs-ofctl compose-packet --bare "$eth,$arp")
+OVS_WAIT_UNTIL([test $(ovs-pcap p2-tx.pcap | grep -c "$packet") -eq 1])
+
+dnl Make sure all meters, and outputs datapath actions get executed.
+OVS_WAIT_UNTIL([grep "sub-execute meter(0),meter(0),2 on packet arp" \
+                  ovs-vswitchd.log])
+OVS_WAIT_UNTIL([grep "sub-execute 1 on packet arp" ovs-vswitchd.log])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 dnl CHECK_CONTINUATION(TITLE, N_PORTS0, N_PORTS1, ACTIONS0, ACTIONS1, [EXTRA_SETUP])
 dnl
