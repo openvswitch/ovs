@@ -66,6 +66,7 @@ EXTRA_DIST += \
 	utilities/ovs-vlan-test.in \
 	utilities/ovs-vsctl-bashcomp.bash \
 	utilities/checkpatch.py \
+	utilities/checkpatch_dict.txt \
 	utilities/docker/Makefile \
 	utilities/docker/ovs-override.conf \
 	utilities/docker/start-ovs \
