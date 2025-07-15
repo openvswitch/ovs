@@ -41,6 +41,7 @@ Alan Pevec                         alan.pevec@redhat.com
 Ales Musil                         amusil@redhat.com
 Alessandro Pilotti                 apilotti@cloudbasesolutions.com
 Alexander Duyck                    alexander.h.duyck@redhat.com
+Alexandra Rukomoinikova            arukomoinikova@k2.cloud
 Alexandru Copot                    alex.mihai.c@gmail.com
 Alexei Starovoitov                 ast@plumgrid.com
 Alexey I. Froloff                  raorn@raorn.name
