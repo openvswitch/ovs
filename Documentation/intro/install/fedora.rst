@@ -37,11 +37,17 @@ Build Requirements
 ------------------
 
 You will need to install all required packages to build the RPMs.
-Newer distributions use ``dnf`` but if it's not available, then use
-``yum`` instructions.
+Fedora 41 and newer version use ``dnf5`` by default.
+Other distributions typically use ``dnf``.
+If neither ``dnf5`` nor ``dnf`` is available, then use ``yum`` instructions.
 
 The command below will install RPM tools and generic build dependencies.
 And (optionally) include these packages: libcap-ng libcap-ng-devel dpdk-devel.
+
+DNF5:
+::
+
+    $ dnf5 install @development-tools rpm-build dnf-plugins-core
 
 DNF:
 ::
