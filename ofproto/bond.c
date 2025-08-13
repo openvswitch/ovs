@@ -459,8 +459,23 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
     }
 
     if (bond->rebalance_interval != s->rebalance_interval) {
+        if (s->rebalance_interval && bond->rebalance_interval) {
+            /* Recompute the next rebalance interval by moving the
+             * next_rebalance to be offset by the new interval.  In this
+             * case, if all that was updated is the rebalance interval,
+             * we can skip triggering the rest of the port reconfiguration. */
+            if (bond->next_rebalance) {
+                long long int old_start_time =
+                    bond->next_rebalance - s->rebalance_interval;
+                bond->next_rebalance =
+                    old_start_time + bond->rebalance_interval;
+            }
+        } else {
+            /* When the bond is doing a disable/enable of the rebalance
+             * interval, trigger the revalidation. */
+            revalidate = true;
+        }
         bond->rebalance_interval = s->rebalance_interval;
-        revalidate = true;
     }
 
     if (bond->balance != s->balance) {
