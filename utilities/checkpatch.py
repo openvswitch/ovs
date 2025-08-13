@@ -384,15 +384,32 @@ def filter_comments(current_line, keep=False):
     return sanitized_line
 
 
-def check_spelling(line, comment):
+NOT_COMMENT = 0
+C_COMMENT = 1
+PY_COMMENT = 2
+
+
+def check_spelling(line, comment_type):
     if not spell_check_dict or not spellcheck:
         return False
 
     is_name_tag = re.compile(r'^\s*([a-z-]+-by): (.*@.*)$', re.I | re.M | re.S)
     if line.startswith('Fixes: ') or is_name_tag.match(line):
         return False
+    if comment_type == NOT_COMMENT:
+        words = line
+    elif comment_type == C_COMMENT:
+        words = filter_comments(line, True)
+    elif comment_type == PY_COMMENT:
+        words = ""
+        matched = re.search(r'#([^!].*)$', line)
+        if matched:
+            words = matched.group(1)
+        else:
+            words = line.replace("'''", '').replace('"""', '').strip()
+    else:
+        return False
 
-    words = filter_comments(line, True) if comment else line
     words = words.replace(':', ' ').split(' ')
 
     flagged_words = []
@@ -599,7 +616,11 @@ checks = [
 
     {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: has_comment(x),
-     'check': lambda x: check_spelling(x, True)},
+     'check': lambda x: check_spelling(x, comment_type=C_COMMENT)},
+
+    {'regex': r'\.py(\.in)?$', 'match_name': None,
+     'prereq': lambda x: "#" in x or "'''" in x or '"""' in x,
+     'check': lambda x: check_spelling(x, PY_COMMENT)},
 
     {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
      'check': lambda x: empty_return_with_brace(x),
@@ -783,7 +804,7 @@ def run_file_checks(text):
 def run_subject_checks(subject, spellcheck=False):
     warnings = False
 
-    if spellcheck and check_spelling(subject, False):
+    if spellcheck and check_spelling(subject, comment_type=NOT_COMMENT):
         warnings = True
 
     summary = subject[subject.rindex(': ') + 2:]
@@ -1005,7 +1026,7 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
                             '--abbrev=12 COMMIT_REF\n')
                 print("%d: %s\n" % (lineno, line))
             elif spellcheck:
-                check_spelling(line, False)
+                check_spelling(line, comment_type=NOT_COMMENT)
             for typo, correct in tags_typos.items():
                 m = re.match(typo, line, re.I)
                 if m:

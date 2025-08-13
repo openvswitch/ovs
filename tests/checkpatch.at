@@ -39,33 +39,54 @@ Subject: Patch this is.
     fi
 }
 
-# try_checkpatch_c_file SOURCE [ERRORS] [CHECKPATCH-ARGS] [FILTER]
+# try_checkpatch_file FILENAME SOURCE [ERRORS] [CHECKPATCH-ARGS] [FILTER]
 #
-# Runs checkpatch against test SOURCE expecting the set of specified
-# ERRORS (and warnings).  Optionally, sets [CHECKPATCH-ARGS].  The
-# optional FILTER can be used to adjust the expected output before
+# Runs checkpatch against FILENAME with SOURCE contents, expecting the set
+# of specified ERRORS (and warnings).  Optionally, sets [CHECKPATCH-ARGS].
+# The optional FILTER can be used to adjust the expected output before
 # processing.
-try_checkpatch_c_file() {
-   echo "$1" | sed 's/^    //' > test.c
+try_checkpatch_file() {
+   local FILENAME="$1"
+   echo "$2" | sed 's/^    //' > "$FILENAME"
 
-   # Take expected output from $2.
-   if test -n "$2"; then
-       echo "$2" | sed 's/^    //' > expout
+   # Take expected output from $3.
+   if test -n "$3"; then
+       echo "$3" | sed 's/^    //' > expout
    else
        : > expout
    fi
 
    if test -s expout; then
        AT_CHECK([OVS_SRC_DIR=$top_srcdir $PYTHON3 \
-                   $top_srcdir/utilities/checkpatch.py $3 -q -f test.c],
+                   $top_srcdir/utilities/checkpatch.py $4 -q -f "$FILENAME"],
                 [1], [stdout])
-       AT_CHECK([sed "$4
+       AT_CHECK([sed "$5
                       /^Lines checked:/d
                       /^$/d" stdout], [0], [expout])
    else
        AT_CHECK([OVS_SRC_DIR=$top_srcdir $PYTHON3 \
-                   $top_srcdir/utilities/checkpatch.py $3 -q -f test.c])
+                   $top_srcdir/utilities/checkpatch.py $4 -q -f "$FILENAME"])
    fi
+}
+
+# try_checkpatch_c_file SOURCE [ERRORS] [CHECKPATCH-ARGS] [FILTER]
+#
+# Runs checkpatch against "C" SOURCE contents, expecting the set of
+# specified ERRORS (and warnings).  Optionally, sets [CHECKPATCH-ARGS].
+# The optional FILTER can be used to adjust the expected output before
+# processing.
+try_checkpatch_c_file() {
+    try_checkpatch_file "test.c" "$@"
+}
+
+# try_checkpatch_py_file SOURCE [ERRORS] [CHECKPATCH-ARGS] [FILTER]
+#
+# Runs checkpatch against "Python" SOURCE contents, expecting the set of
+# specified ERRORS (and warnings).  Optionally, sets [CHECKPATCH-ARGS].
+# The optional FILTER can be used to adjust the expected output before
+# processing.
+try_checkpatch_py_file() {
+    try_checkpatch_file "test.py" "$@"
 }
 OVS_END_SHELL_HELPERS
 
@@ -762,5 +783,24 @@ try_checkpatch_c_file \
     }" \
     "" \
     "-S"
+
+dnl Second check with some different words
+try_checkpatch_c_file \
+    "/* This code is for my private prooperty. */
+    " \
+    "WARNING: Possible misspelled word: \"prooperty\"
+    test.c:1:
+    /* This code is for my private prooperty. */" \
+    "-S" \
+    "/^Did you mean:/d"
+
+try_checkpatch_py_file \
+    "# This is a python file with an intentionaly misspelt word.
+    # The user wants to check if it's working." \
+    "WARNING: Possible misspelled word: \"intentionaly\"
+    test.py:1:
+    # This is a python file with an intentionaly misspelt word." \
+    "-S" \
+    "/^Did you mean:/d"
 
 AT_CLEANUP
