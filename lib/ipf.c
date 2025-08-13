@@ -1193,6 +1193,9 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
                 const struct ipf_frag *frag_0 = &rp->list->frag_list[0];
                 void *l4_frag = dp_packet_l4(frag_0->pkt);
                 void *l4_reass = dp_packet_l4(pkt);
+
+                /* Complete all L4 checksums before reassembly. */
+                dp_packet_ol_send_prepare(pkt, 0);
                 memcpy(l4_frag, l4_reass, dp_packet_l4_size(frag_0->pkt));
 
                 for (int i = 0; i <= rp->list->last_inuse_idx; i++) {
