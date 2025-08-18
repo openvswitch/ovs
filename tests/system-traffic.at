@@ -8204,8 +8204,9 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.2 >/dev/null])
 
 OVS_START_L7([at_ns1], [ftp])
 
-dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([10.1.1.2]), [0], [ignore], [ignore])
+dnl FTP requests from p0->p1 should work fine, with and without EPSV.
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([10.1.1.2], [--epsv]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP([10.1.1.2], [--disable-epsv]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -8384,8 +8385,9 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.240 >/dev/null])
 
 OVS_START_L7([at_ns1], [ftp])
 
-dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2]), [0], [ignore], [ignore])
+dnl FTP requests from p0->p1 should work fine with and without EPRT.
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2], [--eprt]), [0], [ignore], [ignore])
+NS_CHECK_EXEC([at_ns0], OVS_GET_FTP_ACTIVE([10.1.1.2], [--disable-eprt]), [0], [ignore], [ignore])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl

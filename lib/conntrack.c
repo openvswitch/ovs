@@ -192,6 +192,8 @@ static alg_helper alg_helpers[] = {
 #define FTP_PORT_CMD "PORT"
 /* FTP pasv string used in passive mode. */
 #define FTP_PASV_REPLY_CODE "227"
+/* FTP epsv string used in passive mode. */
+#define FTP_EPSV_REPLY_CODE "229"
 /* Maximum decimal digits for port in FTP command.
  * The port is represented as two 3 digit numbers with the
  * high part a multiple of 256. */
@@ -203,6 +205,8 @@ static alg_helper alg_helpers[] = {
 #define FTP_EPSV_REPLY "EXTENDED PASSIVE"
 /* Maximum decimal digits for port in FTP extended command. */
 #define MAX_EXT_FTP_PORT_DGTS 5
+/* FTP extended command code for IPv4. */
+#define FTP_AF_V4 '1'
 /* FTP extended command code for IPv6. */
 #define FTP_AF_V6 '2'
 /* Used to indicate a wildcard L4 source port number for ALGs.
@@ -3243,11 +3247,15 @@ replace_substring(char *substr, uint8_t substr_size,
 }
 
 static void
-repl_bytes(char *str, char c1, char c2)
+repl_bytes(char *str, char c1, char c2, int max)
 {
     while (*str) {
         if (*str == c1) {
             *str = c2;
+
+            if (--max == 0) {
+                break;
+            }
         }
         str++;
     }
@@ -3269,9 +3277,15 @@ static int
 repl_ftp_v4_addr(struct dp_packet *pkt, ovs_be32 v4_addr_rep,
                  char *ftp_data_start,
                  size_t addr_offset_from_ftp_data_start,
-                 size_t addr_size OVS_UNUSED)
+                 size_t addr_size)
 {
     enum { MAX_FTP_V4_NAT_DELTA = 8 };
+
+    /* EPSV mode. */
+    if (addr_offset_from_ftp_data_start == 0 &&
+        addr_size == 0) {
+        return 0;
+    }
 
     /* Do conservative check for pathological MTU usage. */
     uint32_t orig_used_size = dp_packet_size(pkt);
@@ -3287,7 +3301,7 @@ repl_ftp_v4_addr(struct dp_packet *pkt, ovs_be32 v4_addr_rep,
     char v4_addr_str[INET_ADDRSTRLEN] = {0};
     ovs_assert(inet_ntop(AF_INET, &v4_addr_rep, v4_addr_str,
                          sizeof v4_addr_str));
-    repl_bytes(v4_addr_str, '.', ',');
+    repl_bytes(v4_addr_str, '.', ',', 0);
     modify_packet(pkt, ftp_data_start + addr_offset_from_ftp_data_start,
                   addr_size, v4_addr_str, strlen(v4_addr_str),
                   orig_used_size);
@@ -3345,8 +3359,11 @@ detect_ftp_ctl_type(const struct conn_lookup_ctx *ctx,
         }
     } else {
         if (strncasecmp(ftp_msg, FTP_PORT_CMD, strlen(FTP_PORT_CMD)) &&
+            strncasecmp(ftp_msg, FTP_EPRT_CMD, strlen(FTP_EPRT_CMD)) &&
             strncasecmp(ftp_msg, FTP_PASV_REPLY_CODE,
-                        strlen(FTP_PASV_REPLY_CODE))) {
+                        strlen(FTP_PASV_REPLY_CODE)) &&
+            strncasecmp(ftp_msg, FTP_EPSV_REPLY_CODE,
+                        strlen(FTP_EPSV_REPLY_CODE))) {
             return CT_FTP_CTL_OTHER;
         }
     }
@@ -3370,11 +3387,22 @@ process_ftp_ctl_v4(struct conntrack *ct,
     char ftp_msg[LARGEST_FTP_MSG_OF_INTEREST + 1] = {0};
     get_ftp_ctl_msg(pkt, ftp_msg);
     char *ftp = ftp_msg;
+    struct in_addr ip_addr;
     enum ct_alg_mode mode;
+    bool extended = false;
 
     if (!strncasecmp(ftp, FTP_PORT_CMD, strlen(FTP_PORT_CMD))) {
         ftp = ftp_msg + strlen(FTP_PORT_CMD);
         mode = CT_FTP_MODE_ACTIVE;
+    } else if (!strncasecmp(ftp, FTP_EPRT_CMD, strlen(FTP_EPRT_CMD))) {
+        ftp = ftp_msg + strlen(FTP_EPRT_CMD);
+        mode = CT_FTP_MODE_ACTIVE;
+        extended = true;
+    } else if (!strncasecmp(ftp, FTP_EPSV_REPLY_CODE,
+                            strlen(FTP_EPSV_REPLY_CODE))) {
+        ftp = ftp_msg + strlen(FTP_EPSV_REPLY_CODE);
+        mode = CT_FTP_MODE_PASSIVE;
+        extended = true;
     } else {
         ftp = ftp_msg + strlen(FTP_PASV_REPLY_CODE);
         mode = CT_FTP_MODE_PASSIVE;
@@ -3392,71 +3420,101 @@ process_ftp_ctl_v4(struct conntrack *ct,
         return CT_FTP_CTL_INVALID;
     }
 
-    char *ip_addr_start = ftp;
-    *addr_offset_from_ftp_data_start = ip_addr_start - ftp_msg;
-
-    uint8_t comma_count = 0;
-    while (comma_count < 4 && *ftp) {
-        if (*ftp == ',') {
-            comma_count++;
-            if (comma_count == 4) {
-                *ftp = 0;
-            } else {
-                *ftp = '.';
-            }
+    /* EPRT, verify address family. */
+    if (extended && mode == CT_FTP_MODE_ACTIVE) {
+        if (ftp[0] != FTP_AF_V4 || isdigit(ftp[1])) {
+            return CT_FTP_CTL_INVALID;
         }
+
+        ftp = skip_non_digits(ftp + 1);
+        if (*ftp == 0) {
+            return CT_FTP_CTL_INVALID;
+        }
+    }
+
+    if (!extended || mode == CT_FTP_MODE_ACTIVE) {
+        char *ip_addr_start = ftp;
+        *addr_offset_from_ftp_data_start = ip_addr_start - ftp_msg;
+        repl_bytes(ftp, ',', '.', 3);
+
+        /* Advance to end of IP address, to terminate it. */
+        while (*ftp) {
+            if (!isdigit(*ftp) && *ftp != '.') {
+                break;
+            }
+            ftp++;
+        }
+        *ftp = 0;
         ftp++;
-    }
-    if (comma_count != 4) {
-        return CT_FTP_CTL_INVALID;
+
+        int rc2 = inet_pton(AF_INET, ip_addr_start, &ip_addr);
+        if (rc2 != 1) {
+            return CT_FTP_CTL_INVALID;
+        }
+
+        *addr_size = ftp - ip_addr_start - 1;
+    } else {
+        *addr_size = 0;
+        *addr_offset_from_ftp_data_start = 0;
     }
 
-    struct in_addr ip_addr;
-    int rc2 = inet_pton(AF_INET, ip_addr_start, &ip_addr);
-    if (rc2 != 1) {
-        return CT_FTP_CTL_INVALID;
-    }
-
-    *addr_size = ftp - ip_addr_start - 1;
     char *save_ftp = ftp;
-    ftp = terminate_number_str(ftp, MAX_FTP_PORT_DGTS);
-    if (!ftp) {
-        return CT_FTP_CTL_INVALID;
-    }
-    int value;
-    if (!str_to_int(save_ftp, 10, &value)) {
-        return CT_FTP_CTL_INVALID;
-    }
+    uint16_t port_hs;
 
-    /* This is derived from the L4 port maximum is 65535. */
-    if (value > 255) {
-        return CT_FTP_CTL_INVALID;
-    }
+    if (!extended) {
+        ftp = terminate_number_str(ftp, MAX_FTP_PORT_DGTS);
+        if (!ftp) {
+            return CT_FTP_CTL_INVALID;
+        }
+        int value;
+        if (!str_to_int(save_ftp, 10, &value)) {
+            return CT_FTP_CTL_INVALID;
+        }
 
-    uint16_t port_hs = value;
-    port_hs <<= 8;
+        /* This is derived from the L4 port maximum is 65535. */
+        if (value > 255) {
+            return CT_FTP_CTL_INVALID;
+        }
 
-    /* Skip over comma. */
-    ftp++;
-    save_ftp = ftp;
-    bool digit_found = false;
-    while (isdigit(*ftp)) {
+        port_hs = value;
+        port_hs <<= 8;
+
+        /* Skip over comma. */
         ftp++;
-        digit_found = true;
-    }
-    if (!digit_found) {
-        return CT_FTP_CTL_INVALID;
-    }
-    *ftp = 0;
-    if (!str_to_int(save_ftp, 10, &value)) {
-        return CT_FTP_CTL_INVALID;
+        save_ftp = ftp;
+        bool digit_found = false;
+        while (isdigit(*ftp)) {
+            ftp++;
+            digit_found = true;
+        }
+        if (!digit_found) {
+            return CT_FTP_CTL_INVALID;
+        }
+        *ftp = 0;
+        if (!str_to_int(save_ftp, 10, &value)) {
+            return CT_FTP_CTL_INVALID;
+        }
+
+        if (value > 255) {
+            return CT_FTP_CTL_INVALID;
+        }
+
+        port_hs |= value;
+    } else {
+        ftp = terminate_number_str(ftp, MAX_EXT_FTP_PORT_DGTS);
+        if (!ftp) {
+            return CT_FTP_CTL_INVALID;
+        }
+        int value;
+        if (!str_to_int(save_ftp, 10, &value)) {
+            return CT_FTP_CTL_INVALID;
+        }
+        if (value > UINT16_MAX) {
+            return CT_FTP_CTL_INVALID;
+        }
+        port_hs = (uint16_t) value;
     }
 
-    if (value > 255) {
-        return CT_FTP_CTL_INVALID;
-    }
-
-    port_hs |= value;
     ovs_be16 port = htons(port_hs);
     ovs_be32 conn_ipv4_addr;
 
@@ -3478,12 +3536,14 @@ process_ftp_ctl_v4(struct conntrack *ct,
         OVS_NOT_REACHED();
     }
 
-    ovs_be32 ftp_ipv4_addr;
-    ftp_ipv4_addr = ip_addr.s_addr;
-    /* Although most servers will block this exploit, there may be some
-     * less well managed. */
-    if (ftp_ipv4_addr != conn_ipv4_addr && ftp_ipv4_addr != *v4_addr_rep) {
-        return CT_FTP_CTL_INVALID;
+    if (!extended || mode == CT_FTP_MODE_ACTIVE) {
+        ovs_be32 ftp_ipv4_addr;
+        ftp_ipv4_addr = ip_addr.s_addr;
+        /* Although most servers will block this exploit, there may be some
+         * less well managed. */
+        if (ftp_ipv4_addr != conn_ipv4_addr && ftp_ipv4_addr != *v4_addr_rep) {
+            return CT_FTP_CTL_INVALID;
+        }
     }
 
     expectation_create(ct, port, conn_for_expectation,
