@@ -1,4 +1,4 @@
-v3.6.0 - xx xxx xxxx
+v3.6.0 - 18 Aug 2025
 --------------------
    - Bonding:
      * Bond rebalancing log messages of INFO log level are highly reduced: they
@@ -8,6 +8,11 @@ v3.6.0 - xx xxx xxxx
      * New debug appctl command 'dpdk/get-memzone-stats'.
      * Removed upper limit for the number of rx/tx descriptors (n_r/txq_desc).
      * OVS validated with DPDK 24.11.2.
+   - OVSDB performance:
+     * Table indexes are now used for lookups while processing certain database
+       queries (e.g. 'select' operation).
+     * JSON data structures are re-worked to allow storing short strings and
+       arrays in-place, improving performance and the total memory usage.
    - OVSDB-IDL:
      * New functions <db>_<table>_<column>_server_type() that allow checking
        the server-side type of a particular column.  Can be used for checking
@@ -19,7 +24,7 @@ v3.6.0 - xx xxx xxxx
      * Added a new option, --ulimit-core=<LIMIT>, to set the daemon's ulimit
        core file size.
    - ovs-appctl:
-     * Added JSON output support to the 'ovs/route/show' command.
+     * Added JSON output support to 'ovs/route/show' and 'fdb/show' commands.
    - ovs-vsctl:
      * Now exits with error code 160 (ERROR_BAD_ARGUMENTS) on Windows and
        65 (EX_DATAERR) on other platforms if it fails while waiting for
