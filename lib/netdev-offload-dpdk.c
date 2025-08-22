@@ -2375,7 +2375,7 @@ netdev_offload_dpdk_flow_destroy(struct ufid_to_rte_flow_data *rte_flow_data)
         unsigned int tid = netdev_offload_thread_id();
 
         data = (struct netdev_offload_dpdk_data *)
-            ovsrcu_get(void *, &netdev->hw_info.offload_data);
+            ovsrcu_get(void *, &physdev->hw_info.offload_data);
         data->rte_flow_counters[tid]--;
 
         VLOG_DBG_RL(&rl, "%s/%s: rte_flow 0x%"PRIxPTR
