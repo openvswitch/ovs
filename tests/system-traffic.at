@@ -8693,20 +8693,39 @@ table=21             ip,nw_dst=10.1.1.2 action=set_field:f0:00:00:01:01:02->eth_
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl non-FIP case
+dnl non-FIP case.
+dnl
+dnl The last ACK from the 3-WAY handshake will go via upcall after going
+dnl through conntrack because +est traffic is handled differently from +new.
+dnl The sender though will proceed sending data.  Since connection is very
+dnl short, it is possible that this one ACK will be delivered after the
+dnl connection is already closed, i.e. after all the data is sent and the
+dnl connection termination sequence (FIN-ACK-FIN-ACK) is done.  Delivery
+dnl in this case will trigger RST reply.  And RST will transition TIME_WAIT
+dnl into CLOSE, hence the need to look for both states below.
 NS_CHECK_EXEC([at_ns1], [echo "foobar" |nc $NC_EOF_OPT 10.1.1.1 1234])
-OVS_WAIT_UNTIL([[ovs-appctl dpctl/dump-conntrack | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/id=[0-9]*/id=<cleared>/g' |
-grep "tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)"
-]])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/dump-conntrack \
+                        | grep -E '(TIME_WAIT|CLOSING)' | FORMAT_CT(10.1.1.2)],
+[tcp,dnl
+orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),dnl
+reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),dnl
+protoinfo=(state=<cleared>)])
 
-dnl Check that the full session ends as expected (i.e. TIME_WAIT). Otherwise it
-dnl means the datapath didn't process the ct_clear action. Ending in SYN_RECV
-dnl (OVS maps to ESTABLISHED) means the initial frame was committed, but not a
-dnl second time after the FIP translation (because ct_clear didn't occur).
+dnl Check that the full session ends as expected (i.e. TIME_WAIT/CLOSING).
+dnl Otherwise it means the datapath didn't process the ct_clear action.
+dnl Ending in SYN_RECV (OVS maps to ESTABLISHED) means the initial frame
+dnl was committed, but not a second time after the FIP translation (because
+dnl ct_clear didn't occur).
+dnl
+dnl Same considerations about packet reordering apply, hence looking for
+dnl both states.
 NS_CHECK_EXEC([at_ns1], [echo "foobar" |nc $NC_EOF_OPT 10.254.254.1 1234])
-OVS_WAIT_UNTIL([[ovs-appctl dpctl/dump-conntrack | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/id=[0-9]*/id=<cleared>/g' |
-grep "tcp,orig=(src=10.254.254.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.254.254.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)"
-]])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/dump-conntrack \
+                        | grep -E '(TIME_WAIT|CLOSING)' | FORMAT_CT(10.254.254.2)],
+[tcp,dnl
+orig=(src=10.254.254.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),dnl
+reply=(src=10.1.1.1,dst=10.254.254.2,sport=<cleared>,dport=<cleared>),dnl
+protoinfo=(state=<cleared>)])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
