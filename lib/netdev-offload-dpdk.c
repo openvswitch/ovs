@@ -1514,6 +1514,8 @@ parse_flow_match(struct netdev *netdev,
             } else {
                 VLOG_WARN_RL(&rl, "Unknown IPv4 frag (0x%x/0x%x)",
                              match->flow.nw_frag, match->wc.masks.nw_frag);
+                free(spec);
+                free(mask);
                 return -1;
             }
             consumed_masks->nw_frag = 0;
@@ -1597,6 +1599,8 @@ parse_flow_match(struct netdev *netdev,
             } else {
                 VLOG_WARN_RL(&rl, "Unknown IPv6 frag (0x%x/0x%x)",
                              match->flow.nw_frag, match->wc.masks.nw_frag);
+                free(frag_spec);
+                free(frag_mask);
                 return -1;
             }
 
