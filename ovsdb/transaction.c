@@ -646,6 +646,7 @@ find_and_add_weak_refs(const struct ovsdb_row *src,
     }
 
     if (ovsdb_base_type_is_weak_ref(&column->type.value)) {
+        ovs_assert(!datum->n || datum->values);
         for (i = 0; i < datum->n; i++) {
             find_and_add_weak_ref(src, &datum->keys[i], &datum->values[i],
                                   column, false, ref_list, not_found, zero);
