@@ -3622,7 +3622,9 @@ raft_next_entry(struct raft *raft, struct uuid *eid)
     }
 
     raft->last_applied++;
-    *eid = e->eid;
+    if (eid) {
+        *eid = e->eid;
+    }
 
     /* DB will only read each entry once, so we don't need to store the fully
      * parsed json object any longer.  The serialized version is sufficient
