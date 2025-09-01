@@ -295,6 +295,7 @@ Lilijun                            jerry.lilijun@huawei.com
 Lili Huang                         huanglili.huang@huawei.com
 Liliia Butorina                    l.butorina@partner.samsung.com
 Linda Sun                          lsun@vmware.com
+Linda Wang                         linda.wang@jaguarmicro.com
 Lior Neudorfer                     lior@guardicore.com
 Liu Chang                          txfh2007@aliyun.com
 Liu Yulong                         liuyulong.xa@gmail.com
