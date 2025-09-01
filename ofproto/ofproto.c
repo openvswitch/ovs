@@ -4265,6 +4265,7 @@ oftable_vacancy(const struct oftable *t)
 static void
 query_table_desc__(struct ofputil_table_desc *td,
                    struct ofproto *ofproto, uint8_t table_id)
+    OVS_REQUIRES(ofproto_mutex)
 {
     const struct oftable *t = &ofproto->tables[table_id];
 
@@ -4289,10 +4290,12 @@ query_tables_desc(struct ofproto *ofproto, struct ofputil_table_desc **descp)
     size_t i;
 
     table_desc = *descp = xcalloc(ofproto->n_tables, sizeof *table_desc);
+    ovs_mutex_lock(&ofproto_mutex);
     for (i = 0; i < ofproto->n_tables; i++) {
         struct ofputil_table_desc *td = &table_desc[i];
         query_table_desc__(td, ofproto, i);
     }
+    ovs_mutex_unlock(&ofproto_mutex);
 }
 
 /* Function to handle dump-table-desc request. */
@@ -4325,6 +4328,7 @@ handle_table_desc_request(struct ofconn *ofconn,
  * must be enabled. */
 static void
 send_table_status(struct ofproto *ofproto, uint8_t table_id)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct oftable *t = &ofproto->tables[table_id];
     if (!t->vacancy_event) {
