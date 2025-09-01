@@ -398,6 +398,7 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
                 /* Permanent error.  Transition to "completed" state to report
                  * it. */
                 if (!strcmp(t->request->method, "transact")) {
+                    ovs_assert(t->reply);
                     json_array_add(t->reply->result,
                                    ovsdb_error_to_json_free(error));
                     ovsdb_trigger_complete(t);
