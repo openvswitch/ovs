@@ -681,7 +681,7 @@ ovsdb_monitor_change_set_destroy(struct ovsdb_monitor_change_set *mcs)
 static enum ovsdb_monitor_selection
 ovsdb_monitor_row_update_type(bool initial, const bool old, const bool new)
 {
-    return initial ? OJMS_INITIAL
+    return initial ? (new ? OJMS_INITIAL : OJMS_NONE)
             : !old ? OJMS_INSERT
             : !new ? OJMS_DELETE
             : OJMS_MODIFY;
