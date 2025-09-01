@@ -380,6 +380,7 @@ ovsdb_relay_run(void)
         struct relay_ctx *ctx = node->data;
         struct ovs_list events;
 
+        ovs_assert(ctx->db && ctx->cs);
         ovsdb_txn_forward_run(ctx->db, ctx->cs);
         ovsdb_cs_run(ctx->cs, &events);
 
