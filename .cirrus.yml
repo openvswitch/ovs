@@ -16,7 +16,7 @@ freebsd_build_task:
 
   prepare_script:
     - sysctl -w kern.coredump=0
-    - pkg update -f
+    - pkg update -f -r FreeBSD
     - pkg install -y ${DEPENDENCIES}
         $(pkg search -xq "^py3[0-9]+-(${PY_DEPS})-[0-9]+" | xargs)
 
