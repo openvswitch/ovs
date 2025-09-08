@@ -719,8 +719,8 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,push_nsh(flags=0,ttl=63,mdtype=1,np=1,spi=0x3000,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(1)),set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(4789)
-recirc_id(0),tunnel(tun_id=0x0,src=30.0.0.1,dst=30.0.0.3,flags(-df-csum+key)),in_port(4789),packet_type(ns=1,id=0x894f),eth_type(0x894f),nsh(np=1,spi=0x3000,si=255), packets:1, bytes:108, used:0.0s, actions:pop_nsh(),recirc(0x1)
-recirc_id(0x1),tunnel(tun_id=0x0,src=30.0.0.1,dst=30.0.0.3,flags(-df-csum+key)),in_port(4789),packet_type(ns=1,id=0x800),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:84, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:03),6
+recirc_id(0),tunnel(tun_id=0x0,src=30.0.0.1,dst=30.0.0.3,flags(+df-csum+key)),in_port(4789),packet_type(ns=1,id=0x894f),eth_type(0x894f),nsh(np=1,spi=0x3000,si=255), packets:1, bytes:108, used:0.0s, actions:pop_nsh(),recirc(0x1)
+recirc_id(0x1),tunnel(tun_id=0x0,src=30.0.0.1,dst=30.0.0.3,flags(+df-csum+key)),in_port(4789),packet_type(ns=1,id=0x800),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:84, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:03),6
 ])
 
 AT_CHECK([
@@ -773,9 +773,9 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.20/255.255.255.248,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,push_nsh(flags=0,ttl=63,mdtype=1,np=1,spi=0x3020,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(1)),set(ipv4(src=20.0.0.1,dst=20.0.0.2)),tnl_pop(4789)
-recirc_id(0),tunnel(tun_id=0x0,src=20.0.0.1,dst=20.0.0.2,flags(-df-csum+key)),in_port(4789),packet_type(ns=1,id=0x894f),eth_type(0x894f),nsh(spi=0x3020,si=255), packets:1, bytes:108, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),set(nsh(spi=0x3020,si=254)),pop_eth,tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.3,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(2)),set(ipv4(src=30.0.0.2,dst=30.0.0.3)),tnl_pop(4789)
-recirc_id(0),tunnel(tun_id=0x0,src=30.0.0.2,dst=30.0.0.3,flags(-df-csum+key)),in_port(4789),packet_type(ns=1,id=0x894f),eth_type(0x894f),nsh(np=1,spi=0x3020,si=254), packets:1, bytes:108, used:0.0s, actions:pop_nsh(),recirc(0x2)
-recirc_id(0x2),tunnel(tun_id=0x0,src=30.0.0.2,dst=30.0.0.3,flags(-df-csum+key)),in_port(4789),packet_type(ns=1,id=0x800),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:84, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:03),6
+recirc_id(0),tunnel(tun_id=0x0,src=20.0.0.1,dst=20.0.0.2,flags(+df-csum+key)),in_port(4789),packet_type(ns=1,id=0x894f),eth_type(0x894f),nsh(spi=0x3020,si=255), packets:1, bytes:108, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),set(nsh(spi=0x3020,si=254)),pop_eth,tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.3,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(2)),set(ipv4(src=30.0.0.2,dst=30.0.0.3)),tnl_pop(4789)
+recirc_id(0),tunnel(tun_id=0x0,src=30.0.0.2,dst=30.0.0.3,flags(+df-csum+key)),in_port(4789),packet_type(ns=1,id=0x894f),eth_type(0x894f),nsh(np=1,spi=0x3020,si=254), packets:1, bytes:108, used:0.0s, actions:pop_nsh(),recirc(0x2)
+recirc_id(0x2),tunnel(tun_id=0x0,src=30.0.0.2,dst=30.0.0.3,flags(+df-csum+key)),in_port(4789),packet_type(ns=1,id=0x800),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:84, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:03),6
 ])
 
 AT_CHECK([
