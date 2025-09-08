@@ -55,8 +55,6 @@ This is the current list of active Open vSwitch committers:
      - i.maximets@ovn.org
    * - Kevin Traynor
      - ktraynor@redhat.com
-   * - Russell Bryant
-     - russell@ovn.org
    * - Simon Horman
      - horms@ovn.org
    * - William Tu
@@ -93,6 +91,8 @@ More information about Emeritus Committers can be found here:
      - jpettit@ovn.org
    * - Pravin B Shelar
      - pshelar@ovn.org
+   * - Russell Bryant
+     - russell@ovn.org
    * - Thomas Graf
      - tgraf@tgraf.ch
    * - YAMAMOTO Takashi
