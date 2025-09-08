@@ -148,6 +148,10 @@ ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
         tnl->ip_tos = ip->ip_tos;
         tnl->ip_ttl = ip->ip_ttl;
 
+        if (ip->ip_frag_off & htons(IP_DF)) {
+            tnl->flags |= FLOW_TNL_F_DONT_FRAGMENT;
+        }
+
         *hlen += IP_HEADER_LEN;
 
     } else if (IP_VER(ip->ip_ihl_ver) == 6) {
@@ -485,7 +489,7 @@ parse_gre_header(struct dp_packet *packet,
         if (pkt_csum) {
             return -EINVAL;
         }
-        tnl->flags = FLOW_TNL_F_CSUM;
+        tnl->flags |= FLOW_TNL_F_CSUM;
         options++;
     }
 
