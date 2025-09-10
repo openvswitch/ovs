@@ -2245,6 +2245,63 @@ AT_CHECK_UNQUOTED([ovs-pcap p1.pcap | sort], [0], [dnl
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([userspace offload - tso + check_pkt_len])
+OVS_VSWITCHD_START(
+  [set Open_vSwitch . other_config:userspace-tso-enable=true])
+add_of_ports --pcap br0 $(seq 1 3)
+
+AT_CHECK([ovs-appctl vlog/set netdev_dummy:file:dbg])
+
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1,ip actions=check_pkt_larger(514)->NXM_NX_REG0[[0]],resubmit(,1)
+table=1,ip,reg0=0x0 actions=output:2
+table=1,ip,reg0=0x1 actions=output:3
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow_s="in_port(1),eth(src=8a:bf:7e:2f:05:84,dst=0a:8f:39:4f:e0:73),eth_type(0x0800), \
+        ipv4(src=192.168.123.2,dst=192.168.123.1,proto=6,tos=1,ttl=64,frag=no), \
+        tcp(src=54392,dst=5201),tcp_flags(ack)"
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "${flow_s}"])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | strip_used | strip_stats], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), dnl
+packets:0, bytes:0, used:never, actions:check_pkt_len(size=514,gt(3),le(2))
+])
+
+AT_CHECK([ovs-pcap p2-tx.pcap | wc -l], [0], [1
+])
+AT_CHECK([ovs-pcap p3-tx.pcap | wc -l], [0], [0
+])
+
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_tso_segsz=460])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "${flow_s}"])
+AT_CHECK([ovs-pcap p2-tx.pcap | wc -l], [0], [2
+])
+AT_CHECK([ovs-pcap p3-tx.pcap | wc -l], [0], [0
+])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "${flow_s}" --len 974])
+AT_CHECK([ovs-pcap p2-tx.pcap | wc -l], [0], [4
+])
+AT_CHECK([ovs-pcap p3-tx.pcap | wc -l], [0], [0
+])
+
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_tso_segsz=462])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "${flow_s}" --len 974])
+AT_CHECK([ovs-pcap p2-tx.pcap | wc -l], [0], [4
+])
+AT_CHECK([ovs-pcap p3-tx.pcap | wc -l], [0], [2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([dpif-netdev - revalidators handle dp modification fail correctly])
 OVS_VSWITCHD_START(
   [add-port br0 p1 \
