@@ -797,6 +797,25 @@ odp_execute_check_pkt_len(void *dp, struct dp_packet *packet, bool steal,
     uint32_t size = dp_packet_get_send_len(packet)
                     - dp_packet_l2_pad_size(packet);
 
+    if (dp_packet_get_tso_segsz(packet)) {
+        const void *payload;
+        uint32_t segsize;
+
+        if (dp_packet_tunnel(packet)) {
+            payload = dp_packet_get_inner_tcp_payload(packet);
+        } else {
+            payload = dp_packet_get_tcp_payload(packet);
+        }
+        if (payload) {
+            /* Evaluate a segment maximum length for this TSO packet. */
+            segsize = (char *) payload - (char *) dp_packet_data(packet)
+                      + dp_packet_get_tso_segsz(packet);
+            if (segsize < size) {
+                size = segsize;
+            }
+        }
+    }
+
     a = attrs[OVS_CHECK_PKT_LEN_ATTR_PKT_LEN];
     if (size > nl_attr_get_u16(a)) {
         a = attrs[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER];
