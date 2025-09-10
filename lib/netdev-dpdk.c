@@ -2785,12 +2785,11 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
             return false;
         }
         mbuf->ol_flags |= RTE_MBUF_F_TX_TCP_SEG;
-    }
 
-    /* If L4 checksum is requested, IPv4 should be requested as well. */
-    if (mbuf->ol_flags & RTE_MBUF_F_TX_L4_MASK
-        && mbuf->ol_flags & RTE_MBUF_F_TX_IPV4) {
-        mbuf->ol_flags |= RTE_MBUF_F_TX_IP_CKSUM;
+        /* DPDK API mandates IPv4 checksum when requesting TSO. */
+        if (IP_VER(ip->ip_ihl_ver) == 4) {
+            mbuf->ol_flags |= RTE_MBUF_F_TX_IP_CKSUM;
+        }
     }
 
     return true;
