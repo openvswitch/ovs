@@ -64,16 +64,71 @@ args_contains(const struct svec *args, const char *value)
     return false;
 }
 
+static int
+compare_core_ids(const void *a_, const void *b_)
+{
+    const unsigned int *a = a_;
+    const unsigned int *b = b_;
+
+    return *a < *b ? -1 : *a > *b;
+}
+
+/* Converts a hexadecimal core mask to DPDK lcore list format.
+ * Returns NULL if no valid bits are set in the mask. */
+static char *
+cmask_to_lcore_list(const char *cmask)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct ovs_numa_dump *lcore_dump;
+    struct ovs_numa_info_core *core;
+    unsigned int *core_ids = NULL;
+    unsigned int num_cores;
+    unsigned int i = 0;
+
+    lcore_dump = ovs_numa_dump_cores_with_cmask(cmask);
+
+    num_cores = ovs_numa_dump_count(lcore_dump);
+    if (num_cores == 0) {
+        ovs_numa_dump_destroy(lcore_dump);
+        return NULL;
+    }
+    core_ids = xmalloc(num_cores * sizeof *core_ids);
+
+    FOR_EACH_CORE_ON_DUMP (core, lcore_dump) {
+        core_ids[i++] = core->core_id;
+    }
+
+    /* ovs_numa_dump uses a hash map, so sort by core id. */
+    qsort(core_ids, num_cores, sizeof *core_ids, compare_core_ids);
+
+    if (num_cores > RTE_MAX_LCORE) {
+        VLOG_INFO("Truncating DPDK lcore list as dpdk-lcore-mask has >"
+                  " %u lcores", RTE_MAX_LCORE);
+        num_cores = RTE_MAX_LCORE;
+    }
+
+    for (i = 0; i < num_cores; i++) {
+        ds_put_format(&ds, "%u@%u,", i, core_ids[i]);
+    }
+    /* Remove trailing comma. */
+    ds_chomp(&ds, ',');
+
+    ovs_numa_dump_destroy(lcore_dump);
+    free(core_ids);
+    return ds_steal_cstr(&ds);
+}
+
 static void
 construct_dpdk_options(const struct smap *ovs_other_config, struct svec *args)
 {
     struct dpdk_options_map {
         const char *ovs_configuration;
         const char *dpdk_option;
+        char *(*param_conversion) (const char *);
     } opts[] = {
-        {"dpdk-lcore-mask",   "-c"            },
-        {"dpdk-hugepage-dir", "--huge-dir"    },
-        {"dpdk-socket-limit", "--socket-limit"},
+        {"dpdk-lcore-mask",   "--lcores",       cmask_to_lcore_list},
+        {"dpdk-hugepage-dir", "--huge-dir",     NULL},
+        {"dpdk-socket-limit", "--socket-limit", NULL},
     };
 
     int i;
@@ -85,11 +140,24 @@ construct_dpdk_options(const struct smap *ovs_other_config, struct svec *args)
 
         if (value) {
             if (!args_contains(args, opts[i].dpdk_option)) {
+                char *dpdk_val = NULL;
+
+                if (opts[i].param_conversion) {
+                    dpdk_val = (opts[i].param_conversion)(value);
+                    if (!dpdk_val) {
+                        VLOG_WARN("Ignoring database defined option '%s'"
+                                  " due to invalid value '%s'",
+                                  opts[i].ovs_configuration, value);
+                        continue;
+                    }
+                    value = dpdk_val;
+                }
                 svec_add(args, opts[i].dpdk_option);
                 svec_add(args, value);
+                free(dpdk_val);
             } else {
                 VLOG_WARN("Ignoring database defined option '%s' due to "
-                          "dpdk-extra config", opts[i].dpdk_option);
+                          "dpdk-extra config", opts[i].ovs_configuration);
             }
         }
     }

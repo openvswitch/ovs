@@ -416,3 +416,19 @@ m4_define([XT6_ACCEPT],
    else
        IPTABLES_ACCEPT([ip6tables], [$1])
    fi])
+
+dnl CHECK_CPU_DISCOVERED([n_cpu])
+dnl
+dnl Waits until CPUs are discovered and checks if the number of discovered CPUs
+dnl is greater or equal to 'n_cpu'.  Without the 'n_cpu' parameter checks that
+dnl at least one CPU is discovered.
+m4_define([CHECK_CPU_DISCOVERED], [
+    PATTERN="Discovered [[0-9]]* NUMA nodes and [[0-9]]* CPU cores"
+    OVS_WAIT_UNTIL([grep "$PATTERN" ovs-vswitchd.log])
+    N_CPU=$(grep "$PATTERN" ovs-vswitchd.log \
+            | sed -e 's/.* \([[0-9]]*\) CPU cores/\1/')
+    if [[ -z "$1" ]]
+        then AT_CHECK([test "$N_CPU" -gt "0"])
+        else AT_SKIP_IF([test "$N_CPU" -lt "$1"])
+    fi
+])
