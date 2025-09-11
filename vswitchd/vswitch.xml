@@ -334,13 +334,22 @@
           those uncovered cores are considered not set.
         </p>
         <p>
-          For performance reasons, it is best to set this to a single core on
-          the system, rather than allow lcore threads to float.
+          The lowest set core will be assigned in DPDK as the DPDK main thread.
+          Other set bits will be assigned by DPDK as DPDK worker threads.
+          As OVS implements its own threading for the datapath (see
+          <ref column="other_config" key="pmd-cpu-mask"/>), DPDK worker
+          threads will be unused.
         </p>
         <p>
-          If not specified, the value will be determined by choosing the lowest
-          CPU core from initial cpu affinity list. Otherwise, the value will be
-          passed directly to the DPDK library.
+          If this option is specified, all OVS main, handler, and revalidator
+          threads will be pinned to the selected DPDK main thread core.
+          This means that potentially many threads will share a single CPU
+          core, which may not be desirable for performance reasons.
+        </p>
+        <p>
+          If this option is not specified the value for DPDK initialization
+          will be auto-determined and all OVS main, revalidator and handler
+          threads will float on the OVS cpu affinity list.
         </p>
       </column>
 
