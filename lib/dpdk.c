@@ -70,12 +70,10 @@ construct_dpdk_options(const struct smap *ovs_other_config, struct svec *args)
     struct dpdk_options_map {
         const char *ovs_configuration;
         const char *dpdk_option;
-        bool default_enabled;
-        const char *default_value;
     } opts[] = {
-        {"dpdk-lcore-mask",   "-c",             false, NULL},
-        {"dpdk-hugepage-dir", "--huge-dir",     false, NULL},
-        {"dpdk-socket-limit", "--socket-limit", false, NULL},
+        {"dpdk-lcore-mask",   "-c"            },
+        {"dpdk-hugepage-dir", "--huge-dir"    },
+        {"dpdk-socket-limit", "--socket-limit"},
     };
 
     int i;
@@ -84,9 +82,6 @@ construct_dpdk_options(const struct smap *ovs_other_config, struct svec *args)
     for (i = 0; i < ARRAY_SIZE(opts); ++i) {
         const char *value = smap_get(ovs_other_config,
                                      opts[i].ovs_configuration);
-        if (!value && opts[i].default_enabled) {
-            value = opts[i].default_value;
-        }
 
         if (value) {
             if (!args_contains(args, opts[i].dpdk_option)) {
