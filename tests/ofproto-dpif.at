@@ -1270,7 +1270,7 @@ n_flows=ok n_buckets=ok
 #   bucket4:    0                   0
 
 ovs-appctl time/warp 1000
-AT_CHECK([ovs-ofctl -O OpenFlow13 dump-group-stats br0 | sed 's/duration=[[0-9]]\.[[0-9]]*s,//' | check_group_stats 40 80 200 500],
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-group-stats br0 | check_group_stats 40 80 200 500],
 [0], [dnl
 bucket0 >= 40
 bucket1 >= 80
@@ -6884,9 +6884,8 @@ ovs-ofctl monitor br0 resume --detach --no-chdir \
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow"], [0], [stdout])
 
 # Check flow stats
-AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
-AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sed -n 's/idle_age=[[0-9]]*/idle_age=0/p' | grep 'table=2'], [0], [dnl
- cookie=0x0, duration=0.0s, table=2, n_packets=1, n_bytes=106, idle_age=0, reg1=0x1 actions=output:2
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | grep 'table=2'], [0], [dnl
+ table=2, n_packets=1, n_bytes=106, reg1=0x1 actions=output:2
 ])
 
 # The packet should be received by port 2
@@ -6919,9 +6918,8 @@ ovs-ofctl monitor br0 resume --detach --no-chdir \
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow"], [0], [stdout])
 
 # Check flow stats
-AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
-AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sed -n 's/idle_age=[[0-9]]*/idle_age=0/p' | grep 'table=2'], [0], [dnl
- cookie=0x0, duration=0.0s, table=2, n_packets=1, n_bytes=106, idle_age=0, ct_state=+new+trk,icmp,in_port=1 actions=output:2
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | grep 'table=2'], [0], [dnl
+ table=2, n_packets=1, n_bytes=106, ct_state=+new+trk,icmp,in_port=1 actions=output:2
 ])
 
 # The packet should be received by port 2
@@ -7011,9 +7009,8 @@ ovs-ofctl monitor br1 resume --detach --no-chdir --pidfile=ovs-ofctl.pid 2> ofct
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 "$flow"], [0], [stdout])
 
 # Check flow stats
-AT_CHECK([ovs-ofctl dump-flows br1], [0], [stdout])
-AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sed -n 's/idle_age=[[0-9]]*/idle_age=0/p' | grep 'table=3' | grep -v 'commit'], [0], [dnl
- cookie=0x0, duration=0.0s, table=3, n_packets=1, n_bytes=106, idle_age=0, icmp,in_port=1 actions=output:2
+AT_CHECK([ovs-ofctl dump-flows br1 | ofctl_strip | grep 'table=3' | grep -v 'commit'], [0], [dnl
+ table=3, n_packets=1, n_bytes=106, icmp,in_port=1 actions=output:2
 ])
 
 # The packet should be received by port 1
@@ -9205,10 +9202,9 @@ done
 
 AT_CHECK([ovs-appctl time/warp 1000], [0], [ignore])
 AT_CHECK([ovs-appctl revalidator/purge], [0])
-AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
-AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
- cookie=0x0, duration=0.0s, table=0, n_packets=0, n_bytes=0, idle_age=1, icmp actions=NORMAL
- cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=1180, idle_age=1, ip actions=NORMAL
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | grep actions= | sort], [0], [dnl
+ icmp actions=NORMAL
+ n_packets=10, n_bytes=1180, ip actions=NORMAL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -9487,10 +9483,9 @@ ovs-appctl time/warp 100
 AT_CHECK([ovs-vsctl set Open_vSwitch . other-config:n-revalidator-threads=2])
 ovs-appctl time/warp 1000
 
-AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
-AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
- cookie=0x0, duration=0.0s, table=0, n_packets=0, n_bytes=0, idle_age=1, icmp actions=NORMAL
- cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=1180, idle_age=1, ip actions=NORMAL
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | grep actions= | sort], [0], [dnl
+ icmp actions=NORMAL
+ n_packets=10, n_bytes=1180, ip actions=NORMAL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
