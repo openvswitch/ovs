@@ -2804,8 +2804,11 @@ AT_CHECK([uuidfilt monitor.stdout | sed '/^$/d'], [0], [dnl
 <8> delete 4 four
 <9> insert 4 four
 ])
-OVSDB_SERVER_SHUTDOWN(["/Address already in use/d"])
-OVSDB_SERVER_SHUTDOWN2(["/Address already in use/d"])
+
+dnl glibc returns 'Address already in use' error message
+dnl musl returns 'Address in use' error message
+OVSDB_SERVER_SHUTDOWN(["/Address \(already \)*in use/d"])
+OVSDB_SERVER_SHUTDOWN2(["/Address \(already \)*in use/d"])
 
 dnl Starting a replay.
 AT_CHECK([ovsdb-server --replay=./replay_dir                      dnl
