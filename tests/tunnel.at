@@ -1066,9 +1066,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
 AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=vxlan options:dst_port=9000 \
                     options:remote_ip=flow options:exts=gbp ofport_request=2])
 
-AT_CHECK([grep p2 ovs-vswitchd.log | sed "s/^.*\(bridge br0:.*\)$/\1/"], [0],
-  [bridge br0: added interface p2 on port 2
-])
+AT_CHECK([grep -q 'bridge br0: added interface p2 on port 2' ovs-vswitchd.log])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
