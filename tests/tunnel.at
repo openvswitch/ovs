@@ -129,7 +129,7 @@ AT_CHECK([ovs-appctl dpctl/dump-flows | tail -1], [0], [dnl
 recirc_id(0),tunnel(src=3.3.3.200/255.255.255.0,dst=1.1.1.1,ttl=64,tp_src=1,tp_dst=123),in_port(1),eth(),eth_type(0x0800), packets:0, bytes:0, used:never, actions:2
 ])
 
-OVS_VSWITCHD_STOP
+OVS_VSWITCHD_STOP(["/receive tunnel port not found/d"])
 AT_CLEANUP
 
 AT_SETUP([tunnel - too long nested attributes])
