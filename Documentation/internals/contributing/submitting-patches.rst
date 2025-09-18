@@ -357,6 +357,19 @@ Open vSwitch please sign off your work.  The sign off certifies the following:
 
 See also http://developercertificate.org/.
 
+AI-assisted Contributions
+-------------------------
+
+OVS is a Linux Foundation Collaborative Project, and the Linux Foundation's
+policy for AI-generated patches can be found here:
+https://www.linuxfoundation.org/legal/generative-ai .
+
+OVS allows the use of AI assistants in producing patches.  Contributions
+which have used an AI assistant should disclose the use of the assistant by
+using the "Assisted-by" tag.  While AI-assisted patches are allowed, the author
+of the patch is ultimately responsible for ensuring that the AI-generated code
+has not violated any terms of the Developer's Certificate of Origin.
+
 Feature Deprecation Guidelines
 ------------------------------
 
