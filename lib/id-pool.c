@@ -60,6 +60,8 @@ id_pool_destroy(struct id_pool *pool)
 static void
 id_pool_init(struct id_pool *pool, uint32_t base, uint32_t n_ids)
 {
+    ovs_assert(base <= UINT32_MAX - n_ids);
+
     pool->base = base;
     pool->n_ids = n_ids;
     pool->next_free_id = base;
