@@ -3,6 +3,8 @@ Post-v3.6.0
    - Userspace datapath:
      * Conntrack now supports the FTP commands EPSV and EPRT with IPv4
        connections, instead of limiting these commands to IPv6 only.
+   - DPDK:
+     * OVS validated with DPDK 24.11.3.
 
 
 v3.6.0 - 18 Aug 2025
