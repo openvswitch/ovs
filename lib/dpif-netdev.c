@@ -2414,7 +2414,7 @@ dpif_netdev_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
     struct dp_netdev_port *port;
     int error;
 
-    ovs_rwlock_wrlock(&dp->port_rwlock);
+    ovs_rwlock_rdlock(&dp->port_rwlock);
     error = get_port_by_number(dp, port_no, &port);
     if (!error && dpif_port) {
         answer_port_query(port, dpif_port);
