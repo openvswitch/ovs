@@ -38,6 +38,7 @@ Adrian Guzowski                    adrian.guzowski@exatel.pl
 Adrian Moreno                      amorenoz@redhat.com
 Aidan Shribman                     aidan.shribman@gmail.com
 Alan Pevec                         alan.pevec@redhat.com
+Aleksandr Smirnov                  alekssmirnov@k2.cloud
 Ales Musil                         amusil@redhat.com
 Alessandro Pilotti                 apilotti@cloudbasesolutions.com
 Alexander Duyck                    alexander.h.duyck@redhat.com
