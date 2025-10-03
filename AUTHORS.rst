@@ -222,6 +222,7 @@ Ihar Hrachyshka                    ihar.hrachyshka@gmail.com
 Ilya Maximets                      i.maximets@ovn.org
 Iman Tabrizian                     tabrizian@outlook.com
 Isaku Yamahata                     yamahata@valinux.co.jp
+Ivan Burnin                        iburnin@k2.cloud
 Ivan Dyukov                        i.dyukov@samsung.com
 Ivan Malov                         ivan.malov@arknetworks.am
 IWASE Yusuke                       iwase.yusuke@gmail.com
