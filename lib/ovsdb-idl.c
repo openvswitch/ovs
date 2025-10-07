@@ -111,6 +111,7 @@ struct ovsdb_idl_txn {
     enum ovsdb_idl_txn_status status;
     char *error;
     bool dry_run;
+    bool assert_read_only;
     struct ds comment;
 
     /* Increments. */
@@ -2771,6 +2772,7 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
     txn->status = TXN_UNCOMMITTED;
     txn->error = NULL;
     txn->dry_run = false;
+    txn->assert_read_only = false;
     ds_init(&txn->comment);
 
     txn->inc_table = NULL;
@@ -2839,6 +2841,7 @@ ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn,
     ovs_assert(!txn->inc_table);
     ovs_assert(column->type.key.type == OVSDB_TYPE_INTEGER);
     ovs_assert(column->type.value.type == OVSDB_TYPE_VOID);
+    ovs_assert(!txn->assert_read_only);
 
     txn->inc_table = row->table->class_->name;
     txn->inc_column = column->name;
@@ -3560,6 +3563,18 @@ ovsdb_idl_txn_abort(struct ovsdb_idl_txn *txn)
     }
 }
 
+/* If 'assert' is true, configures the IDL to generate an assertion
+ * failure when a write operation is attempted on the transaction.
+ * Otherwise, write operations are allowed on the transaction.
+ * The check will turn into no-op when building with NDEBUG. */
+void
+ovsdb_idl_txn_assert_read_only(struct ovsdb_idl_txn *txn, bool assert)
+{
+    if (txn) {
+        txn->assert_read_only = assert;
+    }
+}
+
 /* Returns a string that reports the error status for 'txn'.  The caller must
  * not modify or free the returned string.  A call to ovsdb_idl_txn_destroy()
  * for 'txn' may free the returned string.
@@ -3650,6 +3665,7 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
     ovs_assert(row->new_datum != NULL);
     ovs_assert(column_idx < class->n_columns);
     ovs_assert(row->old_datum == NULL || column_mode & OVSDB_IDL_MONITOR);
+    ovs_assert(!row->table->idl->txn->assert_read_only);
 
     if (row->table->idl->verify_write_only && !write_only) {
         VLOG_ERR("Bug: Attempt to write to a read/write column (%s:%s) when"
@@ -3834,6 +3850,7 @@ ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
 
     ovs_assert(row->new_datum != NULL);
     ovs_assert(!is_index_row(row_));
+    ovs_assert(!row->table->idl->txn->assert_read_only);
     ovsdb_idl_remove_from_indexes(row_);
     if (!row->old_datum) {
         ovsdb_idl_row_unparse(row);
@@ -3863,6 +3880,7 @@ ovsdb_idl_txn_insert__(struct ovsdb_idl_txn *txn,
     struct ovsdb_idl_row *row = ovsdb_idl_row_create__(class);
 
     ovs_assert(uuid || !persist_uuid);
+    ovs_assert(!txn->assert_read_only);
     if (uuid) {
         ovs_assert(!ovsdb_idl_txn_get_row(txn, uuid));
         row->uuid = *uuid;
@@ -4221,6 +4239,8 @@ ovsdb_idl_txn_add_map_op(struct ovsdb_idl_row *row,
                          struct ovsdb_datum *datum,
                          enum map_op_type op_type)
 {
+    ovs_assert(!row->table->idl->txn->assert_read_only);
+
     const struct ovsdb_idl_table_class *class;
     size_t column_idx;
     struct map_op *map_op;
@@ -4257,6 +4277,8 @@ ovsdb_idl_txn_add_set_op(struct ovsdb_idl_row *row,
                          struct ovsdb_datum *datum,
                          enum set_op_type op_type)
 {
+    ovs_assert(!row->table->idl->txn->assert_read_only);
+
     const struct ovsdb_idl_table_class *class;
     size_t column_idx;
     struct set_op *set_op;

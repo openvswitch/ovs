@@ -5,6 +5,10 @@ Post-v3.6.0
        connections, instead of limiting these commands to IPv6 only.
    - DPDK:
      * OVS validated with DPDK 24.11.3.
+   - OVSDB-IDL:
+     * New ovsdb_idl_txn_assert_read_only() interface to mark transactions
+       as read-only and trigger assertion failure when application attempts
+       to modify the database data through this transaction.
 
 
 v3.6.0 - 18 Aug 2025

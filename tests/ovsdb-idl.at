@@ -3000,3 +3000,60 @@ m4_define([OVSDB_CHECK_IDL_CHANGE_AWARE],
 
 OVSDB_CHECK_IDL_CHANGE_AWARE([standalone])
 OVSDB_CHECK_IDL_CHANGE_AWARE([clustered])
+
+AT_SETUP([ovsdb-idl - read only insert - C])
+AT_KEYWORDS([ovsdb server idl read only assert])
+OVSDB_START_IDLTEST
+
+AT_CHECK([[ovsdb-client transact unix:socket \
+  '["idltest",
+    {"op": "insert",
+     "table": "simple",
+     "row": {}}]']],
+  [0], [ignore], [ignore])
+AT_CHECK([[test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 \
+                      --assert-read-only idl unix:socket 'insert 1']],
+         [ignore], [ignore], [stderr])
+AT_SKIP_IF([grep -q "Assertion tests are not available due to NDEBUG" stderr])
+AT_CHECK([grep -qE "assertion !.*txn->assert_read_only failed" stderr])
+
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+AT_SETUP([ovsdb-idl - read only set - C])
+AT_KEYWORDS([ovsdb server idl read only assert])
+OVSDB_START_IDLTEST
+
+AT_CHECK([[ovsdb-client transact unix:socket \
+  '["idltest",
+    {"op": "insert",
+     "table": "simple",
+     "row": {}}]']],
+  [0], [ignore], [ignore])
+AT_CHECK([[test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 \
+                      --assert-read-only idl unix:socket 'set 0 r 2.0']],
+         [ignore], [ignore], [stderr])
+AT_SKIP_IF([grep -q "Assertion tests are not available due to NDEBUG" stderr])
+AT_CHECK([grep -qE "assertion !.*txn->assert_read_only failed" stderr])
+
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+AT_SETUP([ovsdb-idl - read only delete - C])
+AT_KEYWORDS([ovsdb server idl read only assert])
+OVSDB_START_IDLTEST
+
+AT_CHECK([[ovsdb-client transact unix:socket \
+  '["idltest",
+    {"op": "insert",
+     "table": "simple",
+     "row": {"i": 1}}]']],
+  [0], [ignore], [ignore])
+AT_CHECK([[test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 \
+                      --assert-read-only idl unix:socket 'delete 1']],
+         [ignore], [ignore], [stderr])
+AT_SKIP_IF([grep -q "Assertion tests are not available due to NDEBUG" stderr])
+AT_CHECK([grep -qE "assertion !.*txn->assert_read_only failed" stderr])
+
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP

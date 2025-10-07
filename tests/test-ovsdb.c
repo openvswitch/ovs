@@ -16,6 +16,11 @@
 
 #include <config.h>
 
+#ifdef NDEBUG
+#define TEST_OVSDB_SKIP_ASSERT 1
+#undef NDEBUG
+#endif
+
 #include <fcntl.h>
 #include <getopt.h>
 #include <inttypes.h>
@@ -57,6 +62,7 @@ VLOG_DEFINE_THIS_MODULE(test_ovsdb);
 
 struct test_ovsdb_pvt_context {
     bool write_changed_only;
+    bool assert_read_only;
     bool track;
 };
 
@@ -93,6 +99,7 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
         {"verbose", optional_argument, NULL, 'v'},
         {"change-track", optional_argument, NULL, 'c'},
         {"write-changed-only", optional_argument, NULL, 'w'},
+        {"assert-read-only", optional_argument, NULL, 'r'},
         {"magic", required_argument, NULL, OPT_MAGIC},
         {"no-rename-open-files", no_argument, NULL, OPT_NO_RENAME_OPEN_FILES},
         {"help", no_argument, NULL, 'h'},
@@ -129,6 +136,13 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
 
         case 'w':
             pvt->write_changed_only = true;
+            break;
+
+        case 'r':
+#ifdef TEST_OVSDB_SKIP_ASSERT
+            ovs_fatal(0, "Assertion tests are not available due to NDEBUG");
+#endif
+            pvt->assert_read_only = true;
             break;
 
         case OPT_MAGIC:
@@ -2459,7 +2473,7 @@ idltest_find_simple(struct ovsdb_idl *idl, int i)
 }
 
 static bool
-idl_set(struct ovsdb_idl *idl, char *commands, int step)
+idl_set(struct ovsdb_idl *idl, char *commands, int step, bool assert_read_only)
 {
     char *cmd, *save_ptr1 = NULL;
     struct ovsdb_idl_txn *txn;
@@ -2472,6 +2486,7 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
 
     txn = ovsdb_idl_txn_create(idl);
     ovsdb_idl_check_consistency(idl);
+    ovsdb_idl_txn_assert_read_only(txn, assert_read_only);
     for (cmd = strtok_r(commands, ",", &save_ptr1); cmd;
          cmd = strtok_r(NULL, ",", &save_ptr1)) {
         char *save_ptr2 = NULL;
@@ -2911,7 +2926,7 @@ do_idl(struct ovs_cmdl_context *ctx)
             next_cond_seqno = update_conditions(idl, arg + strlen(cond_s),
                                                 step++);
         } else if (arg[0] != '[') {
-            if (!idl_set(idl, arg, step++)) {
+            if (!idl_set(idl, arg, step++, pvt->assert_read_only)) {
                 /* If idl_set() returns false, then no transaction
                  * was sent to the server and most likely 'seqno'
                  * would remain the same.  And the above 'Wait for update'
