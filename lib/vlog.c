@@ -663,7 +663,7 @@ vlog_direct_write_to_log_file_unsafe(const char *s)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     if (log_fd >= 0) {
-        ignore(write(log_fd, s, strlen(s)));
+        ovs_ignore(write(log_fd, s, strlen(s)));
     }
 }
 
@@ -1228,7 +1228,7 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
                         async_append_flush(log_writer);
                     }
                 } else {
-                    ignore(write(log_fd, s.string, s.length));
+                    ovs_ignore(write(log_fd, s.string, s.length));
                 }
             }
             ovs_mutex_unlock(&log_file_mutex);

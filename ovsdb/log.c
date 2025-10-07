@@ -651,7 +651,7 @@ ovsdb_log_write(struct ovsdb_log *file, const struct json *json)
 
         /* Remove any partially written data, ignoring errors since there is
          * nothing further we can do. */
-        ignore(ftruncate(fileno(file->stream), file->offset));
+        ovs_ignore(ftruncate(fileno(file->stream), file->offset));
 
         file->error = ovsdb_io_error(error, "%s: write failed",
                                      file->display_name);

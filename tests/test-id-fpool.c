@@ -276,7 +276,7 @@ id_fpool_thread(void *aux_)
 
     start = running_time_ms;
     for (i = 0; i < n_ids_per_thread; i++) {
-        ignore(id_fpool_new_id(aux->pool, tid, &th_ids[i]));
+        ovs_ignore(id_fpool_new_id(aux->pool, tid, &th_ids[i]));
     }
     thread_working_ms[tid] = elapsed(&start);
 
@@ -298,9 +298,9 @@ id_fpool_thread(void *aux_)
 
     start = running_time_ms;
     for (i = 0; i < n_ids_per_thread; i++) {
-        ignore(id_fpool_new_id(aux->pool, tid, &th_ids[i]));
+        ovs_ignore(id_fpool_new_id(aux->pool, tid, &th_ids[i]));
         id_fpool_free_id(aux->pool, tid, th_ids[i]);
-        ignore(id_fpool_new_id(aux->pool, tid, &th_ids[i]));
+        ovs_ignore(id_fpool_new_id(aux->pool, tid, &th_ids[i]));
     }
     thread_working_ms[tid] = elapsed(&start);
 
@@ -320,10 +320,10 @@ id_fpool_thread(void *aux_)
         if (elapsed(&start) >= TIMEOUT_MS) {
             break;
         }
-        ignore(id_fpool_new_id(aux->pool, tid, &th_ids[i]));
+        ovs_ignore(id_fpool_new_id(aux->pool, tid, &th_ids[i]));
         swap_u32(&th_ids[i], &th_ids[random_range(i + 1)]);
         id_fpool_free_id(aux->pool, tid, th_ids[i]);
-        ignore(id_fpool_new_id(aux->pool, tid, &th_ids[i]));
+        ovs_ignore(id_fpool_new_id(aux->pool, tid, &th_ids[i]));
     }
     thread_working_ms[tid] = elapsed(&start);
 
@@ -431,9 +431,9 @@ id_pool_thread(void *aux_)
     start = running_time_ms;
     for (i = 0; i < n_ids_per_thread; i++) {
         ovs_mutex_lock(aux->lock);
-        ignore(id_pool_alloc_id(aux->pool, &th_ids[i]));
+        ovs_ignore(id_pool_alloc_id(aux->pool, &th_ids[i]));
         id_pool_free_id(aux->pool, th_ids[i]);
-        ignore(id_pool_alloc_id(aux->pool, &th_ids[i]));
+        ovs_ignore(id_pool_alloc_id(aux->pool, &th_ids[i]));
         ovs_mutex_unlock(aux->lock);
     }
     thread_working_ms[tid] = elapsed(&start);
@@ -457,10 +457,10 @@ id_pool_thread(void *aux_)
             break;
         }
         ovs_mutex_lock(aux->lock);
-        ignore(id_pool_alloc_id(aux->pool, &th_ids[i]));
+        ovs_ignore(id_pool_alloc_id(aux->pool, &th_ids[i]));
         swap_u32(&th_ids[i], &th_ids[random_range(i + 1)]);
         id_pool_free_id(aux->pool, th_ids[i]);
-        ignore(id_pool_alloc_id(aux->pool, &th_ids[i]));
+        ovs_ignore(id_pool_alloc_id(aux->pool, &th_ids[i]));
         ovs_mutex_unlock(aux->lock);
     }
     thread_working_ms[tid] = elapsed(&start);

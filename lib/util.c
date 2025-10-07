@@ -734,7 +734,7 @@ ctl_timeout_setup(unsigned int secs)
         char *env = getenv("OVS_CTL_TIMEOUT");
 
         if (env && env[0]) {
-            ignore(str_to_uint(env, 10, &secs));
+            ovs_ignore(str_to_uint(env, 10, &secs));
         }
     }
     if (secs) {
@@ -1317,7 +1317,7 @@ follow_symlinks(const char *filename)
  * __attribute__((warn_unused_result)) and you genuinely want to ignore
  * its return value.  (Note that every scalar type can be implicitly
  * converted to bool.) */
-void ignore(bool x OVS_UNUSED) { }
+void ovs_ignore(bool x OVS_UNUSED) { }
 
 /* Returns an appropriate delimiter for inserting just before the 0-based item
  * 'index' in a list that has 'total' items in it. */

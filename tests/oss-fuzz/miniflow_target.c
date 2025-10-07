@@ -103,7 +103,7 @@ test_miniflow(struct flow *flow)
 
     /* Obtain miniflow hash. */
     uint32_t hash = miniflow_hash_5tuple(miniflow, 0);
-    ignore(hash);
+    ovs_ignore(hash);
 
     /* Check that the flow equals its miniflow. */
     for (i = 0; i < FLOW_MAX_VLAN_HEADERS; i++) {

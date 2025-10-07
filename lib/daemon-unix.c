@@ -531,7 +531,7 @@ daemonize_post_detach(void)
 {
     if (detach) {
         if (chdir_) {
-            ignore(chdir("/"));
+            ovs_ignore(chdir("/"));
         }
         close_standard_fds();
     }

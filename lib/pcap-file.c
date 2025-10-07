@@ -174,7 +174,7 @@ ovs_pcap_write_header(struct pcap_file *p_file)
     ph.sigfigs = 0;
     ph.snaplen = 1518;
     ph.network = 1;             /* Ethernet */
-    ignore(fwrite(&ph, sizeof ph, 1, p_file->file));
+    ovs_ignore(fwrite(&ph, sizeof ph, 1, p_file->file));
     fflush(p_file->file);
 }
 
@@ -292,8 +292,8 @@ ovs_pcap_write(struct pcap_file *p_file, struct dp_packet *buf)
     prh.ts_subsec = tv.tv_usec;
     prh.incl_len = dp_packet_size(buf);
     prh.orig_len = dp_packet_size(buf);
-    ignore(fwrite(&prh, sizeof prh, 1, p_file->file));
-    ignore(fwrite(data_dp, dp_packet_size(buf), 1, p_file->file));
+    ovs_ignore(fwrite(&prh, sizeof prh, 1, p_file->file));
+    ovs_ignore(fwrite(data_dp, dp_packet_size(buf), 1, p_file->file));
     fflush(p_file->file);
 }
 

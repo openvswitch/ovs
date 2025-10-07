@@ -212,12 +212,12 @@ search_ccmap(void *aux_)
                 }
                 ovs_mutex_unlock(&aux->mutex);
             } else {
-                ignore(ccmap_find(aux->ccmap, hash));
+                ovs_ignore(ccmap_find(aux->ccmap, hash));
             }
         }
     } else {
         for (i = 0; i < n_elems; i++) {
-            ignore(ccmap_find(aux->ccmap, hash_int(i, 0)));
+            ovs_ignore(ccmap_find(aux->ccmap, hash_int(i, 0)));
         }
     }
     return NULL;
