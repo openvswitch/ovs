@@ -244,8 +244,8 @@ send_backtrace_to_monitor(void)
     }
 
     if (monitor) {
-        ignore(write(daemonize_fd, unw_bt,
-                     dep * sizeof(struct unw_backtrace)));
+        ovs_ignore(write(daemonize_fd, unw_bt,
+                         dep * sizeof(struct unw_backtrace)));
     } else {
         /* Since there is no monitor daemon running, write backtrace
          * in current process.
@@ -295,7 +295,7 @@ send_backtrace_to_monitor(void)
     backtrace_capture(&bt);
 
     if (monitor && daemonize_fd > -1) {
-        ignore(write(daemonize_fd, &bt, sizeof bt));
+        ovs_ignore(write(daemonize_fd, &bt, sizeof bt));
     } else {
         int log_fd = vlog_get_log_file_fd_unsafe();
 
@@ -332,7 +332,7 @@ fatal_signal_handler(int sig_nr)
         send_backtrace_to_monitor();
         raise(sig_nr);
     }
-    ignore(write(signal_fds[1], "", 1));
+    ovs_ignore(write(signal_fds[1], "", 1));
 #else
     SetEvent(wevent);
 #endif

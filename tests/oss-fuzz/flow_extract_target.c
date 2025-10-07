@@ -7,6 +7,7 @@
 #include "openvswitch/ofp-match.h"
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/match.h"
+#include "openvswitch/util.h"
 #include "classifier-private.h"
 
 static void
@@ -24,7 +25,7 @@ test_flow_hash(const struct flow *flow)
     hash = flow_hash_fields(flow, NX_HASH_FIELDS_NW_SRC, hash);
     hash = flow_hash_fields(flow, NX_HASH_FIELDS_NW_DST, hash);
     hash = flow_hash_fields(flow, NX_HASH_FIELDS_SYMMETRIC_L3, hash);
-    ignore(hash);
+    ovs_ignore(hash);
 }
 
 static void
@@ -57,12 +58,12 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     /* Parse TCP flags. */
     if (dp_packet_size(&packet) >= ETH_HEADER_LEN) {
         uint16_t tcp_flags = parse_tcp_flags(&packet, NULL, NULL, NULL);
-        ignore(tcp_flags);
+        ovs_ignore(tcp_flags);
     }
 
     /* Count headers. */
     int count = flow_count_vlan_headers(&flow);
-    ignore(count);
+    ovs_ignore(count);
 
     /* Extract metadata. */
     struct match flow_metadata;

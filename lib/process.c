@@ -627,5 +627,5 @@ process_search_path(const char *name)
 static void
 sigchld_handler(int signr OVS_UNUSED)
 {
-    ignore(write(fds[1], "", 1));
+    ovs_ignore(write(fds[1], "", 1));
 }

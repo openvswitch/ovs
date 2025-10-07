@@ -21,6 +21,7 @@
 #include <poll.h>
 #include <unistd.h>
 #include "openvswitch/poll-loop.h"
+#include "openvswitch/util.h"
 #include "socket-util.h"
 
 /* Initializes 'latch' as initially unset. */
@@ -63,7 +64,7 @@ latch_poll(struct latch *latch)
 void
 latch_set(struct latch *latch)
 {
-    ignore(write(latch->fds[1], "", 1));
+    ovs_ignore(write(latch->fds[1], "", 1));
 }
 
 /* Returns true if 'latch' is set, false otherwise.  Does not reset 'latch'

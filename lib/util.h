@@ -270,8 +270,6 @@ char *abs_file_name(const char *dir, const char *file_name);
 bool is_file_name_absolute(const char *);
 
 char *follow_symlinks(const char *filename);
-
-void ignore(bool x OVS_UNUSED);
 
 /* Bitwise tests. */
 

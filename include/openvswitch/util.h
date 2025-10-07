@@ -44,6 +44,10 @@ const char *ovs_get_program_version(void);
      : (X) <= UINT_MAX / (Y) ? (unsigned int) (X) * (unsigned int) (Y)  \
      : UINT_MAX)
 
+/* A special function that is intended to explicitly ignore results of
+ * functions marked with __attribute__((warn_unused_result)), if necessary. */
+void ovs_ignore(bool);
+
 /* Like the standard assert macro, except:
  *
  *    - Writes the failure message to the log.
@@ -55,7 +59,7 @@ const char *ovs_get_program_version(void);
      ? (void) 0                                                         \
      : ovs_assert_failure(OVS_SOURCE_LOCATOR, __func__, #CONDITION))
 #else
-#define ovs_assert(CONDITION) ((void) (CONDITION))
+#define ovs_assert ovs_ignore
 #endif
 OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 

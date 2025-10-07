@@ -342,12 +342,12 @@ search_cmap(void *aux_)
                 }
                 ovs_mutex_unlock(&aux->mutex);
             } else {
-                ignore(find(aux->cmap, i));
+                ovs_ignore(find(aux->cmap, i));
             }
         }
     } else {
         for (i = 0; i < n_elems; i++) {
-            ignore(find(aux->cmap, i));
+            ovs_ignore(find(aux->cmap, i));
         }
     }
     return NULL;
@@ -378,7 +378,7 @@ benchmark_cmap(void)
     /* Iteration. */
     xgettimeofday(&start);
     CMAP_FOR_EACH (e, node, &cmap) {
-        ignore(e);
+        ovs_ignore(e);
     }
     printf("cmap iterate: %5d ms\n", elapsed(&start));
 
@@ -438,7 +438,7 @@ find_batch(const struct cmap *cmap, const int value)
 
         CMAP_NODE_FOR_EACH (e, node, nodes[i]) {
             if (OVS_LIKELY(e->value == value + i)) {
-                ignore(e); /* Found result. */
+                ovs_ignore(e); /* Found result. */
                 break;
             }
         }
@@ -498,7 +498,7 @@ benchmark_cmap_batched(void)
     /* Iteration. */
     xgettimeofday(&start);
     CMAP_FOR_EACH (e, node, &cmap) {
-        ignore(e);
+        ovs_ignore(e);
     }
     printf("cmap iterate: %5d ms\n", elapsed(&start));
 
@@ -570,13 +570,13 @@ search_hmap(void *aux_)
                 fat_rwlock_unlock(&aux->fatlock);
             } else {
                 fat_rwlock_rdlock(&aux->fatlock);
-                ignore(hfind(aux->hmap, i));
+                ovs_ignore(hfind(aux->hmap, i));
                 fat_rwlock_unlock(&aux->fatlock);
             }
         }
     } else {
         for (i = 0; i < n_elems; i++) {
-            ignore(hfind(aux->hmap, i));
+            ovs_ignore(hfind(aux->hmap, i));
         }
     }
     return NULL;
@@ -606,7 +606,7 @@ benchmark_hmap(void)
 
     xgettimeofday(&start);
     HMAP_FOR_EACH (e, node, &hmap) {
-        ignore(e);
+        ovs_ignore(e);
     }
     printf("hmap iterate: %5d ms\n", elapsed(&start));
 

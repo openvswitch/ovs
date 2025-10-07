@@ -105,7 +105,7 @@ async_append_wait(struct async_append *ap)
             }
             aio_suspend(&p, 1, NULL);
         } else {
-            ignore(aio_return(aiocb));
+            ovs_ignore(aio_return(aiocb));
             ap->aiocb_tail++;
             byteq_advance_tail(&ap->byteq, aiocb->aio_nbytes);
             n++;
@@ -143,7 +143,7 @@ async_append_write(struct async_append *ap, const void *data_, size_t size)
         aiocb->aio_sigevent.sigev_notify = SIGEV_NONE;
         if (aio_write(aiocb) == -1) {
             async_append_flush(ap);
-            ignore(write(ap->fd, data, size));
+            ovs_ignore(write(ap->fd, data, size));
             return;
         }
 
