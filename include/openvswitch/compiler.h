@@ -26,6 +26,9 @@
 #ifndef __has_extension
   #define __has_extension(x) 0
 #endif
+#ifndef __has_attribute
+  #define __has_attribute(x) 0
+#endif
 
 /* To make OVS_NO_RETURN portable across gcc/clang and MSVC, it should be
  * added at the beginning of the function declaration. */
@@ -37,7 +40,10 @@
 #define OVS_NO_RETURN
 #endif
 
-#if __GNUC__ && !__CHECKER__
+#ifdef __CHECKER__
+#define OVS_RETURNS_NONNULL
+#elif ( __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9) \
+        || __has_attribute(returns_nonnull))
 #define OVS_RETURNS_NONNULL __attribute__((returns_nonnull))
 #else
 #define OVS_RETURNS_NONNULL
