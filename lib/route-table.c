@@ -44,6 +44,15 @@
  * old headers.  (We can't test for it with #ifdef because it's an enum.) */
 #define RTA_MARK 16
 
+/* Linux 4.1 added RTA_VIA. */
+#ifndef HAVE_RTA_VIA
+#define RTA_VIA 18
+struct rtvia {
+    sa_family_t rtvia_family;
+    uint8_t     rtvia_addr[];
+};
+#endif
+
 VLOG_DEFINE_THIS_MODULE(route_table);
 
 COVERAGE_DEFINE(route_table_dump);
