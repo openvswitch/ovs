@@ -582,6 +582,45 @@ jobs:
         name: logs-osx-clang---disable-ssl
         path: config.log
 
+  build-old-linux-distribution:
+    env:
+      dependencies:   git make automake libtool gcc libnuma-dev zlib1g-dev
+      python_version: 3.12.11
+
+    name: linux gcc (ubuntu-14.04)
+    runs-on:   ubuntu-24.04
+    container: ubuntu:14.04
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: update APT cache
+      run:  sudo apt update || true
+
+    - name: install dependencies
+      run:  sudo apt install -y ${{ env.dependencies }}
+
+    - name: build python
+      run:  |
+        git clone --branch v${{ env.python_version }} --depth 1 \
+            https://github.com/python/cpython cpython
+        cd cpython && ./configure && sudo make -j4 install
+        python3 --version
+
+    - name: checkout
+      run:  |
+        SHA=${{ github.event.pull_request.head.sha || github.sha }}
+        git clone https://github.com/${{ github.repository }}.git ovs
+        cd ovs && git fetch origin $SHA && git checkout $SHA
+
+    - name: prepare
+      run:  cd ovs && ./boot.sh && ./configure --disable-ssl --enable-Werror
+
+    - name: build
+      run:  cd ovs && make -j4
+
   build-linux-deb:
     env:
       deb_dependencies: |
