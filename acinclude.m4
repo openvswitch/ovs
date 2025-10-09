@@ -155,6 +155,13 @@ AC_DEFUN([OVS_CHECK_LINUX_NETLINK], [
     ])],
     [AC_DEFINE([HAVE_NLA_BITFIELD32], [1],
     [Define to 1 if struct nla_bitfield32 is available.])])
+
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/rtnetlink.h>], [
+        struct rtvia x =  { 0 };
+    ])],
+    [AC_DEFINE([HAVE_RTA_VIA], [1],
+    [Define to 1 if struct rtvia is available.])])
 ])
 
 dnl OVS_CHECK_LINUX_TC
