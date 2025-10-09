@@ -475,7 +475,9 @@ dnl The checking of binutils funcationality instead of LD version is similar
 dnl to as how DPDK proposes to solve this issue:
 dnl   http://patches.dpdk.org/patch/71723/
 AC_DEFUN([OVS_CHECK_BINUTILS_AVX512],
-  [AC_CACHE_CHECK(
+  [OVS_CHECK_CC_OPTION(
+   [-mavx512f],
+   [AC_CACHE_CHECK(
     [binutils avx512 assembler checks passing],
     [ovs_cv_binutils_avx512_good],
     [dnl Assemble a short snippet to test for issue in "build-aux" dir:
@@ -496,7 +498,8 @@ AC_DEFUN([OVS_CHECK_BINUTILS_AVX512],
      else
        dnl non x86_64 architectures don't have avx512, so not affected
        ovs_cv_binutils_avx512_good=no
-     fi])
+     fi])],
+    [ovs_cv_binutils_avx512_good=no])
    if test "$ovs_cv_binutils_avx512_good" = yes; then
      AC_DEFINE([HAVE_LD_AVX512_GOOD], [1],
                [Define to 1 if binutils correctly supports AVX512.])
