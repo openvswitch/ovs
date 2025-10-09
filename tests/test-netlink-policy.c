@@ -48,35 +48,30 @@ test_nl_policy_parse_ll_addr(struct ovs_cmdl_context *ctx OVS_UNUSED) {
     struct nlattr *attrs[ARRAY_SIZE(policy)];
     struct nlattr_fixture fixture_nl_data_policy_short = {
         /* too short according to policy */
-        .nlattr.nla_len = 5,
-        .nlattr.nla_type = TEST_POLICY_ATTR,
+        .nlattr = { .nla_len = 5, .nla_type = TEST_POLICY_ATTR },
         .data = { 0x00 },
     };
     struct nlattr_fixture fixture_nl_data_policy_long = {
         /* too long according to policy */
-        .nlattr.nla_len = 25,
-        .nlattr.nla_type = TEST_POLICY_ATTR,
+        .nlattr = { .nla_len = 25, .nla_type = TEST_POLICY_ATTR },
         .data = { 0x00, 0x00, 0x67, 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00,
                   0x00, 0xe4, 0x1d, 0x2d, 0x03, 0x00, 0xa5, 0xf0, 0x2f, 0x00,
                   0x00 },
     };
     struct nlattr_fixture fixture_nl_data_eth = {
         /* valid policy and eth_addr length */
-        .nlattr.nla_len = 10,
-        .nlattr.nla_type = TEST_POLICY_ATTR,
+        .nlattr = { .nla_len = 10, .nla_type = TEST_POLICY_ATTR },
         .data = { 0x00, 0x53, 0x00, 0x00, 0x00, 0x2a },
     };
     struct nlattr_fixture fixture_nl_data_ib = {
         /* valid policy and ib_addr length */
-        .nlattr.nla_len = 24,
-        .nlattr.nla_type = TEST_POLICY_ATTR,
+        .nlattr = { .nla_len = 24, .nla_type = TEST_POLICY_ATTR },
         .data = { 0x00, 0x00, 0x00, 0x67, 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00,
                   0x00, 0x00, 0xe4, 0x1d, 0x2d, 0x03, 0x00, 0xa5, 0xf0, 0x2f },
     };
     struct nlattr_fixture fixture_nl_data_invalid = {
         /* valid policy but data neither eth_addr nor ib_addr */
-        .nlattr.nla_len = 11,
-        .nlattr.nla_type = TEST_POLICY_ATTR,
+        .nlattr = { .nla_len = 11, .nla_type = TEST_POLICY_ATTR },
         .data = { 0x00, 0x53, 0x00, 0x00, 0x00, 0x2a, 0x00 },
     };
     struct ofpbuf *buf;
