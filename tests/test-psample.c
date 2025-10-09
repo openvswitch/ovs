@@ -160,6 +160,7 @@ static inline void
 sample_clear(struct sample *sample)
 {
     sample->group_id = 0;
+    sample->rate = 0;
     sample->obs_domain_id = 0;
     sample->obs_point_id = 0;
     sample->has_cookie = false;
@@ -214,7 +215,7 @@ parse_psample(struct ofpbuf *buf, struct sample *sample)
 static void run(struct nl_sock *sock)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
-    struct sample sample = {};
+    struct sample sample;
     int error;
 
     dp_packet_init(&sample.packet, 1500);
