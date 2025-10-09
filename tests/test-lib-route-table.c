@@ -27,6 +27,11 @@
 #include "packets.h"
 #include "route-table.h"
 
+/* Definition was added in Linux v4.18. */
+#ifndef RTPROT_BGP
+#define RTPROT_BGP 186
+#endif
+
 static char *
 rt_prot_name(unsigned char p)
 {
