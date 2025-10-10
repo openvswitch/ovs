@@ -830,9 +830,13 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
                  tnl_cfg.exts |= (1 << OVS_BAREUDP_EXT_MULTIPROTO_MODE);
             } else {
                  uint16_t payload_ethertype;
+                 char *error = str_to_u16(node->value, "payload_type",
+                                          &payload_ethertype);
 
-                 if (str_to_u16(node->value, "payload_type",
-                                &payload_ethertype)) {
+                 if (error) {
+                     free(error);
+                     ds_put_format(&errors, "%s: bad %s 'payload_type'\n",
+                                   name, node->value);
                      err = EINVAL;
                      goto out;
                  }
