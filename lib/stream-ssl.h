@@ -68,6 +68,7 @@ void stream_ssl_set_ciphersuites(const char *arg);
             break;
 
 #define STREAM_SSL_CASES \
-    case 'p': case 'c': case 'C': case OPT_SSL_PROTOCOLS: case OPT_SSL_CIPHERS:
+    case 'p': case 'c': case 'C': case OPT_SSL_PROTOCOLS: \
+    case OPT_SSL_CIPHERS: case OPT_SSL_CIPHERSUITES:
 
 #endif /* stream-ssl.h */
