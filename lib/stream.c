@@ -163,7 +163,9 @@ stream_usage(const char *name, bool active, bool passive,
            "  --ssl-ciphers=CIPHERS     list of SSL/TLS ciphers to enable\n"
            "                            with TLSv1.2\n"
            "  --ssl-ciphersuites=SUITES list of SSL/TLS ciphersuites to\n"
-           "                            enable with TLSv1.3 and later\n");
+           "                            enable with TLSv1.3 and later\n"
+           "  --ssl-server-name=NAME    server name for TLS Server Name\n"
+           "                            Indication (SNI)\n");
 #endif
 }
 

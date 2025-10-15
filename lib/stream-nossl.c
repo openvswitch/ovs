@@ -96,3 +96,10 @@ stream_ssl_set_ciphersuites(const char *arg OVS_UNUSED)
     /* Ignore this option since it seems harmless to set TLS ciphersuites if
      * SSL/TLS won't be used. */
 }
+
+void
+stream_ssl_set_server_name(const char *server_name OVS_UNUSED)
+{
+    /* Ignore this option since it seems harmless to set TLS server name if
+     * SSL/TLS won't be used. */
+}

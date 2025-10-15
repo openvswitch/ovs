@@ -168,6 +168,11 @@ static char *ssl_protocols = "TLSv1.2+";
 static char *ssl_ciphers = "DEFAULT:@SECLEVEL=2";
 static char *ssl_ciphersuites = ""; /* Using default ones, unless specified. */
 
+/* Server name override for SNI (Server Name Indication).
+ * If set, this name will be used for SNI instead of the hostname
+ * extracted from the connection string. */
+static char *ssl_server_name_override;
+
 /* Ordinarily, the SSL client and server verify each other's certificates using
  * a CA certificate.  Setting this to false disables this behavior.  (This is a
  * security risk.) */
@@ -372,7 +377,11 @@ ssl_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
                              dscp);
     if (fd >= 0) {
         int state = error ? STATE_TCP_CONNECTING : STATE_SSL_CONNECTING;
-        return new_ssl_stream(xstrdup(name), get_server_name(suffix),
+        char *server_name = ssl_server_name_override
+                            ? xstrdup(ssl_server_name_override)
+                            : get_server_name(suffix);
+
+        return new_ssl_stream(xstrdup(name), server_name,
                               fd, CLIENT, state, streamp);
     } else {
         VLOG_ERR("%s: connect: %s", name, ovs_strerror(error));
@@ -1249,6 +1258,16 @@ stream_ssl_set_ciphersuites(const char *arg)
                  ERR_error_string(ERR_get_error(), NULL));
     }
     ssl_ciphersuites = xstrdup(arg);
+}
+
+/* Sets the server name override for SNI (Server Name Indication).
+ * If 'server_name' is NULL, clears any existing override and SNI will
+ * use the hostname from the connection string. */
+void
+stream_ssl_set_server_name(const char *server_name)
+{
+    free(ssl_server_name_override);
+    ssl_server_name_override = nullable_xstrdup(server_name);
 }
 
 /* Set SSL/TLS protocols based on the string input. Aborts with an error

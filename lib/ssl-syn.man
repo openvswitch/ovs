@@ -4,3 +4,5 @@
 [\fB\-\-certificate=\fIcert.pem\fR]
 .br
 [\fB\-\-ca\-cert=\fIcacert.pem\fR]
+.br
+[\fB\-\-ssl\-server\-name=\fIservername\fR]

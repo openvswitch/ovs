@@ -24,3 +24,10 @@ be a different one, depending on the PKI design in use.)
 Disables verification of certificates presented by SSL/TLS peers.  This
 introduces a security risk, because it means that certificates cannot
 be verified to be those of known trusted hosts.
+.
+.IP "\fB\-\-ssl\-server\-name=\fIservername\fR"
+Specifies the server name to use for TLS Server Name Indication (SNI).
+By default, the hostname from the connection string is used for SNI.
+This option allows overriding the SNI hostname, which is useful when
+connecting through proxies or service meshes where the connection endpoint
+differs from the intended server name.

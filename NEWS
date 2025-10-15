@@ -1,5 +1,12 @@
 Post-v3.6.0
 --------------------
+   - TLS:
+     * Added support for TLS Server Name Indication (SNI) with the new
+       --ssl-server-name option.  This allows specifying the server name
+       for SNI, which is useful when connecting through proxies or service
+       meshes where the connection endpoint differs from the intended
+       server name.  Without this option, the hostname from the connection
+       string is used for SNI, as before.
    - Userspace datapath:
      * Conntrack now supports the FTP commands EPSV and EPRT with IPv4
        connections, instead of limiting these commands to IPv6 only.

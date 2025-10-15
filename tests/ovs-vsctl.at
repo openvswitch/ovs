@@ -1769,6 +1769,63 @@ AT_CHECK([grep "server name" ovsdb-server.log], [0],
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+AT_SETUP([TLS server name indication (SNI) with --ssl-server-name])
+AT_KEYWORDS([ovs-vsctl ssl tls sni client])
+AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+OVSDB_INIT([conf.db])
+PKIDIR=$abs_top_builddir/tests
+
+# This test validates the --ssl-server-name option for SNI.
+# Test 1: Connect to IP with --ssl-server-name to verify SNI override.
+# Test 2: Connect to same IP without --ssl-server-name (no SNI sent).
+
+AT_CAPTURE_FILE([ovsdb-server.log])
+on_exit 'kill $(cat ovsdb-server.pid)'
+AT_CHECK([ovsdb-server --log-file --detach --no-chdir --pidfile \
+    --private-key=$PKIDIR/testpki-privkey.pem \
+    --certificate=$PKIDIR/testpki-cert.pem \
+    --ca-cert=$PKIDIR/testpki-cacert.pem \
+    --remote=pssl:0:127.0.0.1 \
+    -vstream_ssl:file:dbg conf.db], [0], [ignore], [ignore])
+PARSE_LISTENING_PORT([ovsdb-server.log], [SSL_PORT])
+
+# Test 1: SNI override - connect to IP but specify server name.
+# This validates that --ssl-server-name overrides connection hostname.
+AT_CHECK([ovs-vsctl -t 5 --no-wait \
+    --db=ssl:127.0.0.1:$SSL_PORT \
+    --private-key=$PKIDIR/testpki-privkey.pem \
+    --certificate=$PKIDIR/testpki-cert.pem \
+    --ca-cert=$PKIDIR/testpki-cacert.pem \
+    --ssl-server-name=sni-test.example \
+    add-br br0])
+
+# Verify SNI was sent with the overridden name.
+OVS_WAIT_UNTIL([grep -q \
+    "connection indicated server name sni-test.example" \
+    ovsdb-server.log])
+
+# Save current log size for Test 2.
+LOG_SIZE=$(wc -l < ovsdb-server.log)
+
+# Test 2: Default behavior without SNI override - should NOT show SNI
+# connecting to IP address (no hostname to extract).
+AT_CHECK([ovs-vsctl -t 5 --no-wait \
+    --db=ssl:127.0.0.1:$SSL_PORT \
+    --private-key=$PKIDIR/testpki-privkey.pem \
+    --certificate=$PKIDIR/testpki-cert.pem \
+    --ca-cert=$PKIDIR/testpki-cacert.pem \
+    add-br br1])
+
+# Stop server to ensure logs are flushed before checking.
+OVS_VSCTL_CLEANUP
+
+# Check that no new SNI messages appeared in Test 2 (connecting to IP
+# without --ssl-server-name should not generate SNI).
+AT_CHECK([tail -n +$(($LOG_SIZE + 1)) ovsdb-server.log | \
+    grep -q "connection indicated server name"], [1])
+
+AT_CLEANUP
+
 dnl ----------------------------------------------------------------------
 AT_BANNER([set ingress policing test])
 
