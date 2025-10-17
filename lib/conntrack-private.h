@@ -209,10 +209,10 @@ struct conntrack_zone_limit {
 
 struct conntrack {
     struct ovs_mutex ct_lock; /* Protects the following fields. */
-    struct cmap conns[UINT16_MAX + 1] OVS_GUARDED;
-    struct rculist exp_lists[N_EXP_LISTS] OVS_GUARDED;
-    struct cmap zone_limits OVS_GUARDED;
-    struct cmap timeout_policies OVS_GUARDED;
+    struct cmap conns[UINT16_MAX + 1];
+    struct rculist exp_lists[N_EXP_LISTS];
+    struct cmap zone_limits;
+    struct cmap timeout_policies;
     uint32_t zone_limit_seq OVS_GUARDED; /* Used to disambiguate zone limit
                                           * counts. */
     atomic_uint32_t default_zone_limit;
