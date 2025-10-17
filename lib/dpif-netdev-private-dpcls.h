@@ -66,7 +66,7 @@ uint32_t (*dpcls_subtable_lookup_func)(struct dpcls_subtable *subtable,
 /* A set of rules that all have the same fields wildcarded. */
 struct dpcls_subtable {
     /* The fields are only used by writers. */
-    struct cmap_node cmap_node OVS_GUARDED; /* Within dpcls 'subtables_map'. */
+    struct cmap_node cmap_node;  /* Within dpcls 'subtables_map'. */
 
     /* These fields are accessed by readers. */
     struct cmap rules;           /* Contains "struct dpcls_rule"s. */
