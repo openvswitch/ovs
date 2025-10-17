@@ -81,7 +81,7 @@ struct policer_node {
 
 /* ccmap and protective mutex for counting recirculation id (chain) usage. */
 static struct ovs_mutex used_chains_mutex = OVS_MUTEX_INITIALIZER;
-static struct ccmap used_chains OVS_GUARDED;
+static struct ccmap used_chains;
 
 /* Protects below meter police ids pool. */
 static struct ovs_mutex meter_police_ids_mutex = OVS_MUTEX_INITIALIZER;
