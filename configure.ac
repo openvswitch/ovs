@@ -182,6 +182,7 @@ OVS_ENABLE_OPTION([-Wmultistatement-macros])
 OVS_ENABLE_OPTION([-Wcast-align=strict])
 OVS_ENABLE_OPTION([-Wno-null-pointer-arithmetic])
 OVS_ENABLE_OPTION([-Warray-bounds-pointer-arithmetic])
+OVS_ENABLE_OPTION([-Wno-default-const-init-field-unsafe])
 OVS_CONDITIONAL_CC_OPTION([-Wno-unused], [HAVE_WNO_UNUSED])
 OVS_CONDITIONAL_CC_OPTION([-Wno-unused-parameter], [HAVE_WNO_UNUSED_PARAMETER])
 OVS_ENABLE_WERROR_TOP
