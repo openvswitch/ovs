@@ -92,13 +92,13 @@ struct dp_netdev_pmd_thread {
      * made while still holding the 'flow_mutex'.
      */
     struct ovs_mutex flow_mutex;
-    struct cmap flow_table OVS_GUARDED; /* Flow table. */
-    struct cmap simple_match_table OVS_GUARDED; /* Flow table with simple
-                                                   match flows only. */
+    struct cmap flow_table; /* Flow table. */
+    struct cmap simple_match_table; /* Flow table with simple
+                                     * match flows only. */
     /* Number of flows in the 'flow_table' per in_port. */
-    struct ccmap n_flows OVS_GUARDED;
+    struct ccmap n_flows;
     /* Number of flows in the 'simple_match_table' per in_port. */
-    struct ccmap n_simple_flows OVS_GUARDED;
+    struct ccmap n_simple_flows;
 
     /* One classifier per in_port polled by the pmd */
     struct cmap classifiers;
