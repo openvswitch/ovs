@@ -7333,12 +7333,14 @@ ofproto_group_exists(const struct ofproto *ofproto, uint32_t group_id)
 
 static void
 group_add_rule(struct ofgroup *group, struct rule *rule)
+    OVS_REQUIRES(ofproto_mutex)
 {
     rule_collection_add(&group->rules, rule);
 }
 
 static void
 group_remove_rule(struct ofgroup *group, struct rule *rule)
+    OVS_REQUIRES(ofproto_mutex)
 {
     rule_collection_remove(&group->rules, rule);
 }
@@ -7555,6 +7557,7 @@ handle_queue_get_config_request(struct ofconn *ofconn,
 static enum ofperr
 init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
            ovs_version_t version, struct ofgroup **ofgroup)
+    OVS_REQUIRES(ofproto_mutex)
 {
     enum ofperr error;
     const long long int now = time_msec();

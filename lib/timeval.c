@@ -114,6 +114,7 @@ static void timespec_add(struct timespec *sum,
 
 static void
 init_clock(struct clock *c, clockid_t id)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     memset(c, 0, sizeof *c);
     c->id = id;
@@ -124,6 +125,7 @@ init_clock(struct clock *c, clockid_t id)
 
 static void
 do_init_time(void)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct timespec ts;
 

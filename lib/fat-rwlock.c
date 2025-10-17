@@ -104,9 +104,11 @@ fat_rwlock_destroy(struct fat_rwlock *rwlock)
      * data destructor can't race with our loop below. */
     ovsthread_key_delete(rwlock->key);
 
+    ovs_mutex_lock(&rwlock->mutex);
     LIST_FOR_EACH_SAFE (slot, list_node, &rwlock->threads) {
         free_slot(slot);
     }
+    ovs_mutex_unlock(&rwlock->mutex);
     ovs_mutex_destroy(&rwlock->mutex);
 }
 
