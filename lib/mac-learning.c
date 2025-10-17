@@ -215,6 +215,7 @@ mac_learning_clear_statistics(struct mac_learning *ml)
  * entries. */
 struct mac_learning *
 mac_learning_create(unsigned int idle_time)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct mac_learning *ml;
 
