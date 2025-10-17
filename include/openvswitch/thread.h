@@ -60,10 +60,10 @@ struct OVS_LOCKABLE ovs_spin {
  * Most of these functions abort the process with an error message on any
  * error.  ovs_mutex_trylock() is an exception: it passes through a 0 or EBUSY
  * return value to the caller and aborts on any other error. */
-void ovs_mutex_init(const struct ovs_mutex *);
-void ovs_mutex_init_recursive(const struct ovs_mutex *);
-void ovs_mutex_init_adaptive(const struct ovs_mutex *);
-void ovs_mutex_destroy(const struct ovs_mutex *);
+void ovs_mutex_init(struct ovs_mutex *);
+void ovs_mutex_init_recursive(struct ovs_mutex *);
+void ovs_mutex_init_adaptive(struct ovs_mutex *);
+void ovs_mutex_destroy(struct ovs_mutex *);
 void ovs_mutex_unlock(const struct ovs_mutex *mutex) OVS_RELEASES(mutex);
 void ovs_mutex_lock_at(const struct ovs_mutex *mutex, const char *where)
     OVS_ACQUIRES(mutex);
@@ -79,8 +79,8 @@ void ovs_mutex_cond_wait(pthread_cond_t *, const struct ovs_mutex *mutex)
     OVS_REQUIRES(mutex);
 
 #ifdef HAVE_PTHREAD_SPIN_LOCK
-void ovs_spin_init(const struct ovs_spin *);
-void ovs_spin_destroy(const struct ovs_spin *);
+void ovs_spin_init(struct ovs_spin *);
+void ovs_spin_destroy(struct ovs_spin *);
 void ovs_spin_unlock(const struct ovs_spin *spin) OVS_RELEASES(spin);
 void ovs_spin_lock_at(const struct ovs_spin *spin, const char *where)
     OVS_ACQUIRES(spin);

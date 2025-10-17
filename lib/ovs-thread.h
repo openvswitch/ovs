@@ -69,8 +69,8 @@ struct OVS_LOCKABLE ovs_rwlock {
  * Most of these functions abort the process with an error message on any
  * error.  The "trylock" functions are exception: they pass through a 0 or
  * EBUSY return value to the caller and abort on any other error. */
-void ovs_rwlock_init(const struct ovs_rwlock *);
-void ovs_rwlock_destroy(const struct ovs_rwlock *);
+void ovs_rwlock_init(struct ovs_rwlock *);
+void ovs_rwlock_destroy(struct ovs_rwlock *);
 void ovs_rwlock_unlock(const struct ovs_rwlock *rwlock) OVS_RELEASES(rwlock);
 
 /* Wrappers for pthread_rwlockattr_*() that abort the process on any error. */
