@@ -287,7 +287,7 @@ struct dp_netdev {
 
     /* Meters. */
     struct ovs_mutex meters_lock;
-    struct cmap meters OVS_GUARDED;
+    struct cmap meters;
 
     /* Probability of EMC insertions is a factor of 'emc_insert_min'.*/
     atomic_uint32_t emc_insert_min;

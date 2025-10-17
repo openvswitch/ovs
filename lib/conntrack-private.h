@@ -200,10 +200,10 @@ enum ct_ephemeral_range {
 
 struct conntrack {
     struct ovs_mutex ct_lock; /* Protects 2 following fields. */
-    struct cmap conns OVS_GUARDED;
+    struct cmap conns;
     struct rculist exp_lists[N_EXP_LISTS];
-    struct cmap zone_limits OVS_GUARDED;
-    struct cmap timeout_policies OVS_GUARDED;
+    struct cmap zone_limits;
+    struct cmap timeout_policies;
     uint32_t hash_basis; /* Salt for hashing a connection key. */
     pthread_t clean_thread; /* Periodically cleans up connection tracker. */
     struct latch clean_thread_exit; /* To destroy the 'clean_thread'. */
