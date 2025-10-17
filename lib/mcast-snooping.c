@@ -187,6 +187,7 @@ normalize_idle_time(unsigned int idle_time)
  * MCAST_DEFAULT_MAX entries. */
 struct mcast_snooping *
 mcast_snooping_create(void)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct mcast_snooping *ms;
 
@@ -321,7 +322,9 @@ mcast_group_insert_bundle(struct mcast_snooping *ms OVS_UNUSED,
 /* Return true if multicast still has bundles associated.
  * Return false if there is no bundles. */
 static bool
-mcast_group_has_bundles(struct mcast_group *grp)
+mcast_group_has_bundles(const struct mcast_snooping *ms OVS_UNUSED,
+                        const struct mcast_group *grp)
+    OVS_REQ_RDLOCK(ms->rwlock)
 {
     return !ovs_list_is_empty(&grp->bundle_lru);
 }
@@ -331,6 +334,7 @@ mcast_group_has_bundles(struct mcast_group *grp)
 static void
 mcast_snooping_flush_group__(struct mcast_snooping *ms,
                              struct mcast_group *grp)
+    OVS_REQ_WRLOCK(ms->rwlock)
 {
     ovs_assert(ovs_list_is_empty(&grp->bundle_lru));
     hmap_remove(&ms->table, &grp->hmap_node);
@@ -394,7 +398,7 @@ mcast_snooping_prune_expired(struct mcast_snooping *ms,
         expired++;
     }
 
-    if (!mcast_group_has_bundles(grp)) {
+    if (!mcast_group_has_bundles(ms, grp)) {
         mcast_snooping_flush_group__(ms, grp);
         expired++;
     }
@@ -713,7 +717,9 @@ mcast_snooping_add_mrouter(struct mcast_snooping *ms, uint16_t vlan,
 }
 
 static void
-mcast_snooping_flush_mrouter(struct mcast_mrouter_bundle *mrouter)
+mcast_snooping_flush_mrouter(const struct mcast_snooping *ms OVS_UNUSED,
+                             struct mcast_mrouter_bundle *mrouter)
+    OVS_REQ_WRLOCK(ms->rwlock)
 {
     ovs_list_remove(&mrouter->mrouter_node);
     free(mrouter);
@@ -826,7 +832,7 @@ mcast_snooping_mdb_flush__(struct mcast_snooping *ms)
     hmap_shrink(&ms->table);
 
     while (mrouter_get_lru(ms, &mrouter)) {
-        mcast_snooping_flush_mrouter(mrouter);
+        mcast_snooping_flush_mrouter(ms, mrouter);
     }
 }
 
@@ -859,7 +865,7 @@ mcast_snooping_flush__(struct mcast_snooping *ms)
 
     /* flush multicast routers */
     while (mrouter_get_lru(ms, &mrouter)) {
-        mcast_snooping_flush_mrouter(mrouter);
+        mcast_snooping_flush_mrouter(ms, mrouter);
     }
 
     /* flush flood ports */
@@ -909,7 +915,7 @@ mcast_snooping_run__(struct mcast_snooping *ms)
     mrouter_expired = 0;
     while (mrouter_get_lru(ms, &mrouter)
            && time_now() >= mrouter->expires) {
-        mcast_snooping_flush_mrouter(mrouter);
+        mcast_snooping_flush_mrouter(ms, mrouter);
         mrouter_expired++;
     }
 
@@ -1001,7 +1007,7 @@ mcast_snooping_flush_bundle(struct mcast_snooping *ms, void *port)
         if (mcast_group_delete_bundle(ms, g, port)) {
             ms->need_revalidate = true;
 
-            if (!mcast_group_has_bundles(g)) {
+            if (!mcast_group_has_bundles(ms, g)) {
                 mcast_snooping_flush_group__(ms, g);
             }
         }
@@ -1009,7 +1015,7 @@ mcast_snooping_flush_bundle(struct mcast_snooping *ms, void *port)
 
     LIST_FOR_EACH_SAFE (m, mrouter_node, &ms->mrouter_lru) {
         if (m->port == port) {
-            mcast_snooping_flush_mrouter(m);
+            mcast_snooping_flush_mrouter(ms, m);
             ms->need_revalidate = true;
         }
     }

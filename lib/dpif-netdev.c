@@ -7841,6 +7841,7 @@ dp_netdev_pmd_get_next(struct dp_netdev *dp, struct cmap_position *pos)
 static void
 dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
                         unsigned core_id, int numa_id)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     pmd->dp = dp;
     pmd->core_id = core_id;
@@ -7895,6 +7896,7 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
 
 static void
 dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct dpcls *cls;
 
