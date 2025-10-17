@@ -242,8 +242,10 @@ bond_create(const struct bond_settings *s, struct ofproto_dpif *ofproto)
     bond = xzalloc(sizeof *bond);
     bond->ofproto = ofproto;
     hmap_init(&bond->members);
-    ovs_list_init(&bond->enabled_members);
     ovs_mutex_init(&bond->mutex);
+    ovs_mutex_lock(&bond->mutex);
+    ovs_list_init(&bond->enabled_members);
+    ovs_mutex_unlock(&bond->mutex);
     ovs_refcount_init(&bond->ref_cnt);
     hmap_init(&bond->pr_rule_ops);
 

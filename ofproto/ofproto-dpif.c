@@ -709,8 +709,10 @@ close_dpif_backer(struct dpif_backer *backer, bool del)
         }
     }
     simap_destroy(&backer->tnl_backers);
-    ovs_rwlock_destroy(&backer->odp_to_ofport_lock);
+    ovs_rwlock_wrlock(&backer->odp_to_ofport_lock);
     hmap_destroy(&backer->odp_to_ofport_map);
+    ovs_rwlock_unlock(&backer->odp_to_ofport_lock);
+    ovs_rwlock_destroy(&backer->odp_to_ofport_lock);
     shash_find_and_delete(&all_dpif_backers, backer->type);
     free(backer->type);
     free(backer->dp_version_string);
@@ -784,8 +786,10 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
 
     backer->type = xstrdup(type);
     backer->refcount = 1;
-    hmap_init(&backer->odp_to_ofport_map);
     ovs_rwlock_init(&backer->odp_to_ofport_lock);
+    ovs_rwlock_wrlock(&backer->odp_to_ofport_lock);
+    hmap_init(&backer->odp_to_ofport_map);
+    ovs_rwlock_unlock(&backer->odp_to_ofport_lock);
     backer->need_revalidate = 0;
     simap_init(&backer->tnl_backers);
     backer->recv_set_enable = !ofproto_get_flow_restore_wait();
@@ -1841,7 +1845,9 @@ construct(struct ofproto *ofproto_)
     hmap_insert(&all_ofproto_dpifs_by_name,
                 &ofproto->all_ofproto_dpifs_by_name_node,
                 hash_string(ofproto->up.name, 0));
+    ovs_mutex_lock(&ofproto->stats_mutex);
     memset(&ofproto->stats, 0, sizeof ofproto->stats);
+    ovs_mutex_unlock(&ofproto->stats_mutex);
 
     ofproto_init_tables(ofproto_, N_TABLES);
     error = add_internal_flows(ofproto);
