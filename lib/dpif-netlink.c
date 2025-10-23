@@ -274,6 +274,7 @@ static int dpif_netlink_vport_from_ofpbuf(struct dpif_netlink_vport *,
 static int dpif_netlink_port_query__(const struct dpif_netlink *dpif,
                                      odp_port_t port_no, const char *port_name,
                                      struct dpif_port *dpif_port);
+static void vport_del_channels(struct dpif_netlink *, odp_port_t);
 
 static int
 create_nl_sock(struct dpif_netlink *dpif OVS_UNUSED, struct nl_sock **sockp)
@@ -588,6 +589,8 @@ vport_add_channel(struct dpif_netlink *dpif, odp_port_t port_no,
         }
         dpif->uc_array_size = new_size;
     }
+
+    vport_del_channels(dpif, port_no);
 
     memset(&event, 0, sizeof event);
     event.events = EPOLLIN | EPOLLEXCLUSIVE;
