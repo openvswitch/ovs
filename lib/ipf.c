@@ -302,6 +302,22 @@ ipf_reassembled_list_remove(struct reassembled_pkt *rp)
     ovs_list_remove(&rp->rp_list_node);
 }
 
+/* Normally, access to ipf lists requires holding ipf_lock.  This is a special
+ * function to work around this restriction.  As a consequence of not taking
+ * any locks, the result of this function can be wrong.  Must only be used in
+ * cases where the wrong result doesn't impact the overall correctness of the
+ * logic, e.g., a quick check if there is any work to be done on current
+ * iteration that otherwise would block all other threads by taking a lock.
+ *
+ * XXX: We need a proper thread-safe solution for this instead.
+ */
+static bool
+ipf_list_is_empty_unsafe(struct ovs_list *list)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    return ovs_list_is_empty(list);
+}
+
 /* Symmetric */
 static uint32_t
 ipf_list_key_hash(const struct ipf_list_key *key, uint32_t basis)
@@ -1071,7 +1087,7 @@ ipf_send_completed_frags(struct ipf *ipf, struct dp_packet_batch *pb,
                          long long now, bool v6, uint16_t zone,
                          odp_port_t in_port)
 {
-    if (ovs_list_is_empty(&ipf->frag_complete_list)) {
+    if (ipf_list_is_empty_unsafe(&ipf->frag_complete_list)) {
         return;
     }
 
@@ -1114,7 +1130,7 @@ ipf_delete_expired_frags(struct ipf *ipf, long long now)
     };
 
 
-    if (ovs_list_is_empty(&ipf->frag_exp_list)) {
+    if (ipf_list_is_empty_unsafe(&ipf->frag_exp_list)) {
         return;
     }
 
@@ -1151,7 +1167,7 @@ static void
 ipf_execute_reass_pkts(struct ipf *ipf, struct dp_packet_batch *pb,
                        ovs_be16 dl_type)
 {
-    if (ovs_list_is_empty(&ipf->reassembled_pkt_list)) {
+    if (ipf_list_is_empty_unsafe(&ipf->reassembled_pkt_list)) {
         return;
     }
 
@@ -1175,7 +1191,7 @@ static void
 ipf_post_execute_reass_pkts(struct ipf *ipf,
                             struct dp_packet_batch *pb, bool v6)
 {
-    if (ovs_list_is_empty(&ipf->reassembled_pkt_list)) {
+    if (ipf_list_is_empty_unsafe(&ipf->reassembled_pkt_list)) {
         return;
     }
 
@@ -1308,8 +1324,8 @@ ipf_clean_thread_main(void *f)
 
         long long now = time_msec();
 
-        if (!ovs_list_is_empty(&ipf->frag_exp_list) ||
-            !ovs_list_is_empty(&ipf->frag_complete_list)) {
+        if (!ipf_list_is_empty_unsafe(&ipf->frag_exp_list) ||
+            !ipf_list_is_empty_unsafe(&ipf->frag_complete_list)) {
 
             ovs_mutex_lock(&ipf->ipf_lock);
 
