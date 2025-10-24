@@ -1366,10 +1366,11 @@ ipf_init(void)
 void
 ipf_destroy(struct ipf *ipf)
 {
-    ovs_mutex_lock(&ipf->ipf_lock);
     latch_set(&ipf->ipf_clean_thread_exit);
     pthread_join(ipf->ipf_clean_thread, NULL);
     latch_destroy(&ipf->ipf_clean_thread_exit);
+
+    ovs_mutex_lock(&ipf->ipf_lock);
 
     struct ipf_list *ipf_list;
     HMAP_FOR_EACH_POP (ipf_list, node, &ipf->frag_lists) {
