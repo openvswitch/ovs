@@ -1151,6 +1151,9 @@ netdev_bsd_get_features(const struct netdev *netdev,
 
     /* Current settings. */
     *current = netdev_bsd_parse_media(ifmr.ifm_active);
+    if (!*current) {
+        *current = NETDEV_F_OTHER;
+    }
 
     /* Advertised features. */
     *advertised = netdev_bsd_parse_media(ifmr.ifm_current);
