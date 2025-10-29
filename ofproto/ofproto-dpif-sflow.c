@@ -299,7 +299,6 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     struct dpif_sflow *ds = ds_;
     SFLCounters_sample_element elem, lacp_elem, of_elem, name_elem;
     SFLCounters_sample_element eth_elem;
-    enum netdev_features current;
     struct dpif_sflow_port *dsp;
     SFLIf_counters *counters;
     SFLEthernet_counters* eth_counters;
@@ -308,6 +307,7 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     struct lacp_member_stats lacp_stats;
     uint32_t curr_speed;
     const char *ifName;
+    bool full_duplex;
 
     dsp = dpif_sflow_find_port(ds, u32_to_odp(poller->bridgePort));
     if (!dsp) {
@@ -318,11 +318,10 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     counters = &elem.counterBlock.generic;
     counters->ifIndex = SFL_DS_INDEX(poller->dsi);
     counters->ifType = 6;
-    if (!netdev_get_features(dsp->ofport->netdev, &current, NULL, NULL, NULL)) {
+    if (!netdev_get_duplex(dsp->ofport->netdev, &full_duplex)) {
         /* The values of ifDirection come from MAU MIB (RFC 2668): 0 = unknown,
            1 = full-duplex, 2 = half-duplex, 3 = in, 4=out */
-        counters->ifDirection = (netdev_features_is_full_duplex(current)
-                                 ? 1 : 2);
+        counters->ifDirection = full_duplex ? 1 : 2;
     } else {
         counters->ifDirection = 0;
     }
