@@ -97,6 +97,7 @@ struct netdev_bsd {
     enum netdev_features current;
     enum netdev_features advertised;
     enum netdev_features supported;
+    bool full_duplex;
 
     int tap_fd;         /* TAP character device, if any, otherwise -1. */
 
@@ -1155,6 +1156,7 @@ netdev_bsd_read_features(struct netdev_bsd *netdev)
     if (!netdev->current) {
         netdev->current = NETDEV_F_OTHER;
     }
+    netdev->full_duplex = ifmr.ifm_active & IFM_FDX;
 
     /* Advertised features. */
     netdev->advertised = netdev_bsd_parse_media(ifmr.ifm_current);
@@ -1218,6 +1220,23 @@ netdev_bsd_get_speed(const struct netdev *netdev_, uint32_t *current,
         *max =
             MIN(UINT32_MAX,
                 netdev_features_to_bps(netdev->supported, 0) / 1000000ULL);
+    }
+    error = netdev->get_features_error;
+    ovs_mutex_unlock(&netdev->mutex);
+
+    return error;
+}
+
+static int
+netdev_bsd_get_duplex(const struct netdev *netdev_, bool *full_duplex)
+{
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    int error;
+
+    ovs_mutex_lock(&netdev->mutex);
+    netdev_bsd_read_features(netdev);
+    if (!netdev->get_features_error) {
+        *full_duplex = netdev->full_duplex;
     }
     error = netdev->get_features_error;
     ovs_mutex_unlock(&netdev->mutex);
@@ -1553,6 +1572,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     .get_stats = netdev_bsd_get_stats,               \
     .get_features = netdev_bsd_get_features,         \
     .get_speed = netdev_bsd_get_speed,               \
+    .get_duplex = netdev_bsd_get_duplex,             \
     .set_in4 = netdev_bsd_set_in4,                   \
     .get_addr_list = netdev_bsd_get_addr_list,       \
     .get_next_hop = netdev_bsd_get_next_hop,         \

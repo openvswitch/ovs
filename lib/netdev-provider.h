@@ -513,6 +513,13 @@ struct netdev_class {
     int (*get_speed)(const struct netdev *netdev, uint32_t *current,
                      uint32_t *max);
 
+    /* Stores the current duplex status of 'netdev' into '*full_duplex'.
+     * 'true' means full duplex, 'false' means half duplex.
+     *
+     * This function may be set to null if it would always return EOPNOTSUPP.
+     */
+    int (*get_duplex)(const struct netdev *netdev, bool *full_duplex);
+
     /* Set the features advertised by 'netdev' to 'advertise', which is a
      * set of NETDEV_F_* bits.
      *

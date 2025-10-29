@@ -207,5 +207,17 @@ AT_CHECK([ovs-vsctl get interface tap0 link_speed], [0], [dnl
 50000000000
 ])
 
+AT_CHECK([ovs-vsctl get interface tap0 duplex], [0], [dnl
+full
+])
+
+AT_CHECK([ip link set dev tap0 down])
+AT_CHECK([ethtool -s tap0 duplex half])
+AT_CHECK([ip link set dev tap0 up])
+
+AT_CHECK([ovs-vsctl get interface tap0 duplex], [0], [dnl
+half
+])
+
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
