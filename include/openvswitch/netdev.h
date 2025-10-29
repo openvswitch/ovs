@@ -136,6 +136,7 @@ int netdev_get_speed(const struct netdev *, uint32_t *current, uint32_t *max);
 uint64_t netdev_features_to_bps(enum netdev_features features,
                                 uint64_t default_bps);
 bool netdev_features_is_full_duplex(enum netdev_features features);
+int netdev_get_duplex(const struct netdev *, bool *full_duplex);
 int netdev_set_advertisements(struct netdev *, enum netdev_features advertise);
 void netdev_features_format(struct ds *, enum netdev_features);
 
