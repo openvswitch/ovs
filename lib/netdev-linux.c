@@ -2678,6 +2678,9 @@ netdev_linux_read_features(struct netdev_linux *netdev)
         netdev->current = NETDEV_F_100GB_FD;
     } else if (netdev->current_speed == 1000000) {
         netdev->current = NETDEV_F_1TB_FD;
+    } else if (netdev->current_speed
+               && netdev->current_speed != SPEED_UNKNOWN) {
+        netdev->current = NETDEV_F_OTHER;
     } else {
         netdev->current = 0;
     }
