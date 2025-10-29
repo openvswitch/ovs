@@ -175,6 +175,11 @@ static inline uint32_t rpl_ethtool_cmd_speed(const struct ethtool_cmd *ep)
 #define ADVERTISED_10000baseR_FEC      (1 << 20)
 #endif
 
+/* Linux 3.2 introduced "unknown" speed. */
+#ifndef SPEED_UNKNOWN
+#define SPEED_UNKNOWN -1
+#endif
+
 /* Linux 3.5 introduced supported and advertised flags for
  * 40G base KR4, CR4, SR4 and LR4. */
 #ifndef SUPPORTED_40000baseKR4_Full
@@ -186,6 +191,16 @@ static inline uint32_t rpl_ethtool_cmd_speed(const struct ethtool_cmd *ep)
 #define ADVERTISED_40000baseCR4_Full   (1 << 24)
 #define ADVERTISED_40000baseSR4_Full   (1 << 25)
 #define ADVERTISED_40000baseLR4_Full   (1 << 26)
+#endif
+
+/* Linux 3.19 introduced speed for 40G. */
+#ifndef SPEED_40000
+#define SPEED_40000 40000
+#endif
+
+/* Linux 4.2 introduced speed for 100G. */
+#ifndef SPEED_100000
+#define SPEED_100000 100000
 #endif
 
 /* Linux 2.6.35 introduced IFLA_STATS64 and rtnl_link_stats64.
@@ -2673,9 +2688,9 @@ netdev_linux_read_features(struct netdev_linux *netdev)
         netdev->current = ecmd.duplex ? NETDEV_F_1GB_FD : NETDEV_F_1GB_HD;
     } else if (netdev->current_speed == SPEED_10000) {
         netdev->current = NETDEV_F_10GB_FD;
-    } else if (netdev->current_speed == 40000) {
+    } else if (netdev->current_speed == SPEED_40000) {
         netdev->current = NETDEV_F_40GB_FD;
-    } else if (netdev->current_speed == 100000) {
+    } else if (netdev->current_speed == SPEED_100000) {
         netdev->current = NETDEV_F_100GB_FD;
     } else if (netdev->current_speed == 1000000) {
         netdev->current = NETDEV_F_1TB_FD;
