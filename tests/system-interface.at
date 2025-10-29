@@ -199,7 +199,7 @@ OFPST_PORT_DESC reply (OF1.5):
  1(tap0): addr:aa:55:aa:55:00:01
      config:     0
      state:      LIVE
-     current:    COPPER
+     current:    OTHER COPPER
      speed: 50000 Mbps now, 0 Mbps max
 ])
 
