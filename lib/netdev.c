@@ -1298,6 +1298,37 @@ netdev_features_is_full_duplex(enum netdev_features features)
                         | NETDEV_F_100GB_FD | NETDEV_F_1TB_FD)) != 0;
 }
 
+/* Stores the duplex capability of 'netdev' into 'full_duplex'.
+ *
+ * Some network devices may not implement support for this function.
+ * In such cases this function will always return EOPNOTSUPP. */
+int
+netdev_get_duplex(const struct netdev *netdev, bool *full_duplex)
+{
+    int error;
+
+    *full_duplex = false;
+    error = netdev->netdev_class->get_duplex
+            ? netdev->netdev_class->get_duplex(netdev, full_duplex)
+            : EOPNOTSUPP;
+
+    if (error == EOPNOTSUPP) {
+        enum netdev_features current;
+
+        error = netdev_get_features(netdev, &current, NULL, NULL, NULL);
+        if (!error && (current & NETDEV_F_OTHER)) {
+             error = EOPNOTSUPP;
+        }
+        if (!error) {
+            *full_duplex = (current & (NETDEV_F_10MB_FD | NETDEV_F_100MB_FD
+                                        | NETDEV_F_1GB_FD | NETDEV_F_10GB_FD
+                                        | NETDEV_F_40GB_FD | NETDEV_F_100GB_FD
+                                        | NETDEV_F_1TB_FD)) != 0;
+        }
+    }
+    return error;
+}
+
 /* Set the features advertised by 'netdev' to 'advertise'.  Returns 0 if
  * successful, otherwise a positive errno value. */
 int

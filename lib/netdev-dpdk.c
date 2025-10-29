@@ -4176,6 +4176,23 @@ out:
     return 0;
 }
 
+static int
+netdev_dpdk_get_duplex(const struct netdev *netdev, bool *full_duplex)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int err = 0;
+
+    ovs_mutex_lock(&dev->mutex);
+    if (dev->link.link_speed != RTE_ETH_SPEED_NUM_UNKNOWN) {
+        *full_duplex = dev->link.link_duplex == RTE_ETH_LINK_FULL_DUPLEX;
+    } else {
+        err = EOPNOTSUPP;
+    }
+    ovs_mutex_unlock(&dev->mutex);
+
+    return err;
+}
+
 static struct ingress_policer *
 netdev_dpdk_policer_construct(uint32_t rate, uint32_t burst)
 {
@@ -6888,6 +6905,7 @@ parse_vhost_config(const struct smap *ovs_other_config)
     .get_custom_stats = netdev_dpdk_get_custom_stats,   \
     .get_features = netdev_dpdk_get_features,           \
     .get_speed = netdev_dpdk_get_speed,                 \
+    .get_duplex = netdev_dpdk_get_duplex,               \
     .get_status = netdev_dpdk_get_status,               \
     .reconfigure = netdev_dpdk_reconfigure,             \
     .rxq_recv = netdev_dpdk_rxq_recv

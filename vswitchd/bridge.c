@@ -2532,11 +2532,11 @@ iface_refresh_netdev_status(struct iface *iface)
 {
     struct smap smap;
 
-    enum netdev_features current;
     enum netdev_flags flags;
     const char *link_state;
     struct eth_addr mac;
     int64_t bps, mtu_64, ifindex64, link_resets;
+    bool full_duplex;
     int mtu, error;
     uint32_t mbps;
 
@@ -2576,11 +2576,9 @@ iface_refresh_netdev_status(struct iface *iface)
     link_resets = netdev_get_carrier_resets(iface->netdev);
     ovsrec_interface_set_link_resets(iface->cfg, &link_resets, 1);
 
-    error = netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
+    error = netdev_get_duplex(iface->netdev, &full_duplex);
     if (!error) {
-        ovsrec_interface_set_duplex(iface->cfg,
-                                    netdev_features_is_full_duplex(current)
-                                    ? "full" : "half");
+        ovsrec_interface_set_duplex(iface->cfg, full_duplex ? "full" : "half");
     } else {
         ovsrec_interface_set_duplex(iface->cfg, NULL);
     }
