@@ -4280,15 +4280,23 @@ dpif_netlink_meter_get_stats(const struct dpif *dpif_,
                                             ARRAY_SIZE(ovs_meter_stats_policy));
     if (error) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_INFO_RL(&rl, "dpif_netlink_meter_transact %s failed",
-                     command == OVS_METER_CMD_GET ? "get" : "del");
+        VLOG_RL(&rl, error == ENOENT ? VLL_DBG : VLL_WARN,
+                "dpif_netlink_meter_transact %s failed: %s",
+                command == OVS_METER_CMD_GET ? "get" : "del",
+                ovs_strerror(error));
         return error;
     }
 
-    if (stats
-        && a[OVS_METER_ATTR_ID]
-        && a[OVS_METER_ATTR_STATS]
-        && nl_attr_get_u32(a[OVS_METER_ATTR_ID]) == meter_id.uint32) {
+    if (a[OVS_METER_ATTR_ID]
+        && nl_attr_get_u32(a[OVS_METER_ATTR_ID]) != meter_id.uint32) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_INFO_RL(&rl,
+                     "Kernel returned a different meter id than requested");
+        ofpbuf_delete(msg);
+        return EINVAL;
+    }
+
+    if (stats && a[OVS_METER_ATTR_STATS]) {
         /* return stats */
         const struct ovs_flow_stats *stat;
         const struct nlattr *nla;
@@ -4366,12 +4374,33 @@ probe_broken_meters__(struct dpif *dpif)
 {
     /* This test is destructive if a probe occurs while ovs-vswitchd is
      * running (e.g., an ovs-dpctl meter command is called), so choose a
-     * random high meter id to make this less likely to occur. */
-    ofproto_meter_id id1 = { 54545401 };
-    ofproto_meter_id id2 = { 54545402 };
+     * high meter id to make this less likely to occur.
+     *
+     * In Linux kernel v5.10+ meters are stored in a table that is not
+     * a real hash table.  It's just an array with 'meter_id % size' used
+     * as an index.  The numbers are chosen to fit into the minimal table
+     * size (1024) without wrapping, so these IDs are guaranteed to be
+     * found under normal conditions in the meter table, if such meters
+     * exist.  It's possible to break this check by creating some meters
+     * in the kernel manually with different IDs that map onto the same
+     * indexes, but that should not be a big problem since ovs-vswitchd
+     * always allocates densely packed meter IDs with an id-pool.
+     *
+     * These IDs will also work in cases where the table in the kernel is
+     * a proper hash table. */
+    ofproto_meter_id id1 = { 1021 };
+    ofproto_meter_id id2 = { 1022 };
     struct ofputil_meter_band band = {OFPMBT13_DROP, 0, 1, 0};
     struct ofputil_meter_config config1 = { 1, OFPMF13_KBPS, 1, &band};
     struct ofputil_meter_config config2 = { 2, OFPMF13_KBPS, 1, &band};
+
+    /* First check if these meters are already in the kernel.  If we get
+     * a proper response from the kernel with all the good meter IDs, then
+     * meters are likley supported correctly. */
+    if (!dpif_netlink_meter_get(dpif, id1, NULL, 0)
+        || !dpif_netlink_meter_get(dpif, id2, NULL, 0)) {
+        return false;
+    }
 
     /* Try adding two meters and make sure that they both come back with
      * the proper meter id.  Use the "__" version so that we don't cause
