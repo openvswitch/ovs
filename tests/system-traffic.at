@@ -2494,6 +2494,34 @@ OVS_WAIT_UNTIL([test $(ovs-pcap p1.pcap | grep -c "${packet}") -eq 5])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_BANNER([Meters])
+
+AT_SETUP([meters - datapath probe])
+dnl Linux kernel 4.18+ should properly support meters.
+OVS_CHECK_MIN_KERNEL(4, 18)
+OVS_TRAFFIC_VSWITCHD_START()
+
+dnl Create a lot of meters.
+for i in $(seq 1023); do
+  AT_CHECK([ovs-ofctl -OOpenFlow13 add-meter br0 "meter=$i kbps band=type=drop rate=100"])
+done
+
+dnl Kill the process to avoid any potential datapath cleanups.
+pid=$(cat ovs-vswitchd.pid)
+AT_CHECK([kill $pid])
+OVS_WAIT_WHILE([kill -0 $pid])
+
+dnl Start it back.
+AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --log-file], [0], [], [stderr])
+on_exit "kill_ovs_vswitchd"
+
+dnl It should still be possible to create meters.
+AT_CHECK([ovs-ofctl -OOpenFlow13 add-meter br0 "meter=1 kbps band=type=drop rate=100"])
+AT_CHECK([grep -q "broken meter implementation" ovs-vswitchd.log], [1])
+
+OVS_TRAFFIC_VSWITCHD_STOP(['/terminating with signal/d'])
+AT_CLEANUP
+
 AT_BANNER([MPLS])
 
 AT_SETUP([mpls - encap header dp-support])
