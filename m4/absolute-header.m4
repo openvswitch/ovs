@@ -68,7 +68,7 @@ AC_DEFUN([gl_ABSOLUTE_HEADER_ONE],
   esac
 changequote(,)
   case "$host_os" in
-    (mingw*|msys*)
+    (mingw*|msys*|cygwin*)
       dnl For the sake of native Windows compilers (excluding gcc),
       dnl treat backslash as a directory separator, like /.
       dnl Actually, these compilers use a double-backslash as
