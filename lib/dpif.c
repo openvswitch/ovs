@@ -1161,9 +1161,9 @@ dpif_flow_dump_next(struct dpif_flow_dump_thread *thread,
 
 struct dpif_execute_helper_aux {
     struct dpif *dpif;
-    const struct flow *flow;
     int error;
     struct ofpbuf meter_actions;
+    struct dpif_execute orig_execute;
 };
 
 /* This is called for actions that need the context of the datapath to be
@@ -1199,7 +1199,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_PSAMPLE:
     case OVS_ACTION_ATTR_SAMPLE:
     case OVS_ACTION_ATTR_RECIRC: {
-        struct dpif_execute execute;
+        struct dpif_execute execute = aux->orig_execute;
         struct pkt_metadata *md = &packet->md;
 
         if (flow_tnl_dst_is_set(&md->tunnel) || aux->meter_actions.size) {
@@ -1235,11 +1235,8 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         }
 
         execute.packet = packet;
-        execute.flow = aux->flow;
         execute.needs_help = false;
-        execute.probe = false;
-        execute.mtu = 0;
-        execute.hash = 0;
+
         aux->error = dpif_execute(aux->dpif, &execute);
         log_execute_message(aux->dpif, &this_module, &execute,
                             true, aux->error);
@@ -1287,8 +1284,8 @@ dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
 {
     struct dpif_execute_helper_aux aux = {
         .dpif = dpif,
-        .flow = execute->flow,
         .error = 0,
+        .orig_execute = *execute,
     };
     struct dp_packet_batch pb;
 
