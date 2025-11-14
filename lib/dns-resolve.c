@@ -28,6 +28,7 @@
 #include "openvswitch/hmap.h"
 #include "openvswitch/vlog.h"
 #include "timeval.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(dns_resolve);
 
@@ -43,6 +44,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 enum resolve_state {
     RESOLVE_INVALID,
     RESOLVE_PENDING,
+    RESOLVE_GOOD_UNUSED,
     RESOLVE_GOOD,
     RESOLVE_ERROR
 };
@@ -220,11 +222,29 @@ resolve_find_or_new__(const char *name)
     return req;
 }
 
+#define RESOLVE_UNUSED_TIMEOUT 300
+
 static bool
 resolve_check_expire__(struct resolve_request *req)
     OVS_REQUIRES(dns_mutex__)
 {
-    return time_now() > req->time + req->ub_result->ttl;
+    int ttl = req->ub_result->ttl;
+
+    /* When we just sent a request, but didn't look at the response yet, it's
+     * not caching, but a "transaction in progress" situation, so we can use
+     * the response even with TTL of 0 and more than 1 second passed.
+     * Allow such values to be accessed for at least RESOLVE_UNUSED_TIMEOUT
+     * seconds without considering them stale.  This is necessary in case of
+     * large backoff intervals on connections or if the process is doing some
+     * other work not looking at the response for longer than TTL. */
+    if (req->state == RESOLVE_GOOD_UNUSED) {
+        ttl = MAX(ttl, RESOLVE_UNUSED_TIMEOUT);
+        /* Not a "transaction in progress" anymore, normal caching rules should
+         * apply from this point forward. */
+        req->state = RESOLVE_GOOD;
+    }
+
+    return time_now() > req->time + ttl;
 }
 
 static bool
@@ -232,7 +252,7 @@ resolve_check_valid__(struct resolve_request *req)
     OVS_REQUIRES(dns_mutex__)
 {
     return (req != NULL
-        && req->state == RESOLVE_GOOD
+        && (req->state == RESOLVE_GOOD || req->state == RESOLVE_GOOD_UNUSED)
         && !resolve_check_expire__(req));
 }
 
@@ -289,7 +309,7 @@ resolve_callback__(void *req_, int err, struct ub_result *result)
 
     req->ub_result = result;
     req->addr = addr;
-    req->state = RESOLVE_GOOD;
+    req->state = RESOLVE_GOOD_UNUSED;
     req->time = time_now();
 }
 
