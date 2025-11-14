@@ -312,6 +312,7 @@ Luis E. P.                         l31g@hotmail.com
 Luca Czesla                        luca.czesla@mail.schwarz
 Lukasz Pawlik                      lukaszx.pawlik@intel.com
 Lukasz Rzasik                      lukasz.rzasik@gmail.com
+MJ Ponsonby                        mj.ponsonby@canonical.com
 Maciej Józefczyk                   mjozefcz@redhat.com
 Madhu Challa                       challa@noironetworks.com
 Manohar K C                        manukc@gmail.com
