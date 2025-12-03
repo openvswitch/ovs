@@ -417,6 +417,22 @@ CHECK_PORTS([a])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+AT_SETUP([add-br a, del-br a + set external-ids on deleted bridge])
+AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL([add-br a])])
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+  [del-br a],
+  [set bridge $(RUN_OVS_VSCTL([get bridge a _uuid])) external-ids:key0=value0])],
+  [1], [], [stderr])
+AT_CHECK([uuidfilt stderr], [0], [dnl
+ovs-vsctl: no row "<0>" in table Bridge
+])
+CHECK_BRIDGES([a, a, 0])
+CHECK_PORTS([a])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
 AT_SETUP([external IDs])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
