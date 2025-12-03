@@ -2602,7 +2602,10 @@ ovsdb_idl_get_row_for_uuid(const struct ovsdb_idl *idl,
                            const struct ovsdb_idl_table_class *tc,
                            const struct uuid *uuid)
 {
-    return ovsdb_idl_get_row(ovsdb_idl_table_from_class(idl, tc), uuid);
+    const struct ovsdb_idl_row *row;
+
+    row = ovsdb_idl_get_row(ovsdb_idl_table_from_class(idl, tc), uuid);
+    return (row && ovsdb_idl_row_exists(row)) ? row : NULL;
 }
 
 static struct ovsdb_idl_row *
