@@ -923,7 +923,7 @@ duplicate_index_row(const struct ovsdb_column_set *index,
     /* Put 'a' and 'b' in a predictable order to make error messages
      * reproducible for testing. */
     ovsdb_column_set_init(&all_columns);
-    ovsdb_column_set_add_all(&all_columns, a->table);
+    ovsdb_column_set_add_all_comparable(&all_columns, a->table);
     if (ovsdb_row_compare_columns_3way(a, b, &all_columns) < 0) {
         const struct ovsdb_row *tmp = a;
         a = b;

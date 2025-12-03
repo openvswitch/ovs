@@ -257,6 +257,25 @@ ovsdb_column_set_add_all(struct ovsdb_column_set *set,
     }
 }
 
+void
+ovsdb_column_set_add_all_comparable(struct ovsdb_column_set *set,
+                                    const struct ovsdb_table *table)
+{
+    const struct shash_node **nodes = shash_sort(&table->schema->columns);
+    size_t i, n = shash_count(&table->schema->columns);
+
+    for (i = 0; i < n; i++) {
+        const struct ovsdb_column *column = nodes[i]->data;
+
+        /* UUIDs would cause a random order if used for comparison. */
+        if (column->type.key.type != OVSDB_TYPE_UUID
+            && column->type.value.type != OVSDB_TYPE_UUID) {
+            ovsdb_column_set_add(set, column);
+        }
+    }
+    free(nodes);
+}
+
 bool
 ovsdb_column_set_contains(const struct ovsdb_column_set *set,
                           unsigned int column_index)
