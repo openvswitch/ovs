@@ -79,6 +79,8 @@ void ovsdb_column_set_add(struct ovsdb_column_set *,
                           const struct ovsdb_column *);
 void ovsdb_column_set_add_all(struct ovsdb_column_set *,
                               const struct ovsdb_table *);
+void ovsdb_column_set_add_all_comparable(struct ovsdb_column_set *,
+                                         const struct ovsdb_table *);
 bool ovsdb_column_set_contains(const struct ovsdb_column_set *,
                                unsigned int column_index);
 bool ovsdb_column_set_equals(const struct ovsdb_column_set *,
