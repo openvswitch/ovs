@@ -542,8 +542,8 @@ dpif_netlink_rtnl_port_destroy(const char *name, const char *type)
  *
  * See ovs_tunnels_out_of_tree
  */
-bool
-dpif_netlink_rtnl_probe_oot_tunnels(void)
+static bool
+dpif_netlink_rtnl_probe_oot_tunnels__(void)
 {
     char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
     struct netdev *netdev = NULL;
@@ -620,6 +620,20 @@ dpif_netlink_rtnl_probe_oot_tunnels(void)
             out_of_tree = true;
         }
         netdev_close(netdev);
+    }
+
+    return out_of_tree;
+}
+
+bool
+dpif_netlink_rtnl_probe_oot_tunnels(void)
+{
+    bool out_of_tree = dpif_netlink_rtnl_probe_oot_tunnels__();
+
+    if (out_of_tree) {
+        VLOG_WARN_ONCE("Use of the OOT Kernel datapath module is deprecated. "
+                       "Please use the module provided by the upstream "
+                       "Kernel instead.");
     }
 
     return out_of_tree;
