@@ -185,7 +185,7 @@ Q: Are all the DPDK releases that OVS versions work with maintained?
     The latest information about DPDK stable and LTS releases can be found
     at `DPDK stable`_.
 
-.. _DPDK stable: http://doc.dpdk.org/guides-24.11/contributing/stable.html
+.. _DPDK stable: https://doc.dpdk.org/guides-25.11/contributing/stable.html
 
 Q: What features are not available in the Open vSwitch kernel datapath that
 ships as part of the upstream Linux kernel?
