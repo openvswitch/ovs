@@ -283,6 +283,10 @@
     ((size_t)((char *)&(((type *)0)->member) - (char *)0))
 #endif
 
+#if _MSC_VER
+#pragma message ("warning: Windows support is deprecated.")
+#endif
+
 /* Build assertions.
  *
  * Use BUILD_ASSERT_DECL as a declaration or a statement, or BUILD_ASSERT as
