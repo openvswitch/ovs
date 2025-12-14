@@ -4899,6 +4899,8 @@ pick_dp_hash_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
             hash_alg = OVS_HASH_ALG_L4;
         }
         ctx_trigger_recirculate_with_hash(ctx, hash_alg, group->hash_basis);
+        xlate_report(ctx, OFT_DETAIL,
+                     "selection method in use: dp_hash, recirculating");
         return NULL;
     } else {
         uint32_t hash_mask = group->hash_mask;
@@ -4978,7 +4980,9 @@ xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group,
             xlate_group_bucket(ctx, bucket, is_last_action);
             xlate_group_stats(ctx, group, bucket);
         } else {
-            xlate_report(ctx, OFT_DETAIL, "no live bucket");
+            if (!ctx->freezing) {
+                xlate_report(ctx, OFT_DETAIL, "no live bucket");
+            }
             if (ctx->xin->xcache) {
                 ofproto_group_unref(&group->up);
             }
