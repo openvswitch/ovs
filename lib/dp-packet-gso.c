@@ -153,7 +153,6 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
 
             tnl_hdr = dp_packet_l4(seg);
             tnl_hdr->udp_len = htons(dp_packet_l4_size(seg));
-            dp_packet_l4_checksum_set_partial(seg);
         }
 
         if (udp_tnl || gre_tnl) {
