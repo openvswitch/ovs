@@ -1689,6 +1689,7 @@ bool packet_rh_present(struct dp_packet *packet, uint8_t *nexthdr,
 void IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6);
 void packet_tcp_complete_csum(struct dp_packet *, bool is_inner);
 void packet_udp_complete_csum(struct dp_packet *, bool is_inner);
+bool packet_udp_tunnel_csum(struct dp_packet *);
 void packet_sctp_complete_csum(struct dp_packet *, bool is_inner);
 
 #define DNS_HEADER_LEN 12

@@ -2085,6 +2085,112 @@ out:
     }
 }
 
+/* This helper computes a "constant" UDP checksum without looking at the
+ * L4 payload.
+ *
+ * This is possible when L4 is either TCP or UDP: the L4 payload checksum
+ * is either computed in SW or in HW later, but its contribution to the
+ * outer checksum is cancelled by the L4 payload being part of the global
+ * packet sum. */
+bool
+packet_udp_tunnel_csum(struct dp_packet *p)
+{
+    const ovs_be16 *inner_l4_csum_p;
+    struct ip_header *inner_ip;
+    const void *inner_l4_data;
+    struct udp_header *udp;
+    ovs_be16 inner_l4_csum;
+    uint32_t partial_csum;
+    struct ip_header *ip;
+    uint32_t inner_csum;
+    bool inner_ipv4;
+    void *inner_l4;
+
+    inner_ip = dp_packet_inner_l3(p);
+    inner_l4 = dp_packet_inner_l4(p);
+    ip = dp_packet_l3(p);
+    udp = dp_packet_l4(p);
+
+    if (dp_packet_inner_l4_proto_tcp(p)) {
+        inner_l4_csum_p = &(((struct tcp_header *) inner_l4)->tcp_csum);
+        inner_l4_data = dp_packet_get_inner_tcp_payload(p);
+        if (!inner_l4_data) {
+            /* Malformed packet. */
+            return false;
+        }
+    } else if (dp_packet_inner_l4_proto_udp(p)) {
+        inner_l4_csum_p = &(((struct udp_header *) inner_l4)->udp_csum);
+        inner_l4_data = (char *) inner_l4 + sizeof (struct udp_header);
+        if (*inner_l4_csum_p == 0) {
+            /* There is no nested checksum.
+             * No choice but compute a full checksum. */
+            return false;
+        }
+    } else {
+        /* This optimisation applies only to inner TCP/UDP. */
+        return false;
+    }
+
+    if (!dp_packet_inner_l4_checksum_valid(p)) {
+        /* We have no idea about the contribution of the payload data
+         * and what the L4 checksum put in the packet data looks like.
+         * Simpler is to let a full checksum happen. */
+        return false;
+    }
+
+    inner_ipv4 = IP_VER(inner_ip->ip_ihl_ver) == 4;
+    if (inner_ipv4) {
+        inner_csum = packet_csum_pseudoheader(inner_ip);
+    } else {
+        struct ovs_16aligned_ip6_hdr *inner_ip6 = dp_packet_inner_l3(p);
+
+        inner_csum = packet_csum_pseudoheader6(inner_ip6);
+    }
+
+    inner_csum = csum_continue(inner_csum, inner_l4,
+        (char *) inner_l4_csum_p - (char *) inner_l4);
+    inner_l4_csum = csum_finish(csum_continue(inner_csum, inner_l4_csum_p + 1,
+        (char *) inner_l4_data - (char *)(inner_l4_csum_p + 1)));
+    /* Important: for inner UDP, a null inner_l4_csum here should in theory be
+     * replaced with 0xffff.  However, since the only use of inner_l4_csum is
+     * for the final outer checksum with a csum_add16() below, we can skip this
+     * entirely because adding 0xffff will have the same effect as adding 0x0
+     * after reducing in csum_finish. */
+
+    udp->udp_csum = 0;
+    if (IP_VER(ip->ip_ihl_ver) == 4) {
+        partial_csum = packet_csum_pseudoheader(ip);
+    } else {
+        struct ovs_16aligned_ip6_hdr *ip6 = dp_packet_l3(p);
+
+        partial_csum = packet_csum_pseudoheader6(ip6);
+    }
+
+    partial_csum = csum_continue(partial_csum, udp,
+        (char *) inner_ip - (char *) udp);
+    if (!inner_ipv4 || !dp_packet_inner_ip_checksum_valid(p)) {
+        /* IPv6 has no checksum, so for inner IPv6, we need to sum the header.
+         *
+         * In IPv4 case, if inner checksum is already good or HW offload
+         * has been requested, the (final) sum of the IPv4 header will be 0.
+         * Otherwise, we need to sum the header like for IPv6. */
+        partial_csum = csum_continue(partial_csum, inner_ip,
+            (char *) inner_l4 - (char *) inner_ip);
+    }
+    partial_csum = csum_continue(partial_csum, inner_l4,
+        (char *) inner_l4_csum_p - (char *) inner_l4);
+    partial_csum = csum_add16(partial_csum, inner_l4_csum);
+    partial_csum = csum_continue(partial_csum, inner_l4_csum_p + 1,
+        (char *) inner_l4_data - (char *)(inner_l4_csum_p + 1));
+    udp->udp_csum = csum_finish(partial_csum);
+    if (!udp->udp_csum) {
+        udp->udp_csum = htons(0xffff);
+    }
+    dp_packet_l4_checksum_set_good(p);
+
+    return true;
+}
+
 /* Set SCTP checksum field in packet 'p' with complete checksum.
  * The packet must have the L3 and L4 offsets. */
 void

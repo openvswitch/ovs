@@ -593,19 +593,22 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
         return;
     }
 
-    if (dp_packet_tunnel_geneve(p)
-        || dp_packet_tunnel_vxlan(p)) {
-
+    if (dp_packet_tunnel_geneve(p) || dp_packet_tunnel_vxlan(p)) {
         /* If the TX interface doesn't support UDP tunnel offload but does
-         * support inner checksum offload and an outer UDP checksum is
-         * required, then we can't offload inner checksum either. As that would
+         * support inner SCTP checksum offload and an outer UDP checksum is
+         * required, then we can't offload inner checksum either as that would
          * invalidate the outer checksum. */
         if (!(flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM)
             && dp_packet_l4_checksum_partial(p)) {
-            flags &= ~(NETDEV_TX_OFFLOAD_TCP_CKSUM |
-                       NETDEV_TX_OFFLOAD_UDP_CKSUM |
-                       NETDEV_TX_OFFLOAD_SCTP_CKSUM |
-                       NETDEV_TX_OFFLOAD_IPV4_CKSUM);
+            flags &= ~NETDEV_TX_OFFLOAD_SCTP_CKSUM;
+            if (!packet_udp_tunnel_csum(p)) {
+                /* Similarly to the previous comment, since the outer UDP
+                 * checksum optimisation did not happen, invalidate inner
+                 * checksum offloads support. */
+                flags &= ~(NETDEV_TX_OFFLOAD_TCP_CKSUM |
+                           NETDEV_TX_OFFLOAD_UDP_CKSUM |
+                           NETDEV_TX_OFFLOAD_IPV4_CKSUM);
+            }
         }
     }
 

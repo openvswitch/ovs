@@ -66,17 +66,15 @@ int
 dp_packet_gso_nr_segs(struct dp_packet *p)
 {
     uint16_t segsz = dp_packet_get_tso_segsz(p);
-    const char *data_tail;
-    const char *data_pos;
+    uint32_t data_length;
 
     if (dp_packet_tunnel(p)) {
-        data_pos = dp_packet_get_inner_tcp_payload(p);
+        data_length = dp_packet_get_inner_tcp_payload_length(p);
     } else {
-        data_pos = dp_packet_get_tcp_payload(p);
+        data_length = dp_packet_get_tcp_payload_length(p);
     }
-    data_tail = (char *) dp_packet_tail(p) - dp_packet_l2_pad_size(p);
 
-    return DIV_ROUND_UP(data_tail - data_pos, segsz);
+    return DIV_ROUND_UP(data_length, segsz);
 }
 
 /* Perform software segmentation on packet 'p'.

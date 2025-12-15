@@ -2648,59 +2648,43 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     }
 
     if (dp_packet_tunnel(pkt)) {
-        if (dp_packet_ip_checksum_partial(pkt)
-            || dp_packet_l4_checksum_partial(pkt)) {
-            mbuf->outer_l2_len = (char *) dp_packet_l3(pkt) -
-                                 (char *) dp_packet_eth(pkt);
-            mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
-                                 (char *) dp_packet_l3(pkt);
+        mbuf->outer_l2_len = (char *) dp_packet_l3(pkt) -
+                             (char *) dp_packet_eth(pkt);
+        mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
+                             (char *) dp_packet_l3(pkt);
 
-            if (dp_packet_tunnel_geneve(pkt)) {
-                mbuf->ol_flags |= RTE_MBUF_F_TX_TUNNEL_GENEVE;
-            } else if (dp_packet_tunnel_vxlan(pkt)) {
-                mbuf->ol_flags |= RTE_MBUF_F_TX_TUNNEL_VXLAN;
-            } else {
-                ovs_assert(dp_packet_tunnel_gre(pkt));
-                mbuf->ol_flags |= RTE_MBUF_F_TX_TUNNEL_GRE;
-            }
-
-            if (dp_packet_ip_checksum_partial(pkt)) {
-                mbuf->ol_flags |= RTE_MBUF_F_TX_OUTER_IP_CKSUM;
-            }
-
-            if (dp_packet_l4_checksum_partial(pkt)) {
-                ovs_assert(dp_packet_l4_proto_udp(pkt));
-                mbuf->ol_flags |= RTE_MBUF_F_TX_OUTER_UDP_CKSUM;
-            }
-
-            ip = dp_packet_l3(pkt);
-            mbuf->ol_flags |= IP_VER(ip->ip_ihl_ver) == 4
-                              ? RTE_MBUF_F_TX_OUTER_IPV4
-                              : RTE_MBUF_F_TX_OUTER_IPV6;
-
-            /* Inner L2 length must account for the tunnel header length. */
-            l2 = dp_packet_l4(pkt);
-            l3 = dp_packet_inner_l3(pkt);
-            l3_csum = dp_packet_inner_ip_checksum_partial(pkt);
-            l4 = dp_packet_inner_l4(pkt);
-            l4_csum = dp_packet_inner_l4_checksum_partial(pkt);
-            is_tcp = dp_packet_inner_l4_proto_tcp(pkt);
-            is_udp = dp_packet_inner_l4_proto_udp(pkt);
-            is_sctp = dp_packet_inner_l4_proto_sctp(pkt);
+        if (dp_packet_tunnel_geneve(pkt)) {
+            mbuf->ol_flags |= RTE_MBUF_F_TX_TUNNEL_GENEVE;
+        } else if (dp_packet_tunnel_vxlan(pkt)) {
+            mbuf->ol_flags |= RTE_MBUF_F_TX_TUNNEL_VXLAN;
         } else {
-            mbuf->outer_l2_len = 0;
-            mbuf->outer_l3_len = 0;
-
-            /* Skip outer headers. */
-            l2 = dp_packet_eth(pkt);
-            l3 = dp_packet_inner_l3(pkt);
-            l3_csum = dp_packet_inner_ip_checksum_partial(pkt);
-            l4 = dp_packet_inner_l4(pkt);
-            l4_csum = dp_packet_inner_l4_checksum_partial(pkt);
-            is_tcp = dp_packet_inner_l4_proto_tcp(pkt);
-            is_udp = dp_packet_inner_l4_proto_udp(pkt);
-            is_sctp = dp_packet_inner_l4_proto_sctp(pkt);
+            ovs_assert(dp_packet_tunnel_gre(pkt));
+            mbuf->ol_flags |= RTE_MBUF_F_TX_TUNNEL_GRE;
         }
+
+        if (dp_packet_ip_checksum_partial(pkt)) {
+            mbuf->ol_flags |= RTE_MBUF_F_TX_OUTER_IP_CKSUM;
+        }
+
+        if (dp_packet_l4_checksum_partial(pkt)) {
+            ovs_assert(dp_packet_l4_proto_udp(pkt));
+            mbuf->ol_flags |= RTE_MBUF_F_TX_OUTER_UDP_CKSUM;
+        }
+
+        ip = dp_packet_l3(pkt);
+        mbuf->ol_flags |= IP_VER(ip->ip_ihl_ver) == 4
+                          ? RTE_MBUF_F_TX_OUTER_IPV4
+                          : RTE_MBUF_F_TX_OUTER_IPV6;
+
+        /* Inner L2 length must account for the tunnel header length. */
+        l2 = dp_packet_l4(pkt);
+        l3 = dp_packet_inner_l3(pkt);
+        l3_csum = dp_packet_inner_ip_checksum_partial(pkt);
+        l4 = dp_packet_inner_l4(pkt);
+        l4_csum = dp_packet_inner_l4_checksum_partial(pkt);
+        is_tcp = dp_packet_inner_l4_proto_tcp(pkt);
+        is_udp = dp_packet_inner_l4_proto_udp(pkt);
+        is_sctp = dp_packet_inner_l4_proto_sctp(pkt);
     } else {
         mbuf->outer_l2_len = 0;
         mbuf->outer_l3_len = 0;

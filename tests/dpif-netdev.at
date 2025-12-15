@@ -1371,13 +1371,33 @@ AT_CHECK([ovs-vsctl set Interface p2 options:ol_ip_tx_csum_disabled=true])
 AT_CHECK([cat good_csum_expected | sed -e "s/339e/0000/" > half_bad_csum_expected])
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [bad_frame], [half_bad_csum_expected])
 
+dnl Special case 2, to check if Tx offloads did happen in the driver
+dnl with the outer UDP optimisation.
+dnl A valid inner L4 checksum is required for the optimisation to trigger.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=true])
+
+AT_CHECK([cat good_csum_expected | sed -e "s/339e/0000/" -e "s/bd3c/423c/" > half_bad_csum_expected])
+CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [bad_frame], [half_bad_csum_expected])
+
+AT_CHECK([ovs-vsctl remove Interface p1 options ol_l4_rx_csum_set_good])
+
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_ip_tx_csum_disabled])
 
-dnl Special case 2, to check if inner Tx offload did happen in the driver.
+dnl Special case 3, to check if inner Tx offload did happen in the driver.
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_ip_tx_csum])
 
 dnl The inner part will be fixed by datapath.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [bad_frame], [good_csum_expected])
+
+dnl Special case 4, to check if Tx offloads did happen in the driver
+dnl with the outer UDP optimisation.
+dnl A valid inner L4 checksum is required for the optimisation to trigger.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=true])
+
+AT_CHECK([cat good_csum_expected | sed -e "s/bd3c/423c/" > half_bad_csum_expected])
+CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [bad_frame], [half_bad_csum_expected])
+
+AT_CHECK([ovs-vsctl remove Interface p1 options ol_l4_rx_csum_set_good])
 
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_ip_tx_csum_disabled])
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_ip_tx_csum])
@@ -1511,8 +1531,8 @@ AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum_disabled])
 dnl Special case 2, to check if inner Tx offload did happen in the driver.
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum])
 
-dnl The inner part will be fixed by datapath.
-CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [good_csum_expected])
+AT_CHECK([cat good_csum_expected | sed -e "s/7715/dead/" > bad_csum_updated])
+CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [bad_csum_updated])
 
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum_disabled])
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum])
@@ -1683,8 +1703,8 @@ AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum_disabled])
 dnl Special case 2, to check if inner Tx offload did happen in the driver.
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum])
 
-dnl The inner part will be fixed by datapath.
-CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [good_csum_expected])
+AT_CHECK([cat good_csum_expected | sed -e "s/c6de/dead/" > bad_csum_updated])
+CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [bad_csum_updated])
 
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum_disabled])
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum])
@@ -1818,8 +1838,8 @@ AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum_disabled])
 dnl Special case 2, to check if inner Tx offload did happen in the driver.
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum])
 
-dnl The inner part will be fixed by datapath.
-CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [good_csum_expected])
+AT_CHECK([cat good_csum_expected | sed -e "s/f165/dead/" > bad_csum_updated])
+CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [bad_csum_updated])
 
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum_disabled])
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum])
@@ -1990,8 +2010,8 @@ AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum_disabled])
 dnl Special case 2, to check if inner Tx offload did happen in the driver.
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum])
 
-dnl The inner part will be fixed by datapath.
-CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [good_csum_expected])
+AT_CHECK([cat good_csum_expected | sed -e "s/412f/dead/" > bad_csum_updated])
+CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [bad_csum_updated])
 
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum_disabled])
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum])
@@ -2218,13 +2238,33 @@ AT_CHECK([ovs-vsctl set Interface p2 options:ol_ip_tx_csum_disabled=true])
 AT_CHECK([cat good_csum_expected | sed -e "s/339e/0000/" > half_bad_csum_expected])
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [bad_frame], [half_bad_csum_expected])
 
+dnl Special case 2, to check if Tx offloads did happen in the driver
+dnl with the outer UDP optimisation.
+dnl A valid inner L4 checksum is required for the optimisation to trigger.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=true])
+
+AT_CHECK([cat good_csum_expected | sed -e "s/339e/0000/" -e "s/bd3c/423c/" > half_bad_csum_expected])
+CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [bad_frame], [half_bad_csum_expected])
+
+AT_CHECK([ovs-vsctl remove Interface p1 options ol_l4_rx_csum_set_good])
+
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_ip_tx_csum_disabled])
 
-dnl Special case 2, to check if inner Tx offload did happen in the driver.
+dnl Special case 3, to check if inner Tx offload did happen in the driver.
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_ip_tx_csum])
 
 dnl The inner part will be fixed by datapath.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [bad_frame], [good_csum_expected])
+
+dnl Special case 4, to check if Tx offloads did happen in the driver
+dnl with the outer UDP optimisation.
+dnl A valid inner L4 checksum is required for the optimisation to trigger.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=true])
+
+AT_CHECK([cat good_csum_expected | sed -e "s/bd3c/423c/" > half_bad_csum_expected])
+CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [bad_frame], [half_bad_csum_expected])
+
+AT_CHECK([ovs-vsctl remove Interface p1 options ol_l4_rx_csum_set_good])
 
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_ip_tx_csum_disabled])
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_ip_tx_csum])
@@ -2358,8 +2398,8 @@ AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum_disabled])
 dnl Special case 2, to check if inner Tx offload did happen in the driver.
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum])
 
-dnl The inner part will be fixed by datapath.
-CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [good_csum_expected])
+AT_CHECK([cat good_csum_expected | sed -e "s/7715/dead/" > bad_csum_updated])
+CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [bad_csum_updated])
 
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum_disabled])
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum])
@@ -2530,8 +2570,8 @@ AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum_disabled])
 dnl Special case 2, to check if inner Tx offload did happen in the driver.
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum])
 
-dnl The inner part will be fixed by datapath.
-CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [good_csum_expected])
+AT_CHECK([cat good_csum_expected | sed -e "s/c6de/dead/" > bad_csum_updated])
+CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [bad_csum_updated])
 
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum_disabled])
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum])
@@ -2665,8 +2705,8 @@ AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum_disabled])
 dnl Special case 2, to check if inner Tx offload did happen in the driver.
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum])
 
-dnl The inner part will be fixed by datapath.
-CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [good_csum_expected])
+AT_CHECK([cat good_csum_expected | sed -e "s/f165/dead/" > bad_csum_updated])
+CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [bad_csum_updated])
 
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum_disabled])
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum])
@@ -2837,8 +2877,8 @@ AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum_disabled])
 dnl Special case 2, to check if inner Tx offload did happen in the driver.
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_out_udp_tx_csum])
 
-dnl The inner part will be fixed by datapath.
-CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [good_csum_expected])
+AT_CHECK([cat good_csum_expected | sed -e "s/412f/dead/" > bad_csum_updated])
+CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [bad_csum_updated])
 
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum_disabled])
 AT_CHECK([ovs-vsctl remove Interface p2 options ol_l4_tx_csum])
