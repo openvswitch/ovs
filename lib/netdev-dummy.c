@@ -172,6 +172,16 @@ struct netdev_dummy {
     /* Disable L4 Tx csum offload. */
     bool ol_l4_tx_csum_disabled OVS_GUARDED;
 
+    /* Announce netdev outer IP Tx csum offload. */
+    bool ol_out_ip_tx_csum OVS_GUARDED;
+    /* Disable outer IP Tx csum offload. */
+    bool ol_out_ip_tx_csum_disabled OVS_GUARDED;
+
+    /* Announce netdev outer UDP Tx csum offload. */
+    bool ol_out_udp_tx_csum OVS_GUARDED;
+    /* Disable outer UDP Tx csum offload. */
+    bool ol_out_udp_tx_csum_disabled OVS_GUARDED;
+
     /* Set the segment size for netdev TSO support. */
     int ol_tso_segsz OVS_GUARDED;
 };
@@ -852,6 +862,20 @@ netdev_dummy_get_config(const struct netdev *dev, struct smap *args)
         }
     }
 
+    if (netdev->ol_out_ip_tx_csum) {
+        smap_add_format(args, "ol_out_ip_tx_csum", "%s", "true");
+        if (netdev->ol_out_ip_tx_csum_disabled) {
+            smap_add_format(args, "ol_out_ip_tx_csum_disabled", "%s", "true");
+        }
+    }
+
+    if (netdev->ol_out_udp_tx_csum) {
+        smap_add_format(args, "ol_out_udp_tx_csum", "%s", "true");
+        if (netdev->ol_out_udp_tx_csum_disabled) {
+            smap_add_format(args, "ol_out_udp_tx_csum_disabled", "%s", "true");
+        }
+    }
+
     if (netdev->ol_tso_segsz && userspace_tso_enabled()) {
         smap_add_format(args, "ol_tso_segsz", "%d", netdev->ol_tso_segsz);
     }
@@ -1012,6 +1036,28 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args,
         netdev_->ol_flags &= ~NETDEV_TX_OFFLOAD_TCP_CKSUM;
         netdev_->ol_flags &= ~NETDEV_TX_OFFLOAD_UDP_CKSUM;
         netdev->ol_l4_tx_csum_disabled = true;
+    }
+
+    netdev->ol_out_ip_tx_csum = smap_get_bool(args, "ol_out_ip_tx_csum",
+                                              false);
+    if (netdev->ol_out_ip_tx_csum) {
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_OUTER_IP_CKSUM;
+        netdev->ol_out_ip_tx_csum_disabled =
+            smap_get_bool(args, "ol_out_ip_tx_csum_disabled", false);
+    } else {
+        netdev_->ol_flags &= ~NETDEV_TX_OFFLOAD_OUTER_IP_CKSUM;
+        netdev->ol_out_ip_tx_csum_disabled = true;
+    }
+
+    netdev->ol_out_udp_tx_csum = smap_get_bool(args, "ol_out_udp_tx_csum",
+                                               false);
+    if (netdev->ol_out_udp_tx_csum) {
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM;
+        netdev->ol_out_udp_tx_csum_disabled =
+            smap_get_bool(args, "ol_out_udp_tx_csum_disabled", false);
+    } else {
+        netdev_->ol_flags &= ~NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM;
+        netdev->ol_out_udp_tx_csum_disabled = true;
     }
 
     if (userspace_tso_enabled()) {
@@ -1310,6 +1356,12 @@ netdev_dummy_send(struct netdev *netdev, int qid,
             flags &= ~NETDEV_TX_OFFLOAD_TCP_CKSUM;
             flags &= ~NETDEV_TX_OFFLOAD_UDP_CKSUM;
         }
+        if (!dev->ol_out_ip_tx_csum_disabled) {
+            flags &= ~NETDEV_TX_OFFLOAD_OUTER_IP_CKSUM;
+        }
+        if (!dev->ol_out_udp_tx_csum_disabled) {
+            flags &= ~NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM;
+        }
         is_tso = userspace_tso_enabled() && dev->ol_tso_segsz &&
                  dp_packet_get_tso_segsz(packet);
         ovs_mutex_unlock(&dev->mutex);
@@ -1340,6 +1392,11 @@ netdev_dummy_send(struct netdev *netdev, int qid,
         }
 
         if (VLOG_IS_DBG_ENABLED()) {
+            bool inner_ip_csum_good;
+            bool inner_l4_csum_good;
+            bool inner_ip_csum_bad;
+            bool inner_l4_csum_bad;
+            const char *tunnel;
             bool ip_csum_good;
             bool l4_csum_good;
             bool ip_csum_bad;
@@ -1349,16 +1406,38 @@ netdev_dummy_send(struct netdev *netdev, int qid,
             ip_csum_bad = !!(packet->offloads & DP_PACKET_OL_IP_CKSUM_BAD);
             l4_csum_good = !!(packet->offloads & DP_PACKET_OL_L4_CKSUM_GOOD);
             l4_csum_bad = !!(packet->offloads & DP_PACKET_OL_L4_CKSUM_BAD);
-            VLOG_DBG("Tx: packet with csum IP %s, L4 %s, segsz %"PRIu16,
+            inner_ip_csum_good =
+                !!(packet->offloads & DP_PACKET_OL_INNER_IP_CKSUM_GOOD);
+            inner_ip_csum_bad =
+                !!(packet->offloads & DP_PACKET_OL_INNER_IP_CKSUM_BAD);
+            inner_l4_csum_good =
+                !!(packet->offloads & DP_PACKET_OL_INNER_L4_CKSUM_GOOD);
+            inner_l4_csum_bad =
+                !!(packet->offloads & DP_PACKET_OL_INNER_L4_CKSUM_BAD);
+            tunnel = !dp_packet_tunnel(packet)         ? "none"
+                     : dp_packet_tunnel_vxlan(packet)  ? "vxlan"
+                     : dp_packet_tunnel_geneve(packet) ? "geneve"
+                     : "gre";
+            VLOG_DBG("Tx: packet with csum IP %s, L4 %s, tunnel %s, "
+                     "inner csum IP %s, inner L4 %s, segsz %"PRIu16,
                      ip_csum_good ? (ip_csum_bad ? "partial" : "good")
                                   : (ip_csum_bad ? "bad" : "unknown"),
                      l4_csum_good ? (l4_csum_bad ? "partial" : "good")
                                   : (l4_csum_bad ? "bad" : "unknown"),
+                     tunnel,
+                     inner_ip_csum_good
+                         ? (inner_ip_csum_bad ? "partial" : "good")
+                         : (inner_ip_csum_bad ? "bad" : "unknown"),
+                     inner_l4_csum_good
+                         ? (inner_l4_csum_bad ? "partial" : "good")
+                         : (inner_l4_csum_bad ? "bad" : "unknown"),
                      dp_packet_get_tso_segsz(packet));
         }
 
         if (dp_packet_ip_checksum_partial(packet)
-            || dp_packet_l4_checksum_partial(packet)) {
+            || dp_packet_l4_checksum_partial(packet)
+            || dp_packet_inner_ip_checksum_partial(packet)
+            || dp_packet_inner_l4_checksum_partial(packet)) {
             dp_packet_ol_send_prepare(packet, flags);
         }
 
