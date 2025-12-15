@@ -79,12 +79,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 #define PROD_NUM_DESCS      XSK_RING_PROD__DEFAULT_NUM_DESCS
 #define CONS_NUM_DESCS      XSK_RING_CONS__DEFAULT_NUM_DESCS
 
-#ifdef XDP_USE_NEED_WAKEUP
-#define NEED_WAKEUP_DEFAULT true
-#else
-#define NEED_WAKEUP_DEFAULT false
-#endif
-
 /* The worst case is all 4 queues TX/CQ/RX/FILL are full + some packets
  * still on processing in threads. Number of packets currently in OVS
  * processing is hard to estimate because it depends on number of ports.
@@ -101,7 +95,6 @@ BUILD_ASSERT_DECL(PROD_NUM_DESCS == CONS_NUM_DESCS);
 
 static struct xsk_socket_info *xsk_configure(int ifindex, int xdp_queue_id,
                                              enum afxdp_mode mode,
-                                             bool use_need_wakeup,
                                              bool report_socket_failures);
 static void xsk_remove_xdp_program(uint32_t ifindex, enum afxdp_mode);
 static void xsk_destroy(struct xsk_socket_info *xsk);
@@ -176,18 +169,12 @@ struct netdev_afxdp_tx_lock {
     );
 };
 
-#ifdef XDP_USE_NEED_WAKEUP
 static inline void
 xsk_rx_wakeup_if_needed(struct xsk_umem_info *umem,
                         struct netdev *netdev, int fd)
 {
-    struct netdev_linux *dev = netdev_linux_cast(netdev);
     struct pollfd pfd;
     int ret;
-
-    if (!dev->use_need_wakeup) {
-        return;
-    }
 
     if (xsk_ring_prod__needs_wakeup(&umem->fq)) {
         pfd.fd = fd;
@@ -207,22 +194,6 @@ xsk_tx_need_wakeup(struct xsk_socket_info *xsk_info)
 {
     return xsk_ring_prod__needs_wakeup(&xsk_info->tx);
 }
-
-#else /* !XDP_USE_NEED_WAKEUP */
-static inline void
-xsk_rx_wakeup_if_needed(struct xsk_umem_info *umem OVS_UNUSED,
-                        struct netdev *netdev OVS_UNUSED,
-                        int fd OVS_UNUSED)
-{
-    /* Nothing. */
-}
-
-static inline bool
-xsk_tx_need_wakeup(struct xsk_socket_info *xsk_info OVS_UNUSED)
-{
-    return true;
-}
-#endif /* XDP_USE_NEED_WAKEUP */
 
 static void
 netdev_afxdp_cleanup_unused_pool(struct unused_pool *pool)
@@ -341,7 +312,7 @@ xsk_configure_umem(void *buffer, uint64_t size)
 static struct xsk_socket_info *
 xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
                      uint32_t queue_id, enum afxdp_mode mode,
-                     bool use_need_wakeup, bool report_socket_failures)
+                     bool report_socket_failures)
 {
     struct xsk_socket_config cfg;
     struct xsk_socket_info *xsk;
@@ -355,14 +326,8 @@ xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
     cfg.rx_size = CONS_NUM_DESCS;
     cfg.tx_size = PROD_NUM_DESCS;
     cfg.libbpf_flags = 0;
-    cfg.bind_flags = xdp_modes[mode].bind_flags;
+    cfg.bind_flags = xdp_modes[mode].bind_flags | XDP_USE_NEED_WAKEUP;
     cfg.xdp_flags = xdp_modes[mode].xdp_flags | XDP_FLAGS_UPDATE_IF_NOEXIST;
-
-#ifdef XDP_USE_NEED_WAKEUP
-    if (use_need_wakeup) {
-        cfg.bind_flags |= XDP_USE_NEED_WAKEUP;
-    }
-#endif
 
     if (if_indextoname(ifindex, devname) == NULL) {
         VLOG_ERR("ifindex %d to devname failed (%s)",
@@ -375,10 +340,8 @@ xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
                              &xsk->rx, &xsk->tx, &cfg);
     if (ret) {
         VLOG(report_socket_failures ? VLL_ERR : VLL_DBG,
-             "xsk_socket__create failed (%s) mode: %s, "
-             "use-need-wakeup: %s, qid: %d",
-             ovs_strerror(errno), xdp_modes[mode].name,
-             use_need_wakeup ? "true" : "false", queue_id);
+             "xsk_socket__create failed (%s) mode: %s, qid: %d",
+             ovs_strerror(errno), xdp_modes[mode].name, queue_id);
         free(xsk);
         return NULL;
     }
@@ -424,7 +387,7 @@ xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
 
 static struct xsk_socket_info *
 xsk_configure(int ifindex, int xdp_queue_id, enum afxdp_mode mode,
-              bool use_need_wakeup, bool report_socket_failures)
+              bool report_socket_failures)
 {
     struct xsk_socket_info *xsk;
     struct xsk_umem_info *umem;
@@ -450,7 +413,7 @@ xsk_configure(int ifindex, int xdp_queue_id, enum afxdp_mode mode,
     VLOG_DBG("Allocated umem pool at 0x%"PRIxPTR, (uintptr_t) umem);
 
     xsk = xsk_configure_socket(umem, ifindex, xdp_queue_id, mode,
-                               use_need_wakeup, report_socket_failures);
+                               report_socket_failures);
     if (!xsk) {
         /* Clean up umem and xpacket pool. */
         if (xsk_umem__delete(umem->umem)) {
@@ -470,11 +433,10 @@ xsk_configure_queue(struct netdev_linux *dev, int ifindex, int queue_id,
 {
     struct xsk_socket_info *xsk_info;
 
-    VLOG_DBG("%s: configuring queue: %d, mode: %s, use-need-wakeup: %s.",
-             netdev_get_name(&dev->up), queue_id, xdp_modes[mode].name,
-             dev->use_need_wakeup ? "true" : "false");
-    xsk_info = xsk_configure(ifindex, queue_id, mode, dev->use_need_wakeup,
-                             report_socket_failures);
+    VLOG_DBG("%s: configuring queue: %d, mode: %s.",
+             netdev_get_name(&dev->up), queue_id, xdp_modes[mode].name);
+
+    xsk_info = xsk_configure(ifindex, queue_id, mode, report_socket_failures);
     if (!xsk_info) {
         VLOG(report_socket_failures ? VLL_ERR : VLL_DBG,
              "%s: Failed to create AF_XDP socket on queue %d in %s mode.",
@@ -617,7 +579,6 @@ netdev_afxdp_set_config(struct netdev *netdev, const struct smap *args,
     struct netdev_linux *dev = netdev_linux_cast(netdev);
     const char *str_xdp_mode;
     enum afxdp_mode xdp_mode;
-    bool need_wakeup;
     int new_n_rxq;
 
     ovs_mutex_lock(&dev->mutex);
@@ -644,20 +605,10 @@ netdev_afxdp_set_config(struct netdev *netdev, const struct smap *args,
         return EINVAL;
     }
 
-    need_wakeup = smap_get_bool(args, "use-need-wakeup", NEED_WAKEUP_DEFAULT);
-#ifndef XDP_USE_NEED_WAKEUP
-    if (need_wakeup) {
-        VLOG_WARN("XDP need_wakeup is not supported in libbpf/libxdp.");
-        need_wakeup = false;
-    }
-#endif
-
     if (dev->requested_n_rxq != new_n_rxq
-        || dev->requested_xdp_mode != xdp_mode
-        || dev->requested_need_wakeup != need_wakeup) {
+        || dev->requested_xdp_mode != xdp_mode) {
         dev->requested_n_rxq = new_n_rxq;
         dev->requested_xdp_mode = xdp_mode;
-        dev->requested_need_wakeup = need_wakeup;
         netdev_request_reconfigure(netdev);
     }
     ovs_mutex_unlock(&dev->mutex);
@@ -672,8 +623,6 @@ netdev_afxdp_get_config(const struct netdev *netdev, struct smap *args)
     ovs_mutex_lock(&dev->mutex);
     smap_add_format(args, "n_rxq", "%d", netdev->n_rxq);
     smap_add_format(args, "xdp-mode", "%s", xdp_modes[dev->xdp_mode].name);
-    smap_add_format(args, "use-need-wakeup", "%s",
-                    dev->use_need_wakeup ? "true" : "false");
     ovs_mutex_unlock(&dev->mutex);
     return 0;
 }
@@ -708,7 +657,6 @@ netdev_afxdp_reconfigure(struct netdev *netdev)
 
     if (netdev->n_rxq == dev->requested_n_rxq
         && dev->xdp_mode == dev->requested_xdp_mode
-        && dev->use_need_wakeup == dev->requested_need_wakeup
         && dev->xsks) {
         goto out;
     }
@@ -725,7 +673,6 @@ netdev_afxdp_reconfigure(struct netdev *netdev)
     if (setrlimit(RLIMIT_MEMLOCK, &r)) {
         VLOG_ERR("setrlimit(RLIMIT_MEMLOCK) failed: %s", ovs_strerror(errno));
     }
-    dev->use_need_wakeup = dev->requested_need_wakeup;
 
     err = xsk_configure_all(netdev);
     if (err) {
@@ -922,39 +869,26 @@ netdev_afxdp_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
 }
 
 static inline int
-kick_tx(struct xsk_socket_info *xsk_info, enum afxdp_mode mode,
-        bool use_need_wakeup)
+kick_tx(struct xsk_socket_info *xsk_info)
 {
-    int ret, retries;
-    static const int KERNEL_TX_BATCH_SIZE = 16;
+    /* At most try as many times as the number of packets we have to send. */
+    uint32_t max_retry = xsk_info->outstanding_tx;
 
-    if (use_need_wakeup && !xsk_tx_need_wakeup(xsk_info)) {
-        return 0;
-    }
+    while (max_retry-- && xsk_tx_need_wakeup(xsk_info)) {
+        int fd = xsk_socket__fd(xsk_info->xsk);
+        int ret;
 
-    /* In all modes except native-with-zerocopy packet transmission is
-     * synchronous, and the kernel xmits only TX_BATCH_SIZE(16) packets for a
-     * single sendmsg syscall.
-     * So, we have to kick the kernel (n_packets / 16) times to be sure that
-     * all packets are transmitted. */
-    retries = (mode != OVS_AF_XDP_MODE_NATIVE_ZC)
-              ? xsk_info->outstanding_tx / KERNEL_TX_BATCH_SIZE
-              : 0;
-kick_retry:
-    /* This causes system call into kernel's xsk_sendmsg, and xsk_generic_xmit
-     * (generic and native modes) or xsk_zc_xmit (native-with-zerocopy mode).
-     */
-    ret = sendto(xsk_socket__fd(xsk_info->xsk), NULL, 0, MSG_DONTWAIT,
-                                NULL, 0);
-    if (ret < 0) {
-        if (retries-- && errno == EAGAIN) {
-            goto kick_retry;
-        }
-        if (errno == ENXIO || errno == ENOBUFS || errno == EOPNOTSUPP) {
-            return errno;
+        /* This causes system call into kernel's xsk_sendmsg, and
+         * xsk_generic_xmit (generic and native modes) or xsk_wakeup
+         * (native-with-zerocopy mode). */
+        ret = sendto(fd, NULL, 0, MSG_DONTWAIT, NULL, 0);
+        if (ret < 0 && errno != EAGAIN) {
+            /* It's possible that the device is busy, but we shouldn't
+             * alert users, as that can be too much noise. */
+            return errno == EBUSY ? 0 : errno;
         }
     }
-    /* No error, or EBUSY, or too many retries on EAGAIN. */
+    /* No error or too many retries on EAGAIN. */
     return 0;
 }
 
@@ -1104,7 +1038,7 @@ __netdev_afxdp_batch_send(struct netdev *netdev, int qid,
                            &orig);
         COVERAGE_INC(afxdp_tx_full);
         afxdp_complete_tx(xsk_info);
-        kick_tx(xsk_info, dev->xdp_mode_in_use, dev->use_need_wakeup);
+        kick_tx(xsk_info);
         error = ENOMEM;
         goto out;
     }
@@ -1128,7 +1062,7 @@ __netdev_afxdp_batch_send(struct netdev *netdev, int qid,
     xsk_ring_prod__submit(&xsk_info->tx, dp_packet_batch_size(batch));
     xsk_info->outstanding_tx += dp_packet_batch_size(batch);
 
-    ret = kick_tx(xsk_info, dev->xdp_mode_in_use, dev->use_need_wakeup);
+    ret = kick_tx(xsk_info);
     if (OVS_UNLIKELY(ret)) {
         VLOG_WARN_RL(&rl, "%s: error sending AF_XDP packet: %s.",
                      netdev_get_name(netdev), ovs_strerror(ret));
@@ -1219,7 +1153,6 @@ netdev_afxdp_construct(struct netdev *netdev)
 
     dev->requested_n_rxq = NR_QUEUE;
     dev->requested_xdp_mode = OVS_AF_XDP_MODE_BEST_EFFORT;
-    dev->requested_need_wakeup = NEED_WAKEUP_DEFAULT;
 
     dev->xsks = NULL;
     dev->tx_locks = NULL;

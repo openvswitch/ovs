@@ -1,5 +1,10 @@
 Post-v3.6.0
 --------------------
+   - AF_XDP:
+     * AF_XDP support now requires Linux kernel v5.4+ or a nominally older
+       distribution kernel with sufficient features backported.
+     * Setting or reporting "use-need-wakeup" is no longer supported.  The
+       feature is always enabled.
    - TLS:
      * Added support for TLS Server Name Indication (SNI) with the new
        --ssl-server-name option.  This allows specifying the server name

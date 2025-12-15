@@ -89,6 +89,9 @@ vSwitch with AF_XDP will require the following:
 
 - ``libbpf`` and ``libxdp`` (if version of ``libbpf`` if higher than ``0.6``).
 
+- Linux kernel v5.4+ or a nominally older distribution kernel that has
+  required features backported.
+
 - Linux kernel XDP support, with the following options (required)
 
   * CONFIG_BPF=y
@@ -145,7 +148,7 @@ Finally, build and install OVS::
 
 To kick start end-to-end autotesting::
 
-  uname -a # make sure having 5.0+ kernel
+  uname -a # make sure having 5.4+ kernel
   ethtool --version # make sure ethtool is installed
   make check-afxdp TESTSUITEFLAGS='1'
 
@@ -179,9 +182,6 @@ more details):
  * ``xdp-mode``: ``best-effort``, ``native-with-zerocopy``,
    ``native`` or ``generic``.  Defaults to ``best-effort``, i.e. best of
    supported modes, so in most cases you don't need to change it.
-
- * ``use-need-wakeup``: default ``true`` if libbpf supports it,
-   otherwise ``false``.
 
 For example, to use 1 PMD (on core 4) on 1 queue (queue 0) device,
 configure these options: ``pmd-cpu-mask``, ``pmd-rxq-affinity``, and

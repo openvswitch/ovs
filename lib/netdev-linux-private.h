@@ -119,9 +119,6 @@ struct netdev_linux {
     enum afxdp_mode requested_xdp_mode;     /* Requested  AF_XDP mode. */
     enum afxdp_mode xdp_mode_in_use;        /* Effective  AF_XDP mode. */
 
-    bool use_need_wakeup;
-    bool requested_need_wakeup;
-
     struct netdev_afxdp_tx_lock *tx_locks;  /* Array of locks for TX queues. */
 #endif
 };

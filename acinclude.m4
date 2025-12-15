@@ -310,7 +310,11 @@ AC_DEFUN([OVS_CHECK_LINUX_AF_XDP], [
     AC_CHECK_HEADER([bpf/libbpf.h], [], [failed_dep="bpf/libbpf.h"])
 
     if test "$failed_dep" = none; then
-      AC_CHECK_HEADER([linux/if_xdp.h], [], [failed_dep="linux/if_xdp.h"])
+      AC_CHECK_HEADER([linux/if_xdp.h], [
+        AC_CHECK_DECLS([XDP_USE_NEED_WAKEUP], [],
+                       [failed_dep="XDP_USE_NEED_WAKEUP"],
+                       [[#include <linux/if_xdp.h>]])
+      ], [failed_dep="linux/if_xdp.h"])
     fi
 
     if test "$failed_dep" = none; then
