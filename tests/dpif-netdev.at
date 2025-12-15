@@ -736,7 +736,8 @@ AT_CHECK([test `ovs-vsctl get Interface p2 statistics:tx_q0_packets` -gt 0 -a dn
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([userspace offload - ip csum offload])
+AT_SETUP([dpif-netdev - ip csum offload])
+AT_KEYWORDS([userspace offload])
 OVS_VSWITCHD_START(
   [add-br br1 -- set bridge br1 datapath-type=dummy -- \
    add-port br1 p1 -- \
@@ -946,7 +947,8 @@ AT_CHECK([tail -n 2 p2.pcap.txt], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([userspace offload - tcp csum offload])
+AT_SETUP([dpif-netdev - tcp csum offload])
+AT_KEYWORDS([userspace offload])
 OVS_VSWITCHD_START(
   [add-br br1 -- set bridge br1 datapath-type=dummy -- \
    add-port br1 p1 -- \
@@ -1120,7 +1122,8 @@ AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=false])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([userspace offload - tcp csum offload (simple match)])
+AT_SETUP([dpif-netdev - tcp csum offload (simple match)])
+AT_KEYWORDS([userspace offload])
 OVS_VSWITCHD_START(
   [add-br br1 -- set bridge br1 datapath-type=dummy -- \
    add-port br1 p1 -- \
@@ -1196,7 +1199,8 @@ AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0]
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([userspace offload - udp csum offload])
+AT_SETUP([dpif-netdev - udp csum offload])
+AT_KEYWORDS([userspace offload])
 OVS_VSWITCHD_START(
   [add-br br1 -- set bridge br1 datapath-type=dummy -- \
    add-port br1 p1 -- \
@@ -1370,7 +1374,8 @@ AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=false])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([userspace offload - IPv6 tcp csum offload])
+AT_SETUP([dpif-netdev - IPv6 tcp csum offload])
+AT_KEYWORDS([userspace offload])
 OVS_VSWITCHD_START(
   [add-br br1 -- set bridge br1 datapath-type=dummy -- \
    add-port br1 p1 -- \
@@ -1544,7 +1549,8 @@ AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=false])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([userspace offload - IPv6 udp csum offload])
+AT_SETUP([dpif-netdev - IPv6 udp csum offload])
+AT_KEYWORDS([userspace offload])
 OVS_VSWITCHD_START(
   [add-br br1 -- set bridge br1 datapath-type=dummy -- \
    add-port br1 p1 -- \
@@ -1718,7 +1724,8 @@ AT_CHECK([ovs-vsctl set Interface p1 options:ol_l4_rx_csum_set_good=false])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([userspace offload - conntrack])
+AT_SETUP([dpif-netdev - conntrack])
+AT_KEYWORDS([userspace offload])
 OVS_VSWITCHD_START(
   [add-br br1 -- set bridge br1 datapath-type=dummy -- \
    add-port br1 p1 -- \
@@ -1932,7 +1939,8 @@ AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=false])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([userspace offload - tso])
+AT_SETUP([dpif-netdev - tso])
+AT_KEYWORDS([userspace offload])
 OVS_VSWITCHD_START(
   [set Open_vSwitch . other_config:userspace-tso-enable=true -- \
    add-br br1 -- set bridge br1 datapath-type=dummy -- \
@@ -2004,7 +2012,8 @@ AT_CHECK_UNQUOTED([ovs-pcap p2.pcap], [0], [dnl
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([userspace offload - tunnel tso fallback])
+AT_SETUP([dpif-netdev - tunnel tso fallback])
+AT_KEYWORDS([userspace offload])
 OVS_VSWITCHD_START([set Open_vSwitch . other_config:userspace-tso-enable=true \
                     -- add-br br1 -- set bridge br1 datapath-type=dummy \
                        other-config:hwaddr=aa:55:aa:55:00:03 \
@@ -2245,7 +2254,8 @@ AT_CHECK_UNQUOTED([ovs-pcap p1.pcap | sort], [0], [dnl
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([userspace offload - tso + check_pkt_len])
+AT_SETUP([dpif-netdev - tso + check_pkt_len])
+AT_KEYWORDS([userspace offload])
 OVS_VSWITCHD_START(
   [set Open_vSwitch . other_config:userspace-tso-enable=true])
 add_of_ports --pcap br0 $(seq 1 3)
