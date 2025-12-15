@@ -2647,10 +2647,7 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
         return true;
     }
 
-    if (dp_packet_tunnel(pkt)
-        && (dp_packet_inner_ip_checksum_partial(pkt)
-            || dp_packet_inner_l4_checksum_partial(pkt)
-            || mbuf->tso_segsz)) {
+    if (dp_packet_tunnel(pkt)) {
         if (dp_packet_ip_checksum_partial(pkt)
             || dp_packet_l4_checksum_partial(pkt)) {
             mbuf->outer_l2_len = (char *) dp_packet_l3(pkt) -

@@ -553,12 +553,18 @@ dp_packet_compare_offsets(struct dp_packet *b1, struct dp_packet *b2,
 void
 dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
 {
-    if (!dp_packet_ip_checksum_partial(p)
-        && !dp_packet_l4_checksum_partial(p)
-        && !dp_packet_inner_ip_checksum_partial(p)
+    if (!dp_packet_inner_ip_checksum_partial(p)
         && !dp_packet_inner_l4_checksum_partial(p)) {
-        /* Only checksumming needs actions. */
-        return;
+
+        if (!dp_packet_ip_checksum_partial(p)
+            && !dp_packet_l4_checksum_partial(p)) {
+            /* No checksumming needed. */
+            return;
+        }
+
+        if (OVS_UNLIKELY(dp_packet_tunnel(p) && !dp_packet_get_tso_segsz(p))) {
+            p->offloads &= ~DP_PACKET_OL_TUNNEL_MASK;
+        }
     }
 
     if (!dp_packet_tunnel(p)) {
