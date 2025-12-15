@@ -71,7 +71,6 @@ COVERAGE_DEFINE(netdev_add_router);
 COVERAGE_DEFINE(netdev_get_stats);
 COVERAGE_DEFINE(netdev_push_header_drops);
 COVERAGE_DEFINE(netdev_soft_seg_good);
-COVERAGE_DEFINE(netdev_soft_seg_drops);
 
 struct netdev_saved_flags {
     struct netdev *netdev;
@@ -843,17 +842,12 @@ netdev_send_tso(struct netdev *netdev, int qid,
     curr_batch = batches;
     DP_PACKET_BATCH_REFILL_FOR_EACH (k, size, packet, batch) {
         if (dp_packet_get_tso_segsz(packet)) {
-            if (dp_packet_gso(packet, &curr_batch)) {
-                COVERAGE_INC(netdev_soft_seg_good);
-            } else {
-                COVERAGE_INC(netdev_soft_seg_drops);
-            }
-            dp_packet_delete(packet);
+            dp_packet_gso(packet, &curr_batch);
+            COVERAGE_INC(netdev_soft_seg_good);
         } else {
             if (dp_packet_batch_is_full(curr_batch)) {
                 curr_batch++;
             }
-
             dp_packet_batch_add(curr_batch, packet);
         }
     }
