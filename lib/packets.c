@@ -33,6 +33,7 @@
 #include "ovs-thread.h"
 #include "odp-util.h"
 #include "dp-packet.h"
+#include "dp-packet-gso.h"
 #include "unaligned.h"
 
 const struct in6_addr in6addr_exact = IN6ADDR_EXACT_INIT;
@@ -2103,6 +2104,7 @@ packet_udp_tunnel_csum(struct dp_packet *p)
     uint32_t partial_csum;
     struct ip_header *ip;
     uint32_t inner_csum;
+    uint16_t tso_segsz;
     bool inner_ipv4;
     void *inner_l4;
 
@@ -2183,6 +2185,38 @@ packet_udp_tunnel_csum(struct dp_packet *p)
     partial_csum = csum_continue(partial_csum, inner_l4_csum_p + 1,
         (char *) inner_l4_data - (char *)(inner_l4_csum_p + 1));
     udp->udp_csum = csum_finish(partial_csum);
+    tso_segsz = dp_packet_get_tso_segsz(p);
+    if (tso_segsz) {
+        uint16_t payload_len = dp_packet_get_inner_tcp_payload_length(p);
+
+        ovs_assert(payload_len == tso_segsz * dp_packet_gso_nr_segs(p));
+
+        /* The pseudo header used in the outer UDP checksum is dependent on
+         * the ip_tot_len / ip6_plen which was a reflection of the TSO frame
+         * size. The segmented packet will be shorter. */
+        udp->udp_csum = recalc_csum16(udp->udp_csum, htons(payload_len),
+                                      htons(tso_segsz));
+
+        /* When segmenting the packet, various headers get updated:
+         * - inner L3
+         *   - for IPv4, ip_tot_len is updated, BUT it is not affecting the
+         *     outer UDP checksum because the IPv4 header itself contains
+         *     a checksum that compensates for this update,
+         *   - for IPv6, ip6_plen is updated, and this must be considered,
+         * - inner L4
+         *   - inner pseudo header used in the TCP checksum is dependent on
+         *     the inner ip_tot_len / ip6_plen,
+         *   - TCP seq number is updated,
+         *   - the HW may change some TCP flags (think PSH/FIN),
+         *   BUT the TCP checksum will compensate for those updates,
+         *
+         * Summary: we only care about the inner IPv6 header update.
+         */
+        if (IP_VER(inner_ip->ip_ihl_ver) != 4) {
+            udp->udp_csum = recalc_csum16(udp->udp_csum, htons(payload_len),
+                                          htons(tso_segsz));
+        }
+    }
     if (!udp->udp_csum) {
         udp->udp_csum = htons(0xffff);
     }

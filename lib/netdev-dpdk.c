@@ -2725,20 +2725,13 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 
     if (mbuf->tso_segsz) {
         struct tcp_header *th = l4;
-        uint16_t link_tso_segsz;
         int hdr_len;
 
         mbuf->l4_len = TCP_OFFSET(th->tcp_ctl) * 4;
 
         hdr_len = mbuf->l2_len + mbuf->l3_len + mbuf->l4_len;
-        link_tso_segsz = dev->mtu - mbuf->l3_len - mbuf->l4_len;
         if (dp_packet_tunnel(pkt)) {
             hdr_len += mbuf->outer_l2_len + mbuf->outer_l3_len;
-            link_tso_segsz -= mbuf->outer_l3_len + mbuf->l2_len;
-        }
-
-        if (mbuf->tso_segsz > link_tso_segsz) {
-            mbuf->tso_segsz = link_tso_segsz;
         }
 
         if (OVS_UNLIKELY((hdr_len + mbuf->tso_segsz) > dev->max_packet_len)) {

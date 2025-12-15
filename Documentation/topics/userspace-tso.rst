@@ -105,6 +105,32 @@ then started again. OvS will then report::
    $ ovs-vsctl get interface vhost0 status:userspace-tso
    ovs-vsctl: no key "userspace-tso" in Interface record "vhost0" column status
 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Software segmentation fallback
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In case a `TSO` packet is transmitted over a port that does not support
+segmentation, OvS userspace datapath segments the packet in software
+(see lib/dp-packet-gso.c).
+
+This case is common for port not supporting TSO at all.
+A coverage counter exists to reflect when the software fallback helper
+is called.::
+
+   $ ovs-appctl coverage/read-counter netdev_soft_seg_good
+   178760
+
+Another possibility is when the `TSO` packet involves a header encapsulation
+requested by OvS.
+When the tunnel encapsulation is UDP based, and checksum on the tunnel header
+is requested but the transmitting port does not support this combination,
+OvS does some partial segmentation based on the segmentation size coming
+from the receiving port.
+A coverage counter exists to reflect when this optimisation is called.::
+
+   $ ovs-appctl coverage/read-counter netdev_partial_seg_good
+   1345
+
 ~~~~~~~~~~~
 Limitations
 ~~~~~~~~~~~

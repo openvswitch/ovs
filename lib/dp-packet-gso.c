@@ -77,6 +77,23 @@ dp_packet_gso_nr_segs(struct dp_packet *p)
     return DIV_ROUND_UP(data_length, segsz);
 }
 
+/* For partial segmentation, we try to pack as much data as we can in a first
+ * packet (up to the final number of segments on the wire).
+ * If there is still some data left, we need an extra "little" packet
+ * (shorter than tso_segsz). */
+int
+dp_packet_gso_partial_nr_segs(struct dp_packet *p)
+{
+    if ((dp_packet_tunnel_geneve(p) || dp_packet_tunnel_vxlan(p))
+        && dp_packet_l4_checksum_partial(p)
+        && dp_packet_get_inner_tcp_payload_length(p)
+           != dp_packet_gso_nr_segs(p) * dp_packet_get_tso_segsz(p)) {
+        return 2;
+    }
+
+    return 1;
+}
+
 static void
 dp_packet_gso_update_segment(struct dp_packet *seg, int seg_no, int n_segs,
                              uint16_t tso_segsz, bool udp_tnl, bool gre_tnl)
@@ -136,7 +153,7 @@ dp_packet_gso_update_segment(struct dp_packet *seg, int seg_no, int n_segs,
     tcp_seq += seg_no * tso_segsz;
     put_16aligned_be32(&tcp_hdr->tcp_seq, htonl(tcp_seq));
 
-    if (OVS_LIKELY(seg_no < (n_segs - 1))) {
+    if (seg_no < (n_segs - 1) && !dp_packet_get_tso_segsz(seg)) {
         uint16_t tcp_offset = TCP_OFFSET(tcp_hdr->tcp_ctl);
         /* Reset flags PUSH and FIN unless it is the last segment. */
         uint16_t tcp_flags = TCP_FLAGS(tcp_hdr->tcp_ctl)
@@ -157,12 +174,9 @@ dp_packet_gso_update_segment(struct dp_packet *seg, int seg_no, int n_segs,
     }
 }
 
-/* Perform software segmentation on packet 'p'.
- *
- * Segments packet 'p' into the array of preallocated batches in 'batches',
- * updating the 'batches' pointer as needed. */
-void
-dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
+static void
+dp_packet_gso__(struct dp_packet *p, struct dp_packet_batch **batches,
+                bool partial_seg)
 {
     struct dp_packet_batch *curr_batch = *batches;
     struct dp_packet *seg;
@@ -200,6 +214,13 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
         data_len = dp_packet_get_tcp_payload_length(p);
     }
 
+    if (partial_seg) {
+        if (dp_packet_gso_partial_nr_segs(p) != 1) {
+            goto last_seg;
+        }
+        goto first_seg;
+    }
+
     for (int i = 1; i < n_segs - 1; i++) {
         seg = dp_packet_gso_seg_new(p, hdr_len, hdr_len + i * tso_segsz,
                                     tso_segsz);
@@ -212,6 +233,7 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
         dp_packet_batch_add(curr_batch, seg);
     }
 
+last_seg:
     /* Create the last segment. */
     seg = dp_packet_gso_seg_new(p, hdr_len, hdr_len + (n_segs - 1) * tso_segsz,
                                 data_len - (n_segs - 1) * tso_segsz);
@@ -223,11 +245,44 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
     }
     dp_packet_batch_add(curr_batch, seg);
 
-    /* Trim the first segment and reset TSO. */
-    dp_packet_set_size(p, hdr_len + tso_segsz);
-    dp_packet_set_tso_segsz(p, 0);
+first_seg:
+    if (partial_seg) {
+        if (dp_packet_gso_partial_nr_segs(p) != 1) {
+            dp_packet_set_size(p, hdr_len + (n_segs - 1) * tso_segsz);
+            if (n_segs == 2) {
+                /* No need to ask HW segmentation, we already did the job. */
+                dp_packet_set_tso_segsz(p, 0);
+            }
+        }
+    } else {
+        /* Trim the first segment and reset TSO. */
+        dp_packet_set_size(p, hdr_len + tso_segsz);
+        dp_packet_set_tso_segsz(p, 0);
+    }
     dp_packet_gso_update_segment(p, 0, n_segs, tso_segsz, udp_tnl, gre_tnl);
 
 out:
     *batches = curr_batch;
+}
+
+/* Perform software segmentation on packet 'p'.
+ *
+ * Segments packet 'p' into the array of preallocated batches in 'batches',
+ * updating the 'batches' pointer as needed. */
+void
+dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
+{
+    dp_packet_gso__(p, batches, false);
+}
+
+/* Perform partial software segmentation on packet 'p'.
+ *
+ * For UDP tunnels, if the packet payload length is not aligned on the
+ * segmentation size, segments the last segment of packet 'p' into the array
+ * of preallocated batches in 'batches', updating the 'batches' pointer
+ * as needed. */
+void
+dp_packet_gso_partial(struct dp_packet *p, struct dp_packet_batch **batches)
+{
+    dp_packet_gso__(p, batches, true);
 }

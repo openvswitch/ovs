@@ -71,6 +71,7 @@ COVERAGE_DEFINE(netdev_add_router);
 COVERAGE_DEFINE(netdev_get_stats);
 COVERAGE_DEFINE(netdev_push_header_drops);
 COVERAGE_DEFINE(netdev_soft_seg_good);
+COVERAGE_DEFINE(netdev_partial_seg_good);
 
 struct netdev_saved_flags {
     struct netdev *netdev;
@@ -802,7 +803,8 @@ netdev_get_pt_mode(const struct netdev *netdev)
  * from netdev_class->send() if at least one batch failed to send. */
 static int
 netdev_send_tso(struct netdev *netdev, int qid,
-                struct dp_packet_batch *batch, bool concurrent_txq)
+                struct dp_packet_batch *batch, bool concurrent_txq,
+                bool partial_seg)
 {
     struct dp_packet_batch *batches;
     struct dp_packet *packet;
@@ -812,11 +814,15 @@ netdev_send_tso(struct netdev *netdev, int qid,
     int error;
 
     /* Calculate the total number of packets in the batch after
-     * the segmentation. */
+     * the (partial?) segmentation. */
     n_packets = 0;
     DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
         if (dp_packet_get_tso_segsz(packet)) {
-            n_packets += dp_packet_gso_nr_segs(packet);
+            if (partial_seg) {
+                n_packets += dp_packet_gso_partial_nr_segs(packet);
+            } else {
+                n_packets += dp_packet_gso_nr_segs(packet);
+            }
         } else {
             n_packets++;
         }
@@ -842,8 +848,13 @@ netdev_send_tso(struct netdev *netdev, int qid,
     curr_batch = batches;
     DP_PACKET_BATCH_REFILL_FOR_EACH (k, size, packet, batch) {
         if (dp_packet_get_tso_segsz(packet)) {
-            dp_packet_gso(packet, &curr_batch);
-            COVERAGE_INC(netdev_soft_seg_good);
+            if (partial_seg) {
+                dp_packet_gso_partial(packet, &curr_batch);
+                COVERAGE_INC(netdev_partial_seg_good);
+            } else {
+                dp_packet_gso(packet, &curr_batch);
+                COVERAGE_INC(netdev_soft_seg_good);
+            }
         } else {
             if (dp_packet_batch_is_full(curr_batch)) {
                 curr_batch++;
@@ -906,7 +917,8 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
         if (!(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
                 if (dp_packet_get_tso_segsz(packet)) {
-                    return netdev_send_tso(netdev, qid, batch, concurrent_txq);
+                    return netdev_send_tso(netdev, qid, batch, concurrent_txq,
+                                           false);
                 }
             }
         } else if (!(netdev_flags & (NETDEV_TX_VXLAN_TNL_TSO |
@@ -915,16 +927,16 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
                 if (dp_packet_get_tso_segsz(packet)
                     && dp_packet_tunnel(packet)) {
-                    return netdev_send_tso(netdev, qid, batch, concurrent_txq);
+                    return netdev_send_tso(netdev, qid, batch, concurrent_txq,
+                                           false);
                 }
             }
         } else if (!(netdev_flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM)) {
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
                 if (dp_packet_get_tso_segsz(packet)
-                    && (dp_packet_tunnel_vxlan(packet)
-                        || dp_packet_tunnel_geneve(packet))
-                    && dp_packet_l4_checksum_partial(packet)) {
-                    return netdev_send_tso(netdev, qid, batch, concurrent_txq);
+                    && dp_packet_gso_partial_nr_segs(packet) != 1) {
+                    return netdev_send_tso(netdev, qid, batch, concurrent_txq,
+                                           true);
                 }
             }
         }
