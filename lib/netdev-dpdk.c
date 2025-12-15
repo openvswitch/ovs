@@ -2598,6 +2598,9 @@ netdev_dpdk_batch_init_packet_fields(struct dp_packet_batch *batch)
     struct dp_packet *packet;
 
     DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        /* Datapath does not support multi-segment buffers. */
+        ovs_assert(packet->mbuf.nb_segs == 1);
+
         dp_packet_reset_cutlen(packet);
         packet->packet_type = htonl(PT_ETH);
         packet->has_hash = !!(packet->mbuf.ol_flags & RTE_MBUF_F_RX_RSS_HASH);
