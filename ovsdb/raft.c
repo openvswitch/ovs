@@ -1857,9 +1857,18 @@ raft_set_term(struct raft *raft, uint64_t term, const struct uuid *vote)
 
 static bool
 raft_accept_vote(struct raft *raft, struct raft_server *s,
-                 const struct uuid *vote)
+                 const struct uuid *vote, bool is_prevote)
 {
     if (uuid_equals(&s->vote, vote)) {
+        return false;
+    }
+    if (raft->prevote_passed && is_prevote) {
+        /* This is mostly a defensive check, as pre-vote and a vote should
+         * not happen on the same term.  But we'd like to know if they do. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_WARN_RL(&rl, "ignoring pre-vote reply from server %s "
+                          "during the actual election on term %"PRIu64".",
+                     s->nickname, raft->term);
         return false;
     }
     if (!uuid_is_zero(&s->vote)) {
@@ -1959,7 +1968,7 @@ raft_start_election(struct raft *raft, bool is_prevote,
     }
 
     /* Vote for ourselves. */
-    if (raft_accept_vote(raft, me, &raft->sid)) {
+    if (raft_accept_vote(raft, me, &raft->sid, is_prevote)) {
         /* We just started vote, so it shouldn't be accepted yet unless this is
          * a one-node cluster. In such case we don't do pre-vote, and become
          * leader immediately. */
@@ -3985,7 +3994,7 @@ raft_handle_vote_reply(struct raft *raft,
 
     struct raft_server *s = raft_find_peer(raft, &rpy->common.sid);
     if (s) {
-        if (raft_accept_vote(raft, s, &rpy->vote)) {
+        if (raft_accept_vote(raft, s, &rpy->vote, rpy->is_prevote)) {
             if (raft->prevote_passed) {
                 raft_become_leader(raft);
             } else {
