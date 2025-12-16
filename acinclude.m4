@@ -30,6 +30,8 @@ AC_DEFUN([OVS_CHECK_ACTIONS_AUTOVALIDATOR], [
     AC_DEFINE([ACTIONS_AUTOVALIDATOR_DEFAULT], [1],
               [Autovalidator for actions is a default implementation.])
     AC_MSG_RESULT([yes])
+    AC_MSG_WARN(
+      [Explicit AVX512 feature support will be deprecated in the next release.])
   fi
 ])
 
@@ -50,6 +52,8 @@ AC_DEFUN([OVS_CHECK_MFEX_AUTOVALIDATOR], [
     AC_DEFINE([MFEX_AUTOVALIDATOR_DEFAULT], [1],
               [Autovalidator for miniflow_extract is a default implementation.])
     AC_MSG_RESULT([yes])
+    AC_MSG_WARN(
+      [Explicit AVX512 feature support will be deprecated in the next release.])
   fi
 ])
 
@@ -70,6 +74,8 @@ AC_DEFUN([OVS_CHECK_DPCLS_AUTOVALIDATOR], [
               [Autovalidator for the userspace datapath classifier is a
                default implementation.])
     AC_MSG_RESULT([yes])
+    AC_MSG_WARN(
+      [Explicit AVX512 feature support will be deprecated in the next release.])
   fi
 ])
 
@@ -88,6 +94,8 @@ AC_DEFUN([OVS_CHECK_DPIF_AVX512_DEFAULT], [
               [DPIF AVX512 is a default implementation of the userspace
                datapath interface.])
     AC_MSG_RESULT([yes])
+    AC_MSG_WARN(
+      [Explicit AVX512 feature support will be deprecated in the next release.])
   fi
 ])
 

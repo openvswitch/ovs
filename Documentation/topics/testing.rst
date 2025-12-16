@@ -366,6 +366,10 @@ testsuite.
 Userspace datapath: Testing and Validation of CPU-specific Optimizations
 ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
+.. note::
+  The AVX512 CPU-specific optimization features are deprecated and will be
+  removed in a future release.
+
 As multiple versions of the datapath classifier, packet parsing functions and
 actions can co-exist, each with different CPU ISA optimizations, it is
 important to validate that they all give the exact same results.  To easily

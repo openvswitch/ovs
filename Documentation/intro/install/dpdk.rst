@@ -155,6 +155,10 @@ has to be configured to build against the DPDK library (``--with-dpdk``).
      While ``--with-dpdk`` is required, you can pass any other configuration
      option described in :ref:`general-configuring`.
 
+   .. note::
+     The AVX512 Datapath Classifier Performance feature is deprecated and will
+     be removed in a future release.
+
    It is strongly recommended to build OVS with at least ``-msse4.2`` and
    ``-mpopcnt`` optimization flags. If these flags are not enabled, the AVX512
    optimized DPCLS implementation is not available in the resulting binary.

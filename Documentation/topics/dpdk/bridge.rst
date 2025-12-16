@@ -165,6 +165,11 @@ To turn on SMC::
 Datapath Classifier Performance
 -------------------------------
 
+.. note::
+
+   The AVX512 Datapath Classifier Performance feature is deprecated and will be
+   removed in a future release.
+
 The datapath classifier (dpcls) performs wildcard rule matching, a compute
 intensive process of matching a packet ``miniflow`` to a rule ``miniflow``. The
 code that does this compute work impacts datapath performance, and optimizing
@@ -214,6 +219,11 @@ result in lower performance when these mitigations are enabled.
 Optimizing Specific Subtable Search
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+.. note::
+
+   The AVX512 Optimizing Specific Subtable Search feature is deprecated and
+   will be removed in a future release.
+
 During the packet classification, the datapath can use specialized lookup
 tables to optimize the search.  However, not all situations are optimized.  If
 you see a message like the following one in the OVS logs, it means that there
@@ -247,6 +257,11 @@ the output of the ``dp-extra-info:miniflow_bits(4,1)`` values.
 Datapath Interface Performance
 ------------------------------
 
+.. note::
+
+   The AVX512 Datapath Interface Performance feature is deprecated and will be
+   removed in a future release.
+
 The datapath interface (DPIF) is responsible for taking packets through the
 major components of the userspace datapath; such as packet parsing, caches and
 datapath classifier lookups.
@@ -273,6 +288,11 @@ name::
 
 Packet parsing performance
 --------------------------
+
+.. note::
+
+   The AVX512 Packet parsing performance feature is deprecated and will be
+   removed in a future release.
 
 Open vSwitch performs parsing of the raw packets and extracts the important
 header information into a compressed miniflow structure.  This miniflow is
@@ -330,6 +350,11 @@ following command::
 
 Actions Implementations (Experimental)
 --------------------------------------
+
+.. note::
+
+   The AVX512 Actions Implementations feature is deprecated and will be
+   removed in a future release.
 
 Actions describe what processing or modification should be performed on a
 packet when it matches a given flow. Similar to the datapath interface,

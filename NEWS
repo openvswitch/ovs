@@ -30,6 +30,11 @@ Post-v3.6.0
      * The OOT kernel module: was deprecated in v2.15; was last present in
        the v2.17 release; and is no longer present in any supported release
        since v2.17 went EOL when v3.5 was released.
+   - The following AVX512-specific features are now deprecated:
+     * AVX512-optimized DPCLS lookups.
+     * AVX512-optimized action handling.
+     * AVX512-optimized miniflow extraction.
+     * AVX512-optimized DPIF input processing.
 
 
 v3.6.0 - 18 Aug 2025
