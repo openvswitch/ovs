@@ -172,43 +172,6 @@
  * flow table.  Currently this limit is 4.
  *
  *
- * Partitioning (Lookup Time and Wildcard Optimization)
- * ----------------------------------------------------
- *
- * Suppose that a given classifier is being used to handle multiple stages in a
- * pipeline using "resubmit", with metadata (that is, the OpenFlow 1.1+ field
- * named "metadata") distinguishing between the different stages.  For example,
- * metadata value 1 might identify ingress rules, metadata value 2 might
- * identify ACLs, and metadata value 3 might identify egress rules.  Such a
- * classifier is essentially partitioned into multiple sub-classifiers on the
- * basis of the metadata value.
- *
- * The classifier has a special optimization to speed up matching in this
- * scenario:
- *
- *     - Each cls_subtable that matches on metadata gets a tag derived from the
- *       subtable's mask, so that it is likely that each subtable has a unique
- *       tag.  (Duplicate tags have a performance cost but do not affect
- *       correctness.)
- *
- *     - For each metadata value matched by any cls_rule, the classifier
- *       constructs a "struct cls_partition" indexed by the metadata value.
- *       The cls_partition has a 'tags' member whose value is the bitwise-OR of
- *       the tags of each cls_subtable that contains any rule that matches on
- *       the cls_partition's metadata value.  In other words, struct
- *       cls_partition associates metadata values with subtables that need to
- *       be checked with flows with that specific metadata value.
- *
- * Thus, a flow lookup can start by looking up the partition associated with
- * the flow's metadata, and then skip over any cls_subtable whose 'tag' does
- * not intersect the partition's 'tags'.  (The flow must also be looked up in
- * any cls_subtable that doesn't match on metadata.  We handle that by giving
- * any such cls_subtable TAG_ALL as its 'tags' so that it matches any tag.)
- *
- * Partitioning saves lookup time by reducing the number of subtable lookups.
- * Each eliminated subtable lookup also reduces the amount of un-wildcarding.
- *
- *
  * Classifier Versioning
  * =====================
  *
@@ -336,7 +299,6 @@ struct classifier {
                                              * for staged lookup. */
     struct cmap subtables_map;      /* Contains "struct cls_subtable"s.  */
     struct pvector subtables;
-    struct cmap partitions;         /* Contains "struct cls_partition"s. */
     struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
     atomic_uint32_t n_tries;        /* Number of tries.  Also serves as a
                                      * memory synchronization point for trie
