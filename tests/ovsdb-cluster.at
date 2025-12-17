@@ -1005,6 +1005,18 @@ for i in $(seq $n); do
     AT_CHECK([ovs-appctl -t $(pwd)/s$i cluster/status $schema_name | grep "Term: 1"], [0], [ignore])
 done
 
+# Now force election without pausing RPC, so the requests are actually sent.
+AT_CHECK([ovs-appctl -t $(pwd)/s2 cluster/failure-test force-election], [0], [ignore])
+
+# The server transitions into a candidate role while engaging the test
+# and shortly after it should step back to be a follower.
+OVS_WAIT_UNTIL([ovs-appctl -t $(pwd)/s2 cluster/status $schema_name | grep "Role: follower"])
+
+# No term change.
+for i in $(seq $n); do
+    AT_CHECK([ovs-appctl -t $(pwd)/s$i cluster/status $schema_name | grep "Term: 1"], [0], [ignore])
+done
+
 for i in $(seq $n); do
     OVS_APP_EXIT_AND_WAIT_BY_TARGET([$(pwd)/s$i], [s$i.pid])
 done
