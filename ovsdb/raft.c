@@ -3935,10 +3935,6 @@ static void
 raft_handle_vote_reply(struct raft *raft,
                        const struct raft_vote_reply *rpy)
 {
-    if (!raft_receive_term__(raft, &rpy->common, rpy->term)) {
-        return;
-    }
-
     if (raft->role != RAFT_CANDIDATE) {
         return;
     }
@@ -4700,10 +4696,12 @@ raft_handle_rpc(struct raft *raft, const union raft_rpc *rpc)
         s->last_msg_ts = time_msec();
     }
 
+    if (raft_should_suppress_disruptive_server(raft, rpc)) {
+        return;
+    }
+
     uint64_t term = raft_rpc_get_term(rpc);
-    if (term
-        && !raft_should_suppress_disruptive_server(raft, rpc)
-        && !raft_receive_term__(raft, &rpc->common, term)) {
+    if (term && !raft_receive_term__(raft, &rpc->common, term)) {
         if (rpc->type == RAFT_RPC_APPEND_REQUEST) {
             /* Section 3.3: "If a server receives a request with a stale term
              * number, it rejects the request." */
@@ -5227,6 +5225,7 @@ raft_unixctl_failure_test(struct unixctl_conn *conn OVS_UNUSED,
         failure_test = FT_CRASH_BEFORE_SEND_SNAPSHOT_REP;
     } else if (!strcmp(test, "delay-election")) {
         failure_test = FT_DELAY_ELECTION;
+
         struct raft *raft;
         HMAP_FOR_EACH (raft, hmap_node, &all_rafts) {
             if (raft->role == RAFT_FOLLOWER) {
@@ -5235,6 +5234,13 @@ raft_unixctl_failure_test(struct unixctl_conn *conn OVS_UNUSED,
         }
     } else if (!strcmp(test, "dont-send-vote-request")) {
         failure_test = FT_DONT_SEND_VOTE_REQUEST;
+    } else if (!strcmp(test, "force-election")) {
+        struct raft *raft;
+        HMAP_FOR_EACH (raft, hmap_node, &all_rafts) {
+            if (raft->role != RAFT_LEADER) {
+                raft_start_election(raft, true, false);
+            }
+        }
     } else if (!strcmp(test, "stop-raft-rpc")) {
         failure_test = FT_STOP_RAFT_RPC;
     } else if (!strcmp(test,
