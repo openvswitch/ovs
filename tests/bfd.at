@@ -1127,7 +1127,7 @@ bridge("br0")
      -> no learned MAC for destination, flooding
 
 Final flow: unchanged
-Megaflow: recirc_id=0,eth,udp,tun_id=0,tun_src=2.2.2.2,tun_dst=2.2.2.1,tun_tos=0,tun_flags=-df-csum+key,in_port=1,dl_src=00:11:22:33:44:66,dl_dst=00:23:20:00:00:77,nw_frag=no,tp_dst=3784
+Megaflow: recirc_id=0,eth,udp,tun_id=0,tun_src=2.2.2.2,tun_dst=2.2.2.1,tun_tos=0,tun_flags=+key,in_port=1,dl_src=00:11:22:33:44:66,dl_dst=00:23:20:00:00:77,nw_frag=no,tp_dst=3784
 Datapath actions: 100
 ], [])
 

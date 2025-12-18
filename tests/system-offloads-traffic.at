@@ -1003,7 +1003,7 @@ AT_CHECK(
   [grep -q -F "set(tunnel(dst=172.31.1.1,ttl=64,tp_dst=4789,flags(df)))" \
    stdout])
 AT_CHECK(
-  [grep -q -F "tunnel(tun_id=0x0,src=172.31.1.1,dst=172.31.1.100,tp_dst=4789,flags(-df+csum+key))" \
+  [grep -q -F "tunnel(tun_id=0x0,src=172.31.1.1,dst=172.31.1.100,tp_dst=4789,flags(+key))" \
    stdout])
 
 # Now verify the none df, and forced csum case.
