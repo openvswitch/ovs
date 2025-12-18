@@ -29,12 +29,15 @@ import ovs.vlog
 
 vlog = ovs.vlog.Vlog("dns_resolve")
 
+RESOLVE_UNUSED_TIMEOUT = 300  # Seconds.
+
 
 class ReqState(enum.Enum):
     INVALID = 0
     PENDING = 1
-    GOOD = 2
-    ERROR = 3
+    GOOD_UNUSED = 2
+    GOOD = 3
+    ERROR = 4
 
 
 class DNSRequest:
@@ -48,11 +51,27 @@ class DNSRequest:
 
     @property
     def expired(self):
-        return time.time() > self.time + self.ttl
+        ttl = self.ttl
+        # When we just sent a request, but didn't look at the response yet,
+        # it's not caching, but a "transaction in progress" situation, so we
+        # can use the response even with TTL of 0 and more than 1 second
+        # passed.  Allow such values to be accessed for at least
+        # RESOLVE_UNUSED_TIMEOUT seconds without considering them stale.
+        # This is necessary in case of large backoff intervals on connections
+        # or if the process is doing some other work not looking at the
+        # response for longer than TTL.
+        if self.state == ReqState.GOOD_UNUSED:
+            ttl = max(ttl, RESOLVE_UNUSED_TIMEOUT)
+            # Not a "transaction in progress" anymore, normal caching rules
+            # should apply from this point forward.
+            self.state = ReqState.GOOD
+
+        return time.time() > self.time + ttl
 
     @property
     def is_valid(self):
-        return self.state == ReqState.GOOD and not self.expired
+        return (self.state in [ReqState.GOOD_UNUSED, ReqState.GOOD]
+                and not self.expired)
 
     def __str__(self):
         return (f"DNSRequest(name={self.name}, state={self.state}, "
@@ -184,7 +203,7 @@ class DNSResolver:
             # _callback causes a segfault. So just grab and store what we need.
             req.result = str(ip)
             req.ttl = result.ttl
-            req.state = ReqState.GOOD
+            req.state = ReqState.GOOD_UNUSED
             req.time = time.time()
         except (ValueError, StopIteration):
             req.state = ReqState.ERROR
