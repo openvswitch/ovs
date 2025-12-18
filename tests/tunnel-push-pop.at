@@ -684,7 +684,7 @@ AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  5'], [0], [dnl
   port  5: rx pkts=1, bytes=98, drop=?, errs=?, frame=?, over=?, crc=?
 ])
 AT_CHECK([ovs-appctl dpif/dump-flows int-br | grep 'in_port(6081)' | sed -e 's/recirc_id=[[0-9]]*/recirc_id=<cleared>/g'], [0], [dnl
-recirc_id(0),tunnel(tun_id=0x7b,src=1.1.2.92,dst=1.1.2.88,geneve({class=0xffff,type=0x80,len=4,0xa/0xf}{class=0xffff,type=0,len=4}),flags(+df-csum+key)),in_port(6081),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=<cleared>,rule_cookie=0,controller_id=0,max_len=65535))
+recirc_id(0),tunnel(tun_id=0x7b,src=1.1.2.92,dst=1.1.2.88,geneve({class=0xffff,type=0x80,len=4,0xa/0xf}{class=0xffff,type=0,len=4}),flags(+key)),in_port(6081),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=<cleared>,rule_cookie=0,controller_id=0,max_len=65535))
 ])
 
 dnl Receive VXLAN with different MAC and verify that the neigh cache gets updated

@@ -372,9 +372,9 @@ tnl_wc_init(struct flow *flow, struct flow_wildcards *wc)
             wc->masks.tunnel.ipv6_src = in6addr_exact;
             wc->masks.tunnel.ipv6_dst = in6addr_exact;
         }
-        wc->masks.tunnel.flags = (FLOW_TNL_F_DONT_FRAGMENT |
-                                  FLOW_TNL_F_CSUM |
-                                  FLOW_TNL_F_KEY);
+        /* FLOW_TNL_F_KEY is necessary to tell if the tun_id is present.  Other
+         * flags are either controlled by OpenFlow or not used for matching. */
+        wc->masks.tunnel.flags = FLOW_TNL_F_KEY;
         wc->masks.tunnel.ip_tos = UINT8_MAX;
         wc->masks.tunnel.ip_ttl = 0;
         /* The tp_src and tp_dst members in flow_tnl are set to be always
