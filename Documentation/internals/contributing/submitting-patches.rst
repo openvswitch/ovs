@@ -320,6 +320,22 @@ Examples of common tags follow.
   appropriate to cite the URL to the report in a Reported-at
   tag.  Use a Reported-by tag to acknowledge the reporters.
 
+``Assisted-by: Name of model, and/or AI Code Assistant``
+
+  When a patch has been created with the assistance of an AI tool,
+  this tag should be used to disclose that fact.  Provide the name
+  of the underlying model used, if known.  For the name of the tool,
+  only include the name, not an email address.  For example:
+
+  ::
+
+      Assisted-by: model-name-42.0, OVS-Code-Assistant-Pro-9.0
+
+  The author of the patch remains fully responsible for the content
+  and must ensure it complies with the `Developer's Certificate of
+  Origin`_.  See the `AI-assisted Contributions`_ section for more
+  information.
+
 Developer's Certificate of Origin
 ---------------------------------
 
