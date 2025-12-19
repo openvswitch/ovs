@@ -7616,7 +7616,13 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             /* Set the field only if the packet actually has it. */
             if (mf_are_prereqs_ok(mf, flow, wc)) {
                 mf_set_mask_l3_prereqs(mf, flow, wc);
-                mf_mask_field_masked(mf, ofpact_set_field_mask(set_field), wc);
+                /* Tunnel fields do not need to be unwildcarded, as ODP library
+                 * doesn't rely on matching these fields when they are written
+                 * but not read. */
+                if (!mf_is_tunnel_field(mf)) {
+                    mf_mask_field_masked(mf, ofpact_set_field_mask(set_field),
+                                         wc);
+                }
                 mf_set_flow_value_masked(mf, set_field->value,
                                          ofpact_set_field_mask(set_field),
                                          flow);
