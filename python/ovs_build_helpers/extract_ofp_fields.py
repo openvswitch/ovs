@@ -149,6 +149,9 @@ def parse_oxm(s, prefix, n_bytes):
         fatal("unknown OXM class for %s" % name)
     oxm_vendor, oxm_class, oxm_class_type = class_
 
+    if int(oxm_type) > 127:
+        fatal("%s: OXM field is out of range (%s > 127)" % (name, oxm_type))
+
     if class_ in match_types:
         if oxm_type in match_types[class_]:
             fatal(
