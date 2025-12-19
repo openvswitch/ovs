@@ -1847,8 +1847,12 @@ nxm_reg_load(const struct mf_subfield *dst, uint64_t src_data,
     union mf_subvalue mask_value;
     ovs_be64 src_data_be = htonll(src_data);
 
-    memset(&mask_value, 0xff, sizeof mask_value);
-    mf_write_subfield_flow(dst, &mask_value, &wc->masks);
+    /* ODP library doesn't rely on tunnel fields to be unwildcarded
+     * when written but not read.  No need to unwildcard them here. */
+    if (!mf_is_tunnel_field(dst->field)) {
+        memset(&mask_value, 0xff, sizeof mask_value);
+        mf_write_subfield_flow(dst, &mask_value, &wc->masks);
+    }
 
     bitwise_copy(&src_data_be, sizeof src_data_be, 0,
                  &src_subvalue, sizeof src_subvalue, 0,
@@ -1964,7 +1968,7 @@ nxm_execute_stack_push(const struct ofpact_stack *push,
     union mf_subvalue dst_value;
 
     mf_write_subfield_flow(&push->subfield,
-                           (union mf_subvalue *)&exact_match_mask,
+                           (union mf_subvalue *) &exact_match_mask,
                            &wc->masks);
 
     mf_read_subfield(&push->subfield, flow, &dst_value);
@@ -1988,9 +1992,13 @@ nxm_execute_stack_pop(const struct ofpact_stack *pop,
                    dst_bytes - src_bytes);
         }
         memcpy(&src_value.u8[sizeof src_value - src_bytes], src, src_bytes);
-        mf_write_subfield_flow(&pop->subfield,
-                               (union mf_subvalue *)&exact_match_mask,
-                               &wc->masks);
+        /* ODP library doesn't rely on tunnel fields to be unwildcarded
+         * when written but not read.  No need to unwildcard them here. */
+        if (!mf_is_tunnel_field(pop->subfield.field)) {
+            mf_write_subfield_flow(&pop->subfield,
+                                   (union mf_subvalue *) &exact_match_mask,
+                                   &wc->masks);
+        }
         mf_write_subfield_flow(&pop->subfield, &src_value, flow);
         return true;
     } else {
