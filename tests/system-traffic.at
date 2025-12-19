@@ -1065,6 +1065,107 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - bridging IPv4 and IPv6 flow based geneve tunnels])
+OVS_CHECK_TUNNEL_TSO()
+OVS_CHECK_GENEVE()
+
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-underlay-0])
+ADD_BR([br-underlay-1])
+
+ADD_NAMESPACES(at_ns0)
+ADD_NAMESPACES(at_ns1)
+
+dnl Set up underlay link from host into the namespaces using veth pairs.
+ADD_VETH(p0, at_ns0, br-underlay-0, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay-0 "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay-0 up])
+
+ADD_VETH(p1, at_ns1, br-underlay-1, "fc00::1/64", [], [], "nodad")
+AT_CHECK([ip addr add dev br-underlay-1 "fc00::100/64" nodad])
+AT_CHECK([ip link set dev br-underlay-1 up])
+
+dnl Set up a single flow-based OVS tunnel endpoint in a root namespace and
+dnl two native linux devices inside the test namespaces.
+dnl
+dnl  ns_gnv0                          |               ns_gnv1
+dnl  ip:        10.1.1.1/24           |               ip:        10.1.1.2/24
+dnl  remote_ip: 172.31.1.100          |               remote_ip: fc00::100
+dnl  vni:       4                     |               vni:       6
+dnl          |                        |                  |
+dnl          |                        |                  |
+dnl  p0                               |               p1
+dnl  ip: 172.31.1.1/24                |               ip: fc00::1/64
+dnl          |                  NS0   |   NS1            |
+dnl ---------|------------------------+------------------|--------------------
+dnl          |                                           |
+dnl       br-underlay-0:                           br-underlay-1:
+dnl       ip: 172.31.1.100/24                      ip: fc00::100/64
+dnl         ovs-p0                                   ovs-p1
+dnl          |                                           |
+dnl          |            br0                            |
+dnl       encap/decap --- ip: 10.1.1.100/24 --------- encap/decap
+dnl                         at_gnv0
+dnl                           remote_ip: flow
+dnl                           local_ip: flow
+dnl                           key: flow
+dnl
+
+dnl Using v6 macro for OVS tunnel to account for maximum overhead.
+ADD_OVS_TUNNEL6([geneve], [br0], [at_gnv0], [flow], [10.1.1.100/24],
+                [options:local_ip=flow options:key=flow])
+
+dnl Setup Linux native tunnels inside namespaces.  Again, using v6 macro for
+dnl the proper MTU configuration.
+ADD_NATIVE_TUNNEL6([geneve], [ns_gnv0], [at_ns0], [172.31.1.100], [10.1.1.1/24],
+                   [vni 4])
+ADD_NATIVE_TUNNEL6([geneve], [ns_gnv1], [at_ns1], [fc00::100], [10.1.1.2/24],
+                   [vni 6 udp6zerocsumtx udp6zerocsumrx])
+
+AT_DATA([flows.txt], [dnl
+in_port=at_gnv0,tun_id=4,actions=load:0->tun_src,load:0->tun_dst,set_field:fc00::100->tun_ipv6_src,set_field:fc00::1->tun_ipv6_dst,set_field:6->tun_id,output:in_port
+in_port=at_gnv0,tun_id=6,actions=load:0->tun_ipv6_src,load:0->tun_ipv6_dst,set_field:172.31.1.100->tun_src,set_field:172.31.1.1->tun_dst,set_field:4->tun_id,output:in_port
+])
+
+AT_CHECK([ovs-ofctl -OOpenFlow15 add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl add-flow br-underlay-0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay-1 "actions=normal"])
+
+dnl It many take longer for IPv6 address to become available.
+OVS_WAIT_UNTIL([ip netns exec at_ns1 ping6 -c 2 fc00::100])
+
+dnl First, check both underlays.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns1], [ping6 -q -c 3 -i 0.3 -W 2 fc00::100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Now, check the overlay with different packet sizes.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl There should be 6 tunnel flows in the datapath - 3 in v4 to v6 direction
+dnl for different fragment types (no, first, later) and 3 from v6 to v4.
+dnl Only count flows that are used in the datapath to make sure they are
+dnl actually matching the traffic.
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep -v 'packets:0' | dnl
+          grep "eth_type(0x0800)" | grep -c tun_id], [0], [dnl
+6
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+
 AT_SETUP([datapath - handling of geneve corrupted metadata])
 OVS_CHECK_GENEVE()
 
