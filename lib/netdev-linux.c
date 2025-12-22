@@ -94,8 +94,8 @@ COVERAGE_DEFINE(netdev_linux_invalid_l4_csum);
 COVERAGE_DEFINE(netdev_linux_unknown_l4_csum);
 
 
-#ifndef IFLA_IF_NETNSID
-#define IFLA_IF_NETNSID 0x45
+#ifndef HAVE_IFLA_IF_NETNSID
+#define IFLA_IF_NETNSID 46
 #endif
 /* These were introduced in Linux 2.6.14, so they might be missing if we have
  * old headers. */
