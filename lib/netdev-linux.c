@@ -92,8 +92,8 @@ COVERAGE_DEFINE(netdev_get_ethtool);
 COVERAGE_DEFINE(netdev_set_ethtool);
 
 
-#ifndef IFLA_IF_NETNSID
-#define IFLA_IF_NETNSID 0x45
+#ifndef HAVE_IFLA_IF_NETNSID
+#define IFLA_IF_NETNSID 46
 #endif
 /* These were introduced in Linux 2.6.14, so they might be missing if we have
  * old headers. */

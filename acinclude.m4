@@ -155,6 +155,13 @@ AC_DEFUN([OVS_CHECK_LINUX_NETLINK], [
     ])],
     [AC_DEFINE([HAVE_NLA_BITFIELD32], [1],
     [Define to 1 if struct nla_bitfield32 is available.])])
+
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/if_link.h>], [
+        int netnsid =  IFLA_IF_NETNSID;
+    ])],
+    [AC_DEFINE([HAVE_IFLA_IF_NETNSID], [1],
+    [Define to 1 if IFLA_IF_NETNSID is available.])])
 ])
 
 dnl OVS_CHECK_LINUX_TC
