@@ -4063,6 +4063,13 @@ bridge_configure_remotes(struct bridge *br,
             free(allowed);
         }
 
+        if (shash_find(&ocs, c->target)) {
+            static struct vlog_rate_limit rl2 = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl2, "bridge %s: Duplicate controllers \"%s\".",
+                         br->name, c->target);
+            continue;
+        }
+
         bridge_configure_local_iface_netdev(br, c);
 
         int dscp = smap_get_int(&c->other_config, "dscp", DSCP_DEFAULT);
