@@ -839,11 +839,6 @@ ipf_process_frag(struct ipf *ipf, struct ipf_list *ipf_list,
 
     if (!duped_frag) {
         if (last_inuse_idx < ipf_list->size - 1) {
-            /* In the case of dpdk, it would be unfortunate if we had
-             * to create a clone fragment outside the dpdk mp due to the
-             * mempool size being too limited. We will otherwise need to
-             * recommend not setting the mempool number of buffers too low
-             * and also clamp the number of fragments. */
             struct ipf_frag *frag = &ipf_list->frag_list[last_inuse_idx + 1];
             frag->pkt = pkt;
             frag->start_data_byte = start_data_byte;
@@ -992,34 +987,9 @@ ipf_extract_frags_from_batch(struct ipf *ipf, struct dp_packet_batch *pb,
     }
 }
 
-/* In case of DPDK, a memory source check is done, as DPDK memory pool
- * management has trouble dealing with multiple source types.  The
- * check_source paramater is used to indicate when this check is needed. */
-static bool
-ipf_dp_packet_batch_add(struct dp_packet_batch *pb , struct dp_packet *pkt,
-                        bool check_source OVS_UNUSED)
-{
-#ifdef DPDK_NETDEV
-    if ((dp_packet_batch_is_full(pb)) ||
-        /* DPDK cannot handle multiple sources in a batch. */
-        (check_source && !dp_packet_batch_is_empty(pb)
-         && pb->packets[0]->source != pkt->source)) {
-#else
-    if (dp_packet_batch_is_full(pb)) {
-#endif
-        return false;
-    }
-
-    dp_packet_batch_add(pb, pkt);
-    return true;
-}
-
-/* This would be used in rare cases where a list cannot be sent. One rare
- * reason known right now is a mempool source check, which exists due to DPDK
- * support, where packets are no longer being received on any port with a
- * source matching the fragment.  Another reason is a race where all
- * conntrack rules are unconfigured when some fragments are yet to be
- * flushed.
+/* This would be used in rare cases where a list cannot be sent.
+ * One reason is a race where all conntrack rules are unconfigured
+ * when some fragments are yet to be flushed.
  *
  * Returns true if the list was purged. */
 static bool
@@ -1063,7 +1033,8 @@ ipf_send_frags_in_list(struct ipf *ipf, struct ipf_list *ipf_list,
     while (ipf_list->last_sent_idx < ipf_list->last_inuse_idx) {
         struct dp_packet *pkt
             = ipf_list->frag_list[ipf_list->last_sent_idx + 1].pkt;
-        if (ipf_dp_packet_batch_add(pb, pkt, true)) {
+        if (!dp_packet_batch_is_full(pb)) {
+            dp_packet_batch_add(pb, pkt);
             ipf_list->last_sent_idx++;
             atomic_count_dec(&ipf->nfrag);
 
@@ -1177,7 +1148,8 @@ ipf_execute_reass_pkts(struct ipf *ipf, struct dp_packet_batch *pb,
     LIST_FOR_EACH_SAFE (rp, rp_list_node, &ipf->reassembled_pkt_list) {
         if (!rp->list->reass_execute_ctx &&
             rp->list->key.dl_type == dl_type &&
-            ipf_dp_packet_batch_add(pb, rp->pkt, false)) {
+            !dp_packet_batch_is_full(pb)) {
+            dp_packet_batch_add(pb, rp->pkt);
             rp->list->reass_execute_ctx = rp->pkt;
         }
     }

@@ -8407,16 +8407,6 @@ dp_execute_output_action(struct dp_netdev_pmd_thread *pmd,
         packets_ = &out;
     }
     dp_packet_batch_apply_cutlen(packets_);
-#ifdef DPDK_NETDEV
-    if (OVS_UNLIKELY(!dp_packet_batch_is_empty(&p->output_pkts)
-                     && packets_->packets[0]->source
-                        != p->output_pkts.packets[0]->source)) {
-        /* XXX: netdev-dpdk assumes that all packets in a single
-         *      output batch has the same source. Flush here to
-         *      avoid memory access issues. */
-        dp_netdev_pmd_flush_output_on_port(pmd, p);
-    }
-#endif
     if (dp_packet_batch_size(&p->output_pkts)
         + dp_packet_batch_size(packets_) > NETDEV_MAX_BURST) {
         /* Flush here to avoid overflow. */
