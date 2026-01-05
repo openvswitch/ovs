@@ -894,7 +894,7 @@ netdev_afxdp_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
 
 #if __GNUC__ >= 11 && !__clang__
         /* GCC 11+ generates a false-positive warning about free() being
-         * called on DPBUF_AFXDP packet, but it is an imposisible code path.
+         * called on DPBUF_AFXDP packet, but it is an impossible code path.
          * Disabling a warning to avoid build failures.
          * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108187 */
 #pragma GCC diagnostic push
