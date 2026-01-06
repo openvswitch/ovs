@@ -4,7 +4,7 @@ AT_BANNER([network service header (NSH)])
 ###   Simple NSH matching test case
 ### -----------------------------------------------------------------
 
-AT_SETUP([nsh - matching])
+AT_SETUP([nsh - match and set])
 
 OVS_VSWITCHD_START([dnl
     set bridge br0 datapath_type=dummy \
@@ -13,7 +13,8 @@ OVS_VSWITCHD_START([dnl
     add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])
 
 AT_DATA([flows.txt], [dnl
-    table=0,in_port=1,dl_type=0x894f,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344,actions=set_field:0x2->nsh_flags,set_field:254->nsh_si,set_field:0x44332211->nsh_c1,2
+table=0,in_port=1,dl_type=0x894f,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344,dnl
+actions=set_field:0x2->nsh_flags,set_field:254->nsh_si,set_field:0x44332211->nsh_c1,load:0x77->nsh_c3[[8..15]],2
 ])
 
 AT_CHECK([
@@ -21,13 +22,22 @@ AT_CHECK([
     ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
     ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions
 ], [0], [dnl
- in_port=1,dl_type=0x894f,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344 actions=set_field:2->nsh_flags,set_field:254->nsh_si,set_field:0x44332211->nsh_c1,output:2
+[ in_port=1,dl_type=0x894f,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344]dnl
+[ actions=set_field:2->nsh_flags,set_field:254->nsh_si,set_field:0x44332211->nsh_c1,set_field:0x7700/0xff00->nsh_c3,output:2]
 ])
 
-AT_CHECK([
-    ovs-appctl ofproto/trace br0 'in_port=1,dl_type=0x894f,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00'
-], [0], [dnl
-Flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
+m4_define([NSH_HEADER], [m4_join([,],
+  [nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255],
+  [nsh_c1=0x11223344,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00])])
+
+m4_define([NSH_HEADER2], [m4_join([,],
+  [nsh_flags=2,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=254],
+  [nsh_c1=0x44332211,nsh_c2=0x55667788,nsh_c3=0x99aa77cc,nsh_c4=0xddeeff00])])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,eth_type=0x894f,NSH_HEADER'], [0], [dnl
+Flow: in_port=1,vlan_tci=0x0000,dnl
+dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,NSH_HEADER,dnl
+nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
 
 bridge("br0")
 -------------
@@ -35,11 +45,42 @@ bridge("br0")
     set_field:2->nsh_flags
     set_field:254->nsh_si
     set_field:0x44332211->nsh_c1
+    set_field:0x7700/0xff00->nsh_c3
     output:2
 
-Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=2,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=254,nsh_c1=0x44332211,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
-Megaflow: recirc_id=0,eth,in_port=1,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344
-Datapath actions: set(nsh(flags=2,ttl=63,spi=0x123456,si=254,c1=0x44332211)),2
+Final flow: in_port=1,vlan_tci=0x0000,dnl
+dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,NSH_HEADER2,dnl
+nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
+Megaflow: recirc_id=0,eth,in_port=1,dl_type=0x894f,dnl
+nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,dnl
+nsh_c1=0x11223344,nsh_c3=0xbb00/0xff00
+Datapath actions: set(nsh(flags=2,ttl=63,spi=0x123456,si=254,c1=0x44332211,c3=0x7700/0x0000ff00)),2
+])
+
+dnl Check that non-masked action variant is also correct.
+AT_CHECK([ovs-appctl dpif/set-dp-features br0 masked_set_action false])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,eth_type=0x894f,NSH_HEADER'], [0], [dnl
+Flow: in_port=1,vlan_tci=0x0000,dnl
+dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,NSH_HEADER,dnl
+nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
+
+bridge("br0")
+-------------
+ 0. in_port=1,dl_type=0x894f,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344, priority 32768
+    set_field:2->nsh_flags
+    set_field:254->nsh_si
+    set_field:0x44332211->nsh_c1
+    set_field:0x7700/0xff00->nsh_c3
+    output:2
+
+Final flow: in_port=1,vlan_tci=0x0000,dnl
+dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,NSH_HEADER2,dnl
+nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
+Megaflow: recirc_id=0,eth,in_port=1,dl_type=0x894f,dnl
+nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,dnl
+nsh_c1=0x11223344,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00
+Datapath actions: set(nsh(flags=2,ttl=63,mdtype=1,np=3,spi=0x123456,si=254,c1=0x44332211,c2=0x55667788,c3=0x99aa77cc,c4=0xddeeff00)),2
 ])
 
 OVS_VSWITCHD_STOP
