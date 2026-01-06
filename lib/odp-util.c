@@ -1050,7 +1050,7 @@ format_odp_set_nsh(struct ds *ds, const struct nlattr *attr)
     struct ovs_key_nsh nsh_mask;
 
     memset(&nsh, 0, sizeof nsh);
-    memset(&nsh_mask, 0xff, sizeof nsh_mask);
+    memset(&nsh_mask, 0, sizeof nsh_mask);
 
     NL_NESTED_FOR_EACH (a, left, attr) {
         enum ovs_nsh_key_attr type = nl_attr_type(a);
@@ -6328,10 +6328,6 @@ static void get_arp_key(const struct flow *, struct ovs_key_arp *);
 static void put_arp_key(const struct ovs_key_arp *, struct flow *);
 static void get_nd_key(const struct flow *, struct ovs_key_nd *);
 static void put_nd_key(const struct ovs_key_nd *, struct flow *);
-static void get_nsh_key(const struct flow *flow, struct ovs_key_nsh *nsh,
-                        bool is_mask);
-static void put_nsh_key(const struct ovs_key_nsh *nsh, struct flow *flow,
-                        bool is_mask);
 
 /* These share the same layout. */
 union ovs_key_tp {
@@ -7931,16 +7927,13 @@ commit_set_action(struct ofpbuf *odp_actions, enum ovs_key_attr key_type,
     nl_msg_end_nested(odp_actions, offset);
 }
 
-/* Masked set actions have a mask following the data within the netlink
- * attribute.  The unmasked bits in the data will be cleared as the data
- * is copied to the action. */
-void
-commit_masked_set_action(struct ofpbuf *odp_actions,
-                         enum ovs_key_attr key_type,
-                         const void *key_, const void *mask_, size_t key_size)
+/* Commit one attribute for a masked set action.  Masked set actions have
+ * a mask following the data within the netlink attribute.  The unmasked bits
+ * in the data will be cleared as the data is copied to the attribute. */
+static void
+commit_masked_attribute(struct ofpbuf *odp_actions, int key_type,
+                        const void *key_, const void *mask_, size_t key_size)
 {
-    size_t offset = nl_msg_start_nested(odp_actions,
-                                        OVS_ACTION_ATTR_SET_MASKED);
     char *data = nl_msg_put_unspec_uninit(odp_actions, key_type, key_size * 2);
     const char *key = key_, *mask = mask_;
 
@@ -7949,6 +7942,17 @@ commit_masked_set_action(struct ofpbuf *odp_actions,
     while (key_size--) {
         *data++ = *key++ & *mask++;
     }
+}
+
+/* A helper to commit a masked set action for a single attribute. */
+void
+commit_masked_set_action(struct ofpbuf *odp_actions,
+                         enum ovs_key_attr key_type,
+                         const void *key_, const void *mask_, size_t key_size)
+{
+    size_t offset = nl_msg_start_nested(odp_actions,
+                                        OVS_ACTION_ATTR_SET_MASKED);
+    commit_masked_attribute(odp_actions, key_type, key_, mask_, key_size);
     nl_msg_end_nested(odp_actions, offset);
 }
 
@@ -8536,116 +8540,65 @@ commit_set_nw_action(const struct flow *flow, struct flow *base,
     return 0;
 }
 
-static inline void
-get_nsh_key(const struct flow *flow, struct ovs_key_nsh *nsh, bool is_mask)
-{
-    *nsh = flow->nsh;
-    if (!is_mask) {
-        if (nsh->mdtype != NSH_M_TYPE1) {
-            memset(nsh->context, 0, sizeof(nsh->context));
-        }
-    }
-}
-
-static inline void
-put_nsh_key(const struct ovs_key_nsh *nsh, struct flow *flow,
-            bool is_mask OVS_UNUSED)
-{
-    flow->nsh = *nsh;
-    if (flow->nsh.mdtype != NSH_M_TYPE1) {
-        memset(flow->nsh.context, 0, sizeof(flow->nsh.context));
-    }
-}
-
 static bool
-commit_nsh(const struct ovs_key_nsh * flow_nsh, bool use_masked_set,
-           const struct ovs_key_nsh *key, struct ovs_key_nsh *base,
-           struct ovs_key_nsh *mask, size_t size,
+commit_nsh(bool use_masked_set, const struct ovs_key_nsh *key,
+           struct ovs_key_nsh *base, struct ovs_key_nsh *mask, size_t size,
            struct ofpbuf *odp_actions)
 {
-    enum ovs_key_attr attr = OVS_KEY_ATTR_NSH;
-
-    if (memcmp(key, base, size)  == 0) {
+    if (!memcmp(key, base, size)) {
         /* Mask bits are set when we have either read or set the corresponding
          * values.  Masked bits will be exact-matched, no need to set them
          * if the value did not actually change. */
         return false;
     }
 
-    bool fully_masked = odp_mask_is_exact(attr, mask, size);
+    bool fully_masked = odp_mask_is_exact(OVS_KEY_ATTR_NSH, mask, size);
+    size_t set_ofs;
 
     if (use_masked_set && !fully_masked) {
-        size_t nsh_key_ofs;
-        struct ovs_nsh_key_base nsh_base;
-        struct ovs_nsh_key_base nsh_base_mask;
-        struct ovs_nsh_key_md1 md1;
-        struct ovs_nsh_key_md1 md1_mask;
-        size_t offset = nl_msg_start_nested(odp_actions,
-                                            OVS_ACTION_ATTR_SET_MASKED);
+        struct ovs_nsh_key_base nsh_base = {
+            .flags = key->flags,
+            .ttl = key->ttl,
+            /* 'mdtype' and 'np' are not writable. */
+            .path_hdr = key->path_hdr,
+        };
+        struct ovs_nsh_key_base nsh_base_mask = {
+            .flags = mask->flags,
+            .ttl = mask->ttl,
+            /* 'mdtype' and 'np' are not writable. */
+            .path_hdr = mask->path_hdr,
+        };
+        size_t nsh_ofs;
 
-        nsh_base.flags = key->flags;
-        nsh_base.ttl = key->ttl;
-        nsh_base.mdtype = key->mdtype;
-        nsh_base.np = key->np;
-        nsh_base.path_hdr = key->path_hdr;
+        set_ofs = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SET_MASKED);
+        nsh_ofs = nl_msg_start_nested(odp_actions, OVS_KEY_ATTR_NSH);
 
-        nsh_base_mask.flags = mask->flags;
-        nsh_base_mask.ttl = mask->ttl;
-        nsh_base_mask.mdtype = mask->mdtype;
-        nsh_base_mask.np = mask->np;
-        nsh_base_mask.path_hdr = mask->path_hdr;
-
-        /* OVS_KEY_ATTR_NSH keys */
-        nsh_key_ofs = nl_msg_start_nested(odp_actions, OVS_KEY_ATTR_NSH);
-
-        /* put value and mask for OVS_NSH_KEY_ATTR_BASE */
-        char *data = nl_msg_put_unspec_uninit(odp_actions,
-                                              OVS_NSH_KEY_ATTR_BASE,
-                                              2 * sizeof(nsh_base));
-        const char *lkey = (char *)&nsh_base, *lmask = (char *)&nsh_base_mask;
-        size_t lkey_size = sizeof(nsh_base);
-
-        while (lkey_size--) {
-            *data++ = *lkey++ & *lmask++;
-        }
-        lmask = (char *)&nsh_base_mask;
-        memcpy(data, lmask, sizeof(nsh_base_mask));
-
-        switch (key->mdtype) {
-        case NSH_M_TYPE1:
-            memcpy(md1.context, key->context, sizeof key->context);
-            memcpy(md1_mask.context, mask->context, sizeof mask->context);
-
-            /* put value and mask for OVS_NSH_KEY_ATTR_MD1 */
-            data = nl_msg_put_unspec_uninit(odp_actions,
-                                            OVS_NSH_KEY_ATTR_MD1,
-                                            2 * sizeof(md1));
-            lkey = (char *)&md1;
-            lmask = (char *)&md1_mask;
-            lkey_size = sizeof(md1);
-
-            while (lkey_size--) {
-                *data++ = *lkey++ & *lmask++;
-            }
-            lmask = (char *)&md1_mask;
-            memcpy(data, lmask, sizeof(md1_mask));
-            break;
-        case NSH_M_TYPE2:
-        default:
-            /* No match support for other MD formats yet. */
-            break;
+        if (!is_all_zeros(&nsh_base_mask, sizeof nsh_base_mask)) {
+            commit_masked_attribute(odp_actions, OVS_NSH_KEY_ATTR_BASE,
+                                    &nsh_base, &nsh_base_mask,
+                                    sizeof nsh_base);
         }
 
-        nl_msg_end_nested(odp_actions, nsh_key_ofs);
+        /* No match support for other MD formats yet. */
+        if (key->mdtype == NSH_M_TYPE1
+            && !is_all_zeros(mask->context, sizeof mask->context)) {
+            commit_masked_attribute(odp_actions, OVS_NSH_KEY_ATTR_MD1,
+                                    key->context, mask->context,
+                                    sizeof key->context);
+        }
 
-        nl_msg_end_nested(odp_actions, offset);
+        nl_msg_end_nested(odp_actions, nsh_ofs);
+        nl_msg_end_nested(odp_actions, set_ofs);
     } else {
+        /* Overwriting the whole header.  Make sure that fields that wasn't
+         * in the mask are indeed the same as in the committed action. */
         if (!fully_masked) {
             memset(mask, 0xff, size);
         }
-        size_t offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SET);
-        nsh_key_to_attr(odp_actions, flow_nsh, NULL, 0, false);
-        nl_msg_end_nested(odp_actions, offset);
+
+        set_ofs = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SET);
+        nsh_key_to_attr(odp_actions, key, NULL, 0, false);
+        nl_msg_end_nested(odp_actions, set_ofs);
     }
     memcpy(base, key, size);
     return true;
@@ -8659,8 +8612,7 @@ commit_set_nsh_action(const struct flow *flow, struct flow *base_flow,
 {
     struct ovs_key_nsh key, mask, base;
 
-    if (flow->dl_type != htons(ETH_TYPE_NSH) ||
-        !memcmp(&base_flow->nsh, &flow->nsh, sizeof base_flow->nsh)) {
+    if (flow->dl_type != htons(ETH_TYPE_NSH)) {
         return;
     }
 
@@ -8668,18 +8620,13 @@ commit_set_nsh_action(const struct flow *flow, struct flow *base_flow,
     ovs_assert(flow->nsh.mdtype == base_flow->nsh.mdtype &&
                flow->nsh.np == base_flow->nsh.np);
 
-    get_nsh_key(flow, &key, false);
-    get_nsh_key(base_flow, &base, false);
-    get_nsh_key(&wc->masks, &mask, true);
-    mask.mdtype = 0;     /* Not writable. */
-    mask.np = 0;         /* Not writable. */
+    key = flow->nsh;
+    base = base_flow->nsh;
+    mask = wc->masks.nsh;
 
-    if (commit_nsh(&base_flow->nsh, use_masked, &key, &base, &mask,
-            sizeof key, odp_actions)) {
-        put_nsh_key(&base, base_flow, false);
-        if (mask.mdtype != 0) { /* Mask was changed by commit(). */
-            put_nsh_key(&mask, &wc->masks, true);
-        }
+    if (commit_nsh(use_masked, &key, &base, &mask, sizeof key, odp_actions)) {
+        base_flow->nsh = base;
+        or_bytes(&wc->masks.nsh, &mask, sizeof wc->masks.nsh);
     }
 }
 
