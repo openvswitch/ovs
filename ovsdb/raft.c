@@ -1539,6 +1539,7 @@ raft_conn_receive(struct raft *raft, struct raft_conn *conn,
     if (error) {
         char *s = ovsdb_error_to_string_free(error);
         VLOG_INFO("%s: %s", jsonrpc_session_get_name(conn->js), s);
+        jsonrpc_session_force_reconnect(conn->js);
         free(s);
         return false;
     }
@@ -1554,6 +1555,7 @@ raft_conn_receive(struct raft *raft, struct raft_conn *conn,
                      SID_FMT" (expected "SID_FMT")",
                      jsonrpc_session_get_name(conn->js),
                      SID_ARGS(&rpc->common.sid), SID_ARGS(&conn->sid));
+        jsonrpc_session_force_reconnect(conn->js);
         raft_rpc_uninit(rpc);
         return false;
     }
