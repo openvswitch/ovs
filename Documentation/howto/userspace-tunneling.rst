@@ -205,7 +205,7 @@ To add route::
 
 To see all routes configured::
 
-    $ ovs-appctl ovs/route/show
+    $ ovs-appctl ovs/route/show [table=ID|all]
 
 To delete route::
 

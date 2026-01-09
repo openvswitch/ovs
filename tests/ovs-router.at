@@ -31,6 +31,17 @@ User: 2.2.2.3/32 MARK 1 dev br0 SRC 2.2.2.2
 AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
 [[
   {
+    "dst": "2.2.2.2",
+    "local": true,
+    "nexthops": [
+      {
+        "dev": "br0"}],
+    "prefix": 32,
+    "prefsrc": "2.2.2.2",
+    "priority": 192,
+    "table": 255,
+    "user": false},
+  {
     "dst": "2.2.2.3",
     "local": false,
     "mark": 1,
@@ -40,6 +51,7 @@ AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
     "prefix": 32,
     "prefsrc": "2.2.2.2",
     "priority": 160,
+    "table": 254,
     "user": true},
   {
     "dst": "2.2.2.0",
@@ -50,6 +62,7 @@ AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
     "prefix": 24,
     "prefsrc": "2.2.2.2",
     "priority": 120,
+    "table": 254,
     "user": false},
   {
     "dst": "1.1.1.0",
@@ -61,6 +74,7 @@ AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
     "prefix": 24,
     "prefsrc": "2.2.2.2",
     "priority": 152,
+    "table": 254,
     "user": true},
   {
     "dst": "1.1.2.0",
@@ -73,6 +87,7 @@ AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
     "prefix": 24,
     "prefsrc": "2.2.2.2",
     "priority": 152,
+    "table": 254,
     "user": true}]]
 ])
 OVS_VSWITCHD_STOP

@@ -7,9 +7,12 @@ Adds \fIip\fR/\fIplen\fR route to vswitchd routing table. \fIoutput_bridge\fR
 needs to be OVS bridge name.  This command is useful if OVS cached
 routes does not look right.
 .
-.IP "\fBovs/route/show\fR"
-Print all routes in OVS routing table, This includes routes cached
-from system routing table and user configured routes.
+.IP "\fBovs/route/show\fR [\fBtable\fR=\fBall\fR|\fIid\fR]"
+Print routes in OVS routing table. This includes routes cached from
+system routing table and user configured routes. By default, the
+contents of all the default tables (local, main, default) is displayed,
+unless requested otherwise with \fItable\fR parameter. In this case the
+contents of a specific table ID or of all routing tables is printed.
 .
 .IP "\fBovs/route/del\fR \fIip\fR/\fIplen\fR [\fBpkt_mark\fR=\fImark\fR]"
 Delete ip/plen route from OVS routing table.

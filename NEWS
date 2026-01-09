@@ -21,6 +21,9 @@ Post-v3.6.0
      * New ovsdb_idl_txn_assert_read_only() interface to mark transactions
        as read-only and trigger assertion failure when application attempts
        to modify the database data through this transaction.
+   - ovs-appctl:
+     * 'ovs/route/show': added new option, table=[ID|all], to list routes from
+       a specific table or all routes from all tables.
    - Windows Support
      * Support for compiling for and running on Windows has been deprecated.
    - Deprecation of support for running OVS user-space with OOT kernel module
