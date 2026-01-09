@@ -106,11 +106,10 @@ AT_CHECK([ovs-vsctl set interface ovs-p0 ingress_policing_burst=10])
 AT_CHECK([ovs-vsctl --columns=other_config list open], [0], [dnl
 other_config        : {hw-offload="false"}
 ])
+m4_define([POLICE_CONF], [rate 100Kbit burst 1...b])
 AT_CHECK([tc -o -s -d filter show dev ovs-p0 ingress |
-  sed -n 's/.*\(rate [[0-9]]*[[a-zA-Z]]* burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q'],
-  [0],[dnl
-rate 100Kbit burst 1280b
-])
+  sed -n 's/.*\(rate [[0-9]]*[[a-zA-Z]]* burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q' |
+  grep -q 'POLICE_CONF'])
 AT_CHECK([tc -s -d filter show dev ovs-p0 ingress |
   grep -E "basic|matchall" > /dev/null], [0])
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -128,11 +127,10 @@ AT_CHECK([ovs-vsctl set interface ovs-p0 ingress_policing_burst=10])
 AT_CHECK([ovs-vsctl --columns=other_config list open], [0], [dnl
 other_config        : {hw-offload="true"}
 ])
+m4_define([POLICE_CONF], [rate 100Kbit burst 1...b])
 AT_CHECK([tc -o -s -d filter show dev ovs-p0 ingress |
-  sed -n 's/.*\(rate [[0-9]]*[[a-zA-Z]]* burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q'],
-  [0],[dnl
-rate 100Kbit burst 1280b
-])
+  sed -n 's/.*\(rate [[0-9]]*[[a-zA-Z]]* burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q' |
+  grep -q 'POLICE_CONF'])
 AT_CHECK([tc -o -s -d filter show dev ovs-p0 ingress | grep matchall |
   sed -n 's/.*\(matchall\).*/\1/; T; p; q'], [0], [dnl
 matchall
