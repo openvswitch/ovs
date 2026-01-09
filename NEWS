@@ -15,6 +15,8 @@ Post-v3.6.0
    - Userspace datapath:
      * Conntrack now supports the FTP commands EPSV and EPRT with IPv4
        connections, instead of limiting these commands to IPv6 only.
+     * Userspace tunneling now supports multi-table and source-based routing
+       using routing rules for selecting next hops after encapsulation.
    - DPDK:
      * Add support for DPDK 25.11.
    - OVSDB-IDL:
@@ -29,6 +31,8 @@ Post-v3.6.0
      * 'ovs/route/lookup': added new option, src=IP, to perform lookup with
        a specific source IP address.
      * Added a new sub-command, ovs/route/rule/show, to list OVS routing rules.
+     * Added new sub-commands, ovs/route/rule/{add,del}, to add and remove
+       user-specified routing rules.
    - Windows Support
      * Support for compiling for and running on Windows has been deprecated.
    - Deprecation of support for running OVS user-space with OOT kernel module

@@ -288,8 +288,8 @@ rule_handle_msg(const struct route_table_msg *change)
 
         route_table_dump_one_table(rd->lookup_table, route_table_handle_msg,
                                    NULL);
-        ovs_router_rule_add(rd->prio, rd->invert, rd->src_len, &rd->from_addr,
-                            rd->lookup_table, rd->ipv4);
+        ovs_router_rule_add(rd->prio, rd->invert, false, rd->src_len,
+                            &rd->from_addr, rd->lookup_table, rd->ipv4);
     }
 }
 
@@ -770,7 +770,7 @@ rules_change(const struct route_table_msg *change OVS_UNUSED,
 static void
 route_map_clear(void)
 {
-    ovs_router_rules_flush();
+    ovs_router_rules_flush(false);
     ovs_router_flush(false);
 }
 

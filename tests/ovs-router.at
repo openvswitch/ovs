@@ -249,14 +249,95 @@ AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 192.0.2.1/24], [0], [OK
 
 dnl Check standard rules exist.
 AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
-0: from all lookup local
-32766: from all lookup main
-32767: from all lookup default
+Cached: 0: from all lookup local
+Cached: 32766: from all lookup main
+Cached: 32767: from all lookup default
 ])
 AT_CHECK([ovs-appctl ovs/route/rule/show -6], [0], [dnl
-0: from all lookup local
-32766: from all lookup main
+Cached: 0: from all lookup local
+Cached: 32766: from all lookup main
 ])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([appctl - route/rule/{add,del}])
+AT_KEYWORDS([ovs_router])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 192.0.2.1/24], [0], [OK
+])
+
+AT_CHECK([ovs-appctl ovs/route/add 10.1.1.0/24 br0 192.0.2.2 table=11], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 10.2.2.0/24 br0 192.0.2.2 table=12], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/show table=all | sort], [0], [dnl
+Cached: 192.0.2.0/24 dev br0 SRC 192.0.2.1
+Cached: 192.0.2.1/32 dev br0 SRC 192.0.2.1 local
+User: 10.1.1.0/24 dev br0 GW 192.0.2.2 SRC 192.0.2.1 table 11
+User: 10.2.2.0/24 dev br0 GW 192.0.2.2 SRC 192.0.2.1 table 12
+])
+
+AT_CHECK([ovs-appctl ovs/route/rule/add from=192.0.2.10/32 table=11], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/add from=192.0.2.20/32 table=12], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+Cached: 0: from all lookup local
+User: 32764: from 192.0.2.20 lookup 12
+User: 32765: from 192.0.2.10 lookup 11
+Cached: 32766: from all lookup main
+Cached: 32767: from all lookup default
+])
+
+AT_CHECK([ovs-appctl ovs/route/rule/add from=192.0.2.10/32 table=11], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/add from=192.0.2.10/32 table=11], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+Cached: 0: from all lookup local
+User: 32762: from 192.0.2.10 lookup 11
+User: 32763: from 192.0.2.10 lookup 11
+User: 32764: from 192.0.2.20 lookup 12
+User: 32765: from 192.0.2.10 lookup 11
+Cached: 32766: from all lookup main
+Cached: 32767: from all lookup default
+])
+
+AT_CHECK([ovs-appctl ovs/route/rule/del from=192.0.2.10/32 table=11], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+Cached: 0: from all lookup local
+User: 32763: from 192.0.2.10 lookup 11
+User: 32764: from 192.0.2.20 lookup 12
+User: 32765: from 192.0.2.10 lookup 11
+Cached: 32766: from all lookup main
+Cached: 32767: from all lookup default
+])
+
+AT_CHECK([ovs-appctl ovs/route/rule/del from=192.0.2.10/32 prio=32765 table=11], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+Cached: 0: from all lookup local
+User: 32763: from 192.0.2.10 lookup 11
+User: 32764: from 192.0.2.20 lookup 12
+Cached: 32766: from all lookup main
+Cached: 32767: from all lookup default
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([appctl - route/rule cleanup])
+AT_KEYWORDS([ovs_router])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 192.0.2.1/24], [0], [OK
+])
+
+AT_CHECK([for i in `seq 1 100`; do ovs-appctl ovs/route/add 10.1.$i.0/24 br0 192.0.2.2 table=11 ; done >/dev/null])
+AT_CHECK([test `ovs-appctl ovs/route/show table=11 | grep '^User:' | wc -l` -eq 100])
+AT_CHECK([for i in `seq 1 50`; do ovs-appctl ovs/route/del 10.1.$i.0/24 table=11 ; done >/dev/null])
+AT_CHECK([test `ovs-appctl ovs/route/show table=11 | grep '^User:' | wc -l` -eq 50])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

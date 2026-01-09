@@ -34,6 +34,22 @@ Print routing rules in OVS. This includes routing rules cached from the system
 routing policy database and user configured routing rules. By default only IPv4
 rules are displayed. For displaying IPv6 rules \fB-6\fR option is required.
 .
+.IP "\fBovs/route/rule/add\fR [\fB-6\fR] [\fBnot\fR] \
+\fBfrom\fR=\fBall\fR|\fIip/plen\fR [\fBprio\fR=\fInum\fR] \
+\fBtable\fR=\fBlocal\fR|\fBmain\fR|\fBdefault\fR|\fIid\fR"
+Add user-configured routing rule to vswitchd. It can be useful to reference
+non-standard routing tables for configuring advanced routing policies, for
+example matching on the source IP address. If priority is not specified, the
+lowest unused priority will be selected automatically. Multiple rules with the
+same priority may exist. User-configured rules and system cached rules co-exist
+together.
+.
+.IP "\fBovs/route/rule/del\fR [\fB-6\fR] [\fBnot\fR] \
+\fBfrom\fR=\fBall\fR|\fIip/plen\fR [\fBprio\fR=\fInum\fR] \
+\fBtable\fR=\fBlocal\fR|\fBmain\fR|\fBdefault\fR|\fIid\fR"
+Delete user-configured routing rule from vswitchd. If priority is not specified
+the first matching rule will be selected for deletion.
+.
 .IP "\fBtnl/neigh/show\fR"
 .IP "\fBtnl/arp/show\fR"
 OVS builds ARP cache by snooping are messages. This command shows

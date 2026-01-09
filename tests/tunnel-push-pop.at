@@ -1467,3 +1467,126 @@ AT_CHECK([tail -1 stdout], [0],
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([tunnel_push_pop - use two VTEPs in same subnet with rules])
+
+dnl Create bridge that has a MAC address.
+OVS_VSWITCHD_START([set bridge br0 datapath_type=dummy dnl
+                    -- set Interface br0 other-config:hwaddr=aa:55:aa:55:00:00])
+
+AT_CHECK([ovs-vsctl add-port br0 p0 \
+          -- set Interface p0 type=dummy ofport_request=1])
+
+AT_CHECK([ovs-vsctl add-br br1 \
+          -- set bridge br1 datapath_type=dummy \
+          -- set Interface br1 other-config:hwaddr=aa:66:aa:66:00:00])
+AT_CHECK([ovs-vsctl add-port br1 p1 \
+          -- set interface p1 type=dummy ofport_request=2])
+
+AT_CHECK([ovs-vsctl \
+          -- add-br int-br \
+          -- set bridge int-br datapath_type=dummy \
+          -- set Interface int-br other-config:hwaddr=aa:77:aa:77:00:00])
+AT_CHECK([ovs-vsctl \
+          -- add-port int-br t0 \
+          -- set Interface t0 type=gre ofport_request=3 \
+                              options:local_ip=1.1.2.80 \
+                              options:remote_ip=1.1.2.90
+])
+AT_CHECK([ovs-vsctl \
+          -- add-port int-br t1 \
+          -- set Interface t1 type=gre ofport_request=4 \
+                              options:local_ip=1.1.2.81 \
+                              options:remote_ip=1.1.2.91
+])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy)
+  br1:
+    br1 65534/101: (dummy-internal)
+    p1 2/2: (dummy)
+  int-br:
+    int-br 65534/3: (dummy-internal)
+    t0 3/4: (gre: local_ip=1.1.2.80, remote_ip=1.1.2.90)
+    t1 4/4: (gre: local_ip=1.1.2.81, remote_ip=1.1.2.91)
+])
+
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.80/24], [0], [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br1 1.1.2.81/24], [0], [OK
+])
+dnl Checking that a local route for added IP was successfully installed
+dnl on br1 only.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached], [0], [dnl
+Cached: 1.1.2.80/32 dev br0 SRC 1.1.2.80 local
+Cached: 1.1.2.81/32 dev br1 SRC 1.1.2.81 local
+Cached: 1.1.2.0/24 dev br1 SRC 1.1.2.81
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl add-flow br1 action=normal])
+AT_CHECK([ovs-ofctl add-flow int-br action=normal])
+
+dnl Use arp reply to achieve tunnel next hop mac binding.
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 dnl
+ 'recirc_id(0),in_port(1),dnl
+  eth(src=f8:bc:12:44:34:b0,dst=aa:55:aa:55:00:00),eth_type(0x0806),dnl
+  arp(sip=1.1.2.90,tip=1.1.2.80,op=2,sha=f8:bc:12:44:34:b0,tha=00:00:00:00:00:00)'
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 dnl
+ 'recirc_id(0),in_port(2),dnl
+  eth(src=f8:bc:12:44:34:b1,dst=aa:66:aa:66:00:00),eth_type(0x0806),dnl
+  arp(sip=1.1.2.91,tip=1.1.2.81,op=2,sha=f8:bc:12:44:34:b1,tha=00:00:00:00:00:00)'
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
+1.1.2.90                                      f8:bc:12:44:34:b0   br0
+1.1.2.91                                      f8:bc:12:44:34:b1   br1
+])
+
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.0/24 br0 src=1.1.2.80 table=10], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.0/24 br1 src=1.1.2.81 table=11], [0], [OK
+])
+
+AT_CHECK([ovs-appctl ovs/route/show table=all | sort], [0], [dnl
+Cached: 1.1.2.0/24 dev br1 SRC 1.1.2.81
+Cached: 1.1.2.80/32 dev br0 SRC 1.1.2.80 local
+Cached: 1.1.2.81/32 dev br1 SRC 1.1.2.81 local
+User: 1.1.2.0/24 dev br0 SRC 1.1.2.80 table 10
+User: 1.1.2.0/24 dev br1 SRC 1.1.2.81 table 11
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(int-br),dnl
+          eth(src=00:00:00:00:00:00,dst=f8:bc:12:44:34:b0),eth_type(0x0800),dnl
+          ipv4(src=1.1.3.100,dst=1.1.3.200,proto=1,tos=0,ttl=64,frag=no),dnl
+          icmp(type=8,code=0)' | grep 'tunneling to.*via'], [0], [dnl
+     -> tunneling to 1.1.2.90 via br1
+     -> tunneling to 1.1.2.91 via br1
+])
+
+AT_CHECK([ovs-appctl ovs/route/rule/add from=1.1.2.80/32 table=10], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/add from=1.1.2.81/32 table=11], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+Cached: 0: from all lookup local
+User: 32764: from 1.1.2.81 lookup 11
+User: 32765: from 1.1.2.80 lookup 10
+Cached: 32766: from all lookup main
+Cached: 32767: from all lookup default
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(int-br),dnl
+          eth(src=00:00:00:00:00:00,dst=f8:bc:12:44:34:b0),eth_type(0x0800),dnl
+          ipv4(src=1.1.3.100,dst=1.1.3.200,proto=1,tos=0,ttl=64,frag=no),dnl
+          icmp(type=8,code=0)' | grep 'tunneling to.*via'], [0], [dnl
+     -> tunneling to 1.1.2.90 via br0
+     -> tunneling to 1.1.2.91 via br1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

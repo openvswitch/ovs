@@ -208,6 +208,13 @@ To see all routes configured::
 
     $ ovs-appctl ovs/route/show [table=ID|all]
 
+To add/delete router rule::
+
+    $ ovs-appctl ovs/route/rule/add [-6] [not] from=all|IP/PLEN [prio=NUM]
+                                    table=local|main|default|ID
+    $ ovs-appctl ovs/route/rule/del [-6] [not] from=all|IP/PLEN [prio=NUM]
+                                    table=local|main|default|ID
+
 To see all router rules configured::
 
     $ ovs-appctl ovs/route/rule/show [-6]

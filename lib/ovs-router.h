@@ -48,11 +48,14 @@ void ovs_router_force_insert(uint32_t table, uint32_t mark,
                              uint8_t plen, const char output_netdev[],
                              const struct in6_addr *gw,
                              const struct in6_addr *prefsrc);
-void ovs_router_rule_add(uint32_t prio, bool invert, uint8_t src_len,
-                         const struct in6_addr *from, uint32_t lookup_table,
-                         bool ipv4);
+void ovs_router_rule_add(uint32_t prio, bool invert, bool user,
+                         uint8_t src_len, const struct in6_addr *from,
+                         uint32_t lookup_table, bool ipv4);
+int ovs_router_rule_del(uint32_t prio, bool invert, uint8_t src_len,
+                        const struct in6_addr *from, uint32_t lookup_table,
+                        bool ipv4);
 void ovs_router_flush(bool flush_all);
-void ovs_router_rules_flush(void);
+void ovs_router_rules_flush(bool flush_all);
 
 void ovs_router_disable_system_routing_table(void);
 
