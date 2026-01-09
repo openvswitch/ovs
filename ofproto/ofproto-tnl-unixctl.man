@@ -2,10 +2,13 @@
 These commands query and modify OVS tunnel components.
 .
 .IP "\fBovs/route/add\fR \fIip\fR/\fIplen\fR \fIoutput_bridge\fR \
-[\fIgw\fR] [\fBpkt_mark\fR=\fImark\fR] [\fBsrc\fR=\fIsrc_ip\fR]"
+[\fIgw\fR] [\fBpkt_mark\fR=\fImark\fR] [\fBsrc\fR=\fIsrc_ip\fR] \
+[\fBtable\fR=\fIid\fR]"
 Adds \fIip\fR/\fIplen\fR route to vswitchd routing table. \fIoutput_bridge\fR
 needs to be OVS bridge name.  This command is useful if OVS cached
-routes does not look right.
+routes does not look right. A non-standard table ID can be specified, in which
+case the route is added to that routing table. The table is created if it
+doesn't exist.
 .
 .IP "\fBovs/route/show\fR [\fBtable\fR=\fBall\fR|\fIid\fR]"
 Print routes in OVS routing table. This includes routes cached from
@@ -14,8 +17,11 @@ contents of all the default tables (local, main, default) is displayed,
 unless requested otherwise with \fItable\fR parameter. In this case the
 contents of a specific table ID or of all routing tables is printed.
 .
-.IP "\fBovs/route/del\fR \fIip\fR/\fIplen\fR [\fBpkt_mark\fR=\fImark\fR]"
-Delete ip/plen route from OVS routing table.
+.IP "\fBovs/route/del\fR \fIip\fR/\fIplen\fR [\fBpkt_mark\fR=\fImark\fR] \
+[\fBtable\fR=\fIid\fR]"
+Delete ip/plen route from OVS routing table. The standard routing table is used
+by default, or a specific custom table when ID is provided via \fItable\fR
+parameter.
 .
 .IP "\fBovs/route/rule/show\fR [\fB-6\fR]"
 Print routing rules in OVS. This includes routing rules cached from the system

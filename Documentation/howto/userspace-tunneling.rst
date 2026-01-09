@@ -201,7 +201,8 @@ Tunnel routing table
 
 To add route::
 
-    $ ovs-appctl ovs/route/add <IP address>/<prefix length> <output-bridge-name> <gw>
+    $ ovs-appctl ovs/route/add <IP address>/<prefix length>
+                               <output-bridge-name> <gw> [table=ID]
 
 To see all routes configured::
 
@@ -213,7 +214,7 @@ To see all router rules configured::
 
 To delete route::
 
-    $ ovs-appctl ovs/route/del <IP address>/<prefix length>
+    $ ovs-appctl ovs/route/del <IP address>/<prefix length> [table=ID]
 
 To look up and display the route for a destination::
 
