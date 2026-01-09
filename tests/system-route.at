@@ -332,3 +332,134 @@ AT_CHECK([ovstest test-lib-route-table-dump | \
 ])
 
 AT_CLEANUP
+
+dnl Checks that OVS ignores unsupported routing rules.
+AT_SETUP([ovs-route - unsupported rules])
+AT_KEYWORDS([route])
+OVS_TRAFFIC_VSWITCHD_START()
+
+dnl Create tap port.
+on_exit 'ip link del p1-route'
+AT_CHECK([ip tuntap add name p1-route mode tap])
+AT_CHECK([ip link set p1-route up])
+
+dnl Check there are no non-standard rules cached in OVS.
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+0: from all lookup local
+32766: from all lookup main
+32767: from all lookup default
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show -6], [0], [dnl
+0: from all lookup local
+32766: from all lookup main
+])
+
+dnl Add unsupported rules to kernel.
+on_exit 'ip rule del priority 100 fwmark 0x16 lookup 42'
+AT_CHECK([ip rule add priority 100 fwmark 0x16 lookup 42])
+on_exit 'ip rule del priority 101 from 10.0.0.1 dport 22 lookup 42'
+AT_CHECK([ip rule add priority 101 from 10.0.0.1 dport 22 lookup 42])
+on_exit 'ip rule del priority 102 from 10.0.0.1 sport 22 lookup 42'
+AT_CHECK([ip rule add priority 102 from 10.0.0.1 sport 22 lookup 42])
+on_exit 'ip rule del priority 103 from 10.0.0.1 tun_id 22 lookup 42'
+AT_CHECK([ip rule add priority 103 from 10.0.0.1 tun_id 22 lookup 42])
+on_exit 'ip rule del priority 104 iif p1-route lookup 42'
+AT_CHECK([ip rule add priority 104 iif p1-route lookup 42])
+on_exit 'ip rule del priority 105 ipproto udp lookup 42'
+AT_CHECK([ip rule add priority 105 ipproto udp lookup 42])
+on_exit 'ip rule del priority 106 from all tun_id 22 lookup 42'
+AT_CHECK([ip rule add priority 106 from all tun_id 22 lookup 42])
+
+dnl Give the main thread a chance to act.
+AT_CHECK([ovs-appctl revalidator/wait])
+dnl Check OVS rules cache hasn't changed.
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+0: from all lookup local
+32766: from all lookup main
+32767: from all lookup default
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show -6], [0], [dnl
+0: from all lookup local
+32766: from all lookup main
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl Checks that OVS uses routes from non-standard tables when there is a rule
+dnl referencing the table.
+AT_SETUP([ovs-route - route tables + rules])
+AT_KEYWORDS([route])
+OVS_TRAFFIC_VSWITCHD_START()
+
+dnl Create tap port.
+on_exit 'ip link del p1-route'
+AT_CHECK([ip tuntap add name p1-route mode tap])
+AT_CHECK([ip link set p1-route up])
+
+dnl Add ip address.
+AT_CHECK([ip addr add 10.0.0.17/24 dev p1-route], [0], [stdout])
+
+dnl Add routes to a custom routing table with a source match rule and check
+dnl that OVS caches them.
+on_exit 'ip rule del from 10.0.0.1 lookup 42'
+AT_CHECK([ip rule add from 10.0.0.1 lookup 42])
+AT_CHECK([ip rule show | grep -q 'from 10.0.0.1 lookup 42'])
+
+dnl Give the main thread a chance to act.
+AT_CHECK([ovs-appctl revalidator/wait])
+dnl Check that the rule is cached in OVS.
+AT_CHECK([ovs-appctl ovs/route/rule/show | grep -q 'lookup 42'])
+dnl Check that the route cache is unchanged (because the table has not been
+dnl created yet).
+AT_CHECK([ovs-appctl ovs/route/show table=42], [2], [], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+Table 'table=42' not found
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+on_exit 'ip route flush table 42'
+AT_CHECK([ip route add 10.0.0.18/32 dev p1-route table 42])
+AT_CHECK([ip route add 10.0.0.19/32 dev p1-route table 42])
+AT_CHECK([ip route show table 42 | grep 'p1-route' | grep -q '10.0.0.18'])
+AT_CHECK([ip route show table 42 | grep 'p1-route' | grep -q '10.0.0.19'])
+
+AT_CHECK([ovs-appctl revalidator/wait])
+dnl Check that OVS learn those routes.
+AT_CHECK([ovs-appctl ovs/route/show table=42 | sort], [0], [dnl
+Cached: 10.0.0.18/32 dev p1-route SRC 10.0.0.17
+Cached: 10.0.0.19/32 dev p1-route SRC 10.0.0.17
+Route Table #42:
+])
+
+dnl Delete a route from the custom table and check that OVS removes the route
+dnl from the cache.
+AT_CHECK([ip route del 10.0.0.18/32 dev p1-route table 42])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl ovs/route/show table=42], [dnl
+Route Table #42:
+Cached: 10.0.0.19/32 dev p1-route SRC 10.0.0.17])
+
+dnl Delete the rule and check that the table no longer exists in the cache.
+AT_CHECK([ip rule del from 10.0.0.1 lookup 42])
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl ovs/route/show table=42], [2], [], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+Table 'table=42' not found
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+dnl Add a custom table and check that OVS ignores it because no rule is
+dnl referencing it.
+on_exit 'ip route flush table 43'
+AT_CHECK([ip route add 10.0.0.18/32 dev p1-route table 43])
+AT_CHECK([ip route show table 43 | grep 'p1-route' | grep -q '10.0.0.18'])
+
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl ovs/route/show table=43], [2], [], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+Table 'table=43' not found
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
