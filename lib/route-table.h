@@ -143,12 +143,26 @@ struct route_data {
     uint32_t rta_priority;       /* 0 if missing. */
 };
 
+struct rule_data {
+    bool invert;
+    uint32_t prio;
+    uint8_t src_len;
+    struct in6_addr from_addr;
+    uint32_t lookup_table;
+    bool ipv4;
+};
+
 /* A digested version of a route message sent down by the kernel to indicate
- * that a route has changed. */
+ * that a route or a rule has changed. */
 struct route_table_msg {
     bool relevant;        /* Should this message be processed? */
-    uint16_t nlmsg_type;  /* e.g. RTM_NEWROUTE, RTM_DELROUTE. */
-    struct route_data rd; /* Data parsed from this message. */
+    uint16_t nlmsg_type;  /* e.g. RTM_NEWROUTE, RTM_DELROUTE, RTM_NEWRULE,
+                           * RTM_DELRULE. */
+    union {               /* Data parsed from this message, depending on
+                           * nlmsg_type. */
+        struct route_data rd;
+        struct rule_data rud;
+    };
 };
 
 uint64_t route_table_get_change_seq(void);
@@ -160,7 +174,7 @@ bool route_table_fallback_lookup(const struct in6_addr *ip6_dst,
                                  struct in6_addr *gw6);
 
 typedef void route_table_handle_msg_callback(const struct route_table_msg *,
-                                             void *aux);
+                                             void *aux, uint32_t table);
 
 bool route_table_dump_one_table(uint32_t id,
                                 route_table_handle_msg_callback *,

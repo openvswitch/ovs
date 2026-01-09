@@ -1174,6 +1174,11 @@ extern const struct in6_addr in6addr_all_routers;
 #define IN6ADDR_ALL_ROUTERS_INIT { { { 0xff,0x02,0x00,0x00,0x00,0x00,0x00,0x00, \
                                        0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02 } } }
 
+extern const struct in6_addr in6addr_v4mapped_any;
+#define IN6ADDR_V4MAPPED_ANY_INIT \
+    { { { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
+          0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 } } }
+
 static inline bool ipv6_addr_equals(const struct in6_addr *a,
                                     const struct in6_addr *b)
 {
@@ -1608,6 +1613,8 @@ bool ipv6_is_zero(const struct in6_addr *a);
 struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);
+bool ipv6_addr_equals_masked(const struct in6_addr *a,
+                             const struct in6_addr *b, int plen);
 
 bool ipv6_parse(const char *s, struct in6_addr *ip);
 char *ipv6_parse_masked(const char *s, struct in6_addr *ipv6,

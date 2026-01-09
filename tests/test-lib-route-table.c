@@ -72,7 +72,8 @@ rt_table_name(uint32_t id)
 
 static void
 test_lib_route_table_handle_msg(const struct route_table_msg *change,
-                                void *data OVS_UNUSED)
+                                void *data OVS_UNUSED,
+                                uint32_t table OVS_UNUSED)
 {
     struct ds nexthop_addr = DS_EMPTY_INITIALIZER;
     struct ds rta_prefsrc = DS_EMPTY_INITIALIZER;
@@ -120,7 +121,7 @@ static void
 test_lib_route_table_change(struct route_table_msg *change,
                             void *aux OVS_UNUSED)
 {
-    test_lib_route_table_handle_msg(change, NULL);
+    test_lib_route_table_handle_msg(change, NULL, 0);
     route_data_destroy(&change->rd);
 }
 

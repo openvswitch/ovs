@@ -23,6 +23,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <linux/fib_rules.h>
 #include <linux/rtnetlink.h>
 #include <net/if.h>
 
@@ -40,9 +41,13 @@
 #include "tnl-ports.h"
 #include "openvswitch/vlog.h"
 
-/* Linux 2.6.36 added RTA_MARK, so define it just in case we're building with
- * old headers.  (We can't test for it with #ifdef because it's an enum.) */
-#define RTA_MARK 16
+/* Below constants were added in different Linux versions, so define them just
+ * in case we're building with old headers. (We can't test for it with #ifdef
+ * because it's an enum.) */
+#define RTA_MARK 16 /* Linux 2.6.36 */
+#define FRA_SUPPRESS_PREFIXLEN 14 /* Linux 3.12 */
+#define FRA_TABLE 15 /* Linux 2.6.19 */
+#define FRA_PROTOCOL 21 /* Linux 4.17 */
 
 /* Linux 4.1 added RTA_VIA. */
 #ifndef HAVE_RTA_VIA
@@ -57,7 +62,9 @@ VLOG_DEFINE_THIS_MODULE(route_table);
 
 COVERAGE_DEFINE(route_table_dump);
 
+BUILD_ASSERT_DECL((enum rt_class_t) CLS_DEFAULT == RT_TABLE_DEFAULT);
 BUILD_ASSERT_DECL((enum rt_class_t) CLS_MAIN == RT_TABLE_MAIN);
+BUILD_ASSERT_DECL((enum rt_class_t) CLS_LOCAL == RT_TABLE_LOCAL);
 
 static struct ovs_mutex route_table_mutex = OVS_MUTEX_INITIALIZER;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -70,13 +77,23 @@ static struct nln *nln = NULL;
 static struct route_table_msg nln_rtmsg_change;
 static struct nln_notifier *route_notifier = NULL;
 static struct nln_notifier *route6_notifier = NULL;
+static struct nln_notifier *rule_notifier = NULL;
+static struct nln_notifier *rule6_notifier = NULL;
 static struct nln_notifier *name_notifier = NULL;
 
 static bool route_table_valid = false;
+static bool rules_valid = false;
+
+static int route_nln_parse(struct ofpbuf *, void *change);
+
+static void rule_handle_msg(const struct route_table_msg *);
+static int rule_parse(struct ofpbuf *, void *change);
 
 static void route_table_reset(void);
-static void route_table_handle_msg(const struct route_table_msg *, void *aux);
+static void route_table_handle_msg(const struct route_table_msg *, void *aux,
+                                   uint32_t table);
 static void route_table_change(struct route_table_msg *, void *aux);
+static void rules_change(const struct route_table_msg *, void *aux);
 static void route_map_clear(void);
 
 static void name_table_init(void);
@@ -116,9 +133,11 @@ route_table_init(void)
     ovs_assert(!nln);
     ovs_assert(!route_notifier);
     ovs_assert(!route6_notifier);
+    ovs_assert(!rule_notifier);
+    ovs_assert(!rule6_notifier);
 
     ovs_router_init();
-    nln = nln_create(NETLINK_ROUTE, route_table_parse, &nln_rtmsg_change);
+    nln = nln_create(NETLINK_ROUTE, route_nln_parse, &nln_rtmsg_change);
 
     route_notifier =
         nln_notifier_create(nln, RTNLGRP_IPV4_ROUTE,
@@ -126,6 +145,13 @@ route_table_init(void)
     route6_notifier =
         nln_notifier_create(nln, RTNLGRP_IPV6_ROUTE,
                             (nln_notify_func *) route_table_change, NULL);
+
+    rule_notifier =
+        nln_notifier_create(nln, RTNLGRP_IPV4_RULE,
+                            (nln_notify_func *) rules_change, NULL);
+    rule6_notifier =
+        nln_notifier_create(nln, RTNLGRP_IPV6_RULE,
+                            (nln_notify_func *) rules_change, NULL);
 
     route_table_reset();
     name_table_init();
@@ -143,7 +169,7 @@ route_table_run(void)
         rtnetlink_run();
         nln_run(nln);
 
-        if (!route_table_valid) {
+        if (!route_table_valid || !rules_valid) {
             route_table_reset();
         }
     }
@@ -202,7 +228,7 @@ route_table_dump_one_table(uint32_t id,
             if (!(nlmsghdr->nlmsg_flags & NLM_F_DUMP_FILTERED)) {
                 filtered = false;
             }
-            handle_msg_cb(&msg, aux);
+            handle_msg_cb(&msg, aux, id);
             route_data_destroy(&msg.rd);
         }
     }
@@ -213,28 +239,195 @@ route_table_dump_one_table(uint32_t id,
 }
 
 static void
+rules_dump(void)
+{
+    uint64_t reply_stub[NL_DUMP_BUFSIZE / 8];
+    struct ofpbuf request, reply, buf;
+    struct fib_rule_hdr *rq_msg;
+    struct nl_dump dump;
+
+    ofpbuf_init(&request, 0);
+
+    nl_msg_put_nlmsghdr(&request, sizeof *rq_msg, RTM_GETRULE, NLM_F_REQUEST);
+
+    rq_msg = ofpbuf_put_zeros(&request, sizeof *rq_msg);
+    rq_msg->family = AF_UNSPEC;
+
+    nl_dump_start(&dump, NETLINK_ROUTE, &request);
+    ofpbuf_uninit(&request);
+
+    ofpbuf_use_stub(&buf, reply_stub, sizeof reply_stub);
+    while (nl_dump_next(&dump, &reply, &buf)) {
+        struct route_table_msg msg;
+
+        if (rule_parse(&reply, &msg)) {
+            rule_handle_msg(&msg);
+        }
+    }
+    ofpbuf_uninit(&buf);
+    nl_dump_done(&dump);
+}
+
+static void
 route_table_reset(void)
 {
-    uint32_t tables[] = {
-        RT_TABLE_DEFAULT,
-        RT_TABLE_MAIN,
-        RT_TABLE_LOCAL,
-    };
-
     route_map_clear();
     netdev_get_addrs_list_flush();
     route_table_valid = true;
+    rules_valid = true;
     rt_change_seq++;
-
     COVERAGE_INC(route_table_dump);
+    rules_dump();
+}
 
-    for (size_t i = 0; i < ARRAY_SIZE(tables); i++) {
-        if (!route_table_dump_one_table(tables[i],
-                                        route_table_handle_msg, NULL)) {
-            /* Got unfiltered reply, no need to dump further. */
-            break;
+static void
+rule_handle_msg(const struct route_table_msg *change)
+{
+    if (change->relevant) {
+        const struct rule_data *rd = &change->rud;
+
+        route_table_dump_one_table(rd->lookup_table, route_table_handle_msg,
+                                   NULL);
+        ovs_router_rule_add(rd->prio, rd->invert, rd->src_len, &rd->from_addr,
+                            rd->lookup_table, rd->ipv4);
+    }
+}
+
+static int
+route_nln_parse(struct ofpbuf *buf, void *change_)
+{
+    const struct nlmsghdr *nlmsg = buf->data;
+
+    if (nlmsg->nlmsg_type == RTM_NEWROUTE ||
+        nlmsg->nlmsg_type == RTM_DELROUTE) {
+        return route_table_parse(buf, change_);
+    } else if (nlmsg->nlmsg_type == RTM_NEWRULE ||
+               nlmsg->nlmsg_type == RTM_DELRULE) {
+        return rule_parse(buf, change_);
+    }
+
+    VLOG_DBG_RL(&rl, "received unsupported rtnetlink route message");
+    return 0;
+}
+
+/* Return RTNLGRP_IPV4_RULE or RTNLGRP_IPV6_RULE on success, 0 on parse
+ * error. */
+static int
+rule_parse(struct ofpbuf *buf, void *change_)
+{
+    struct route_table_msg *change = change_;
+    bool ipv4 = false;
+    bool parsed;
+
+    static const struct nl_policy policy[] = {
+        [FRA_PRIORITY] = { .type = NL_A_U32, .optional = true },
+        [FRA_SRC] = { .type = NL_A_U32, .optional = true },
+        [FRA_TABLE] = { .type = NL_A_U32, .optional = true },
+    };
+
+    static const struct nl_policy policy6[] = {
+        [FRA_PRIORITY] = { .type = NL_A_U32, .optional = true },
+        [FRA_SRC] = { .type = NL_A_IPV6, .optional = true },
+        [FRA_TABLE] = { .type = NL_A_U32, .optional = true },
+    };
+
+    struct nlattr *attrs[ARRAY_SIZE(policy)];
+    const struct fib_rule_hdr *frh;
+
+    frh = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *frh);
+    if (!frh || frh->action != FR_ACT_TO_TBL || frh->tos || frh->dst_len) {
+        /* Unsupported rule. */
+        return 0;
+    }
+
+    if (frh->family == AF_INET) {
+        parsed = nl_policy_parse(buf, NLMSG_HDRLEN +
+                                 sizeof(struct fib_rule_hdr), policy, attrs,
+                                 ARRAY_SIZE(policy));
+        ipv4 = true;
+    } else if (frh->family == AF_INET6) {
+        parsed = nl_policy_parse(buf, NLMSG_HDRLEN +
+                                 sizeof(struct fib_rule_hdr), policy6, attrs,
+                                 ARRAY_SIZE(policy6));
+    } else {
+        VLOG_DBG_RL(&rl, "received non AF_INET rtnetlink route message");
+        return 0;
+    }
+
+    if (parsed) {
+        const struct nlmsghdr *nlmsg;
+
+        nlmsg = buf->data;
+
+        memset(change, 0, sizeof *change);
+        change->relevant = true;
+        change->nlmsg_type = nlmsg->nlmsg_type;
+        change->rud.invert = false;
+        change->rud.src_len = frh->src_len;
+        change->rud.lookup_table = frh->table;
+        change->rud.ipv4 = ipv4;
+
+        if (frh->flags & FIB_RULE_INVERT) {
+            /* Invert the matching of rule selector. */
+            change->rud.invert = true;
+        }
+
+        if (attrs[FRA_PRIORITY]) {
+            change->rud.prio = nl_attr_get_u32(attrs[FRA_PRIORITY]);
+        }
+
+        if (attrs[FRA_SRC]) {
+            if (ipv4) {
+                ovs_be32 src = nl_attr_get_be32(attrs[FRA_SRC]);
+                in6_addr_set_mapped_ipv4(&change->rud.from_addr, src);
+            } else {
+                change->rud.from_addr = nl_attr_get_in6_addr(attrs[FRA_SRC]);
+            }
+        } else {
+            if (ipv4) {
+                in6_addr_set_mapped_ipv4(&change->rud.from_addr, 0);
+            } else {
+                change->rud.from_addr = in6addr_any;
+            }
+        }
+
+        if (attrs[FRA_TABLE]) {
+            change->rud.lookup_table = nl_attr_get_u32(attrs[FRA_TABLE]);
+        } else {
+            change->relevant = false;
+        }
+
+        if (change->rud.invert && !change->rud.src_len) {
+            change->relevant = false;
+        }
+    } else {
+        VLOG_DBG_RL(&rl, "received unparseable rtnetlink rule message");
+        return 0;
+    }
+
+    /* Check if there are any additional attributes that aren't supported
+     * currently by OVS rule-based route lookup. */
+    if (change->relevant) {
+        size_t offset = NLMSG_HDRLEN + sizeof(struct fib_rule_hdr);
+        struct nlattr *nla;
+        size_t left;
+
+        NL_ATTR_FOR_EACH (nla, left, ofpbuf_at(buf, offset, 0),
+                          buf->size - offset) {
+            uint16_t type = nl_attr_type(nla);
+
+            if ((type > FRA_SRC && type < FRA_PRIORITY) ||
+                (type > FRA_PRIORITY && type < FRA_SUPPRESS_PREFIXLEN) ||
+                (type > FRA_TABLE && type < FRA_PROTOCOL) ||
+                type > FRA_PROTOCOL) {
+                change->relevant = false;
+                break;
+            }
         }
     }
+
+    /* Success. */
+    return ipv4 ? RTNLGRP_IPV4_RULE : RTNLGRP_IPV6_RULE;
 }
 
 /* Returns true if the given route requires nexthop information (output
@@ -530,21 +723,12 @@ route_table_parse(struct ofpbuf *buf, void *change)
                                nlmsg, rtm, NULL, change);
 }
 
-static bool
-is_standard_table_id(uint32_t table_id)
-{
-    return !table_id
-           || table_id == RT_TABLE_DEFAULT
-           || table_id == RT_TABLE_MAIN
-           || table_id == RT_TABLE_LOCAL;
-}
-
 static void
 route_table_change(struct route_table_msg *change, void *aux OVS_UNUSED)
 {
     if (!change
         || (change->relevant
-            && is_standard_table_id(change->rd.rta_table_id))) {
+            && ovs_router_is_referenced(change->rd.rta_table_id))) {
         route_table_valid = false;
     }
     if (change) {
@@ -554,7 +738,7 @@ route_table_change(struct route_table_msg *change, void *aux OVS_UNUSED)
 
 static void
 route_table_handle_msg(const struct route_table_msg *change,
-                       void *aux OVS_UNUSED)
+                       void *aux OVS_UNUSED, uint32_t table)
 {
     if (change->relevant && change->nlmsg_type == RTM_NEWROUTE
             && !ovs_list_is_empty(&change->rd.nexthops)) {
@@ -567,7 +751,7 @@ route_table_handle_msg(const struct route_table_msg *change,
         rdnh = CONTAINER_OF(ovs_list_front(&change->rd.nexthops),
                             const struct route_data_nexthop, nexthop_node);
 
-        ovs_router_insert(CLS_MAIN, rd->rta_mark, &rd->rta_dst,
+        ovs_router_insert(table, rd->rta_mark, &rd->rta_dst,
                           IN6_IS_ADDR_V4MAPPED(&rd->rta_dst)
                           ? rd->rtm_dst_len + 96 : rd->rtm_dst_len,
                           rd->rtn_local, rdnh->ifname, &rdnh->addr,
@@ -576,8 +760,18 @@ route_table_handle_msg(const struct route_table_msg *change,
 }
 
 static void
+rules_change(const struct route_table_msg *change OVS_UNUSED,
+             void *aux OVS_UNUSED)
+{
+    if (!change || change->relevant) {
+        rules_valid = false;
+    }
+}
+
+static void
 route_map_clear(void)
 {
+    ovs_router_rules_flush();
     ovs_router_flush(false);
 }
 
