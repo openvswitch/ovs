@@ -341,3 +341,143 @@ AT_CHECK([test `ovs-appctl ovs/route/show table=11 | grep '^User:' | wc -l` -eq 
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([appctl - route/rule lookup])
+AT_KEYWORDS([ovs_router])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
+AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=dummy])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr p1 10.0.0.11/24], [0], [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/ip6addr p1 2001:db8:cafe::11/64], [0], [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr p2 10.0.0.22/24], [0], [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/ip6addr p2 2001:db8:cafe::22/64], [0], [OK
+])
+
+AT_CHECK([ovs-appctl ovs/route/add 10.0.0.0/24 p1 10.0.0.1 table=11], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add ::/0 p1 2001:db8:cafe::1 table=11], [0], [OK
+])
+
+AT_CHECK([ovs-appctl ovs/route/show table=all | sort], [0], [dnl
+Cached: 10.0.0.0/24 dev p2 SRC 10.0.0.22
+Cached: 10.0.0.11/32 dev p1 SRC 10.0.0.11 local
+Cached: 10.0.0.22/32 dev p2 SRC 10.0.0.22 local
+Cached: 2001:db8:cafe::/64 dev p2 SRC 2001:db8:cafe::22
+Cached: 2001:db8:cafe::11/128 dev p1 SRC 2001:db8:cafe::11 local
+Cached: 2001:db8:cafe::22/128 dev p2 SRC 2001:db8:cafe::22 local
+User: 10.0.0.0/24 dev p1 GW 10.0.0.1 SRC 10.0.0.11 table 11
+User: ::/0 dev p1 GW 2001:db8:cafe::1 SRC 2001:db8:cafe::11 table 11
+])
+
+dnl Check that table 11 is ignored when no routing rule references it.
+AT_CHECK([ovs-appctl ovs/route/lookup 10.0.0.100], [0], [dnl
+src 10.0.0.22
+gateway ::
+dev p2
+])
+AT_CHECK([ovs-appctl ovs/route/lookup 10.0.0.100 src=10.0.0.11], [0], [dnl
+src 10.0.0.11
+gateway ::
+dev p2
+])
+
+dnl Check that IPv4 route in table 11 is matched and the default IPv6 route
+dnl in table 11 doesn't swallow other IPv4 traffic.
+AT_CHECK([ovs-appctl ovs/route/rule/add from=10.0.0.11/32 table=11], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+Cached: 0: from all lookup local
+User: 32765: from 10.0.0.11 lookup 11
+Cached: 32766: from all lookup main
+Cached: 32767: from all lookup default
+])
+AT_CHECK([ovs-appctl ovs/route/lookup 10.0.0.100 src=10.0.0.11], [0], [dnl
+src 10.0.0.11
+gateway 10.0.0.1
+dev p1
+])
+AT_CHECK([ovs-appctl ovs/route/lookup 20.0.0.100 src=10.0.0.11], [2], [], [dnl
+Not found
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+dnl Check that IPv6 'from all' routing rule matches only IPv6 traffic and that
+dnl IPv4 route in table 11 still correctly matches IPv4 traffic.
+AT_CHECK([ovs-appctl ovs/route/add 0.0.0.0/0 p1 10.0.0.10 table=10], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add ::/0 p1 2001:db8:cafe::10 table=10], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/show table=all | sort], [0], [dnl
+Cached: 10.0.0.0/24 dev p2 SRC 10.0.0.22
+Cached: 10.0.0.11/32 dev p1 SRC 10.0.0.11 local
+Cached: 10.0.0.22/32 dev p2 SRC 10.0.0.22 local
+Cached: 2001:db8:cafe::/64 dev p2 SRC 2001:db8:cafe::22
+Cached: 2001:db8:cafe::11/128 dev p1 SRC 2001:db8:cafe::11 local
+Cached: 2001:db8:cafe::22/128 dev p2 SRC 2001:db8:cafe::22 local
+User: 0.0.0.0/0 dev p1 GW 10.0.0.10 SRC 10.0.0.11 table 10
+User: 10.0.0.0/24 dev p1 GW 10.0.0.1 SRC 10.0.0.11 table 11
+User: ::/0 dev p1 GW 2001:db8:cafe::1 SRC 2001:db8:cafe::11 table 11
+User: ::/0 dev p1 GW 2001:db8:cafe::10 SRC 2001:db8:cafe::11 table 10
+])
+AT_CHECK([ovs-appctl ovs/route/rule/add -6 from=all table=10], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+Cached: 0: from all lookup local
+User: 32765: from 10.0.0.11 lookup 11
+Cached: 32766: from all lookup main
+Cached: 32767: from all lookup default
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show -6], [0], [dnl
+Cached: 0: from all lookup local
+User: 32764: from all lookup 10
+Cached: 32766: from all lookup main
+])
+AT_CHECK([ovs-appctl ovs/route/lookup 2004::44 src=2001:db8:cafe::22], [0], [dnl
+src 2001:db8:cafe::22
+gateway 2001:db8:cafe::10
+dev p1
+])
+AT_CHECK([ovs-appctl ovs/route/lookup 10.0.0.100 src=10.0.0.11], [0], [dnl
+src 10.0.0.11
+gateway 10.0.0.1
+dev p1
+])
+
+dnl Check that a negated IPv6 routing rule matches only IPv6 traffic and
+dnl correspondingly a negated IPv4 rule only matches IPv4 traffic.
+AT_CHECK([ovs-appctl ovs/route/add ::/0 p1 2001:db8:cafe::44 table=4], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 0.0.0.0/0 p1 10.0.0.66 table=6], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/add -6 not from=2001:db8:cafe::100 table=6], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/add not from=10.0.0.100 table=4], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+Cached: 0: from all lookup local
+User: 32762: not from 10.0.0.100 lookup 4
+User: 32765: from 10.0.0.11 lookup 11
+Cached: 32766: from all lookup main
+Cached: 32767: from all lookup default
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show -6], [0], [dnl
+Cached: 0: from all lookup local
+User: 32763: not from 2001:db8:cafe::100 lookup 6
+User: 32764: from all lookup 10
+Cached: 32766: from all lookup main
+])
+AT_CHECK([ovs-appctl ovs/route/lookup 2004::44 src=2001:db8:cafe::22], [0], [dnl
+src 2001:db8:cafe::22
+gateway 2001:db8:cafe::10
+dev p1
+])
+AT_CHECK([ovs-appctl ovs/route/lookup 10.0.0.100 src=10.0.0.11], [0], [dnl
+src 10.0.0.11
+gateway 10.0.0.1
+dev p1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
