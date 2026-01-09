@@ -207,6 +207,10 @@ To see all routes configured::
 
     $ ovs-appctl ovs/route/show [table=ID|all]
 
+To see all router rules configured::
+
+    $ ovs-appctl ovs/route/rule/show [-6]
+
 To delete route::
 
     $ ovs-appctl ovs/route/del <IP address>/<prefix length>

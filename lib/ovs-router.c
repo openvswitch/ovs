@@ -812,6 +812,112 @@ ovs_router_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
+ovs_router_rules_show_json(struct json *rule_entries, bool ipv6)
+{
+    struct router_rule *rule;
+    struct ds ds;
+
+    PVECTOR_FOR_EACH (rule, &rules) {
+        struct json *entry = json_object_create();
+
+        if (rule->ipv4 == ipv6) {
+            continue;
+        }
+
+        json_object_put(entry, "priority", json_integer_create(rule->prio));
+        json_object_put(entry, "invert", json_boolean_create(rule->invert));
+        json_object_put(entry, "ipv4", json_boolean_create(rule->ipv4));
+        json_object_put(entry, "src-prefix",
+                        json_integer_create(rule->src_prefix));
+        json_object_put(entry, "lookup",
+                        json_integer_create(rule->lookup_table));
+
+        if (rule->src_prefix) {
+            ds_init(&ds);
+            ipv6_format_mapped(&rule->from_addr, &ds);
+            json_object_put_string(entry, "from", ds_cstr_ro(&ds));
+            ds_destroy(&ds);
+        } else {
+            json_object_put_string(entry, "from", "all");
+        }
+
+        json_array_add(rule_entries, entry);
+    }
+}
+
+static char *
+standard_table_name(uint32_t table)
+{
+    switch (table) {
+    case CLS_DEFAULT:
+        return "default";
+    case CLS_MAIN:
+        return "main";
+    case CLS_LOCAL:
+        return "local";
+    }
+
+    return NULL;
+}
+
+static void
+ovs_router_rules_show_text(struct ds *ds, bool ipv6)
+{
+    struct router_rule *rule;
+
+    PVECTOR_FOR_EACH (rule, &rules) {
+        if (rule->ipv4 == ipv6) {
+            continue;
+        }
+        ds_put_format(ds, "%"PRIu32": ", rule->prio);
+        if (rule->invert) {
+            ds_put_format(ds, "not ");
+        }
+        ds_put_format(ds, "from ");
+        if (rule->src_prefix) {
+            ipv6_format_mapped(&rule->from_addr, ds);
+            if (!((IN6_IS_ADDR_V4MAPPED(&rule->from_addr) &&
+                   rule->src_prefix == 32) || rule->src_prefix == 128)) {
+                ds_put_format(ds, "/%"PRIu8" ", rule->src_prefix);
+            }
+        } else {
+            ds_put_cstr(ds, "all");
+        }
+        ds_put_format(ds, " ");
+        if (is_standard_table(rule->lookup_table)) {
+            ds_put_format(ds, "lookup %s\n",
+                          standard_table_name(rule->lookup_table));
+        } else {
+            ds_put_format(ds, "lookup %"PRIu32"\n", rule->lookup_table);
+        }
+    }
+}
+
+static void
+ovs_router_rules_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                      const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    bool ipv6 = false;
+
+    if (argc > 1 && ovs_scan(argv[1], "-6")) {
+        ipv6 = true;
+    }
+
+    if (unixctl_command_get_output_format(conn) == UNIXCTL_OUTPUT_FMT_JSON) {
+        struct json *entries = json_array_create_empty();
+
+        ovs_router_rules_show_json(entries, ipv6);
+        unixctl_command_reply_json(conn, entries);
+    } else {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+
+        ovs_router_rules_show_text(&ds, ipv6);
+        unixctl_command_reply(conn, ds_cstr(&ds));
+        ds_destroy(&ds);
+    }
+}
+
+static void
 ovs_router_lookup_cmd(struct unixctl_conn *conn, int argc,
                       const char *argv[], void *aux OVS_UNUSED)
 {
@@ -1009,6 +1115,8 @@ ovs_router_init(void)
         unixctl_command_register("ovs/route/lookup", "ip_addr "
                                  "[pkt_mark=mark]", 1, 2,
                                  ovs_router_lookup_cmd, NULL);
+        unixctl_command_register("ovs/route/rule/show", "[-6]", 0, 1,
+                                 ovs_router_rules_show, NULL);
         ovsthread_once_done(&once);
     }
 }

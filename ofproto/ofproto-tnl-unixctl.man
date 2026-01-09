@@ -17,6 +17,11 @@ contents of a specific table ID or of all routing tables is printed.
 .IP "\fBovs/route/del\fR \fIip\fR/\fIplen\fR [\fBpkt_mark\fR=\fImark\fR]"
 Delete ip/plen route from OVS routing table.
 .
+.IP "\fBovs/route/rule/show\fR [\fB-6\fR]"
+Print routing rules in OVS. This includes routing rules cached from the system
+routing policy database and user configured routing rules. By default only IPv4
+rules are displayed. For displaying IPv6 rules \fB-6\fR option is required.
+.
 .IP "\fBtnl/neigh/show\fR"
 .IP "\fBtnl/arp/show\fR"
 OVS builds ARP cache by snooping are messages. This command shows

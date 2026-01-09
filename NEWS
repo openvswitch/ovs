@@ -24,6 +24,7 @@ Post-v3.6.0
    - ovs-appctl:
      * 'ovs/route/show': added new option, table=[ID|all], to list routes from
        a specific table or all routes from all tables.
+     * Added a new sub-command, ovs/route/rule/show, to list OVS routing rules.
    - Windows Support
      * Support for compiling for and running on Windows has been deprecated.
    - Deprecation of support for running OVS user-space with OOT kernel module

@@ -240,3 +240,23 @@ User: 2001:db8:babe::/64 dev br0 GW 2001:db8:cafe::2 SRC 2001:db8:cafe::1
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([appctl - route/rule/show])
+AT_KEYWORDS([ovs_router])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 192.0.2.1/24], [0], [OK
+])
+
+dnl Check standard rules exist.
+AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
+0: from all lookup local
+32766: from all lookup main
+32767: from all lookup default
+])
+AT_CHECK([ovs-appctl ovs/route/rule/show -6], [0], [dnl
+0: from all lookup local
+32766: from all lookup main
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
