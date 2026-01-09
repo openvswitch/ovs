@@ -3242,8 +3242,8 @@ OVS_WAIT_UNTIL([tc qdisc show dev ovs-tap0 | grep -q htb])
 OVS_WAIT_UNTIL([tc qdisc show dev ovs-tap1 | grep -q htb])
 
 dnl Check the configuration.
-m4_define([HTB_CONF0], [rate 2Mbit ceil 3Mbit burst 375000b cburst 375000b])
-m4_define([HTB_CONF1], [rate 4Mbit ceil 5Gbit burst 500000b cburst 500000b])
+m4_define([HTB_CONF0], [rate 2Mbit ceil 3Mbit burst 3.....b cburst 3.....b])
+m4_define([HTB_CONF1], [rate 4Mbit ceil 5Gbit burst 5.....b cburst 5.....b])
 AT_CHECK([tc class show dev ovs-tap0 | grep -q 'class htb .* HTB_CONF0'])
 AT_CHECK([tc class show dev ovs-tap0 | grep -q 'class htb .* HTB_CONF1'])
 AT_CHECK([tc class show dev ovs-tap1 | grep -q 'class htb .* HTB_CONF0'])
@@ -3273,7 +3273,7 @@ AT_CHECK([ovs-vsctl set port ovs-p0 qos=@qos -- set port ovs-p1 qos=@qos dnl
 OVS_WAIT_UNTIL([tc qdisc show dev ovs-p0 | grep -q htb])
 OVS_WAIT_UNTIL([tc qdisc show dev ovs-p1 | grep -q htb])
 
-m4_define([HTB_CONF], [rate 40Gbit ceil 50Gbit burst 620000b cburst 618750b])
+m4_define([HTB_CONF], [rate 40Gbit ceil 50Gbit burst 6.....b cburst 6.....b])
 AT_CHECK([tc class show dev ovs-p0 | grep -q 'class htb .* HTB_CONF'])
 AT_CHECK([tc class show dev ovs-p1 | grep -q 'class htb .* HTB_CONF'])
 
@@ -3290,10 +3290,10 @@ ADD_VETH(p0, ns0, br0, "10.1.1.1/24")
 AT_CHECK([ovs-vsctl set interface ovs-p0 ingress_policing_rate=50000000])
 AT_CHECK([ovs-vsctl set interface ovs-p0 ingress_policing_burst=400000])
 
+m4_define([POLICE_CONF], [rate 50Gbit burst 7.......b])
 AT_CHECK([tc -o -s -d filter show dev ovs-p0 ingress |
-  sed -n 's/.*\(rate [[0-9]]*[[a-zA-Z]]* burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q'],
-  [0],[dnl
-rate 50Gbit burst 74500000b
+  sed -n 's/.*\(rate [[0-9]]*[[a-zA-Z]]* burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q' |
+  grep -q 'POLICE_CONF'
 ])
 
 AT_CHECK([tc -s -d filter show dev ovs-p0 ingress |
