@@ -57,6 +57,8 @@ VLOG_DEFINE_THIS_MODULE(route_table);
 
 COVERAGE_DEFINE(route_table_dump);
 
+BUILD_ASSERT_DECL((enum rt_class_t) CLS_MAIN == RT_TABLE_MAIN);
+
 static struct ovs_mutex route_table_mutex = OVS_MUTEX_INITIALIZER;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
@@ -565,7 +567,7 @@ route_table_handle_msg(const struct route_table_msg *change,
         rdnh = CONTAINER_OF(ovs_list_front(&change->rd.nexthops),
                             const struct route_data_nexthop, nexthop_node);
 
-        ovs_router_insert(rd->rta_mark, &rd->rta_dst,
+        ovs_router_insert(CLS_MAIN, rd->rta_mark, &rd->rta_dst,
                           IN6_IS_ADDR_V4MAPPED(&rd->rta_dst)
                           ? rd->rtm_dst_len + 96 : rd->rtm_dst_len,
                           rd->rtn_local, rdnh->ifname, &rdnh->addr,
@@ -576,7 +578,7 @@ route_table_handle_msg(const struct route_table_msg *change,
 static void
 route_map_clear(void)
 {
-    ovs_router_flush();
+    ovs_router_flush(false);
 }
 
 bool

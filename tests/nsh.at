@@ -557,9 +557,12 @@ AT_CHECK([
 AT_CHECK([
     ovs-appctl ovs/route/show | grep Cached: | sort
 ], [0], [dnl
-Cached: 10.0.0.0/24 dev br-p1 SRC 10.0.0.1 local
-Cached: 20.0.0.0/24 dev br-p2 SRC 20.0.0.2 local
-Cached: 30.0.0.0/24 dev br-p3 SRC 30.0.0.3 local
+Cached: 10.0.0.0/24 dev br-p1 SRC 10.0.0.1
+Cached: 10.0.0.1/32 dev br-p1 SRC 10.0.0.1 local
+Cached: 20.0.0.0/24 dev br-p2 SRC 20.0.0.2
+Cached: 20.0.0.2/32 dev br-p2 SRC 20.0.0.2 local
+Cached: 30.0.0.0/24 dev br-p3 SRC 30.0.0.3
+Cached: 30.0.0.3/32 dev br-p3 SRC 30.0.0.3 local
 ])
 
 AT_CHECK([

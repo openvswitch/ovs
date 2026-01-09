@@ -33,6 +33,7 @@
 #include "classifier.h"
 #include "command-line.h"
 #include "compiler.h"
+#include "cmap.h"
 #include "dpif.h"
 #include "fatal-signal.h"
 #include "openvswitch/dynamic-string.h"
@@ -50,10 +51,16 @@
 
 VLOG_DEFINE_THIS_MODULE(ovs_router);
 
+struct clsmap_node {
+    struct cmap_node cmap_node;
+    uint32_t table;
+    struct classifier cls;
+};
+
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
-static struct classifier cls;
+static struct cmap clsmap = CMAP_INITIALIZER;
 
 /* By default, use the system routing table.  For system-independent testing,
  * the unit tests disable using the system routing table. */
@@ -70,6 +77,51 @@ struct ovs_router_entry {
     bool local;
     uint32_t mark;
 };
+
+static void rt_entry_delete__(const struct cls_rule *, struct classifier *);
+
+static struct classifier *
+cls_find(uint32_t table)
+{
+    struct clsmap_node *node;
+
+    CMAP_FOR_EACH_WITH_HASH (node, cmap_node, hash_int(table, 0), &clsmap) {
+        if (node->table == table) {
+            return &node->cls;
+        }
+    }
+
+    return NULL;
+}
+
+static struct classifier *
+cls_create(uint32_t table)
+    OVS_REQUIRES(mutex)
+{
+    struct clsmap_node *node;
+
+    node = xmalloc(sizeof *node);
+    classifier_init(&node->cls, NULL);
+    node->table = table;
+    cmap_insert(&clsmap, &node->cmap_node, hash_int(table, 0));
+
+    return &node->cls;
+}
+
+static void
+cls_flush(struct classifier *cls, bool flush_all)
+    OVS_REQUIRES(mutex)
+{
+    struct ovs_router_entry *rt;
+
+    classifier_defer(cls);
+    CLS_FOR_EACH (rt, cr, cls) {
+        if (flush_all || rt->priority == rt->plen || rt->local) {
+            rt_entry_delete__(&rt->cr, cls);
+        }
+    }
+    classifier_publish(cls);
+}
 
 static struct ovs_router_entry *
 ovs_router_entry_cast(const struct cls_rule *cr)
@@ -110,15 +162,20 @@ ovs_router_lookup(uint32_t mark, const struct in6_addr *ip6_dst,
                   char output_netdev[],
                   struct in6_addr *src, struct in6_addr *gw)
 {
-    const struct cls_rule *cr;
     struct flow flow = {.ipv6_dst = *ip6_dst, .pkt_mark = mark};
+    struct classifier *cls_main = cls_find(CLS_MAIN);
+    const struct cls_rule *cr;
+
+    if (!cls_main) {
+        return false;
+    }
 
     if (src && ipv6_addr_is_set(src)) {
         const struct cls_rule *cr_src;
         struct flow flow_src = {.ipv6_dst = *src, .pkt_mark = mark};
 
-        cr_src = classifier_lookup(&cls, OVS_VERSION_MAX, &flow_src, NULL,
-                                   NULL);
+        cr_src = classifier_lookup(cls_main, OVS_VERSION_MAX, &flow_src,
+                                   NULL, NULL);
         if (cr_src) {
             struct ovs_router_entry *p_src = ovs_router_entry_cast(cr_src);
             if (!p_src->local) {
@@ -129,7 +186,7 @@ ovs_router_lookup(uint32_t mark, const struct in6_addr *ip6_dst,
         }
     }
 
-    cr = classifier_lookup(&cls, OVS_VERSION_MAX, &flow, NULL, NULL);
+    cr = classifier_lookup(cls_main, OVS_VERSION_MAX, &flow, NULL, NULL);
     if (cr) {
         struct ovs_router_entry *p = ovs_router_entry_cast(cr);
 
@@ -257,8 +314,8 @@ out:
 }
 
 static int
-ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
-                    const struct in6_addr *ip6_dst,
+ovs_router_insert__(uint32_t table, uint32_t mark, uint8_t priority,
+                    bool local, const struct in6_addr *ip6_dst,
                     uint8_t plen, const char output_netdev[],
                     const struct in6_addr *gw,
                     const struct in6_addr *ip6_src)
@@ -268,6 +325,7 @@ ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
                         struct in6_addr *prefsrc);
     const struct cls_rule *cr;
     struct ovs_router_entry *p;
+    struct classifier *cls;
     struct match match;
     int err;
 
@@ -308,7 +366,11 @@ ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
     cls_rule_init(&p->cr, &match, priority);
 
     ovs_mutex_lock(&mutex);
-    cr = classifier_replace(&cls, &p->cr, OVS_VERSION_MIN, NULL, 0);
+    cls = cls_find(table);
+    if (!cls) {
+        cls = cls_create(table);
+    }
+    cr = classifier_replace(cls, &p->cr, OVS_VERSION_MIN, NULL, 0);
     ovs_mutex_unlock(&mutex);
 
     if (cr) {
@@ -321,13 +383,13 @@ ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
 }
 
 void
-ovs_router_insert(uint32_t mark, const struct in6_addr *ip_dst, uint8_t plen,
-                  bool local, const char output_netdev[],
+ovs_router_insert(uint32_t table, uint32_t mark, const struct in6_addr *ip_dst,
+                  uint8_t plen, bool local, const char output_netdev[],
                   const struct in6_addr *gw, const struct in6_addr *prefsrc)
 {
     if (use_system_routing_table) {
         uint8_t priority = local ? plen + 64 : plen;
-        ovs_router_insert__(mark, priority, local, ip_dst, plen,
+        ovs_router_insert__(table, mark, priority, local, ip_dst, plen,
                             output_netdev, gw, prefsrc);
     }
 }
@@ -335,24 +397,25 @@ ovs_router_insert(uint32_t mark, const struct in6_addr *ip_dst, uint8_t plen,
 /* The same as 'ovs_router_insert', but it adds the route even if updates
  * from the system routing table are disabled.  Used for unit tests. */
 void
-ovs_router_force_insert(uint32_t mark, const struct in6_addr *ip_dst,
+ovs_router_force_insert(uint32_t table, uint32_t mark,
+                        const struct in6_addr *ip_dst,
                         uint8_t plen, bool local, const char output_netdev[],
                         const struct in6_addr *gw,
                         const struct in6_addr *prefsrc)
 {
     uint8_t priority = local ? plen + 64 : plen;
 
-    ovs_router_insert__(mark, priority, local, ip_dst, plen,
+    ovs_router_insert__(table, mark, priority, local, ip_dst, plen,
                         output_netdev, gw, prefsrc);
 }
 
 static void
-rt_entry_delete__(const struct cls_rule *cr)
+rt_entry_delete__(const struct cls_rule *cr, struct classifier *cls)
 {
     struct ovs_router_entry *p = ovs_router_entry_cast(cr);
 
     tnl_port_map_delete_ipdev(p->output_netdev);
-    classifier_remove_assert(&cls, cr);
+    classifier_remove_assert(cls, cr);
     ovsrcu_postpone(rt_entry_free, ovs_router_entry_cast(cr));
 }
 
@@ -360,20 +423,25 @@ static bool
 rt_entry_delete(uint32_t mark, uint8_t priority,
                 const struct in6_addr *ip6_dst, uint8_t plen)
 {
+    struct classifier *cls_main = cls_find(CLS_MAIN);
     const struct cls_rule *cr;
     struct cls_rule rule;
     struct match match;
     bool res = false;
+
+    if (!cls_main) {
+        return false;
+    }
 
     rt_init_match(&match, mark, ip6_dst, plen);
 
     cls_rule_init(&rule, &match, priority);
 
     /* Find the exact rule. */
-    cr = classifier_find_rule_exactly(&cls, &rule, OVS_VERSION_MAX);
+    cr = classifier_find_rule_exactly(cls_main, &rule, OVS_VERSION_MAX);
     if (cr) {
         ovs_mutex_lock(&mutex);
-        rt_entry_delete__(cr);
+        rt_entry_delete__(cr, cls_main);
         ovs_mutex_unlock(&mutex);
 
         res = true;
@@ -469,8 +537,8 @@ ovs_router_add(struct unixctl_conn *conn, int argc,
         in6_addr_set_mapped_ipv4(&src6, src);
     }
 
-    err = ovs_router_insert__(mark, plen + 32, false, &ip6, plen, argv[2],
-                              &gw6, &src6);
+    err = ovs_router_insert__(CLS_MAIN, mark, plen + 32, false, &ip6, plen,
+                              argv[2], &gw6, &src6);
     if (err) {
         unixctl_command_reply_error(conn, "Error while inserting route.");
     } else {
@@ -512,12 +580,19 @@ ovs_router_del(struct unixctl_conn *conn, int argc OVS_UNUSED,
 static void
 ovs_router_show_json(struct json **routes)
 {
-    int n_rules = classifier_count(&cls);
     struct json **json_entries = NULL;
     struct ovs_router_entry *rt;
+    struct classifier *cls_main;
     struct ds ds;
+    int n_rules;
     int i = 0;
 
+    cls_main = cls_find(CLS_MAIN);
+    if (!cls_main) {
+        goto out;
+    }
+
+    n_rules = classifier_count(cls_main);
     if (!n_rules) {
         goto out;
     }
@@ -525,7 +600,7 @@ ovs_router_show_json(struct json **routes)
     json_entries = xmalloc(n_rules * sizeof *json_entries);
     ds_init(&ds);
 
-    CLS_FOR_EACH (rt, cr, &cls) {
+    CLS_FOR_EACH (rt, cr, cls_main) {
         bool user = rt->priority != rt->plen && !rt->local;
         uint8_t plen = rt->plen;
         struct json *json, *nh;
@@ -579,9 +654,15 @@ static void
 ovs_router_show_text(struct ds *ds)
 {
     struct ovs_router_entry *rt;
+    struct classifier *cls_main;
+
+    cls_main = cls_find(CLS_MAIN);
+    if (!cls_main) {
+        return;
+    }
 
     ds_put_format(ds, "Route Table:\n");
-    CLS_FOR_EACH (rt, cr, &cls) {
+    CLS_FOR_EACH (rt, cr, cls_main) {
         uint8_t plen;
         if (rt->priority == rt->plen || rt->local) {
             ds_put_format(ds, "Cached: ");
@@ -668,27 +749,46 @@ ovs_router_lookup_cmd(struct unixctl_conn *conn, int argc,
     }
 }
 
-void
-ovs_router_flush(void)
+static void
+clsmap_node_destroy_cb(struct clsmap_node *node)
 {
-    struct ovs_router_entry *rt;
+    classifier_destroy(&node->cls);
+    ovsrcu_postpone(free, node);
+}
 
-    ovs_mutex_lock(&mutex);
-    classifier_defer(&cls);
-    CLS_FOR_EACH(rt, cr, &cls) {
-        if (rt->priority == rt->plen || rt->local) {
-            rt_entry_delete__(&rt->cr);
+static void
+ovs_router_flush_protected(bool flush_all)
+    OVS_REQUIRES(mutex)
+{
+    struct clsmap_node *node;
+
+    CMAP_FOR_EACH (node, cmap_node, &clsmap) {
+        cls_flush(&node->cls, flush_all);
+        if (!node->cls.n_rules) {
+            cmap_remove(&clsmap, &node->cmap_node, hash_int(node->table, 0));
+            ovsrcu_postpone(clsmap_node_destroy_cb, node);
         }
     }
-    classifier_publish(&cls);
-    ovs_mutex_unlock(&mutex);
     seq_change(tnl_conf_seq);
+}
+
+void
+ovs_router_flush(bool flush_all)
+{
+    ovs_mutex_lock(&mutex);
+    ovs_router_flush_protected(flush_all);
+    ovs_mutex_unlock(&mutex);
 }
 
 static void
 ovs_router_flush_handler(void *aux OVS_UNUSED)
 {
-    ovs_router_flush();
+    ovs_mutex_lock(&mutex);
+    ovs_router_flush_protected(true);
+    ovs_assert(cmap_is_empty(&clsmap));
+    cmap_destroy(&clsmap);
+    cmap_init(&clsmap);
+    ovs_mutex_unlock(&mutex);
 }
 
 void
@@ -698,7 +798,6 @@ ovs_router_init(void)
 
     if (ovsthread_once_start(&once)) {
         fatal_signal_add_hook(ovs_router_flush_handler, NULL, NULL, true);
-        classifier_init(&cls, NULL);
         unixctl_command_register("ovs/route/add",
                                  "ip/plen dev [gw] "
                                  "[pkt_mark=mark] [src=src_ip]",
