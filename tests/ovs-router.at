@@ -38,7 +38,7 @@ AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
         "dev": "br0"}],
     "prefix": 32,
     "prefsrc": "2.2.2.2",
-    "priority": 192,
+    "priority": 128,
     "table": 255,
     "user": false},
   {
