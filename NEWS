@@ -26,6 +26,8 @@ Post-v3.6.0
        a specific table or all routes from all tables.
      * 'ovs/route/add' and 'ovs/route/del': added new option, table=ID, to
        add/delete a route from a specific table.
+     * 'ovs/route/lookup': added new option, src=IP, to perform lookup with
+       a specific source IP address.
      * Added a new sub-command, ovs/route/rule/show, to list OVS routing rules.
    - Windows Support
      * Support for compiling for and running on Windows has been deprecated.

@@ -957,30 +957,57 @@ static void
 ovs_router_lookup_cmd(struct unixctl_conn *conn, int argc,
                       const char *argv[], void *aux OVS_UNUSED)
 {
-    struct in6_addr gw, src = in6addr_any;
+    struct in6_addr gw, src6 = in6addr_any;
+    char src6_s[IPV6_SCAN_LEN + 1];
     char iface[IFNAMSIZ];
     struct in6_addr ip6;
     unsigned int plen;
     uint32_t mark = 0;
+    ovs_be32 src = 0;
+    bool is_ipv6;
     ovs_be32 ip;
+    int i;
 
     if (scan_ipv4_route(argv[1], &ip, &plen) && plen == 32) {
         in6_addr_set_mapped_ipv4(&ip6, ip);
-    } else if (!(scan_ipv6_route(argv[1], &ip6, &plen) && plen == 128)) {
-        unixctl_command_reply_error(conn, "Invalid parameters");
+        is_ipv6 = false;
+    } else if (scan_ipv6_route(argv[1], &ip6, &plen) && plen == 128) {
+        is_ipv6 = true;
+    } else {
+        unixctl_command_reply_error(conn, "Invalid 'ip/plen' parameter");
         return;
     }
-    if (argc > 2) {
-        if (!ovs_scan(argv[2], "pkt_mark=%"SCNi32, &mark)) {
-            unixctl_command_reply_error(conn, "Invalid pkt_mark");
-            return;
+
+    /* Parse optional parameters. */
+    for (i = 2; i < argc; i++) {
+        if (ovs_scan(argv[i], "pkt_mark=%"SCNu32, &mark)) {
+            continue;
         }
+
+        if (is_ipv6) {
+            if (ovs_scan(argv[i], "src="IPV6_SCAN_FMT, src6_s) &&
+                ipv6_parse(src6_s, &src6)) {
+                continue;
+            }
+        } else {
+            if (ovs_scan(argv[i], "src="IP_SCAN_FMT, IP_SCAN_ARGS(&src))) {
+                continue;
+            }
+        }
+
+        unixctl_command_reply_error(conn, "Invalid pkt_mark or src");
+        return;
     }
-    if (ovs_router_lookup(mark, &ip6, iface, &src, &gw)) {
+
+    if (src) {
+        in6_addr_set_mapped_ipv4(&src6, src);
+    }
+
+    if (ovs_router_lookup(mark, &ip6, iface, &src6, &gw)) {
         struct ds ds = DS_EMPTY_INITIALIZER;
 
         ds_put_format(&ds, "src ");
-        ipv6_format_mapped(&src, &ds);
+        ipv6_format_mapped(&src6, &ds);
         ds_put_format(&ds, "\ngateway ");
         ipv6_format_mapped(&gw, &ds);
         ds_put_format(&ds, "\ndev %s\n", iface);
@@ -1149,7 +1176,7 @@ ovs_router_init(void)
                                  "[pkt_mark=mark] [table=id]", 1, 3,
                                  ovs_router_del, NULL);
         unixctl_command_register("ovs/route/lookup", "ip_addr "
-                                 "[pkt_mark=mark]", 1, 2,
+                                 "[pkt_mark=mark] [src=src_ip]", 1, 3,
                                  ovs_router_lookup_cmd, NULL);
         unixctl_command_register("ovs/route/rule/show", "[-6]", 0, 1,
                                  ovs_router_rules_show, NULL);

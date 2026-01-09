@@ -23,6 +23,12 @@ Delete ip/plen route from OVS routing table. The standard routing table is used
 by default, or a specific custom table when ID is provided via \fItable\fR
 parameter.
 .
+.IP "\fBovs/route/lookup\fR \fIip_addr\fR [\fBpkt_mark\fR=\fImark\fR] \
+[\fBsrc\fR=\fIsrc_ip\fR]"
+Perform route lookup for specified destination IP address in OVS routing tables
+and print the matching route information. The lookup may be more selective when
+additional parameters are used: \fIpkt_mark\fR and \fIsrc\fR.
+.
 .IP "\fBovs/route/rule/show\fR [\fB-6\fR]"
 Print routing rules in OVS. This includes routing rules cached from the system
 routing policy database and user configured routing rules. By default only IPv4

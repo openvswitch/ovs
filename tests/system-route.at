@@ -463,3 +463,57 @@ ovs-appctl: ovs-vswitchd: server returned an error
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+dnl Checks that OVS performs route lookup according to rules with src match.
+AT_SETUP([ovs-route - route lookup + rules])
+AT_KEYWORDS([route])
+OVS_TRAFFIC_VSWITCHD_START()
+
+dnl Create tap ports.
+on_exit 'ip link del p1-route'
+on_exit 'ip link del p2-route'
+AT_CHECK([ip tuntap add name p1-route mode tap])
+AT_CHECK([ip tuntap add name p2-route mode tap])
+AT_CHECK([ip link set p1-route up])
+AT_CHECK([ip link set p2-route up])
+
+dnl Add ip addresses, they need to be from same subnet so that the main router
+dnl table in OVS contains only one of the routes.
+AT_CHECK([ip addr add 10.0.0.11/24 dev p1-route], [0], [stdout])
+AT_CHECK([ip addr add 10.0.0.12/24 dev p2-route], [0], [stdout])
+dnl Give the main thread a chance to act.
+AT_CHECK([ovs-appctl revalidator/wait])
+dnl Check that OVS learn only one of the routes to the subnet.
+AT_CHECK([ovs-appctl ovs/route/show | grep -F '10.0.0.0/24' | grep -q 'p1-route'], [1])
+AT_CHECK([ovs-appctl ovs/route/show | grep -F '10.0.0.0/24' | grep -q 'p2-route'])
+dnl Check that OVS lookup returns p2-route even for srouce IP of p1-route
+dnl internface.
+AT_CHECK([ovs-appctl ovs/route/lookup 10.0.0.10 src=10.0.0.11], [0], [src 10.0.0.11
+gateway ::
+dev p2-route
+])
+
+dnl Add rule to use a custom routing table for source IP of p1-route.
+on_exit 'ip route flush table 42'
+AT_CHECK([ip route add 10.0.0.0/24 dev p1-route table 42])
+AT_CHECK([ip route show table 42 | grep 'p1-route' | grep -Fq '10.0.0.0/24'])
+on_exit 'ip rule del from 10.0.0.11 lookup 42'
+AT_CHECK([ip rule add from 10.0.0.11 lookup 42])
+AT_CHECK([ip rule show | grep -q 'from 10.0.0.11 lookup 42'])
+dnl Give the main thread a chance to act.
+AT_CHECK([ovs-appctl revalidator/wait])
+dnl Check that OVS uses custom table for lookup with source IP of p1-route
+dnl internface and returns the correct p1-route.
+AT_CHECK([ovs-appctl ovs/route/lookup 10.0.0.10 src=10.0.0.11], [0], [src 10.0.0.11
+gateway ::
+dev p1-route
+])
+dnl Check that OVS uses main table for lookup with other source IP that doesn't
+dnl match the rule.
+AT_CHECK([ovs-appctl ovs/route/lookup 10.0.0.10 src=10.0.0.12], [0], [src 10.0.0.12
+gateway ::
+dev p2-route
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
