@@ -1,8 +1,8 @@
 .SS "OPENVSWITCH TUNNELING COMMANDS"
 These commands query and modify OVS tunnel components.
 .
-.IP "\fBovs/route/add \fIip\fB/\fIplen\fB \fIoutput_bridge\fB \
-[\fIgw\fB] [pkt_mark=\fImark\fB] [src=\fIsrc_ip\fB]\fR"
+.IP "\fBovs/route/add\fR \fIip\fR/\fIplen\fR \fIoutput_bridge\fR \
+[\fIgw\fR] [\fBpkt_mark\fR=\fImark\fR] [\fBsrc\fR=\fIsrc_ip\fR]"
 Adds \fIip\fR/\fIplen\fR route to vswitchd routing table. \fIoutput_bridge\fR
 needs to be OVS bridge name.  This command is useful if OVS cached
 routes does not look right.
@@ -11,7 +11,7 @@ routes does not look right.
 Print all routes in OVS routing table, This includes routes cached
 from system routing table and user configured routes.
 .
-.IP "\fBovs/route/del ip/plen [pkt_mark=mark]\fR"
+.IP "\fBovs/route/del\fR \fIip\fR/\fIplen\fR [\fBpkt_mark\fR=\fImark\fR]"
 Delete ip/plen route from OVS routing table.
 .
 .IP "\fBtnl/neigh/show\fR"
@@ -19,8 +19,8 @@ Delete ip/plen route from OVS routing table.
 OVS builds ARP cache by snooping are messages. This command shows
 ARP cache table.
 .
-.IP "\fBtnl/neigh/set \fIbridge ip mac\fR"
-.IP "\fBtnl/arp/set \fIbridge ip mac\fR"
+.IP "\fBtnl/neigh/set\fR \fIbridge\fR \fIip\fR \fImac\fR"
+.IP "\fBtnl/arp/set\fR \fIbridge\fR \fIip\fR \fImac\fR"
 Adds or modifies an ARP cache entry in \fIbridge\fR, mapping \fIip\fR
 to \fImac\fR.
 .
@@ -28,8 +28,8 @@ to \fImac\fR.
 .IP "\fBtnl/arp/flush\fR"
 Flush ARP table.
 .
-.IP "\fBtnl/neigh/aging [\fIseconds\fB]\fR"
-.IP "\fBtnl/arp/aging [\fIseconds\fB]\fR"
+.IP "\fBtnl/neigh/aging\fR [\fIseconds\fR]"
+.IP "\fBtnl/arp/aging\fR [\fIseconds\fR]"
 Changes the aging time. The accepted values of \fIseconds\fR are
 between 1 and 3600. The new entries will get the value as specified in
 \fIseconds\fR. For the existing entries, the aging time is updated
@@ -37,7 +37,7 @@ only if the current expiration is greater than \fIseconds\fR.
 .IP
 If used without arguments, it prints the current aging value.
 .
-.IP "\fBtnl/egress_port_range [num1] [num2]\fR"
+.IP "\fBtnl/egress_port_range\fR [\fInum1\fR] [\fInum2\fR]"
 Set range for UDP source port used for UDP based Tunnels. For
 example VxLAN. If case of zero arguments this command prints
 current range in use.
