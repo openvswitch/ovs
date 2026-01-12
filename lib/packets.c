@@ -2096,9 +2096,10 @@ out:
 bool
 packet_udp_tunnel_csum(struct dp_packet *p)
 {
-    const ovs_be16 *inner_l4_csum_p;
     struct ip_header *inner_ip;
     const void *inner_l4_data;
+    char *after_inner_l4_csum;
+    size_t inner_l4_csum_off;
     struct udp_header *udp;
     ovs_be16 inner_l4_csum;
     uint32_t partial_csum;
@@ -2114,16 +2115,16 @@ packet_udp_tunnel_csum(struct dp_packet *p)
     udp = dp_packet_l4(p);
 
     if (dp_packet_inner_l4_proto_tcp(p)) {
-        inner_l4_csum_p = &(((struct tcp_header *) inner_l4)->tcp_csum);
+        inner_l4_csum_off = offsetof(struct tcp_header, tcp_csum);
         inner_l4_data = dp_packet_get_inner_tcp_payload(p);
         if (!inner_l4_data) {
             /* Malformed packet. */
             return false;
         }
     } else if (dp_packet_inner_l4_proto_udp(p)) {
-        inner_l4_csum_p = &(((struct udp_header *) inner_l4)->udp_csum);
+        inner_l4_csum_off = offsetof(struct udp_header, udp_csum);
         inner_l4_data = (char *) inner_l4 + sizeof (struct udp_header);
-        if (*inner_l4_csum_p == 0) {
+        if (((struct udp_header *) inner_l4)->udp_csum == 0) {
             /* There is no nested checksum.
              * No choice but compute a full checksum. */
             return false;
@@ -2149,10 +2150,10 @@ packet_udp_tunnel_csum(struct dp_packet *p)
         inner_csum = packet_csum_pseudoheader6(inner_ip6);
     }
 
-    inner_csum = csum_continue(inner_csum, inner_l4,
-        (char *) inner_l4_csum_p - (char *) inner_l4);
-    inner_l4_csum = csum_finish(csum_continue(inner_csum, inner_l4_csum_p + 1,
-        (char *) inner_l4_data - (char *)(inner_l4_csum_p + 1)));
+    inner_csum = csum_continue(inner_csum, inner_l4, inner_l4_csum_off);
+    after_inner_l4_csum = (char *) inner_l4 + inner_l4_csum_off + 2;
+    inner_l4_csum = csum_finish(csum_continue(inner_csum, after_inner_l4_csum,
+        (char *) inner_l4_data - after_inner_l4_csum));
     /* Important: for inner UDP, a null inner_l4_csum here should in theory be
      * replaced with 0xffff.  However, since the only use of inner_l4_csum is
      * for the final outer checksum with a csum_add16() below, we can skip this
@@ -2179,11 +2180,10 @@ packet_udp_tunnel_csum(struct dp_packet *p)
         partial_csum = csum_continue(partial_csum, inner_ip,
             (char *) inner_l4 - (char *) inner_ip);
     }
-    partial_csum = csum_continue(partial_csum, inner_l4,
-        (char *) inner_l4_csum_p - (char *) inner_l4);
+    partial_csum = csum_continue(partial_csum, inner_l4, inner_l4_csum_off);
     partial_csum = csum_add16(partial_csum, inner_l4_csum);
-    partial_csum = csum_continue(partial_csum, inner_l4_csum_p + 1,
-        (char *) inner_l4_data - (char *)(inner_l4_csum_p + 1));
+    partial_csum = csum_continue(partial_csum, after_inner_l4_csum,
+        (char *) inner_l4_data - after_inner_l4_csum);
     udp->udp_csum = csum_finish(partial_csum);
     tso_segsz = dp_packet_get_tso_segsz(p);
     if (tso_segsz) {
