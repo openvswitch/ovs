@@ -62,7 +62,7 @@ dp_packet_gso_seg_new(const struct dp_packet *p, size_t hdr_len,
 }
 
 /* Returns the calculated number of TCP segments in packet 'p'. */
-int
+unsigned int
 dp_packet_gso_nr_segs(struct dp_packet *p)
 {
     uint16_t segsz = dp_packet_get_tso_segsz(p);
@@ -81,7 +81,7 @@ dp_packet_gso_nr_segs(struct dp_packet *p)
  * packet (up to the final number of segments on the wire).
  * If there is still some data left, we need an extra "little" packet
  * (shorter than tso_segsz). */
-int
+unsigned int
 dp_packet_gso_partial_nr_segs(struct dp_packet *p)
 {
     if ((dp_packet_tunnel_geneve(p) || dp_packet_tunnel_vxlan(p))
@@ -95,8 +95,9 @@ dp_packet_gso_partial_nr_segs(struct dp_packet *p)
 }
 
 static void
-dp_packet_gso_update_segment(struct dp_packet *seg, int seg_no, int n_segs,
-                             uint16_t tso_segsz, bool udp_tnl, bool gre_tnl)
+dp_packet_gso_update_segment(struct dp_packet *seg, unsigned int seg_no,
+                             unsigned int n_segs, uint16_t tso_segsz,
+                             bool udp_tnl, bool gre_tnl)
 {
     struct tcp_header *tcp_hdr;
     struct ip_header *ip_hdr;
@@ -180,12 +181,12 @@ dp_packet_gso__(struct dp_packet *p, struct dp_packet_batch **batches,
 {
     struct dp_packet_batch *curr_batch = *batches;
     struct dp_packet *seg;
+    unsigned int n_segs;
     uint16_t tso_segsz;
     size_t data_len;
     size_t hdr_len;
     bool udp_tnl;
     bool gre_tnl;
-    int n_segs;
 
     tso_segsz = dp_packet_get_tso_segsz(p);
     ovs_assert(tso_segsz);
@@ -200,7 +201,7 @@ dp_packet_gso__(struct dp_packet *p, struct dp_packet_batch **batches,
     }
     dp_packet_batch_add(curr_batch, p);
 
-    if (n_segs == 1) {
+    if (n_segs <= 1) {
         goto out;
     }
 
@@ -221,7 +222,7 @@ dp_packet_gso__(struct dp_packet *p, struct dp_packet_batch **batches,
         goto first_seg;
     }
 
-    for (int i = 1; i < n_segs - 1; i++) {
+    for (unsigned int i = 1; i < n_segs - 1; i++) {
         seg = dp_packet_gso_seg_new(p, hdr_len, hdr_len + i * tso_segsz,
                                     tso_segsz);
         dp_packet_gso_update_segment(seg, i, n_segs, tso_segsz, udp_tnl,
