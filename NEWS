@@ -54,6 +54,7 @@ Post-v3.6.0
      * AVX512-optimized action handling.
      * AVX512-optimized miniflow extraction.
      * AVX512-optimized DPIF input processing.
+   - Increased the number of OpenFlow registers to 32.
 
 
 v3.6.0 - 18 Aug 2025

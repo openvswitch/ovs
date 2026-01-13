@@ -620,6 +620,175 @@ def do_test_section(input_string, section, expected):
             "actions=load:0x12334->NOFILED",
             ParseError,
         ),
+        (
+            "actions=" + ",".join([
+                f"move:reg{i}[0..15]->reg{i + 1}[16..31]"
+                for i in range(0, 31)
+            ]),
+            [
+                KeyValue(
+                    "move",
+                    {
+                        "src": {
+                            "field": f"reg{i}", "start": 0, "end": 15
+                        },
+                        "dst": {
+                            "field": f"reg{i + 1}", "start": 16, "end": 31
+                        },
+                    },
+                ) for i in range(0, 31)
+            ],
+        ),
+        (
+            "actions=move:reg31[0..15]->reg32[16..31],move:reg32[0..15]->reg33[16..31]",  # noqa: E501
+            ParseError,
+        ),
+        (
+            "actions=" + ",".join([
+                f"move:xreg{i}[0..31]->xreg{i + 1}[32..63]"
+                for i in range(0, 15)
+            ]),
+            [
+                KeyValue(
+                    "move",
+                    {
+                        "src": {
+                            "field": f"xreg{i}", "start": 0, "end": 31
+                        },
+                        "dst": {
+                            "field": f"xreg{i + 1}", "start": 32, "end": 63
+                        },
+                    },
+                ) for i in range(0, 15)
+            ],
+        ),
+        (
+            "actions=move:xreg16[0..31]->xreg17[32..63],move:xreg17[0..31]->xreg18[32..64]",  # noqa: E501
+            ParseError,
+        ),
+        (
+            "actions=" + ",".join([
+                f"move:xxreg{i}[0..63]->xxreg{i + 1}[64..127]"
+                for i in range(0, 7)
+            ]),
+            [
+                KeyValue(
+                    "move",
+                    {
+                        "src": {
+                            "field": f"xxreg{i}", "start": 0, "end": 63
+                        },
+                        "dst": {
+                            "field": f"xxreg{i + 1}", "start": 64, "end": 127
+                        },
+                    },
+                ) for i in range(0, 7)
+            ],
+        ),
+        (
+            "actions=move:xxreg7[0..63]->xxreg8[64..128],move:xxreg8[0..63]->xxreg9[64..127]",  # noqa: E501
+            ParseError,
+        ),
+        (
+            "actions=" + ",".join([
+                f"ct(commit,zone=NXM_NX_REG{i}[0..15],table={i})"
+                for i in range(0, 16)
+            ]),
+            [
+                KeyValue(
+                    "ct",
+                    {
+                        "commit": True,
+                        "zone": {
+                            "field": f"NXM_NX_REG{i}",
+                            "start": 0,
+                            "end": 15,
+                        },
+                        "table": i,
+                    },
+                ) for i in range(0, 16)
+            ],
+        ),
+        (
+            "actions=" + ",".join([
+                f"ct(commit,zone=NXOXM_ET_REG{i}[0..15],table={i})"
+                for i in range(16, 32)
+            ]),
+            [
+                KeyValue(
+                    "ct",
+                    {
+                        "commit": True,
+                        "zone": {
+                            "field": f"NXOXM_ET_REG{i}",
+                            "start": 0,
+                            "end": 15,
+                        },
+                        "table": i,
+                    },
+                ) for i in range(16, 32)
+            ],
+        ),
+        (
+            "actions=" + ",".join([
+                f"ct(commit,zone=OXM_OF_PKT_REG{i}[0..15],table={i})"
+                for i in range(0, 16)
+            ]),
+            [
+                KeyValue(
+                    "ct",
+                    {
+                        "commit": True,
+                        "zone": {
+                            "field": f"OXM_OF_PKT_REG{i}",
+                            "start": 0,
+                            "end": 15,
+                        },
+                        "table": i,
+                    },
+                ) for i in range(0, 16)
+            ],
+        ),
+        (
+            "actions=" + ",".join([
+                f"ct(commit,zone=NXM_NX_XXREG{i}[0..15],table={i})"
+                for i in range(0, 4)
+            ]),
+            [
+                KeyValue(
+                    "ct",
+                    {
+                        "commit": True,
+                        "zone": {
+                            "field": f"NXM_NX_XXREG{i}",
+                            "start": 0,
+                            "end": 15,
+                        },
+                        "table": i,
+                    },
+                ) for i in range(0, 4)
+            ],
+        ),
+        (
+            "actions=" + ",".join([
+                f"ct(commit,zone=NXOXM_ET_XXREG{i}[0..15],table={i})"
+                for i in range(4, 8)
+            ]),
+            [
+                KeyValue(
+                    "ct",
+                    {
+                        "commit": True,
+                        "zone": {
+                            "field": f"NXOXM_ET_XXREG{i}",
+                            "start": 0,
+                            "end": 15,
+                        },
+                        "table": i,
+                    },
+                ) for i in range(4, 8)
+            ],
+        ),
     ],
 )
 def test_act(input_string, expected):
@@ -648,6 +817,39 @@ def test_act(input_string, expected):
                 [
                     KeyValue("priority", 4),
                     KeyValue("in_port", 1)
+                ],
+            ),
+        ),
+        (
+            "table=0, " + ",".join([f"reg{i}={i}" for i in range(0, 32)]),
+            (
+                [
+                    KeyValue("table", 0),
+                ],
+                [
+                    KeyValue(f"reg{i}", i) for i in range(0, 32)
+                ],
+            ),
+        ),
+        (
+            "table=0, " + ",".join([f"xreg{i}={i}" for i in range(0, 16)]),
+            (
+                [
+                    KeyValue("table", 0),
+                ],
+                [
+                    KeyValue(f"xreg{i}", i) for i in range(0, 16)
+                ],
+            ),
+        ),
+        (
+            "table=0, " + ",".join([f"xxreg{i}={i}" for i in range(0, 8)]),
+            (
+                [
+                    KeyValue("table", 0),
+                ],
+                [
+                    KeyValue(f"xxreg{i}", i) for i in range(0, 8)
                 ],
             ),
         ),

@@ -55,6 +55,36 @@ for test_case in \
     'reg13=13/1                                  NXM,OXM' \
     'reg14=14                                    NXM,OXM' \
     'reg14=14/1                                  NXM,OXM' \
+    'reg15=0                                     NXM,OXM' \
+    'reg15=0/1                                   NXM,OXM' \
+    'reg16=16                                    NXM,OXM' \
+    'reg16=16/1                                  NXM,OXM' \
+    'reg17=17                                    NXM,OXM' \
+    'reg17=17/1                                  NXM,OXM' \
+    'reg18=18                                    NXM,OXM' \
+    'reg18=18/1                                  NXM,OXM' \
+    'reg19=19                                    NXM,OXM' \
+    'reg19=19/1                                  NXM,OXM' \
+    'reg20=20                                    NXM,OXM' \
+    'reg20=20/1                                  NXM,OXM' \
+    'reg21=21                                    NXM,OXM' \
+    'reg21=21/1                                  NXM,OXM' \
+    'reg22=22                                    NXM,OXM' \
+    'reg22=22/1                                  NXM,OXM' \
+    'reg23=23/1                                  NXM,OXM' \
+    'reg23=23                                    NXM,OXM' \
+    'reg24=24/1                                  NXM,OXM' \
+    'reg24=24                                    NXM,OXM' \
+    'reg25=25                                    NXM,OXM' \
+    'reg25=25/1                                  NXM,OXM' \
+    'reg26=26                                    NXM,OXM' \
+    'reg26=26/1                                  NXM,OXM' \
+    'reg27=27                                    NXM,OXM' \
+    'reg27=27/1                                  NXM,OXM' \
+    'reg28=28                                    NXM,OXM' \
+    'reg28=28/1                                  NXM,OXM' \
+    'reg29=29                                    NXM,OXM' \
+    'reg29=29/1                                  NXM,OXM' \
     'xreg0=0                                     NXM,OXM' \
     'xreg0=0/1                                   NXM,OXM' \
     'xreg1=1                                     NXM,OXM' \
@@ -71,6 +101,22 @@ for test_case in \
     'xreg6=6/1                                   NXM,OXM' \
     'xreg7=7                                     NXM,OXM' \
     'xreg7=7/1                                   NXM,OXM' \
+    'xreg8=8                                     NXM,OXM' \
+    'xreg8=8/1                                   NXM,OXM' \
+    'xreg9=9                                     NXM,OXM' \
+    'xreg9=9/1                                   NXM,OXM' \
+    'xreg10=10                                   NXM,OXM' \
+    'xreg10=10/1                                 NXM,OXM' \
+    'xreg11=11                                   NXM,OXM' \
+    'xreg11=11/5                                 NXM,OXM' \
+    'xreg12=12                                   NXM,OXM' \
+    'xreg12=12/1                                 NXM,OXM' \
+    'xreg13=13                                   NXM,OXM' \
+    'xreg13=13/1                                 NXM,OXM' \
+    'xreg14=14                                   NXM,OXM' \
+    'xreg14=14/1                                 NXM,OXM' \
+    'xreg15=15                                   NXM,OXM' \
+    'xreg15=15/1                                 NXM,OXM' \
     'xxreg0=0                                    NXM,OXM' \
     'xxreg0=0/1                                  NXM,OXM' \
     'xxreg1=1                                    NXM,OXM' \
@@ -79,8 +125,18 @@ for test_case in \
     'xxreg2=2/1                                  NXM,OXM' \
     'xxreg3=3                                    NXM,OXM' \
     'xxreg3=3/1                                  NXM,OXM' \
+    'xxreg4=4                                    NXM,OXM' \
+    'xxreg4=4/1                                  NXM,OXM' \
+    'xxreg5=5                                    NXM,OXM' \
+    'xxreg5=5/1                                  NXM,OXM' \
+    'xxreg6=6                                    NXM,OXM' \
+    'xxreg6=6/1                                  NXM,OXM' \
+    'xxreg7=7                                    NXM,OXM' \
+    'xxreg7=7/1                                  NXM,OXM' \
     'xxreg3[[0..0]]=1                            NXM,OXM' \
     'xxreg3[[126..127]]=3                        NXM,OXM' \
+    'xxreg7[[0..0]]=1                            NXM,OXM' \
+    'xxreg7[[126..127]]=3                        NXM,OXM' \
     'reg3[[]]=3                                  NXM,OXM' \
     'dl_src=00:11:22:33:44:55                    any' \
     'dl_src=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM,OpenFlow11' \
@@ -581,6 +637,9 @@ actions=sample(probability=12341,collector_set_id=23456,obs_domain_id=NXM_OF_IN_
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[[]])))
 ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[[]])))
+reg31[[0..31]]=1,actions=output:NXM_NX_REG15,output:NXOXM_ET_REG16,output:NXOXM_ET_REG31
+xreg15[[0..31]]=2,xreg15[[32..63]]=3,actions=output:OXM_OF_PKT_REG7,output:OXM_OF_PKT_REG8,output:OXM_OF_PKT_REG15
+xxreg7[[0..31]]=4,xxreg7[[32..63]]=5,xxreg7[[64..95]]=6,xxreg7[[96..127]]=7,actions=output:NXM_NX_XXREG3,output:NXOXM_ET_XXREG4,output:NXOXM_ET_XXREG7
 ])
 AT_CHECK([ovs-ofctl -F nxm parse-flows flows.txt], [0], [stdout])
 
@@ -623,6 +682,9 @@ NXT_FLOW_MOD: ADD actions=sample(probability=12341,collector_set_id=23456,obs_do
 NXT_FLOW_MOD: ADD ip actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[[]]))
 NXT_FLOW_MOD: ADD ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[[0..63]],load:0->NXM_NX_CT_LABEL[[64..127]]))
+NXT_FLOW_MOD: ADD reg31=0x1 actions=output:NXM_NX_REG15[[]],output:NXOXM_ET_REG16[[]],output:NXOXM_ET_REG31[[]]
+NXT_FLOW_MOD: ADD reg30=0x3,reg31=0x2 actions=output:OXM_OF_PKT_REG7[[]],output:OXM_OF_PKT_REG8[[]],output:OXM_OF_PKT_REG15[[]]
+NXT_FLOW_MOD: ADD reg28=0x7,reg29=0x6,reg30=0x5,reg31=0x4 actions=output:NXM_NX_XXREG3[[1..64]],output:NXOXM_ET_XXREG4[[1..64]],output:NXOXM_ET_XXREG7[[1..64]]
 ])
 AT_CLEANUP
 
@@ -665,6 +727,9 @@ ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_LABEL[])))
 ip,actions=ct(commit,exec(set_field(1->ct_label)))
+reg31[0..31]=1,actions=output:NXM_NX_REG15,output:NXOXM_ET_REG16,output:NXOXM_ET_REG31
+xreg15[0..31]=2,xreg15[32..63]=3,actions=output:OXM_OF_PKT_REG7,output:OXM_OF_PKT_REG8,output:OXM_OF_PKT_REG15
+xxreg7[0..31]=4,xxreg7[32..63]=5,xxreg7[64..95]=6,xxreg7[96..127]=7,actions=output:NXM_NX_XXREG3,output:NXOXM_ET_XXREG4,output:NXOXM_ET_XXREG7
 ]])
 AT_CHECK([ovs-ofctl -F nxm -mmm parse-flows flows.txt], [0], [stdout], [stderr])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
@@ -706,6 +771,9 @@ NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
+NXT_FLOW_MOD: ADD NXOXM_ET_REG31(00000001) actions=output:NXM_NX_REG15[],output:NXOXM_ET_REG16[],output:NXOXM_ET_REG31[]
+NXT_FLOW_MOD: ADD NXOXM_ET_REG30(00000003), NXOXM_ET_REG31(00000002) actions=output:OXM_OF_PKT_REG7[],output:OXM_OF_PKT_REG8[],output:OXM_OF_PKT_REG15[]
+NXT_FLOW_MOD: ADD NXOXM_ET_REG28(00000007), NXOXM_ET_REG29(00000006), NXOXM_ET_REG30(00000005), NXOXM_ET_REG31(00000004) actions=output:NXM_NX_XXREG3[1..64],output:NXOXM_ET_XXREG4[1..64],output:NXOXM_ET_XXREG7[1..64]
 ]])
 AT_CLEANUP
 
@@ -981,6 +1049,72 @@ NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0_W(a0e0d050/ffffffff)
 NXM_NX_REG0_W(00000000/00000000)
+
+# Register 15.
+NXM_NX_REG15(acebdf56)
+NXM_NX_REG15_W(a0e0d050/f0f0f0f0)
+NXM_NX_REG15_W(a0e0d050/ffffffff)
+NXM_NX_REG15_W(00000000/00000000)
+
+# Register 16.
+NXOXM_ET_REG16(acebdf56)
+NXOXM_ET_REG16_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG16_W(a0e0d050/ffffffff)
+NXOXM_ET_REG16_W(00000000/00000000)
+
+# Register 31.
+NXOXM_ET_REG31(acebdf56)
+NXOXM_ET_REG31_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG31_W(a0e0d050/ffffffff)
+NXOXM_ET_REG31_W(00000000/00000000)
+
+# xreg 0.
+OXM_OF_PKT_REG0(acebdf56acebdf56)
+OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0)
+OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/ffffffffffffffff)
+OXM_OF_PKT_REG0_W(0000000000000000/0000000000000000)
+
+# xreg 7.
+OXM_OF_PKT_REG7(acebdf56acebdf56)
+OXM_OF_PKT_REG7_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0)
+OXM_OF_PKT_REG7_W(a0e0d050a0e0d050/ffffffffffffffff)
+OXM_OF_PKT_REG7_W(0000000000000000/0000000000000000)
+
+# xreg 8.
+OXM_OF_PKT_REG8(acebdf56acebdf56)
+OXM_OF_PKT_REG8_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0)
+OXM_OF_PKT_REG8_W(a0e0d050a0e0d050/ffffffffffffffff)
+OXM_OF_PKT_REG8_W(0000000000000000/0000000000000000)
+
+# xreg 15.
+OXM_OF_PKT_REG15(acebdf56acebdf56)
+OXM_OF_PKT_REG15_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0)
+OXM_OF_PKT_REG15_W(a0e0d050a0e0d050/ffffffffffffffff)
+OXM_OF_PKT_REG15_W(0000000000000000/0000000000000000)
+
+# xxreg 0.
+NXM_NX_XXREG0(acebdf56acebdf56acebdf56acebdf56)
+NXM_NX_XXREG0_W(a0e0d050a0e0d050a0e0d050a0e0d050/f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0)
+NXM_NX_XXREG0_W(a0e0d050a0e0d050a0e0d050a0e0d050/ffffffffffffffffffffffffffffffff)
+NXM_NX_XXREG0_W(00000000000000000000000000000000/00000000000000000000000000000000)
+
+# xxreg 3.
+NXM_NX_XXREG3(acebdf56acebdf56acebdf56acebdf56)
+NXM_NX_XXREG3_W(a0e0d050a0e0d050a0e0d050a0e0d050/f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0)
+NXM_NX_XXREG3_W(a0e0d050a0e0d050a0e0d050a0e0d050/ffffffffffffffffffffffffffffffff)
+NXM_NX_XXREG3_W(00000000000000000000000000000000/00000000000000000000000000000000)
+
+# xxreg 4.
+NXOXM_ET_XXREG4(acebdf56acebdf56acebdf56acebdf56)
+NXOXM_ET_XXREG4_W(a0e0d050a0e0d050a0e0d050a0e0d050/f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0)
+NXOXM_ET_XXREG4_W(a0e0d050a0e0d050a0e0d050a0e0d050/ffffffffffffffffffffffffffffffff)
+NXOXM_ET_XXREG4_W(00000000000000000000000000000000/00000000000000000000000000000000)
+
+# xxreg 7.
+NXOXM_ET_XXREG7(acebdf56acebdf56acebdf56acebdf56)
+NXOXM_ET_XXREG7_W(a0e0d050a0e0d050a0e0d050a0e0d050/f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0)
+NXOXM_ET_XXREG7_W(a0e0d050a0e0d050a0e0d050a0e0d050/ffffffffffffffffffffffffffffffff)
+NXOXM_ET_XXREG7_W(00000000000000000000000000000000/00000000000000000000000000000000)
 
 # Connection tracking fields,
 NXM_OF_ETH_TYPE(0800) NXM_NX_CT_STATE(00000020)
@@ -1279,6 +1413,72 @@ NXM_NX_TUN_ID(84200000abcdef01)
 NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0(a0e0d050)
+<any>
+
+# Register 15.
+NXM_NX_REG15(acebdf56)
+NXM_NX_REG15_W(a0e0d050/f0f0f0f0)
+NXM_NX_REG15(a0e0d050)
+<any>
+
+# Register 16.
+NXOXM_ET_REG16(acebdf56)
+NXOXM_ET_REG16_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG16(a0e0d050)
+<any>
+
+# Register 31.
+NXOXM_ET_REG31(acebdf56)
+NXOXM_ET_REG31_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG31(a0e0d050)
+<any>
+
+# xreg 0.
+NXM_NX_REG0(acebdf56), NXM_NX_REG1(acebdf56)
+NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1_W(a0e0d050/f0f0f0f0)
+NXM_NX_REG0(a0e0d050), NXM_NX_REG1(a0e0d050)
+<any>
+
+# xreg 7.
+NXM_NX_REG14(acebdf56), NXM_NX_REG15(acebdf56)
+NXM_NX_REG14_W(a0e0d050/f0f0f0f0), NXM_NX_REG15_W(a0e0d050/f0f0f0f0)
+NXM_NX_REG14(a0e0d050), NXM_NX_REG15(a0e0d050)
+<any>
+
+# xreg 8.
+NXOXM_ET_REG16(acebdf56), NXOXM_ET_REG17(acebdf56)
+NXOXM_ET_REG16_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG17_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG16(a0e0d050), NXOXM_ET_REG17(a0e0d050)
+<any>
+
+# xreg 15.
+NXOXM_ET_REG30(acebdf56), NXOXM_ET_REG31(acebdf56)
+NXOXM_ET_REG30_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG31_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG30(a0e0d050), NXOXM_ET_REG31(a0e0d050)
+<any>
+
+# xxreg 0.
+NXM_NX_REG0(acebdf56), NXM_NX_REG1(acebdf56), NXM_NX_REG2(acebdf56), NXM_NX_REG3(acebdf56)
+NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2_W(a0e0d050/f0f0f0f0), NXM_NX_REG3_W(a0e0d050/f0f0f0f0)
+NXM_NX_REG0(a0e0d050), NXM_NX_REG1(a0e0d050), NXM_NX_REG2(a0e0d050), NXM_NX_REG3(a0e0d050)
+<any>
+
+# xxreg 3.
+NXM_NX_REG12(acebdf56), NXM_NX_REG13(acebdf56), NXM_NX_REG14(acebdf56), NXM_NX_REG15(acebdf56)
+NXM_NX_REG12_W(a0e0d050/f0f0f0f0), NXM_NX_REG13_W(a0e0d050/f0f0f0f0), NXM_NX_REG14_W(a0e0d050/f0f0f0f0), NXM_NX_REG15_W(a0e0d050/f0f0f0f0)
+NXM_NX_REG12(a0e0d050), NXM_NX_REG13(a0e0d050), NXM_NX_REG14(a0e0d050), NXM_NX_REG15(a0e0d050)
+<any>
+
+# xxreg 4.
+NXOXM_ET_REG16(acebdf56), NXOXM_ET_REG17(acebdf56), NXOXM_ET_REG18(acebdf56), NXOXM_ET_REG19(acebdf56)
+NXOXM_ET_REG16_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG17_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG18_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG19_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG16(a0e0d050), NXOXM_ET_REG17(a0e0d050), NXOXM_ET_REG18(a0e0d050), NXOXM_ET_REG19(a0e0d050)
+<any>
+
+# xxreg 7.
+NXOXM_ET_REG28(acebdf56), NXOXM_ET_REG29(acebdf56), NXOXM_ET_REG30(acebdf56), NXOXM_ET_REG31(acebdf56)
+NXOXM_ET_REG28_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG29_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG30_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG31_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG28(a0e0d050), NXOXM_ET_REG29(a0e0d050), NXOXM_ET_REG30(a0e0d050), NXOXM_ET_REG31(a0e0d050)
 <any>
 
 # Connection tracking fields,
@@ -2101,7 +2301,7 @@ OXM_OF_ETH_TYPE(86dd) OXM_OF_IP_PROTO(3a) OXM_OF_ICMPV6_TYPE(87) OXM_OF_IPV6_ND_
 OXM_OF_ETH_TYPE(86dd) OXM_OF_IP_PROTO(3b) OXM_OF_ICMPV6_TYPE(87) OXM_OF_IPV6_ND_TARGET(20010db83c4d00010002000300040005) OXM_OF_IPV6_ND_TLL(0002e30f80a4)
 OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(3a) OXM_OF_ICMPV6_TYPE(88) OXM_OF_IPV6_ND_TARGET(20010db83c4d00010002000300040005) OXM_OF_IPV6_ND_TLL(0002e30f80a4)
 
-# Registers 0, 1, and 2.
+# Registers 0, 1, 2, 16, and 31.
 NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0(a0e0d050)
@@ -2110,8 +2310,10 @@ NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1(a0e0d050)
 NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2(a0e0d050)
+NXOXM_ET_REG16_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG31_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG16_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG31(a0e0d050)
 
-# Extended registers 0, 1, and 2.
+# Extended registers 0, 1, 7, and 15.
 # (For OpenFlow 1.2, OVS transforms these into its extension registers.)
 OXM_OF_PKT_REG0_W(acebdf5600000000/ffffffff00000000)
 OXM_OF_PKT_REG0_W(a0e0d05000000000/f0f0f0f000000000)
@@ -2121,6 +2323,21 @@ OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0)
 OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0ffffffff)
 OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d05000000000/f0f0f0f000000000)
 OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d05000000000/ffffffff00000000)
+OXM_OF_PKT_REG7_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG15_W(a0e0d05000000000/f0f0f0f000000000)
+OXM_OF_PKT_REG7_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG15_W(a0e0d05000000000/ffffffff00000000)
+
+# Double-extended registers 0, 1, 4, and 7.
+# (For OpenFlow 1.2, OVS transforms these into its extension registers.)
+NXM_NX_XXREG0_W(acebdf5600000000acebdf5600000000/ffffffff00000000ffffffff00000000)
+NXM_NX_XXREG0_W(a0e0d05000000000a0e0d05000000000/f0f0f0f000000000f0f0f0f000000000)
+NXM_NX_XXREG0_W(a0e0d05000000000a0e0d05000000000/ffffffff00000000ffffffff00000000)
+NXM_NX_XXREG0_W(00000000acebdf5600000000acebdf56/00000000ffffffff00000000ffffffff)
+NXM_NX_XXREG0_W(a0e0d050a0e0d050a0e0d050a0e0d050/f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0)
+NXM_NX_XXREG0_W(a0e0d050a0e0d050a0e0d050a0e0d050/f0f0f0f0fffffffff0f0f0f0ffffffff)
+NXM_NX_XXREG0_W(00000000a0e0d05000000000a0e0d050/00000000f0f0f0f000000000f0f0f0f0), NXM_NX_XXREG1_W(a0e0d05000000000a0e0d05000000000/f0f0f0f000000000f0f0f0f000000000)
+NXM_NX_XXREG0_W(00000000a0e0d05000000000a0e0d050/00000000f0f0f0f000000000f0f0f0f0), NXM_NX_XXREG1_W(a0e0d05000000000a0e0d05000000000/ffffffff00000000ffffffff00000000)
+NXOXM_ET_XXREG4_W(00000000a0e0d05000000000a0e0d050/00000000f0f0f0f000000000f0f0f0f0), NXOXM_ET_XXREG7_W(a0e0d05000000000a0e0d05000000000/f0f0f0f000000000f0f0f0f000000000)
+NXOXM_ET_XXREG4_W(00000000a0e0d05000000000a0e0d050/00000000f0f0f0f000000000f0f0f0f0), NXOXM_ET_XXREG7_W(a0e0d05000000000a0e0d05000000000/ffffffff00000000ffffffff00000000)
 
 # Invalid field number.
 01020304(1111/3333)
@@ -2342,7 +2559,7 @@ nx_pull_match() returned error OFPBMC_BAD_PREREQ
 nx_pull_match() returned error OFPBMC_BAD_PREREQ
 nx_pull_match() returned error OFPBMC_BAD_PREREQ
 
-# Registers 0, 1, and 2.
+# Registers 0, 1, 2, 16, and 31.
 NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0(a0e0d050)
@@ -2351,8 +2568,10 @@ NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1(a0e0d050)
 NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2(a0e0d050)
+NXOXM_ET_REG16_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG31_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG16_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG31(a0e0d050)
 
-# Extended registers 0, 1, and 2.
+# Extended registers 0, 1, 7, and 15.
 # (For OpenFlow 1.2, OVS transforms these into its extension registers.)
 NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
@@ -2362,6 +2581,21 @@ NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1(a0e0d050)
 NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2(a0e0d050)
+NXM_NX_REG15_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG30_W(a0e0d050/f0f0f0f0)
+NXM_NX_REG15_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG30(a0e0d050)
+
+# Double-extended registers 0, 1, 4, and 7.
+# (For OpenFlow 1.2, OVS transforms these into its extension registers.)
+NXM_NX_REG0(acebdf56), NXM_NX_REG2(acebdf56)
+NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG2_W(a0e0d050/f0f0f0f0)
+NXM_NX_REG0(a0e0d050), NXM_NX_REG2(a0e0d050)
+NXM_NX_REG1(acebdf56), NXM_NX_REG3(acebdf56)
+NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2_W(a0e0d050/f0f0f0f0), NXM_NX_REG3_W(a0e0d050/f0f0f0f0)
+NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1(a0e0d050), NXM_NX_REG2_W(a0e0d050/f0f0f0f0), NXM_NX_REG3(a0e0d050)
+NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG3_W(a0e0d050/f0f0f0f0), NXM_NX_REG4_W(a0e0d050/f0f0f0f0), NXM_NX_REG6_W(a0e0d050/f0f0f0f0)
+NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG3_W(a0e0d050/f0f0f0f0), NXM_NX_REG4(a0e0d050), NXM_NX_REG6(a0e0d050)
+NXOXM_ET_REG17_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG19_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG28_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG30_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG17_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG19_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG28(a0e0d050), NXOXM_ET_REG30(a0e0d050)
 
 # Invalid field number.
 nx_pull_match() returned error OFPBMC_BAD_FIELD
@@ -2407,7 +2641,7 @@ AT_CLEANUP
 AT_SETUP([ovs-ofctl parse-oxm (OpenFlow 1.5)])
 AT_KEYWORDS([oxm])
 AT_DATA([oxm.txt], [dnl
-# Extended registers 0 and 1.
+# Extended registers 0, 1, 14, and 15.
 OXM_OF_PKT_REG0_W(acebdf5600000000/ffffffff00000000)
 OXM_OF_PKT_REG0_W(a0e0d05000000000/f0f0f0f000000000)
 OXM_OF_PKT_REG0_W(a0e0d05000000000/ffffffff00000000)
@@ -2416,8 +2650,10 @@ OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0)
 OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0ffffffff)
 OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d05000000000/f0f0f0f000000000)
 OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d05000000000/ffffffff00000000)
+OXM_OF_PKT_REG14_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG15_W(a0e0d05000000000/f0f0f0f000000000)
+OXM_OF_PKT_REG14_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG15_W(a0e0d05000000000/ffffffff00000000)
 
-# Registers 0, 1, and 2.
+# Registers 0, 1, 2, 29, and 31.
 # (OpenFlow 1.5 transforms these into the standard "xregs".)
 NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
@@ -2427,6 +2663,21 @@ NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1(a0e0d050)
 NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2(a0e0d050)
+NXOXM_ET_REG29_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG31_W(a0e0d050/f0f0f0f0)
+NXOXM_ET_REG29_W(a0e0d050/f0f0f0f0), NXOXM_ET_REG31(a0e0d050)
+
+# Double-extended registers 0, 1, 4, and 7.
+# (OpenFlow 1.5 transforms these into the standard "xregs".)
+NXM_NX_XXREG0_W(acebdf5600000000acebdf5600000000/ffffffff00000000ffffffff00000000)
+NXM_NX_XXREG0_W(a0e0d05000000000a0e0d05000000000/f0f0f0f000000000f0f0f0f000000000)
+NXM_NX_XXREG0_W(a0e0d05000000000a0e0d05000000000/ffffffff00000000ffffffff00000000)
+NXM_NX_XXREG0_W(00000000acebdf5600000000acebdf56/00000000ffffffff00000000ffffffff)
+NXM_NX_XXREG0_W(a0e0d050a0e0d050a0e0d050a0e0d050/f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0)
+NXM_NX_XXREG0_W(a0e0d050a0e0d050a0e0d050a0e0d050/f0f0f0f0fffffffff0f0f0f0ffffffff)
+NXM_NX_XXREG0_W(00000000a0e0d05000000000a0e0d050/00000000f0f0f0f000000000f0f0f0f0), NXM_NX_XXREG1_W(a0e0d05000000000a0e0d05000000000/f0f0f0f000000000f0f0f0f000000000)
+NXM_NX_XXREG0_W(00000000a0e0d05000000000a0e0d050/00000000f0f0f0f000000000f0f0f0f0), NXM_NX_XXREG1_W(a0e0d05000000000a0e0d05000000000/ffffffff00000000ffffffff00000000)
+NXOXM_ET_XXREG4_W(00000000a0e0d05000000000a0e0d050/00000000f0f0f0f000000000f0f0f0f0), NXOXM_ET_XXREG7_W(a0e0d05000000000a0e0d05000000000/f0f0f0f000000000f0f0f0f000000000)
+NXOXM_ET_XXREG4_W(00000000a0e0d05000000000a0e0d050/00000000f0f0f0f000000000f0f0f0f0), NXOXM_ET_XXREG7_W(a0e0d05000000000a0e0d05000000000/ffffffff00000000ffffffff00000000)
 
 # actset_output
 ONFOXM_ET_ACTSET_OUTPUT(00000000)
@@ -2438,7 +2689,7 @@ OXM_OF_ACTSET_OUTPUT(fffffff7)
 ])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' --strict parse-oxm OpenFlow15 < oxm.txt],
   [0], [dnl
-# Extended registers 0 and 1.
+# Extended registers 0, 1, 14, and 15.
 OXM_OF_PKT_REG0_W(acebdf5600000000/ffffffff00000000)
 OXM_OF_PKT_REG0_W(a0e0d05000000000/f0f0f0f000000000)
 OXM_OF_PKT_REG0_W(a0e0d05000000000/ffffffff00000000)
@@ -2447,8 +2698,10 @@ OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0)
 OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0ffffffff)
 OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d05000000000/f0f0f0f000000000)
 OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d05000000000/ffffffff00000000)
+OXM_OF_PKT_REG14_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG15_W(a0e0d05000000000/f0f0f0f000000000)
+OXM_OF_PKT_REG14_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG15_W(a0e0d05000000000/ffffffff00000000)
 
-# Registers 0, 1, and 2.
+# Registers 0, 1, 2, 29, and 31.
 # (OpenFlow 1.5 transforms these into the standard "xregs".)
 OXM_OF_PKT_REG0_W(acebdf5600000000/ffffffff00000000)
 OXM_OF_PKT_REG0_W(a0e0d05000000000/f0f0f0f000000000)
@@ -2458,6 +2711,21 @@ OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0)
 OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0ffffffff)
 OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d05000000000/f0f0f0f000000000)
 OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d05000000000/ffffffff00000000)
+OXM_OF_PKT_REG14_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG15_W(00000000a0e0d050/00000000f0f0f0f0)
+OXM_OF_PKT_REG14_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG15_W(00000000a0e0d050/00000000ffffffff)
+
+# Double-extended registers 0, 1, 4, and 7.
+# (OpenFlow 1.5 transforms these into the standard "xregs".)
+OXM_OF_PKT_REG0_W(acebdf5600000000/ffffffff00000000), OXM_OF_PKT_REG1_W(acebdf5600000000/ffffffff00000000)
+OXM_OF_PKT_REG0_W(a0e0d05000000000/f0f0f0f000000000), OXM_OF_PKT_REG1_W(a0e0d05000000000/f0f0f0f000000000)
+OXM_OF_PKT_REG0_W(a0e0d05000000000/ffffffff00000000), OXM_OF_PKT_REG1_W(a0e0d05000000000/ffffffff00000000)
+OXM_OF_PKT_REG0_W(00000000acebdf56/00000000ffffffff), OXM_OF_PKT_REG1_W(00000000acebdf56/00000000ffffffff)
+OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0)
+OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0ffffffff), OXM_OF_PKT_REG1_W(a0e0d050a0e0d050/f0f0f0f0ffffffff)
+OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG2_W(a0e0d05000000000/f0f0f0f000000000), OXM_OF_PKT_REG3_W(a0e0d05000000000/f0f0f0f000000000)
+OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG2_W(a0e0d05000000000/ffffffff00000000), OXM_OF_PKT_REG3_W(a0e0d05000000000/ffffffff00000000)
+OXM_OF_PKT_REG8_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG9_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG14_W(a0e0d05000000000/f0f0f0f000000000), OXM_OF_PKT_REG15_W(a0e0d05000000000/f0f0f0f000000000)
+OXM_OF_PKT_REG8_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG9_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG14_W(a0e0d05000000000/ffffffff00000000), OXM_OF_PKT_REG15_W(a0e0d05000000000/ffffffff00000000)
 
 # actset_output
 OXM_OF_ACTSET_OUTPUT(00000000)

@@ -100,7 +100,7 @@ struct rule;
 /* Metadata for restoring pipeline context after recirculation.  Helpers
  * are inlined below to keep them together with the definition for easier
  * updates. */
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 43);
 
 struct frozen_metadata {
     /* Metadata in struct flow. */

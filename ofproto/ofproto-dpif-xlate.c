@@ -4477,7 +4477,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 43);
 
     if (!check_output_prerequisites(ctx, xport, flow, check_stp)) {
         return;

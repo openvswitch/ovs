@@ -1665,35 +1665,49 @@ AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - registers])
 OVS_VSWITCHD_START
-add_of_ports br0 20 21 22 33 90
+add_of_ports br0 20 21 22 33 34 90
 AT_DATA([flows.txt], [dnl
-in_port=90                 actions=resubmit:2,resubmit:3,resubmit:4,resubmit:91
-in_port=91                 actions=resubmit:5,resubmit:6,resubmit:7,resubmit:92
-in_port=92                 actions=resubmit:8,resubmit:9,resubmit:10,resubmit:11,resubmit:93
-in_port=93                 actions=resubmit:12,resubmit:13,resubmit:14,resubmit:15
+in_port=90 actions=resubmit:2,resubmit:3,resubmit:4,resubmit:91
+in_port=91 actions=resubmit:5,resubmit:6,resubmit:7,resubmit:92
+in_port=92 actions=resubmit:8,resubmit:9,resubmit:10,resubmit:11,resubmit:93
+in_port=93 actions=resubmit:12,resubmit:13,resubmit:14,resubmit:15,resubmit:16,resubmit:17,resubmit:18,resubmit:94
+in_port=94 actions=resubmit:22,resubmit:23,resubmit:24,resubmit:25,resubmit:26,resubmit:27,resubmit:28
 
-in_port=2                  actions=load:0x000db000->NXM_NX_REG0[[]]
-in_port=3                  actions=load:0xdea->NXM_NX_REG0[[20..31]]
-in_port=4                  actions=load:0xeef->NXM_NX_REG0[[0..11]]
-in_port=5                  actions=move:NXM_NX_REG0[[]]->NXM_NX_REG1[[]]
-in_port=6                  actions=load:0x22222222->NXM_NX_REG2[[]]
-in_port=7                  actions=move:NXM_NX_REG1[[20..31]]->NXM_NX_REG2[[0..11]]
-in_port=8                  actions=move:NXM_NX_REG1[[0..11]]->NXM_NX_REG2[[20..31]]
-in_port=9,reg0=0xdeadbeef  actions=output:20
-in_port=10,reg1=0xdeadbeef actions=output:21
-in_port=11,reg2=0xeef22dea actions=output:22
+in_port=2  actions=load:0x000db000->NXM_NX_REG0[[]],load:0x000db000->NXOXM_ET_REG16[[]],load:0x000db000->NXOXM_ET_REG29[[]],
+in_port=3  actions=load:0xdea->NXM_NX_REG0[[20..31]],load:0xdea->NXOXM_ET_REG16[[20..31]],load:0xdea->NXOXM_ET_REG29[[20..31]]
+in_port=4  actions=load:0xeef->NXM_NX_REG0[[0..11]],load:0xeef->NXOXM_ET_REG16[[0..11]],load:0xeef->NXOXM_ET_REG29[[0..11]]
+in_port=5  actions=move:NXM_NX_REG0[[]]->NXM_NX_REG1[[]],move:NXOXM_ET_REG16[[]]->NXOXM_ET_REG17[[]],move:NXOXM_ET_REG29[[]]->NXOXM_ET_REG30[[]]
+in_port=6  actions=load:0x22222222->NXM_NX_REG2[[]],load:0x22222222->NXOXM_ET_REG18[[]],load:0x22222222->NXOXM_ET_REG31[[]]
+in_port=7  actions=move:NXM_NX_REG1[[20..31]]->NXM_NX_REG2[[0..11]],move:NXOXM_ET_REG17[[20..31]]->NXOXM_ET_REG18[[0..11]],move:NXOXM_ET_REG30[[20..31]]->NXOXM_ET_REG31[[0..11]]
+in_port=8  actions=move:NXM_NX_REG1[[0..11]]->NXM_NX_REG2[[20..31]],move:NXOXM_ET_REG17[[0..11]]->NXOXM_ET_REG18[[20..31]],move:NXOXM_ET_REG30[[0..11]]->NXOXM_ET_REG31[[20..31]]
 
-dnl Sanilty check all registers
-in_port=12 actions=load:0x10->NXM_NX_REG0[[]],load:0x11->NXM_NX_REG1[[]],load:0x12->NXM_NX_REG2[[]]
-in_port=13 actions=load:0x13->NXM_NX_REG3[[]],load:0x14->NXM_NX_REG4[[]],load:0x15->NXM_NX_REG5[[]]
-in_port=14 actions=load:0x16->NXM_NX_REG6[[]],load:0x17->NXM_NX_REG7[[]]
-in_port=15,reg0=0x10,reg1=0x11,reg2=0x12,reg3=0x13,reg4=0x14,reg5=0x15,reg6=0x16,reg7=0x17 actions=output:33
+in_port=9,reg0=0xdeadbeef,reg16=0xdeadbeef,reg29=0xdeadbeef  actions=output:20
+in_port=10,reg1=0xdeadbeef,reg17=0xdeadbeef,reg30=0xdeadbeef actions=output:21
+in_port=11,reg2=0xeef22dea,reg18=0xeef22dea,reg31=0xeef22dea actions=output:22
+
+dnl Sanity check registers 0-15
+in_port=12 actions=load:0x100->NXM_NX_REG0[[]],load:0x101->NXM_NX_REG1[[]],load:0x102->NXM_NX_REG2[[]]
+in_port=13 actions=load:0x103->NXM_NX_REG3[[]],load:0x104->NXM_NX_REG4[[]],load:0x105->NXM_NX_REG5[[]]
+in_port=14 actions=load:0x106->NXM_NX_REG6[[]],load:0x107->NXM_NX_REG7[[]],load:0x108->NXM_NX_REG8[[]]
+in_port=15 actions=load:0x109->NXM_NX_REG9[[]],load:0x110->NXM_NX_REG10[[]],load:0x111->NXM_NX_REG11[[]]
+in_port=16 actions=load:0x112->NXM_NX_REG12[[]],load:0x113->NXM_NX_REG13[[]],load:0x114->NXM_NX_REG14[[]]
+in_port=17 actions=load:0x115->NXM_NX_REG15[[]]
+in_port=18,reg0=0x100,reg1=0x101,reg2=0x102,reg3=0x103,reg4=0x104,reg5=0x105,reg6=0x106,reg7=0x107,reg8=0x108,reg9=0x109,reg10=0x110,reg11=0x111,reg12=0x112,reg13=0x113,reg14=0x114,reg15=0x115 actions=output:33
+
+dnl Sanity check registers 16-31
+in_port=22 actions=load:0x116->NXOXM_ET_REG16[[]],load:0x117->NXOXM_ET_REG17[[]],load:0x118->NXOXM_ET_REG18[[]]
+in_port=23 actions=load:0x119->NXOXM_ET_REG19[[]],load:0x120->NXOXM_ET_REG20[[]],load:0x121->NXOXM_ET_REG21[[]]
+in_port=24 actions=load:0x122->NXOXM_ET_REG22[[]],load:0x123->NXOXM_ET_REG23[[]],load:0x124->NXOXM_ET_REG24[[]]
+in_port=25 actions=load:0x125->NXOXM_ET_REG25[[]],load:0x126->NXOXM_ET_REG26[[]],load:0x127->NXOXM_ET_REG27[[]]
+in_port=26 actions=load:0x128->NXOXM_ET_REG28[[]],load:0x129->NXOXM_ET_REG29[[]],load:0x130->NXOXM_ET_REG30[[]]
+in_port=27 actions=load:0x131->NXOXM_ET_REG31[[]]
+in_port=28,reg16=0x116,reg17=0x117,reg18=0x118,reg19=0x119,reg20=0x120,reg21=0x121,reg22=0x122,reg23=0x123,reg24=0x124,reg25=0x125,reg26=0x126,reg27=0x127,reg28=0x128,reg29=0x129,reg30=0x130,reg31=0x131 actions=output:34
 
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: 20,21,22,33
+  [Datapath actions: 20,21,22,33,34
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -1704,8 +1718,10 @@ AT_SETUP([ofproto-dpif - extended registers])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 AT_DATA([flows.txt], [dnl
-table=0     actions=load:0xfedcba9876543210->OXM_OF_PKT_REG1[[]],resubmit(,1)
-table=1,reg2=0xfedcba98,reg3=0x76543210   actions=2
+table=0     actions=load:0xfedcba9876543210->OXM_OF_PKT_REG1[[]],resubmit(,2)
+table=2     actions=load:0xfedcba9876543210->OXM_OF_PKT_REG15[[]],resubmit(,3)
+table=3,reg2=0xfedcba98,reg3=0x76543210    actions=resubmit(,4)
+table=4,reg30=0xfedcba98,reg31=0x76543210  actions=2
 
 # These low-priority rules shouldn't match.  They're here only to make really
 # sure that the test fails if either of the above rules fails to match.
@@ -1726,7 +1742,9 @@ OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 AT_DATA([flows.txt], [dnl
 table=0 actions=load:0x0123456789abcdeffedcba9876543210->NXM_NX_XXREG1[[]],resubmit(,1)
-table=1,reg4=0x01234567,reg5=0x89abcdef,reg6=0xfedcba98,reg7=0x76543210   actions=2
+table=1 actions=load:0x0123456789abcdeffedcba9876543210->NXOXM_ET_XXREG7[[]],resubmit(,2)
+table=2,reg4=0x01234567,reg5=0x89abcdef,reg6=0xfedcba98,reg7=0x76543210       actions=resubmit(,3)
+table=3,reg28=0x01234567,reg29=0x89abcdef,reg30=0xfedcba98,reg31=0x76543210   actions=2
 
 # These low-priority rules shouldn't match.  They're here only to make really
 # sure that the test fails if either of the above rules fails to match.
@@ -1759,7 +1777,8 @@ OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 AT_DATA([flows.txt], [dnl
 table=0     actions=move:OXM_OF_ETH_SRC[[0..47]]->OXM_OF_PKT_REG0[[0..47]],goto_table(1)
-table=1,xreg0=0x0000505400000005   actions=2
+table=1,xreg0=0x0000505400000005   actions=move:OXM_OF_ETH_DST[[0..47]]->OXM_OF_PKT_REG15[[0..47]],goto_table(2)
+table=2,xreg15=0x0000505400000007  actions=2
 
 # These low-priority rules shouldn't match.  They're here only to make really
 # sure that the test fails if either of the above rules fails to match.

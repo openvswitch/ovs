@@ -136,7 +136,7 @@ def parse_oxm(s, prefix, n_bytes):
     global match_types
 
     m = re.match(
-        r"([A-Z0-9_]+)\(([0-9]+)\) since(?: OF(1\.[0-9]+) and)? v([12]\.[0-9]+)$",  # noqa: E501
+        r"([A-Z0-9_]+)\(([0-9]+)\) since(?: OF(1\.[0-9]+) and)? v([123]\.[0-9]+)$",  # noqa: E501
         s,
     )
     if not m:

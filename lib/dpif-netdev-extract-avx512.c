@@ -421,7 +421,7 @@ BUILD_ASSERT_DECL((OFFSETOFEND(struct dp_packet, l4_ofs)
 BUILD_ASSERT_DECL(FLOWMAP_UNITS == 2);
 
 /* Ensure the miniflow-struct ABI is the expected version. */
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 43);
 
 /* If the above build assert happens, this means that you might need to make
  * some modifications to the AVX512 miniflow extractor code. In general, the

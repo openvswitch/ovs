@@ -1054,7 +1054,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     ovs_be32 spi_mask;
     int match_len;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 43);
 
     struct nxm_put_ctx ctx = { .output = b, .implied_ethernet = false };
 

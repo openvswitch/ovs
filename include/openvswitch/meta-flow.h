@@ -211,7 +211,7 @@ struct ofputil_tlv_table_mod;
  *     field.
  *
  * Finally, a few "register" fields have very similar names and purposes,
- * e.g. MFF_REG0 through MFF_REG15.  For these, the comments may be merged
+ * e.g. MFF_REG0 through MFF_REG31.  For these, the comments may be merged
  * together using <N> as a metasyntactic variable for the numeric suffix.
  * Lines in the comment that are specific to one of the particular fields by
  * writing, e.g. <1>, to consider that line only for e.g. MFF_REG1.
@@ -982,7 +982,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_CT_TP_DST,
 
-#if FLOW_N_REGS == 16
+#if FLOW_N_REGS == 32
     /* "reg<N>".
      *
      * Nicira extension scratch pad register with initial value 0.
@@ -1026,11 +1026,55 @@ enum OVS_PACKED_ENUM mf_field_id {
     MFF_REG13,
     MFF_REG14,
     MFF_REG15,
+
+    /* "reg<N>".
+     *
+     * Nicira extension scratch pad register with initial value 0.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_ET_REG16(17) since v3.7.      <16>
+     * OXM: NXOXM_ET_REG17(18) since v3.7.      <17>
+     * OXM: NXOXM_ET_REG18(19) since v3.7.      <18>
+     * OXM: NXOXM_ET_REG19(20) since v3.7.      <19>
+     * OXM: NXOXM_ET_REG20(21) since v3.7.      <20>
+     * OXM: NXOXM_ET_REG21(22) since v3.7.      <21>
+     * OXM: NXOXM_ET_REG22(23) since v3.7.      <22>
+     * OXM: NXOXM_ET_REG23(24) since v3.7.      <23>
+     * OXM: NXOXM_ET_REG24(25) since v3.7.      <24>
+     * OXM: NXOXM_ET_REG25(26) since v3.7.      <25>
+     * OXM: NXOXM_ET_REG26(27) since v3.7.      <26>
+     * OXM: NXOXM_ET_REG27(28) since v3.7.      <27>
+     * OXM: NXOXM_ET_REG28(29) since v3.7.      <28>
+     * OXM: NXOXM_ET_REG29(30) since v3.7.      <29>
+     * OXM: NXOXM_ET_REG30(31) since v3.7.      <30>
+     * OXM: NXOXM_ET_REG31(32) since v3.7.      <31>
+     */
+    MFF_REG16,
+    MFF_REG17,
+    MFF_REG18,
+    MFF_REG19,
+    MFF_REG20,
+    MFF_REG21,
+    MFF_REG22,
+    MFF_REG23,
+    MFF_REG24,
+    MFF_REG25,
+    MFF_REG26,
+    MFF_REG27,
+    MFF_REG28,
+    MFF_REG29,
+    MFF_REG30,
+    MFF_REG31,
 #else
 #error "Need to update MFF_REG* to match FLOW_N_REGS"
 #endif
 
-#if FLOW_N_XREGS == 8
+#if FLOW_N_XREGS == 16
     /* "xreg<N>".
      *
      * OpenFlow 1.5 ``extended register".
@@ -1041,7 +1085,22 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Prerequisites: none.
      * Access: read/write.
      * NXM: none.
-     * OXM: OXM_OF_PKT_REG<N>(<N>) since OF1.3 and v2.4.
+     * OXM: OXM_OF_PKT_REG0(0) since OF1.3 and v2.4.      <0>
+     * OXM: OXM_OF_PKT_REG1(1) since OF1.3 and v2.4.      <1>
+     * OXM: OXM_OF_PKT_REG2(2) since OF1.3 and v2.4.      <2>
+     * OXM: OXM_OF_PKT_REG3(3) since OF1.3 and v2.4.      <3>
+     * OXM: OXM_OF_PKT_REG4(4) since OF1.3 and v2.4.      <4>
+     * OXM: OXM_OF_PKT_REG5(5) since OF1.3 and v2.4.      <5>
+     * OXM: OXM_OF_PKT_REG6(6) since OF1.3 and v2.4.      <6>
+     * OXM: OXM_OF_PKT_REG7(7) since OF1.3 and v2.4.      <7>
+     * OXM: OXM_OF_PKT_REG8(8) since OF1.3 and v3.7.      <8>
+     * OXM: OXM_OF_PKT_REG9(9) since OF1.3 and v3.7.      <9>
+     * OXM: OXM_OF_PKT_REG10(10) since OF1.3 and v3.7.    <10>
+     * OXM: OXM_OF_PKT_REG11(11) since OF1.3 and v3.7.    <11>
+     * OXM: OXM_OF_PKT_REG12(12) since OF1.3 and v3.7.    <12>
+     * OXM: OXM_OF_PKT_REG13(13) since OF1.3 and v3.7.    <13>
+     * OXM: OXM_OF_PKT_REG14(14) since OF1.3 and v3.7.    <14>
+     * OXM: OXM_OF_PKT_REG15(15) since OF1.3 and v3.7.    <15>
      */
     MFF_XREG0,
     MFF_XREG1,
@@ -1051,11 +1110,19 @@ enum OVS_PACKED_ENUM mf_field_id {
     MFF_XREG5,
     MFF_XREG6,
     MFF_XREG7,
+    MFF_XREG8,
+    MFF_XREG9,
+    MFF_XREG10,
+    MFF_XREG11,
+    MFF_XREG12,
+    MFF_XREG13,
+    MFF_XREG14,
+    MFF_XREG15,
 #else
 #error "Need to update MFF_REG* to match FLOW_N_XREGS"
 #endif
 
-#if FLOW_N_XXREGS == 4
+#if FLOW_N_XXREGS == 8
     /* "xxreg<N>".
      *
      * ``extended-extended register".
@@ -1065,20 +1132,36 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Formatting: hexadecimal.
      * Prerequisites: none.
      * Access: read/write.
-     * NXM: NXM_NX_XXREG0(111) since v2.6.              <0>
-     * NXM: NXM_NX_XXREG1(112) since v2.6.              <1>
-     * NXM: NXM_NX_XXREG2(113) since v2.6.              <2>
-     * NXM: NXM_NX_XXREG3(114) since v2.6.              <3>
-     * NXM: NXM_NX_XXREG4(115) since vX.Y.              <4>
-     * NXM: NXM_NX_XXREG5(116) since vX.Y.              <5>
-     * NXM: NXM_NX_XXREG6(117) since vX.Y.              <6>
-     * NXM: NXM_NX_XXREG7(118) since vX.Y.              <7>
+     * NXM: NXM_NX_XXREG0(111) since v2.6.             <0>
+     * NXM: NXM_NX_XXREG1(112) since v2.6.             <1>
+     * NXM: NXM_NX_XXREG2(113) since v2.6.             <2>
+     * NXM: NXM_NX_XXREG3(114) since v2.6.             <3>
      * OXM: none.
      */
     MFF_XXREG0,
     MFF_XXREG1,
     MFF_XXREG2,
     MFF_XXREG3,
+
+    /* "xxreg<N>".
+     *
+     * ``extended-extended register".
+     *
+     * Type: be128.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_ET_XXREG4(33) since v3.7.            <4>
+     * OXM: NXOXM_ET_XXREG5(34) since v3.7.            <5>
+     * OXM: NXOXM_ET_XXREG6(35) since v3.7.            <6>
+     * OXM: NXOXM_ET_XXREG7(36) since v3.7.            <7>
+     */
+    MFF_XXREG4,
+    MFF_XXREG5,
+    MFF_XXREG6,
+    MFF_XXREG7,
 #else
 #error "Need to update MFF_REG* to match FLOW_N_XXREGS"
 #endif
@@ -1977,31 +2060,38 @@ struct mf_bitmap mf_bitmap_not(struct mf_bitmap);
 
 /* Use this macro as CASE_MFF_REGS: in a switch statement to choose all of the
  * MFF_REGn cases. */
-#if FLOW_N_REGS ==16
-#define CASE_MFF_REGS                                             \
-    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3:   \
-    case MFF_REG4: case MFF_REG5: case MFF_REG6: case MFF_REG7:   \
-    case MFF_REG8: case MFF_REG9: case MFF_REG10: case MFF_REG11: \
-    case MFF_REG12: case MFF_REG13: case MFF_REG14: case MFF_REG15
+#if FLOW_N_REGS == 32
+#define CASE_MFF_REGS                                               \
+    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3:     \
+    case MFF_REG4: case MFF_REG5: case MFF_REG6: case MFF_REG7:     \
+    case MFF_REG8: case MFF_REG9: case MFF_REG10: case MFF_REG11:   \
+    case MFF_REG12: case MFF_REG13: case MFF_REG14: case MFF_REG15: \
+    case MFF_REG16: case MFF_REG17: case MFF_REG18: case MFF_REG19: \
+    case MFF_REG20: case MFF_REG21: case MFF_REG22: case MFF_REG23: \
+    case MFF_REG24: case MFF_REG25: case MFF_REG26: case MFF_REG27: \
+    case MFF_REG28: case MFF_REG29: case MFF_REG30: case MFF_REG31
 #else
 #error "Need to update CASE_MFF_REGS to match FLOW_N_REGS"
 #endif
 
 /* Use this macro as CASE_MFF_XREGS: in a switch statement to choose all of the
  * MFF_REGn cases. */
-#if FLOW_N_XREGS == 8
-#define CASE_MFF_XREGS                                              \
-    case MFF_XREG0: case MFF_XREG1: case MFF_XREG2: case MFF_XREG3: \
-    case MFF_XREG4: case MFF_XREG5: case MFF_XREG6: case MFF_XREG7
+#if FLOW_N_XREGS == 16
+#define CASE_MFF_XREGS                                                 \
+    case MFF_XREG0: case MFF_XREG1: case MFF_XREG2: case MFF_XREG3:    \
+    case MFF_XREG4: case MFF_XREG5: case MFF_XREG6: case MFF_XREG7:    \
+    case MFF_XREG8: case MFF_XREG9: case MFF_XREG10: case MFF_XREG11:  \
+    case MFF_XREG12: case MFF_XREG13: case MFF_XREG14: case MFF_XREG15
 #else
 #error "Need to update CASE_MFF_XREGS to match FLOW_N_XREGS"
 #endif
 
 /* Use this macro as CASE_MFF_XXREGS: in a switch statement to choose
  * all of the MFF_REGn cases. */
-#if FLOW_N_XXREGS == 4
-#define CASE_MFF_XXREGS                                              \
-    case MFF_XXREG0: case MFF_XXREG1: case MFF_XXREG2: case MFF_XXREG3
+#if FLOW_N_XXREGS == 8
+#define CASE_MFF_XXREGS                                                 \
+    case MFF_XXREG0: case MFF_XXREG1: case MFF_XXREG2: case MFF_XXREG3: \
+    case MFF_XXREG4: case MFF_XXREG5: case MFF_XXREG6: case MFF_XXREG7
 #else
 #error "Need to update CASE_MFF_XXREGS to match FLOW_N_XXREGS"
 #endif

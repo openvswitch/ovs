@@ -6351,7 +6351,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
     /* New "struct flow" fields that are visible to the datapath (including all
      * data fields) should be translated into equivalent datapath flow fields
      * here (you will have to add a OVS_KEY_ATTR_* for them). */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 43);
 
     struct ovs_key_ethernet *eth_key;
     size_t encap[FLOW_MAX_VLAN_HEADERS] = {0};
@@ -7460,7 +7460,7 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
     /* New "struct flow" fields that are visible to the datapath (including all
      * data fields) should be translated from equivalent datapath flow fields
      * here (you will have to add a OVS_KEY_ATTR_* for them).  */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 43);
 
     enum odp_key_fitness fitness = ODP_FIT_ERROR;
     if (errorp) {
@@ -8868,7 +8868,7 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
     /* If you add a field that OpenFlow actions can change, and that is visible
      * to the datapath (including all data fields), then you should also add
      * code here to commit changes to the field. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 43);
 
     enum slow_path_reason slow1, slow2;
     bool mpls_done = false;

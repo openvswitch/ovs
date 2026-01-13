@@ -2902,10 +2902,20 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
     </field>
 
     <field id="MFF_REG0" title="Register 0">
-      This is the first of several Open vSwitch registers, all of which have
-      the same properties.  Open vSwitch 1.1 introduced registers 0, 1, 2, and
-      3, version 1.3 added register 4, version 1.7 added registers 5, 6, and 7,
-      and version 2.6 added registers 8 through 15.
+      <p>
+        This is the first of several Open vSwitch registers, all of which have
+        the same properties.  Open vSwitch 1.1 introduced registers 0, 1, 2,
+        and 3, version 1.3 added register 4, version 1.7 added registers 5, 6,
+        and 7, version 2.6 added registers 8 through 15, and version 3.7 added
+        registers 16 through 31.
+      </p>
+
+      <p>
+        Code points for registers 0 through 15 are defined within NXM_NX code
+        point prefix, while registers 16 through 31 are defined within
+        NXOXM_ET starting with <code>NXOXM_ET_REG16</code> (17), due to limited
+        space within the NXM_NX class.
+      </p>
     </field>
     <!-- XXX series -->
     <field id="MFF_REG1" title="Register 1" hidden="yes"/>
@@ -2923,6 +2933,22 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
     <field id="MFF_REG13" title="Register 13" hidden="yes"/>
     <field id="MFF_REG14" title="Register 14" hidden="yes"/>
     <field id="MFF_REG15" title="Register 15" hidden="yes"/>
+    <field id="MFF_REG16" title="Register 16" hidden="yes"/>
+    <field id="MFF_REG17" title="Register 17" hidden="yes"/>
+    <field id="MFF_REG18" title="Register 18" hidden="yes"/>
+    <field id="MFF_REG19" title="Register 19" hidden="yes"/>
+    <field id="MFF_REG20" title="Register 20" hidden="yes"/>
+    <field id="MFF_REG21" title="Register 21" hidden="yes"/>
+    <field id="MFF_REG22" title="Register 22" hidden="yes"/>
+    <field id="MFF_REG23" title="Register 23" hidden="yes"/>
+    <field id="MFF_REG24" title="Register 24" hidden="yes"/>
+    <field id="MFF_REG25" title="Register 25" hidden="yes"/>
+    <field id="MFF_REG26" title="Register 26" hidden="yes"/>
+    <field id="MFF_REG27" title="Register 27" hidden="yes"/>
+    <field id="MFF_REG28" title="Register 28" hidden="yes"/>
+    <field id="MFF_REG29" title="Register 29" hidden="yes"/>
+    <field id="MFF_REG30" title="Register 30" hidden="yes"/>
+    <field id="MFF_REG31" title="Register 31" hidden="yes"/>
 
     <field id="MFF_XREG0" title="Extended Register 0">
       <p>
@@ -2931,8 +2957,13 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
         vSwitch already had 32-bit registers by that name, so Open vSwitch uses
         the name ``extended registers'' in an attempt to reduce confusion.  The
         standard allows for up to 128 registers, each 64 bits wide, but Open
-        vSwitch only implements 4 (in versions 2.4 and 2.5) or 8 (in version
-        2.6 and later).
+        vSwitch only implements 4 (in versions 2.4 and 2.5), 8 (in version
+        2.6 and later), or 16 (in version 3.7 and later).
+      </p>
+
+      <p>
+        Code points for all of the extended registers are defined within
+        <code>OXM_OF_PKT_REG</code> code point prefix.
       </p>
 
       <p>
@@ -2961,6 +2992,14 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
     <field id="MFF_XREG5" title="Extended Register 5" hidden="yes"/>
     <field id="MFF_XREG6" title="Extended Register 6" hidden="yes"/>
     <field id="MFF_XREG7" title="Extended Register 7" hidden="yes"/>
+    <field id="MFF_XREG8" title="Extended Register 8" hidden="yes"/>
+    <field id="MFF_XREG9" title="Extended Register 9" hidden="yes"/>
+    <field id="MFF_XREG10" title="Extended Register 10" hidden="yes"/>
+    <field id="MFF_XREG11" title="Extended Register 11" hidden="yes"/>
+    <field id="MFF_XREG12" title="Extended Register 12" hidden="yes"/>
+    <field id="MFF_XREG13" title="Extended Register 13" hidden="yes"/>
+    <field id="MFF_XREG14" title="Extended Register 14" hidden="yes"/>
+    <field id="MFF_XREG15" title="Extended Register 15" hidden="yes"/>
 
     <field id="MFF_XXREG0" title="Double-Extended Register 0">
       <p>
@@ -2970,7 +3009,16 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
         through <code>reg3</code>, with <code>reg0</code> supplying the
         most-significant bits of <code>xxreg0</code> and <code>reg3</code> the
         least-significant.  <code>xxreg1</code> similarly overlays
-        <code>reg4</code> through <code>reg7</code>, and so on.
+        <code>reg4</code> through <code>reg7</code>, and so on. Open
+        vSwitch only implements 4 128-bit registers (in versions 2.6 and
+        later) and 8 (in version 3.7 and later).
+      </p>
+
+      <p>
+        Code points for double-extended registers 0 through 3 are defined
+        within NXM_NX code point prefix, while registers 4 through 7 are
+        defined within NXOXM_ET starting with <code>NXOXM_ET_XXREG4</code>
+        (33), due to limited space within the NXM_NX class.
       </p>
     </field>
 
@@ -2978,6 +3026,10 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
     <field id="MFF_XXREG1" title="Double-Extended Register 1" hidden="yes"/>
     <field id="MFF_XXREG2" title="Double-Extended Register 2" hidden="yes"/>
     <field id="MFF_XXREG3" title="Double-Extended Register 3" hidden="yes"/>
+    <field id="MFF_XXREG4" title="Double-Extended Register 4" hidden="yes"/>
+    <field id="MFF_XXREG5" title="Double-Extended Register 5" hidden="yes"/>
+    <field id="MFF_XXREG6" title="Double-Extended Register 6" hidden="yes"/>
+    <field id="MFF_XXREG7" title="Double-Extended Register 7" hidden="yes"/>
   </group>
 
   <group title="Layer 2 (Ethernet)">

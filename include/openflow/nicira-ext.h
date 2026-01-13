@@ -537,7 +537,7 @@ OFP_ASSERT(sizeof(struct nx_async_config) == 24);
  */
 
 /* Number of registers allocated NXM field IDs. */
-#define NXM_NX_MAX_REGS 16
+#define NXM_NX_MAX_REGS 32
 
 /* Bits in the value of NXM_NX_IP_FRAG. */
 #define NX_IP_FRAG_ANY   (1 << 0) /* Is this a fragment? */

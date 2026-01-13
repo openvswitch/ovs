@@ -147,7 +147,7 @@ void odp_portno_name_format(const struct hmap *portno_names,
  * add another field and forget to adjust this value.
  */
 #define ODPUTIL_FLOW_KEY_BYTES 640
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 43);
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently
