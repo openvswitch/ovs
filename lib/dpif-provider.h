@@ -66,23 +66,52 @@ static inline void dpif_assert_class(const struct dpif *dpif,
 struct dpif_flow_dump {
     struct dpif *dpif;
     bool terse;         /* If true, key/mask/actions may be omitted. */
+
+    struct ovs_mutex offload_dump_mutex;
+    struct dpif_offload_flow_dump **offload_dumps;
+    size_t n_offload_dumps;
+    size_t offload_dump_index;
 };
 
+void dpif_offload_flow_dump_create(struct dpif_flow_dump *,
+                                   const struct dpif *, bool terse);
+void dpif_offload_flow_dump_thread_create(struct dpif_flow_dump_thread *,
+                                          struct dpif_flow_dump *);
+
 static inline void
-dpif_flow_dump_init(struct dpif_flow_dump *dump, const struct dpif *dpif)
+dpif_flow_dump_init(struct dpif_flow_dump *dump, const struct dpif *dpif,
+                    bool terse, struct dpif_flow_dump_types *types)
 {
     dump->dpif = CONST_CAST(struct dpif *, dpif);
+    dump->terse = terse;
+    dump->offload_dumps = NULL;
+    dump->n_offload_dumps = 0;
+    dump->offload_dump_index = 0;
+    ovs_mutex_init(&dump->offload_dump_mutex);
+    if (!types || types->offloaded_flows) {
+        dpif_offload_flow_dump_create(dump, dpif, terse);
+    }
 }
 
 struct dpif_flow_dump_thread {
-    struct dpif *dpif;
+    struct dpif_flow_dump *dump;
+
+    struct dpif_offload_flow_dump_thread **offload_threads;
+    size_t n_offload_threads;
+    size_t offload_dump_index;
+    bool offload_dump_done;
 };
 
 static inline void
 dpif_flow_dump_thread_init(struct dpif_flow_dump_thread *thread,
                            struct dpif_flow_dump *dump)
 {
-    thread->dpif = dump->dpif;
+    thread->dump = dump;
+    thread->offload_threads = NULL;
+    thread->n_offload_threads = 0;
+    thread->offload_dump_index = 0;
+    thread->offload_dump_done = true;
+    dpif_offload_flow_dump_thread_create(thread, dump);
 }
 
 struct ct_dpif_dump_state;

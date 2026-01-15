@@ -160,6 +160,17 @@ dpif_offload_module_init(void)
                    && base_dpif_offload_classes[i]->port_add
                    && base_dpif_offload_classes[i]->port_del);
 
+        ovs_assert((base_dpif_offload_classes[i]->flow_dump_create &&
+                    base_dpif_offload_classes[i]->flow_dump_next &&
+                    base_dpif_offload_classes[i]->flow_dump_destroy &&
+                    base_dpif_offload_classes[i]->flow_dump_thread_create &&
+                    base_dpif_offload_classes[i]->flow_dump_thread_destroy) ||
+                   (!base_dpif_offload_classes[i]->flow_dump_create &&
+                    !base_dpif_offload_classes[i]->flow_dump_next &&
+                    !base_dpif_offload_classes[i]->flow_dump_destroy &&
+                    !base_dpif_offload_classes[i]->flow_dump_thread_create &&
+                    !base_dpif_offload_classes[i]->flow_dump_thread_destroy));
+
         dpif_offload_register_provider(base_dpif_offload_classes[i]);
     }
 
@@ -836,6 +847,184 @@ dpif_offload_meter_del(const struct dpif *dpif, ofproto_meter_id meter_id,
             }
         }
     }
+}
+
+/*
+ * Further initializes a 'struct dpif_flow_dump' that was already initialized
+ * by dpif_flow_dump_create(), preparing it for use by
+ * dpif_offload_flow_dump_next().
+ *
+ * For more details, see the documentation of dpif_flow_dump_create(). */
+void
+dpif_offload_flow_dump_create(struct dpif_flow_dump *dump,
+                              const struct dpif *dpif, bool terse)
+{
+    struct dpif_offload_provider_collection *collection;
+    const struct dpif_offload *offload;
+    size_t n_providers = 0;
+    int i = 0;
+
+    collection = dpif_get_offload_provider_collection(dpif);
+    if (!dump || !dpif_offload_enabled() || !collection) {
+        return;
+    }
+
+    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+        if (offload->class->flow_dump_create) {
+            n_providers++;
+        }
+    }
+
+    if (!n_providers) {
+        return;
+    }
+
+    dump->offload_dumps = xmalloc(n_providers * sizeof(
+        struct dpif_offload_flow_dump *));
+
+    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+        if (offload->class->flow_dump_create) {
+            dump->offload_dumps[i++] =
+                offload->class->flow_dump_create(offload, terse);
+        }
+    }
+    dump->n_offload_dumps = i;
+    dump->offload_dump_index = 0;
+}
+
+/* Destroys the 'dump' data associated with the offload flow dump.
+ * This function is called as part of the general dump cleanup
+ * by dpif_flow_dump_destroy().
+ *
+ * Returns 0 if all individual dpif-offload dump operations complete
+ * without error.  If one or more providers return an error, the error
+ * code from the first failing provider is returned as a positive errno
+ * value. */
+int
+dpif_offload_flow_dump_destroy(struct dpif_flow_dump *dump)
+{
+    int error = 0;
+
+    for (int i = 0; i < dump->n_offload_dumps; i++) {
+        struct dpif_offload_flow_dump *offload_dump = dump->offload_dumps[i];
+        const struct dpif_offload *offload = offload_dump->offload;
+        int rc = offload->class->flow_dump_destroy(offload_dump);
+
+        if (rc && rc != EOF) {
+            VLOG_ERR("Failed flow dumping on dpif-offload provider "
+                     "%s, error %s", dpif_offload_name(offload),
+                     ovs_strerror(rc));
+            if (!error) {
+                error = rc;
+            }
+        }
+    }
+    ovs_mutex_destroy(&dump->offload_dump_mutex);
+    free(dump->offload_dumps);
+    return error;
+}
+
+static void
+dpif_offload_advance_provider_dump(struct dpif_flow_dump_thread *thread)
+{
+    struct dpif_flow_dump *dump = thread->dump;
+
+    ovs_mutex_lock(&dump->offload_dump_mutex);
+
+    /* If we haven't finished (dumped all providers). */
+    if (dump->offload_dump_index < dump->n_offload_dumps) {
+        /* If we are the first to find that current dump is finished
+         * advance it. */
+        if (thread->offload_dump_index == dump->offload_dump_index) {
+            thread->offload_dump_index = ++dump->offload_dump_index;
+            /* Did we just finish the last dump? If so we are done. */
+            if (dump->offload_dump_index == dump->n_offload_dumps) {
+                thread->offload_dump_done = true;
+            }
+        } else {
+            /* otherwise, we are behind, catch up */
+            thread->offload_dump_index = dump->offload_dump_index;
+        }
+    } else {
+        /* Some other thread finished. */
+        thread->offload_dump_done = true;
+    }
+
+    ovs_mutex_unlock(&dump->offload_dump_mutex);
+}
+
+/* This function behaves exactly the same as dpif_flow_dump_next(),
+ * so see its documentation for details. */
+int
+dpif_offload_flow_dump_next(struct dpif_flow_dump_thread *thread,
+                            struct dpif_flow *flows, int max_flows)
+{
+    int n_flows = 0;
+
+    ovs_assert(max_flows > 0);
+
+    /* The logic here processes all registered offload providers and
+     * dumps all related flows.  If done (i.e., it returns 0), continue
+     * with the next offload provider. */
+    while (!thread->offload_dump_done) {
+        struct dpif_offload_flow_dump_thread *offload_thread;
+
+        ovs_assert(thread->offload_dump_index < thread->n_offload_threads);
+        offload_thread = thread->offload_threads[thread->offload_dump_index];
+        n_flows = offload_thread->dump->offload->class->flow_dump_next(
+                        offload_thread, flows, max_flows);
+
+        if (n_flows > 0) {
+            /* If we got some flows, we need to return due to the constraint
+             * on returned flows, as explained in dpif_flow_dump_next(). */
+            break;
+        }
+        dpif_offload_advance_provider_dump(thread);
+    }
+    return MAX(n_flows, 0);
+}
+
+/* Further initializes a 'struct dpif_flow_dump_thread' that was already
+ * initialized by dpif_flow_dump_thread_create(), preparing it for use by
+ * dpif_offload_flow_dump_next(). */
+void
+dpif_offload_flow_dump_thread_create(struct dpif_flow_dump_thread *thread,
+                                     struct dpif_flow_dump *dump)
+{
+    if (!dpif_offload_enabled() || !dump || !dump->n_offload_dumps) {
+        return;
+    }
+
+    thread->n_offload_threads = dump->n_offload_dumps;
+    thread->offload_dump_done = false;
+    thread->offload_dump_index = 0;
+    thread->offload_threads =
+        xmalloc(thread->n_offload_threads * sizeof *thread->offload_threads);
+
+    for (int i = 0; i < dump->n_offload_dumps; i++) {
+        struct dpif_offload_flow_dump *offload_dump = dump->offload_dumps[i];
+        const struct dpif_offload *offload = offload_dump->offload;
+
+        thread->offload_threads[i] =
+            offload->class->flow_dump_thread_create(offload_dump);
+    }
+}
+
+/* Destroys the 'thread' data associated with the offload flow dump.
+ * This function is called as part of the general thread cleanup
+ * by dpif_flow_dump_thread_destroy(). */
+void
+dpif_offload_flow_dump_thread_destroy(struct dpif_flow_dump_thread *thread)
+{
+    for (int i = 0; i < thread->n_offload_threads; i++) {
+        struct dpif_offload_flow_dump_thread *offload_thread;
+        const struct dpif_offload *offload;
+
+        offload_thread = thread->offload_threads[i];
+        offload = offload_thread->dump->offload;
+        offload->class->flow_dump_thread_destroy(offload_thread);
+    }
+    free(thread->offload_threads);
 }
 
 

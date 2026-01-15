@@ -522,7 +522,7 @@ struct dpif_flow_attrs {
 
 struct dpif_flow_dump_types {
     bool ovs_flows;
-    bool netdev_flows;
+    bool offloaded_flows;
 };
 
 void dpif_flow_stats_extract(const struct flow *, const struct dp_packet *packet,

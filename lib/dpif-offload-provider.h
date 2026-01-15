@@ -59,6 +59,32 @@ struct dpif_offload {
 };
 
 
+struct dpif_offload_flow_dump {
+    struct dpif_offload *offload;
+    bool terse;
+};
+
+static inline void
+dpif_offload_flow_dump_init(struct dpif_offload_flow_dump *dump,
+                            const struct dpif_offload *offload, bool terse)
+{
+    dump->offload = CONST_CAST(struct dpif_offload *, offload);
+    dump->terse = terse;
+}
+
+struct dpif_offload_flow_dump_thread {
+    struct dpif_offload_flow_dump *dump;
+};
+
+static inline void
+dpif_offload_flow_dump_thread_init(
+    struct dpif_offload_flow_dump_thread *thread,
+    struct dpif_offload_flow_dump *dump)
+{
+    thread->dump = dump;
+}
+
+
 struct dpif_offload_class {
     /* Type of DPIF offload provider in this class, e.g., "tc", "dpdk",
      * "dummy", etc. */
@@ -127,6 +153,43 @@ struct dpif_offload_class {
     /* Deletes all offloaded flows for this offload_provider.  Return 0 if
      * successful, otherwise returns a positive errno value. */
     int (*flow_flush)(const struct dpif_offload *);
+
+    /* Flow Dumping Interface for dpif-offload.
+     *
+     * This interface mirrors the flow dumping interface found in the dpif
+     * layer.  For a thorough understanding of the design and expectations,
+     * please refer to the documentation in:
+     *   - include/openvswitch/dpif.h
+     *   - include/openvswitch/dpif-provider.h
+     *
+     * The dpif-offload flow dumping interface is intended for use only when
+     * there is a clear separation between traditional dpif flows and offloaded
+     * flows handled by an offload mechanism.
+     *
+     * For example:
+     *   - The 'tc' offload provider installs flow rules via kernel tc without
+     *     creating corresponding kernel datapath (dpif) flows.  In such cases,
+     *     dumping dpif flows would not reflect the actual set of active
+     *     offloaded flows.  This interface provides a way to explicitly
+     *     enumerate such offloaded flows.
+     *
+     * 'flow_dump_create' and 'flow_dump_thread_create' must always return
+     * initialized and usable data structures.  Specifically, they must
+     * initialize the returned structures using dpif_offload_flow_dump_init()
+     * and dpif_offload_flow_dump_thread_init(), respectively, and defer any
+     * error reporting until flow_dump_destroy() is called. */
+    struct dpif_offload_flow_dump *(*flow_dump_create)(
+        const struct dpif_offload *, bool terse);
+
+    int (*flow_dump_next)(struct dpif_offload_flow_dump_thread *,
+                          struct dpif_flow *, int max_flows);
+
+    int (*flow_dump_destroy)(struct dpif_offload_flow_dump *);
+
+    struct dpif_offload_flow_dump_thread *(*flow_dump_thread_create)(
+        struct dpif_offload_flow_dump *);
+
+    void (*flow_dump_thread_destroy)(struct dpif_offload_flow_dump_thread *);
 
     /* Returns the number of flows offloaded by the offload provider. */
     uint64_t (*flow_count)(const struct dpif_offload *);
@@ -231,6 +294,14 @@ void dpif_offload_port_del(struct dpif *, odp_port_t);
 void dpif_offload_port_set_config(struct dpif *, odp_port_t,
                                   const struct smap *cfg);
 void dpif_offload_set_netdev_offload(struct netdev *, struct dpif_offload *);
+void dpif_offload_flow_dump_create(struct dpif_flow_dump *,
+                                   const struct dpif *, bool terse);
+int dpif_offload_flow_dump_destroy(struct dpif_flow_dump *);
+int dpif_offload_flow_dump_next(struct dpif_flow_dump_thread *,
+                                struct dpif_flow *, int max_flows);
+void dpif_offload_flow_dump_thread_create(struct dpif_flow_dump_thread *,
+                                          struct dpif_flow_dump *);
+void dpif_offload_flow_dump_thread_destroy(struct dpif_flow_dump_thread *);
 
 static inline void
 dpif_offload_assert_class(const struct dpif_offload *dpif_offload,

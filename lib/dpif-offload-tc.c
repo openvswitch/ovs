@@ -237,6 +237,49 @@ dpif_offload_tc_flow_flush(const struct dpif_offload *offload)
     return error;
 }
 
+static struct dpif_offload_flow_dump *
+dpif_offload_tc_flow_dump_create(const struct dpif_offload *offload,
+                                 bool terse)
+{
+    struct dpif_offload_flow_dump *dump;
+
+    dump = xmalloc(sizeof *dump);
+    dpif_offload_flow_dump_init(dump, offload, terse);
+    return dump;
+}
+
+static int
+dpif_offload_tc_flow_dump_next(struct dpif_offload_flow_dump_thread *thread,
+                               struct dpif_flow *flows, int max_flows)
+{
+    ovs_assert(thread && flows && max_flows);
+    return 0;
+}
+
+static int
+dpif_offload_tc_flow_dump_destroy(struct dpif_offload_flow_dump *dump)
+{
+    free(dump);
+    return 0;
+}
+
+static struct dpif_offload_flow_dump_thread *
+dpif_offload_tc_flow_dump_thread_create(struct dpif_offload_flow_dump *dump)
+{
+    struct dpif_offload_flow_dump_thread *thread;
+
+    thread = xmalloc(sizeof *thread);
+    dpif_offload_flow_dump_thread_init(thread, dump);
+    return thread;
+}
+
+static void
+dpif_offload_tc_flow_dump_thread_destroy(
+    struct dpif_offload_flow_dump_thread *thread)
+{
+    free(thread);
+}
+
 struct dpif_offload_class dpif_offload_tc_class = {
     .type = "tc",
     .supported_dpif_types = (const char *const[]) {"system", NULL},
@@ -248,6 +291,11 @@ struct dpif_offload_class dpif_offload_tc_class = {
     .port_add = dpif_offload_tc_port_add,
     .port_del = dpif_offload_tc_port_del,
     .flow_flush = dpif_offload_tc_flow_flush,
+    .flow_dump_create = dpif_offload_tc_flow_dump_create,
+    .flow_dump_next = dpif_offload_tc_flow_dump_next,
+    .flow_dump_destroy = dpif_offload_tc_flow_dump_destroy,
+    .flow_dump_thread_create = dpif_offload_tc_flow_dump_thread_create,
+    .flow_dump_thread_destroy = dpif_offload_tc_flow_dump_thread_destroy,
     .flow_count = dpif_offload_tc_flow_count,
     .meter_set = dpif_offload_tc_meter_set,
     .meter_get = dpif_offload_tc_meter_get,

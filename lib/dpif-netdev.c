@@ -4483,13 +4483,12 @@ dpif_netdev_flow_dump_cast(struct dpif_flow_dump *dump)
 
 static struct dpif_flow_dump *
 dpif_netdev_flow_dump_create(const struct dpif *dpif_, bool terse,
-                             struct dpif_flow_dump_types *types OVS_UNUSED)
+                             struct dpif_flow_dump_types *types)
 {
     struct dpif_netdev_flow_dump *dump;
 
     dump = xzalloc(sizeof *dump);
-    dpif_flow_dump_init(&dump->up, dpif_);
-    dump->up.terse = terse;
+    dpif_flow_dump_init(&dump->up, dpif_, terse, types);
     ovs_mutex_init(&dump->mutex);
 
     return &dump->up;
@@ -4547,7 +4546,7 @@ dpif_netdev_flow_dump_next(struct dpif_flow_dump_thread *thread_,
         = dpif_netdev_flow_dump_thread_cast(thread_);
     struct dpif_netdev_flow_dump *dump = thread->dump;
     struct dp_netdev_flow *netdev_flows[FLOW_DUMP_MAX_BATCH];
-    struct dpif_netdev *dpif = dpif_netdev_cast(thread->up.dpif);
+    struct dpif_netdev *dpif = dpif_netdev_cast(thread->up.dump->dpif);
     struct dp_netdev *dp = get_dp_netdev(&dpif->dpif);
     int n_flows = 0;
     int i;

@@ -964,10 +964,10 @@ determine_dpif_flow_dump_types(struct dump_types *dump_types,
                                struct dpif_flow_dump_types *dpif_dump_types)
 {
     dpif_dump_types->ovs_flows = dump_types->ovs || dump_types->non_offloaded;
-    dpif_dump_types->netdev_flows = dump_types->tc || dump_types->offloaded
-                                    || dump_types->non_offloaded
-                                    || dump_types->dpdk
-                                    || dump_types->partially_offloaded;
+    dpif_dump_types->offloaded_flows = dump_types->tc || dump_types->offloaded
+                                       || dump_types->non_offloaded
+                                       || dump_types->dpdk
+                                       || dump_types->partially_offloaded;
 }
 
 static bool

@@ -1621,7 +1621,7 @@ start_netdev_dump(const struct dpif *dpif_,
 {
     ovs_mutex_init(&dump->netdev_lock);
 
-    if (!(dump->types.netdev_flows)) {
+    if (!(dump->types.offloaded_flows)) {
         dump->netdev_dumps_num = 0;
         dump->netdev_dumps = NULL;
         return;
@@ -1642,7 +1642,7 @@ dpif_netlink_populate_flow_dump_types(struct dpif_netlink_flow_dump *dump,
 {
     if (!types) {
         dump->types.ovs_flows = true;
-        dump->types.netdev_flows = true;
+        dump->types.offloaded_flows = true;
     } else {
         memcpy(&dump->types, types, sizeof *types);
     }
@@ -1658,7 +1658,7 @@ dpif_netlink_flow_dump_create(const struct dpif *dpif_, bool terse,
     struct ofpbuf *buf;
 
     dump = xmalloc(sizeof *dump);
-    dpif_flow_dump_init(&dump->up, dpif_);
+    dpif_flow_dump_init(&dump->up, dpif_, terse, types);
 
     dpif_netlink_populate_flow_dump_types(dump, types);
 
@@ -1675,7 +1675,6 @@ dpif_netlink_flow_dump_create(const struct dpif *dpif_, bool terse,
         ofpbuf_delete(buf);
     }
     atomic_init(&dump->status, 0);
-    dump->up.terse = terse;
 
     start_netdev_dump(dpif_, dump);
 
@@ -1885,7 +1884,7 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
     struct dpif_netlink_flow_dump_thread *thread
         = dpif_netlink_flow_dump_thread_cast(thread_);
     struct dpif_netlink_flow_dump *dump = thread->dump;
-    struct dpif_netlink *dpif = dpif_netlink_cast(thread->up.dpif);
+    struct dpif_netlink *dpif = dpif_netlink_cast(thread->up.dump->dpif);
     int n_flows;
 
     ofpbuf_delete(thread->nl_actions);
