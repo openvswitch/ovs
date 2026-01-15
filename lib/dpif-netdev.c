@@ -2600,10 +2600,10 @@ mark_to_flow_associate(const uint32_t mark, struct dp_netdev_flow *flow)
     unsigned int tid = netdev_offload_thread_id();
     dp_netdev_flow_ref(flow);
 
+    flow->mark = mark;
     cmap_insert(&dp_offload_threads[tid].mark_to_flow,
                 CONST_CAST(struct cmap_node *, &flow->mark_node),
                 hash_int(mark, 0));
-    flow->mark = mark;
 
     VLOG_DBG("Associated dp_netdev flow %p with mark %u mega_ufid "UUID_FMT,
              flow, mark, UUID_ARGS((struct uuid *) &flow->mega_ufid));
