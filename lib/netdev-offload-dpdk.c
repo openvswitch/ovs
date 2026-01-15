@@ -25,8 +25,8 @@
 
 #include "cmap.h"
 #include "dpif-netdev.h"
+#include "dpif-offload.h"
 #include "netdev-offload-dpdk.h"
-#include "netdev-offload-provider.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-util.h"
@@ -42,6 +42,9 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(600, 600);
 /* XXX: Temporarily external declarations, will be removed during cleanup. */
 unsigned int dpdk_offload_thread_nb(void);
 unsigned int dpdk_offload_thread_id(void);
+struct netdev *dpif_netdev_offload_get_netdev_by_port_id(odp_port_t);
+void dpif_netdev_offload_ports_traverse(
+    bool (*cb)(struct netdev *, odp_port_t, void *), void *aux);
 
 /* Thread-safety
  * =============
@@ -92,6 +95,7 @@ offload_data_init(struct netdev *netdev)
                                       sizeof *data->rte_flow_counters);
 
     ovsrcu_set(&netdev->hw_info.offload_data, (void *) data);
+    atomic_store_relaxed(&netdev->hw_info.post_process_api_supported, true);
 
     return 0;
 }
@@ -1160,7 +1164,7 @@ add_vport_match(struct flow_patterns *patterns,
     struct netdev *physdev;
     int ret;
 
-    physdev = netdev_ports_get(orig_in_port, tnldev->dpif_type);
+    physdev = dpif_netdev_offload_get_netdev_by_port_id(orig_in_port);
     if (physdev == NULL) {
         return -1;
     }
@@ -1180,7 +1184,6 @@ add_vport_match(struct flow_patterns *patterns,
     add_flow_tnl_items(patterns, physdev, tnl_pmd_items, tnl_pmd_items_cnt);
 
 out:
-    netdev_close(physdev);
     return ret;
 }
 
@@ -1843,18 +1846,17 @@ add_output_action(struct netdev *netdev,
     int ret = 0;
 
     port = nl_attr_get_odp_port(nla);
-    outdev = netdev_ports_get(port, netdev->dpif_type);
+    outdev = dpif_netdev_offload_get_netdev_by_port_id(port);
     if (outdev == NULL) {
         VLOG_DBG_RL(&rl, "Cannot find netdev for odp port %"PRIu32, port);
         return -1;
     }
-    if (!netdev_flow_api_equals(netdev, outdev) ||
+    if (!dpif_offload_netdev_same_offload(netdev, outdev) ||
         add_represented_port_action(actions, outdev)) {
         VLOG_DBG_RL(&rl, "%s: Output to port \'%s\' cannot be offloaded.",
                     netdev_get_name(netdev), netdev_get_name(outdev));
         ret = -1;
     }
-    netdev_close(outdev);
     return ret;
 }
 
@@ -2180,12 +2182,11 @@ add_tnl_pop_action(struct netdev *netdev,
     int ret;
 
     port = nl_attr_get_odp_port(nla);
-    vport = netdev_ports_get(port, netdev->dpif_type);
+    vport = dpif_netdev_offload_get_netdev_by_port_id(port);
     if (vport == NULL) {
         return -1;
     }
     ret = vport_to_rte_tunnel(vport, &tunnel, netdev, &actions->s_tnl);
-    netdev_close(vport);
     if (ret) {
         return ret;
     }
@@ -2424,7 +2425,7 @@ get_netdev_odp_cb(struct netdev *netdev,
     return false;
 }
 
-static int
+int
 netdev_offload_dpdk_flow_put(struct netdev *netdev, struct match *match,
                              struct nlattr *actions, size_t actions_len,
                              const ovs_u128 *ufid, struct offload_info *info,
@@ -2450,8 +2451,7 @@ netdev_offload_dpdk_flow_put(struct netdev *netdev, struct match *match,
         /* Extract the orig_in_port from physdev as in case of modify the one
          * provided by upper layer cannot be used.
          */
-        netdev_ports_traverse(rte_flow_data->physdev->dpif_type,
-                              get_netdev_odp_cb, &aux);
+        dpif_netdev_offload_ports_traverse(get_netdev_odp_cb, &aux);
         info->orig_in_port = aux.odp_port;
         old_stats = rte_flow_data->stats;
         modification = true;
@@ -2475,7 +2475,7 @@ netdev_offload_dpdk_flow_put(struct netdev *netdev, struct match *match,
     return 0;
 }
 
-static int
+int
 netdev_offload_dpdk_flow_del(struct netdev *netdev OVS_UNUSED,
                              const ovs_u128 *ufid,
                              struct dpif_flow_stats *stats)
@@ -2493,8 +2493,8 @@ netdev_offload_dpdk_flow_del(struct netdev *netdev OVS_UNUSED,
     return netdev_offload_dpdk_flow_destroy(rte_flow_data);
 }
 
-static int
-netdev_offload_dpdk_init_flow_api(struct netdev *netdev)
+int
+netdev_offload_dpdk_init(struct netdev *netdev)
 {
     int ret = EOPNOTSUPP;
 
@@ -2512,15 +2512,15 @@ netdev_offload_dpdk_init_flow_api(struct netdev *netdev)
     return ret;
 }
 
-static void
-netdev_offload_dpdk_uninit_flow_api(struct netdev *netdev)
+void
+netdev_offload_dpdk_uninit(struct netdev *netdev)
 {
     if (netdev_dpdk_flow_api_supported(netdev, true)) {
         offload_data_destroy(netdev);
     }
 }
 
-static int
+int
 netdev_offload_dpdk_flow_get(struct netdev *netdev,
                              struct match *match OVS_UNUSED,
                              struct nlattr **actions OVS_UNUSED,
@@ -2620,7 +2620,7 @@ netdev_offload_dpdk_flow_flush(struct netdev *netdev)
     flush_netdev_flows_in_related(netdev, netdev);
 
     if (!netdev_vport_is_vport_class(netdev->netdev_class)) {
-        netdev_ports_traverse(netdev->dpif_type, flush_in_vport_cb, netdev);
+        dpif_netdev_offload_ports_traverse(flush_in_vport_cb, netdev);
     }
 
     return 0;
@@ -2668,8 +2668,7 @@ out:
 }
 
 static struct netdev *
-get_vport_netdev(const char *dpif_type,
-                 struct rte_flow_tunnel *tunnel,
+get_vport_netdev(struct rte_flow_tunnel *tunnel,
                  odp_port_t *odp_port)
 {
     struct get_vport_netdev_aux aux = {
@@ -2684,7 +2683,7 @@ get_vport_netdev(const char *dpif_type,
     } else if (tunnel->type == RTE_FLOW_ITEM_TYPE_GRE) {
         aux.type = "gre";
     }
-    netdev_ports_traverse(dpif_type, get_vport_netdev_cb, &aux);
+    dpif_netdev_offload_ports_traverse(get_vport_netdev_cb, &aux);
 
     return aux.vport;
 }
@@ -2718,8 +2717,7 @@ netdev_offload_dpdk_hw_miss_packet_recover(struct netdev *netdev,
     }
 
     rte_tnl = &rte_restore_info.tunnel;
-    vport_netdev = get_vport_netdev(netdev->dpif_type, rte_tnl,
-                                    &vport_odp);
+    vport_netdev = get_vport_netdev(rte_tnl, &vport_odp);
     if (!vport_netdev) {
         VLOG_WARN_RL(&rl, "Could not find vport netdev");
         return EOPNOTSUPP;
@@ -2799,12 +2797,3 @@ netdev_offload_dpdk_flow_count(struct netdev *netdev)
 
     return total;
 }
-
-const struct netdev_flow_api netdev_offload_dpdk = {
-    .type = "dpdk_flow_api",
-    .flow_put = netdev_offload_dpdk_flow_put,
-    .flow_del = netdev_offload_dpdk_flow_del,
-    .init_flow_api = netdev_offload_dpdk_init_flow_api,
-    .uninit_flow_api = netdev_offload_dpdk_uninit_flow_api,
-    .flow_get = netdev_offload_dpdk_flow_get,
-};

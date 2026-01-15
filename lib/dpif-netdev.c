@@ -59,7 +59,7 @@
 #include "mov-avg.h"
 #include "mpsc-queue.h"
 #include "netdev.h"
-#include "netdev-offload.h"
+#include "netdev-offload-dpdk.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netlink.h"
@@ -416,6 +416,9 @@ static unsigned int dpdk_offload_thread_init(void);
 void dpdk_offload_thread_set_thread_nb(unsigned int thread_nb);
 unsigned int dpdk_offload_thread_nb(void);
 unsigned int dpdk_offload_thread_id(void);
+
+/* XXX: Temporarily external declarations, will be removed during cleanup. */
+struct netdev *dpif_netdev_offload_get_netdev_by_port_id(odp_port_t);
 
 static void
 dp_netdev_offload_init(void)
@@ -2638,7 +2641,6 @@ static int
 mark_to_flow_disassociate(struct dp_netdev *dp,
                           struct dp_netdev_flow *flow)
 {
-    const char *dpif_type_str = dpif_normalize_type(dp->class->type);
     struct cmap_node *mark_node = CONST_CAST(struct cmap_node *,
                                              &flow->mark_node);
     unsigned int tid = dpdk_offload_thread_id();
@@ -2663,14 +2665,13 @@ mark_to_flow_disassociate(struct dp_netdev *dp,
         struct netdev *port;
         odp_port_t in_port = flow->flow.in_port.odp_port;
 
-        port = netdev_ports_get(in_port, dpif_type_str);
+        port = dpif_netdev_offload_get_netdev_by_port_id(in_port);
         if (port) {
             /* Taking a global 'port_rwlock' to fulfill thread safety
              * restrictions regarding netdev port mapping. */
             ovs_rwlock_rdlock(&dp->port_rwlock);
-            ret = netdev_flow_del(port, &flow->mega_ufid, NULL);
+            ret = netdev_offload_dpdk_flow_del(port, &flow->mega_ufid, NULL);
             ovs_rwlock_unlock(&dp->port_rwlock);
-            netdev_close(port);
         }
 
         flow_mark_free(mark);
@@ -2811,7 +2812,6 @@ dp_netdev_flow_offload_put(struct dp_offload_thread_item *item)
     struct dp_netdev *dp = item->dp;
     struct dp_netdev_flow *flow = offload->flow;
     odp_port_t in_port = flow->flow.in_port.odp_port;
-    const char *dpif_type_str = dpif_normalize_type(dp->class->type);
     bool modification = offload->op == DP_NETDEV_FLOW_OFFLOAD_OP_MOD
                         && flow->mark != INVALID_FLOW_MARK;
     struct offload_info info;
@@ -2850,7 +2850,7 @@ dp_netdev_flow_offload_put(struct dp_offload_thread_item *item)
     info.flow_mark = mark;
     info.orig_in_port = offload->orig_in_port;
 
-    port = netdev_ports_get(in_port, dpif_type_str);
+    port = dpif_netdev_offload_get_netdev_by_port_id(in_port);
     if (!port) {
         goto err_free;
     }
@@ -2858,12 +2858,10 @@ dp_netdev_flow_offload_put(struct dp_offload_thread_item *item)
     /* Taking a global 'port_rwlock' to fulfill thread safety
      * restrictions regarding the netdev port mapping. */
     ovs_rwlock_rdlock(&dp->port_rwlock);
-    ret = netdev_flow_put(port, &offload->match,
-                          CONST_CAST(struct nlattr *, offload->actions),
-                          offload->actions_len, &flow->mega_ufid, &info,
-                          NULL);
+    ret = netdev_offload_dpdk_flow_put(
+        port, &offload->match, CONST_CAST(struct nlattr *, offload->actions),
+        offload->actions_len, &flow->mega_ufid, &info, NULL);
     ovs_rwlock_unlock(&dp->port_rwlock);
-    netdev_close(port);
 
     if (ret) {
         goto err_free;
@@ -3713,8 +3711,8 @@ dpif_netdev_get_flow_offload_status(const struct dp_netdev *dp,
         return false;
     }
 
-    netdev = netdev_ports_get(netdev_flow->flow.in_port.odp_port,
-                              dpif_normalize_type(dp->class->type));
+    netdev = dpif_netdev_offload_get_netdev_by_port_id(
+                        netdev_flow->flow.in_port.odp_port);
     if (!netdev) {
         return false;
     }
@@ -3731,8 +3729,9 @@ dpif_netdev_get_flow_offload_status(const struct dp_netdev *dp,
      *      This workaround might make statistics less accurate. Especially
      *      for flow deletion case, since there will be no other attempt.  */
     if (!ovs_rwlock_tryrdlock(&dp->port_rwlock)) {
-        ret = netdev_flow_get(netdev, &match, &actions,
-                              &netdev_flow->mega_ufid, stats, attrs, &buf);
+        ret = netdev_offload_dpdk_flow_get(netdev, &match, &actions,
+                                           &netdev_flow->mega_ufid, stats,
+                                           attrs, &buf);
         /* Storing statistics and attributes from the last request for
          * later use on mutex contention. */
         dp_netdev_flow_set_last_stats_attrs(netdev_flow, stats, attrs, ret);
@@ -3745,7 +3744,6 @@ dpif_netdev_get_flow_offload_status(const struct dp_netdev *dp,
             ret = EAGAIN;
         }
     }
-    netdev_close(netdev);
     if (ret) {
         return false;
     }

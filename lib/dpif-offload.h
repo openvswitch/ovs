@@ -133,6 +133,8 @@ int dpif_offload_port_dump_done(struct dpif_offload_port_dump *);
 
 
 /* Netdev specific function, which can be used in the fast path. */
+bool dpif_offload_netdev_same_offload(const struct netdev *,
+                                      const struct netdev *);
 int dpif_offload_netdev_flush_flows(struct netdev *);
 int dpif_offload_netdev_hw_post_process(struct netdev *, struct dp_packet *);
 

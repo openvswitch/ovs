@@ -154,18 +154,6 @@ netdev_unregister_flow_api_provider(const char *type)
     return error;
 }
 
-bool
-netdev_flow_api_equals(const struct netdev *netdev1,
-                       const struct netdev *netdev2)
-{
-    const struct netdev_flow_api *netdev_flow_api1 =
-        ovsrcu_get(const struct netdev_flow_api *, &netdev1->flow_api);
-    const struct netdev_flow_api *netdev_flow_api2 =
-        ovsrcu_get(const struct netdev_flow_api *, &netdev2->flow_api);
-
-    return netdev_flow_api1 == netdev_flow_api2;
-}
-
 static int
 netdev_assign_flow_api(struct netdev *netdev)
 {

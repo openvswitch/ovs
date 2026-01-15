@@ -2177,7 +2177,7 @@ netdev_tc_parse_nl_actions(struct netdev *netdev, struct tc_flower *flower,
                 return ENODEV;
             }
 
-            if (!netdev_flow_api_equals(netdev, outdev)) {
+            if (!dpif_offload_netdev_same_offload(netdev, outdev)) {
                 VLOG_DBG_RL(&rl,
                             "Flow API provider mismatch between ingress (%s) "
                             "and egress (%s) ports",
