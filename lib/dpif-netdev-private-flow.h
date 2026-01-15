@@ -89,7 +89,6 @@ struct dp_netdev_flow {
                                  /* 'flow_table'. */
     const struct cmap_node simple_match_node; /* In dp_netdev_pmd_thread's
                                                  'simple_match_table'. */
-    const struct cmap_node mark_node; /* In owning flow_mark's mark_to_flow */
     const ovs_u128 ufid;         /* Unique flow identifier. */
     const ovs_u128 mega_ufid;    /* Unique mega flow identifier. */
     const unsigned pmd_id;       /* The 'core_id' of pmd thread owning this */
@@ -102,17 +101,13 @@ struct dp_netdev_flow {
     struct ovs_refcount ref_cnt;
 
     bool dead;
-    uint32_t mark;               /* Unique flow mark for netdev offloading. */
+    bool offloaded;
+    atomic_int offload_queue_depth;
     uint64_t simple_match_mark;  /* Unique flow mark for the simple match. */
     odp_port_t orig_in_port;
 
     /* Statistics. */
     struct dp_netdev_flow_stats stats;
-
-    /* Statistics and attributes received from the netdev offload provider. */
-    atomic_int netdev_flow_get_result;
-    struct dp_netdev_flow_stats last_stats;
-    struct dp_netdev_flow_attrs last_attrs;
 
     /* Actions. */
     OVSRCU_TYPE(struct dp_netdev_actions *) actions;

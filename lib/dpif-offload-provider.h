@@ -281,10 +281,6 @@ struct dpif_offload_class {
      * reasons.  They are intended for use in fast path processing and should
      * be designed with speed and efficiency in mind. */
 
-    /* Deletes all offloaded flows on this netdev.  Return 0 if successful,
-     * otherwise returns a positive errno value. */
-    int (*netdev_flow_flush)(const struct dpif_offload *, struct netdev *);
-
     /* Recover and/or set the packet state (contents and metadata) for
      * continued processing in software, and/or perform any additional
      * post-processing required by the offload provider.
@@ -292,25 +288,31 @@ struct dpif_offload_class {
      * Return 0 if successful and the packet requires further processing;
      * otherwise, return a positive errno value and take ownership of the
      * packet if errno != EOPNOTSUPP.  Return ECANCELED if the packet was
-     * fully consumed by the provider for non-error conditions. */
+     * fully consumed by the provider for non-error conditions.
+     *
+     * When zero (0) is returned, the 'flow_reference' pointer may reference
+     * the flow_reference passed to the matching flow.  This can be used to
+     * support partial offloads.  The returned pointer must remain valid until
+     * the end of the next RCU grace period. */
     int (*netdev_hw_post_process)(const struct dpif_offload *, struct netdev *,
-                                  struct dp_packet *);
+                                  unsigned pmd_id, struct dp_packet *,
+                                  void **flow_reference);
 
     /* Add or modify the specified flow directly in the offload datapath.
      * The actual implementation may choose to handle the offload
      * asynchronously by returning EINPROGRESS and invoking the supplied
-     * 'callback' once completed.  For successful synchronous handling, the
+     * 'callback' once completed.  If the flow is handled asynchronously, the
+     * order should be guaranteed.  For successful synchronous handling, the
      * callback must not be called, and 0 should be returned.  If this call is
      * not successful, a positive errno value should be returned. */
     int (*netdev_flow_put)(const struct dpif_offload *, struct netdev *,
                            struct dpif_offload_flow_put *,
-                           uint32_t *flow_mark);
+                           void **previous_flow_reference);
 
     /* Delete the specified flow directly from the offloaded datapath.  See the
      * above 'netdev_flow_put' for implementation details. */
     int (*netdev_flow_del)(const struct dpif_offload *, struct netdev *,
-                           struct dpif_offload_flow_del *,
-                           uint32_t *flow_mark);
+                           struct dpif_offload_flow_del *);
 
     /* Get offload statistics based on the flows 'ufid'.  Note that this API
      * does NOT support asynchronous handling.  Returns 'true' if the flow was
@@ -320,6 +322,12 @@ struct dpif_offload_class {
                               const ovs_u128 *ufid,
                               struct dpif_flow_stats *stats,
                               struct dpif_flow_attrs *attrs);
+
+    /* Registers a callback that is invoked when a flow reference is released
+     * by the offload provider, i.e., when the flow reference previously passed
+     * to netdev_flow_put() is no longer held by the offload provider. */
+    void (*register_flow_unreference_cb)(const struct dpif_offload *,
+                                         dpif_offload_flow_unreference_cb *);
 };
 
 extern struct dpif_offload_class dpif_offload_dummy_class;
