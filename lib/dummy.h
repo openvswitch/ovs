@@ -20,6 +20,9 @@
 #include <stdbool.h>
 
 struct netdev_class;
+struct dp_packet;
+struct netdev;
+struct flow;
 
 /* Degree of dummy support.
  *
@@ -41,5 +44,8 @@ void netdev_dummy_register(enum dummy_level);
 void timeval_dummy_register(void);
 void ofpact_dummy_enable(void);
 bool is_dummy_netdev_class(const struct netdev_class *);
+void dpif_offload_dummy_netdev_simulate_offload(struct netdev *,
+                                                struct dp_packet *,
+                                                struct flow *);
 
 #endif /* dummy.h */

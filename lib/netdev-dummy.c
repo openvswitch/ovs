@@ -1887,7 +1887,7 @@ netdev_dummy_queue_packet__(struct netdev_rxq_dummy *rx, struct dp_packet *packe
 
 static void
 netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct dp_packet *packet,
-                          struct flow *flow OVS_UNUSED, int queue_id)
+                          struct flow *flow, int queue_id)
     OVS_REQUIRES(dummy->mutex)
 {
     struct netdev_rxq_dummy *rx, *prev;
@@ -1895,6 +1895,8 @@ netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct dp_packet *packet,
     if (dummy->rxq_pcap) {
         ovs_pcap_write(dummy->rxq_pcap, packet);
     }
+
+    dpif_offload_dummy_netdev_simulate_offload(&dummy->up, packet, flow);
 
     prev = NULL;
     LIST_FOR_EACH (rx, node, &dummy->rxes) {

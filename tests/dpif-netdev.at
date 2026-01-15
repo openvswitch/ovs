@@ -37,15 +37,17 @@ filter_flow_install () {
 }
 
 filter_hw_flow_install () {
-    grep 'netdev_dummy.*flow put\[create\]' | sed 's/.*|DBG|//' | sort | uniq
+    grep 'dpif_offload_dummy.*flow put\[create\]' | sed 's/.*|DBG|//' | sort \
+        | uniq
 }
 
 filter_hw_flow_del () {
-    grep 'netdev_dummy.*flow del' | sed 's/.*|DBG|//' | sort | uniq
+    grep 'dpif_offload_dummy.*flow del' | sed 's/.*|DBG|//' | sort | uniq
 }
 
 filter_hw_packet_netdev_dummy () {
-    grep 'netdev_dummy.*: packet:.*with mark' | sed 's/.*|DBG|//' | sort | uniq
+    grep 'dpif_offload_dummy.*: packet:.*with mark' | sed 's/.*|DBG|//' \
+        | sort | uniq
 }
 
 filter_flow_dump () {
@@ -411,7 +413,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD],
       set bridge br0 datapath-type=dummy \
                      other-config:datapath-id=1234 fail-mode=secure], [], [],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
-   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg netdev_dummy:file:dbg])
+   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg dpif_offload_dummy:file:dbg])
 
    AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
    OVS_WAIT_UNTIL([grep "Flow HW offload is enabled" ovs-vswitchd.log])
@@ -459,14 +461,17 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), p
    AT_CHECK([filter_hw_flow_del < ovs-vswitchd.log | strip_xout], [0], [dnl
 p1: flow del: mark: 1
 ])
+
+   # Check if partial hw offload was hit in dpif-netdev.
+   m4_if([$1], [dummy-pmd],
+         [AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show \
+                    | grep -q "PHWOL hits:                  1"])])
+
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
 
-# XXX: Remove these tests for now as we do not have a dummy implementation
-#      to add flows. See netdev_offload_dummy. We will fix and re-add later.
-# DPIF_NETDEV_FLOW_HW_OFFLOAD([dummy])
-# DPIF_NETDEV_FLOW_HW_OFFLOAD([dummy-pmd])
-
+DPIF_NETDEV_FLOW_HW_OFFLOAD([dummy])
+DPIF_NETDEV_FLOW_HW_OFFLOAD([dummy-pmd])
 
 m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS],
   [AT_SETUP([dpif-netdev - partial hw offload with packet modifications - $1])
@@ -476,7 +481,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS],
       set bridge br0 datapath-type=dummy \
                      other-config:datapath-id=1234 fail-mode=secure], [], [],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
-   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg netdev_dummy:file:dbg])
+   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg dpif_offload_dummy:file:dbg])
 
    AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
    OVS_WAIT_UNTIL([grep "Flow HW offload is enabled" ovs-vswitchd.log])
@@ -539,13 +544,16 @@ udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:
 udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=192.168.0.7,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=81,tp_dst=3773
 ])
 
+   # Check if partial hw offload was hit in dpif-netdev.
+   m4_if([$1], [dummy-pmd],
+         [AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show \
+                    | grep -q "PHWOL hits:                  1"])])
+
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
 
-# XXX: Remove these tests for now as we do not have a dummy implementation
-#      to add flows. See netdev_offload_dummy. We will fix and re-add later.
-# DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS([dummy])
-# DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS([dummy-pmd])
+DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS([dummy])
+DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS([dummy-pmd])
 
 m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP],
   [AT_SETUP([dpif-netdev - partial hw offload with arp vlan id packet modifications - $1])
@@ -555,7 +563,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP],
       set bridge br0 datapath-type=dummy \
                      other-config:datapath-id=1234 fail-mode=secure], [], [],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
-   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg netdev_dummy:file:dbg])
+   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg dpif_offload_dummy:file:dbg])
 
    AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
    OVS_WAIT_UNTIL([grep "Flow HW offload is enabled" ovs-vswitchd.log])
@@ -618,13 +626,16 @@ arp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:
 arp,in_port=ANY,dl_vlan=11,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,arp_spa=127.0.0.1,arp_tpa=127.0.0.1,arp_op=1,arp_sha=00:0b:0c:0d:0e:0f,arp_tha=00:00:00:00:00:00
 ])
 
+   # Check if partial hw offload was hit in dpif-netdev.
+   m4_if([$1], [dummy-pmd],
+         [AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show \
+                    | grep -q "PHWOL hits:                  1"])])
+
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
 
-# XXX: Remove these tests for now as we do not have a dummy implementation
-#      to add flows. See netdev_offload_dummy. We will fix and re-add later.
-# DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy])
-# DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy-pmd])
+DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy])
+DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy-pmd])
 
 AT_SETUP([dpif-netdev - check dpctl/add-flow in_port exact match])
 OVS_VSWITCHD_START(
