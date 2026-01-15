@@ -99,10 +99,12 @@ struct netdev {
     struct shash_node *node;            /* Pointer to element in global map. */
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 
-    /* Functions to control flow offloading. */
+    /* The type of dpif this netdev is associated with.  This is set once
+     * when the netdev is added to a specific dpif. */
+    const char *dpif_type;
+
+    /* Data used for controlling flow offloading via dpif-offload. */
     OVSRCU_TYPE(const struct dpif_offload *) dpif_offload;
-    OVSRCU_TYPE(const struct netdev_flow_api *) flow_api;
-    const char *dpif_type;          /* Type of dpif this netdev belongs to. */
     struct netdev_hw_info hw_info;  /* Offload-capable netdev info. */
 };
 

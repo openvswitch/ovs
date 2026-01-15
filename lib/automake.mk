@@ -212,7 +212,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/netdev-dummy.c \
 	lib/netdev-offload.c \
 	lib/netdev-offload.h \
-	lib/netdev-offload-provider.h \
 	lib/netdev-provider.h \
 	lib/netdev-vport.c \
 	lib/netdev-vport.h \

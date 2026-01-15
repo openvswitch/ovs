@@ -19,7 +19,7 @@
 
 /* Forward declarations of private structures. */
 struct netdev;
-struct offload_info;
+struct dpif_netdev_offload_info;
 
 /* Netdev-specific offload functions.  These should only be used by the
  * associated dpif offload provider. */
@@ -32,7 +32,8 @@ int netdev_offload_dpdk_hw_miss_packet_recover(struct netdev *,
 #ifdef DPDK_NETDEV
 int netdev_offload_dpdk_flow_put(struct netdev *, struct match *,
                                  struct nlattr *actions, size_t actions_len,
-                                 const ovs_u128 *ufid, struct offload_info *,
+                                 const ovs_u128 *ufid,
+                                 struct dpif_netdev_offload_info *,
                                  struct dpif_flow_stats *);
 int netdev_offload_dpdk_flow_del(struct netdev *, const ovs_u128 *ufid,
                                  struct dpif_flow_stats *);
@@ -47,7 +48,7 @@ netdev_offload_dpdk_flow_put(struct netdev *netdev OVS_UNUSED,
                               struct nlattr *actions OVS_UNUSED,
                               size_t actions_len OVS_UNUSED,
                               const ovs_u128 *ufid OVS_UNUSED,
-                              struct offload_info *info OVS_UNUSED,
+                              struct dpif_netdev_offload_info *info OVS_UNUSED,
                               struct dpif_flow_stats *stats OVS_UNUSED)
 {
     return EOPNOTSUPP;

@@ -2311,7 +2311,7 @@ netdev_offload_dpdk_add_flow(struct netdev *netdev,
                              struct nlattr *nl_actions,
                              size_t actions_len,
                              const ovs_u128 *ufid,
-                             struct offload_info *info)
+                             struct dpif_netdev_offload_info *info)
 {
     struct flow_patterns patterns = {
         .items = NULL,
@@ -2428,7 +2428,8 @@ get_netdev_odp_cb(struct netdev *netdev,
 int
 netdev_offload_dpdk_flow_put(struct netdev *netdev, struct match *match,
                              struct nlattr *actions, size_t actions_len,
-                             const ovs_u128 *ufid, struct offload_info *info,
+                             const ovs_u128 *ufid,
+                             struct dpif_netdev_offload_info *info,
                              struct dpif_flow_stats *stats)
 {
     struct ufid_to_rte_flow_data *rte_flow_data;

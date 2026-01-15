@@ -40,7 +40,6 @@
 #include "fatal-signal.h"
 #include "hash.h"
 #include "openvswitch/list.h"
-#include "netdev-offload-provider.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-netlink.h"
@@ -431,7 +430,6 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 netdev->reconfigure_seq = seq_create();
                 netdev->last_reconfigure_seq =
                     seq_read(netdev->reconfigure_seq);
-                ovsrcu_set(&netdev->flow_api, NULL);
                 netdev->hw_info.oor = false;
                 atomic_init(&netdev->hw_info.post_process_api_supported,
                             false);
@@ -583,8 +581,6 @@ netdev_unref(struct netdev *dev)
     if (!--dev->ref_cnt) {
         const struct netdev_class *class = dev->netdev_class;
         struct netdev_registered_class *rc;
-
-        netdev_uninit_flow_api(dev);
 
         dev->netdev_class->destruct(dev);
 

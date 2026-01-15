@@ -24,7 +24,6 @@
 #include "dp-packet.h"
 #include "dpif-netdev.h"
 #include "flow.h"
-#include "netdev-offload-provider.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-util.h"

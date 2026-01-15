@@ -2405,7 +2405,6 @@ do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
      * offload modification or deletion. Managing those stray requests
      * is done in the offload threads. */
     dp_netdev_offload_flush(dp, port);
-    netdev_uninit_flow_api(port->netdev);
 
     port_destroy(port);
 }
@@ -2814,7 +2813,7 @@ dp_netdev_flow_offload_put(struct dp_offload_thread_item *item)
     odp_port_t in_port = flow->flow.in_port.odp_port;
     bool modification = offload->op == DP_NETDEV_FLOW_OFFLOAD_OP_MOD
                         && flow->mark != INVALID_FLOW_MARK;
-    struct offload_info info;
+    struct dpif_netdev_offload_info info;
     struct netdev *port;
     uint32_t mark;
     int ret;

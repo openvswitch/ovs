@@ -38,6 +38,18 @@ bool dpif_is_netdev(const struct dpif *);
 #define NR_QUEUE   1
 #define NR_PMD_THREADS 1
 
+/* Flow offloading info structure. XXX: This needs to be moved once the
+ * implementation is migrated to dpif-offload-dpdk. */
+struct dpif_netdev_offload_info {
+    /*
+     * The flow mark id assigned to the flow. If any pkts hit the flow,
+     * it will be in the pkt meta data.
+     */
+    uint32_t flow_mark;
+
+    odp_port_t orig_in_port; /* Originating in_port for tnl flows. */
+};
+
 #ifdef  __cplusplus
 }
 #endif

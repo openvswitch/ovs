@@ -1765,7 +1765,7 @@ check_support(struct dpif_backer *backer)
 /* TC does not support offloading the explicit drop action. As such we need to
  * re-probe the datapath if hw-offload has been modified.
  * Note: We don't support true --> false transition as that requires a restart.
- * See netdev_set_flow_api_enabled(). */
+ * See dpif_offload_set_global_cfg(). */
 static bool
 recheck_support_explicit_drop_action(struct dpif_backer *backer)
 {
