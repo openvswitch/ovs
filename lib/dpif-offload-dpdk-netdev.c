@@ -27,7 +27,6 @@
 #include "dpif-netdev.h"
 #include "dpif-offload.h"
 #include "dpif-offload-dpdk-private.h"
-#include "netdev-offload-dpdk.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-util.h"

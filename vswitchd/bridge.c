@@ -39,7 +39,6 @@
 #include "mac-learning.h"
 #include "mcast-snooping.h"
 #include "netdev.h"
-#include "netdev-offload.h"
 #include "nx-match.h"
 #include "odp-execute.h"
 #include "ofproto/bond.h"

@@ -2461,3 +2461,53 @@ netdev_get_block_id(struct netdev *netdev)
             ? class->get_block_id(netdev)
             : 0);
 }
+
+/*
+ * Get the value of the hw info parameter specified by type.
+ * Returns the value on success (>= 0).  Returns -1 on failure.
+ */
+int
+netdev_get_hw_info(struct netdev *netdev, int type)
+{
+    int val = -1;
+
+    switch (type) {
+    case HW_INFO_TYPE_OOR:
+        val = netdev->hw_info.oor;
+        break;
+    case HW_INFO_TYPE_PEND_COUNT:
+        val = netdev->hw_info.pending_count;
+        break;
+    case HW_INFO_TYPE_OFFL_COUNT:
+        val = netdev->hw_info.offload_count;
+        break;
+    default:
+        break;
+    }
+
+    return val;
+}
+
+/*
+ * Set the value of the hw info parameter specified by type.
+ */
+void
+netdev_set_hw_info(struct netdev *netdev, int type, int val)
+{
+    switch (type) {
+    case HW_INFO_TYPE_OOR:
+        if (val == 0) {
+            VLOG_DBG("Offload rebalance: netdev: %s is not OOR", netdev->name);
+        }
+        netdev->hw_info.oor = val;
+        break;
+    case HW_INFO_TYPE_PEND_COUNT:
+        netdev->hw_info.pending_count = val;
+        break;
+    case HW_INFO_TYPE_OFFL_COUNT:
+        netdev->hw_info.offload_count = val;
+        break;
+    default:
+        break;
+    }
+}

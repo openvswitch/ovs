@@ -2977,7 +2977,7 @@ csum_update_flag(struct tc_flower *flower,
      * is ICMPv6 and tcp checksum if its tcp.
      *
      * This section of the code must be kept in sync with the pre-check
-     * function in netdev-offload-tc.c, tc_will_add_l4_checksum(). */
+     * function in dpif-offload-tc-netdev.c, tc_will_add_l4_checksum(). */
 
     switch (htype) {
     case TCA_PEDIT_KEY_EX_HDR_TYPE_IP4:

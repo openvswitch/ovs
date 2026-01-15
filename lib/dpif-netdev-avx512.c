@@ -30,7 +30,6 @@
 
 #include "dp-packet.h"
 #include "netdev.h"
-#include "netdev-offload.h"
 
 /* Each AVX512 register (zmm register in assembly notation) can contain up to
  * 512 bits, which is equivalent to 8 uint64_t variables. This is the maximum

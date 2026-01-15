@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef NETDEV_OFFLOAD_TC_H
-#define NETDEV_OFFLOAD_TC_H
+#ifndef DPIF_OFFLOAD_TC_PRIVATE_H
+#define DPIF_OFFLOAD_TC_PRIVATE_H
 
 /* Forward declarations of private structures. */
 struct dpif_offload;
@@ -70,4 +70,4 @@ uint64_t dpif_offload_tc_flow_count(const struct dpif_offload *);
 odp_port_t dpif_offload_tc_get_port_id_by_ifindex(const struct dpif_offload *,
                                                   int ifindex);
 
-#endif /* NETDEV_OFFLOAD_TC_H */
+#endif /* DPIF_OFFLOAD_TC_PRIVATE_H */

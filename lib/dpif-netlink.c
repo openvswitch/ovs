@@ -39,7 +39,6 @@
 #include "fat-rwlock.h"
 #include "flow.h"
 #include "netdev-linux.h"
-#include "netdev-offload.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netdev.h"

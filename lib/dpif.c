@@ -30,7 +30,6 @@
 #include "dpif-offload.h"
 #include "dpif-offload-provider.h"
 #include "flow.h"
-#include "netdev-offload.h"
 #include "netdev-provider.h"
 #include "netdev.h"
 #include "netlink.h"

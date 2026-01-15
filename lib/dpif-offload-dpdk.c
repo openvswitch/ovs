@@ -23,7 +23,6 @@
 #include "id-fpool.h"
 #include "mov-avg.h"
 #include "mpsc-queue.h"
-#include "netdev-offload-dpdk.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "util.h"

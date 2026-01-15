@@ -19,8 +19,7 @@
 
 #include "dpif-offload.h"
 #include "dpif-offload-provider.h"
-#include "netdev-offload.h"
-#include "netdev-offload-tc.h"
+#include "dpif-offload-tc-private.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-util.h"

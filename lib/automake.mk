@@ -210,8 +210,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/namemap.c \
 	lib/netdev-dpdk.h \
 	lib/netdev-dummy.c \
-	lib/netdev-offload.c \
-	lib/netdev-offload.h \
 	lib/netdev-provider.h \
 	lib/netdev-vport.c \
 	lib/netdev-vport.h \
@@ -475,12 +473,12 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/dpif-netlink-rtnl.c \
 	lib/dpif-netlink-rtnl.h \
 	lib/dpif-offload-tc.c \
+	lib/dpif-offload-tc-netdev.c \
+	lib/dpif-offload-tc-private.h \
 	lib/if-notifier.c \
 	lib/netdev-linux.c \
 	lib/netdev-linux.h \
 	lib/netdev-linux-private.h \
-	lib/netdev-offload-tc.c \
-	lib/netdev-offload-tc.h \
 	lib/netlink-conntrack.c \
 	lib/netlink-conntrack.h \
 	lib/netlink-notifier.c \
@@ -508,10 +506,9 @@ if DPDK_NETDEV
 lib_libopenvswitch_la_SOURCES += \
 	lib/dpdk.c \
 	lib/dpif-offload-dpdk.c \
+	lib/dpif-offload-dpdk-netdev.c \
 	lib/dpif-offload-dpdk-private.h \
-	lib/netdev-dpdk.c \
-	lib/netdev-offload-dpdk.c \
-	lib/netdev-offload-dpdk.h
+	lib/netdev-dpdk.c
 else
 lib_libopenvswitch_la_SOURCES += \
 	lib/dpdk-stub.c

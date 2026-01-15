@@ -31,7 +31,6 @@
 #include "openvswitch/util.h"
 #include "openvswitch/vlog.h"
 #include "netdev-linux.h"
-#include "netdev-offload-tc.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netlink.h"
@@ -42,6 +41,7 @@
 #include "unaligned.h"
 #include "util.h"
 #include "dpif-offload.h"
+#include "dpif-offload-tc-private.h"
 #include "dpif-provider.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_offload_tc);
