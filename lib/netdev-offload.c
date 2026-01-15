@@ -58,18 +58,6 @@
 
 VLOG_DEFINE_THIS_MODULE(netdev_offload);
 
-/* XXX: Temporarily duplicates definition in dpif-offload-dpdk.c. */
-#define MAX_OFFLOAD_THREAD_NB 10
-#define DEFAULT_OFFLOAD_THREAD_NB 1
-static unsigned int offload_thread_nb = DEFAULT_OFFLOAD_THREAD_NB;
-
-unsigned int dpif_offload_dpdk_get_thread_nb(void); /* XXX: Temporarily
-                                                     * external declaration
-                                                     * until fully refactored.
-                                                     */
-
-DEFINE_EXTERN_PER_THREAD_DATA(netdev_offload_thread_id, OVSTHREAD_ID_UNSET);
-
 /* Protects 'netdev_flow_apis'.  */
 static struct ovs_mutex netdev_flow_api_provider_mutex = OVS_MUTEX_INITIALIZER;
 
@@ -385,64 +373,6 @@ netdev_any_oor(void)
     return oor;
 }
 
-unsigned int
-netdev_offload_thread_nb(void)
-{
-    return offload_thread_nb;
-}
-
-unsigned int
-netdev_offload_ufid_to_thread_id(const ovs_u128 ufid)
-{
-    uint32_t ufid_hash;
-
-    if (netdev_offload_thread_nb() == 1) {
-        return 0;
-    }
-
-    ufid_hash = hash_words64_inline(
-            (const uint64_t [2]){ ufid.u64.lo,
-                                  ufid.u64.hi }, 2, 1);
-    return ufid_hash % netdev_offload_thread_nb();
-}
-
-unsigned int
-netdev_offload_thread_init(void)
-{
-    static atomic_count next_id = ATOMIC_COUNT_INIT(0);
-    bool thread_is_hw_offload;
-    bool thread_is_rcu;
-
-    thread_is_hw_offload = !strncmp(get_subprogram_name(),
-                                    "hw_offload", strlen("hw_offload"));
-    thread_is_rcu = !strncmp(get_subprogram_name(), "urcu", strlen("urcu"));
-
-    /* Panic if any other thread besides offload and RCU tries
-     * to initialize their thread ID. */
-    ovs_assert(thread_is_hw_offload || thread_is_rcu);
-
-    if (*netdev_offload_thread_id_get() == OVSTHREAD_ID_UNSET) {
-        unsigned int id;
-
-        if (thread_is_rcu) {
-            /* RCU will compete with other threads for shared object access.
-             * Reclamation functions using a thread ID must be thread-safe.
-             * For that end, and because RCU must consider all potential shared
-             * objects anyway, its thread-id can be whichever, so return 0.
-             */
-            id = 0;
-        } else {
-            /* Only the actual offload threads have their own ID. */
-            id = atomic_count_inc(&next_id);
-        }
-        /* Panic if any offload thread is getting a spurious ID. */
-        ovs_assert(id < netdev_offload_thread_nb());
-        return *netdev_offload_thread_id_get() = id;
-    } else {
-        return *netdev_offload_thread_id_get();
-    }
-}
-
 void
 netdev_ports_traverse(const char *dpif_type,
                       bool (*cb)(struct netdev *, odp_port_t, void *),
@@ -639,11 +569,6 @@ netdev_set_flow_api_enabled(const struct smap *ovs_other_config OVS_UNUSED)
         static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
         if (ovsthread_once_start(&once)) {
-
-#ifdef DPDK_NETDEV
-            offload_thread_nb = dpif_offload_dpdk_get_thread_nb();
-#endif
-
             netdev_ports_flow_init();
             ovsthread_once_done(&once);
         }

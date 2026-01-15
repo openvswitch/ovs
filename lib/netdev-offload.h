@@ -76,24 +76,6 @@ struct offload_info {
     odp_port_t orig_in_port; /* Originating in_port for tnl flows. */
 };
 
-DECLARE_EXTERN_PER_THREAD_DATA(unsigned int, netdev_offload_thread_id);
-
-unsigned int netdev_offload_thread_nb(void);
-unsigned int netdev_offload_thread_init(void);
-unsigned int netdev_offload_ufid_to_thread_id(const ovs_u128 ufid);
-
-static inline unsigned int
-netdev_offload_thread_id(void)
-{
-    unsigned int id = *netdev_offload_thread_id_get();
-
-    if (OVS_UNLIKELY(id == OVSTHREAD_ID_UNSET)) {
-        id = netdev_offload_thread_init();
-    }
-
-    return id;
-}
-
 int netdev_flow_put(struct netdev *, struct match *, struct nlattr *actions,
                     size_t actions_len, const ovs_u128 *,
                     struct offload_info *, struct dpif_flow_stats *);

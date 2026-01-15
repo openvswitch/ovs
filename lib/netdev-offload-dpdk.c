@@ -39,6 +39,10 @@
 VLOG_DEFINE_THIS_MODULE(netdev_offload_dpdk);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
+/* XXX: Temporarily external declarations, will be removed during cleanup. */
+unsigned int dpdk_offload_thread_nb(void);
+unsigned int dpdk_offload_thread_id(void);
+
 /* Thread-safety
  * =============
  *
@@ -84,7 +88,7 @@ offload_data_init(struct netdev *netdev)
     data = xzalloc(sizeof *data);
     ovs_mutex_init(&data->map_lock);
     cmap_init(&data->ufid_to_rte_flow);
-    data->rte_flow_counters = xcalloc(netdev_offload_thread_nb(),
+    data->rte_flow_counters = xcalloc(dpdk_offload_thread_nb(),
                                       sizeof *data->rte_flow_counters);
 
     ovsrcu_set(&netdev->hw_info.offload_data, (void *) data);
@@ -245,7 +249,7 @@ ufid_to_rte_flow_associate(const ovs_u128 *ufid, struct netdev *netdev,
     data->physdev = netdev != physdev ? netdev_ref(physdev) : physdev;
     data->rte_flow = rte_flow;
     data->actions_offloaded = actions_offloaded;
-    data->creation_tid = netdev_offload_thread_id();
+    data->creation_tid = dpdk_offload_thread_id();
     ovs_mutex_init(&data->lock);
 
     cmap_insert(map, CONST_CAST(struct cmap_node *, &data->node), hash);
@@ -927,7 +931,7 @@ netdev_offload_dpdk_flow_create(struct netdev *netdev,
     flow = netdev_dpdk_rte_flow_create(netdev, attr, items, actions, error);
     if (flow) {
         struct netdev_offload_dpdk_data *data;
-        unsigned int tid = netdev_offload_thread_id();
+        unsigned int tid = dpdk_offload_thread_id();
 
         data = (struct netdev_offload_dpdk_data *)
             ovsrcu_get(void *, &netdev->hw_info.offload_data);
@@ -2376,7 +2380,7 @@ netdev_offload_dpdk_flow_destroy(struct ufid_to_rte_flow_data *rte_flow_data)
 
     if (ret == 0) {
         struct netdev_offload_dpdk_data *data;
-        unsigned int tid = netdev_offload_thread_id();
+        unsigned int tid = dpdk_offload_thread_id();
 
         data = (struct netdev_offload_dpdk_data *)
             ovsrcu_get(void *, &physdev->hw_info.offload_data);
@@ -2577,7 +2581,7 @@ out:
 static void
 flush_netdev_flows_in_related(struct netdev *netdev, struct netdev *related)
 {
-    unsigned int tid = netdev_offload_thread_id();
+    unsigned int tid = dpdk_offload_thread_id();
     struct cmap *map = offload_data_map(related);
     struct ufid_to_rte_flow_data *data;
 
@@ -2789,7 +2793,7 @@ netdev_offload_dpdk_flow_count(struct netdev *netdev)
         return 0;
     }
 
-    for (tid = 0; tid < netdev_offload_thread_nb(); tid++) {
+    for (tid = 0; tid < dpdk_offload_thread_nb(); tid++) {
         total += data->rte_flow_counters[tid];
     }
 

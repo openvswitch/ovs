@@ -154,6 +154,9 @@ dpif_offload_dpdk_close(struct dpif_offload *offload_)
     free(offload);
 }
 
+/* XXX: External reference, will be removed after full integration. */
+void dpdk_offload_thread_set_thread_nb(unsigned int thread_nb);
+
 static void
 dpif_offload_dpdk_set_config(struct dpif_offload *offload_,
                              const struct smap *other_cfg)
@@ -179,6 +182,8 @@ dpif_offload_dpdk_set_config(struct dpif_offload *offload_,
                           offload_thread_nb,
                           offload_thread_nb > 1 ? "s" : "");
             }
+
+            dpdk_offload_thread_set_thread_nb(offload_thread_nb);
 
             DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
                 dpif_offload_dpdk_enable_offload(offload_, port);
@@ -287,11 +292,3 @@ struct dpif_offload_class dpif_offload_dpdk_class = {
     .netdev_flow_flush = dpif_offload_dpdk_netdev_flow_flush,
     .netdev_hw_post_process = dpif_offload_dpdk_netdev_hw_post_process,
 };
-
-/* XXX: Temporary functions below, which will be removed once fully
- *      refactored. */
-unsigned int dpif_offload_dpdk_get_thread_nb(void);
-unsigned int dpif_offload_dpdk_get_thread_nb(void)
-{
-    return offload_thread_nb;
-}

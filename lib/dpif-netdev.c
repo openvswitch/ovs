@@ -410,11 +410,18 @@ struct dp_offload_thread {
 static struct dp_offload_thread *dp_offload_threads;
 static void *dp_netdev_flow_offload_main(void *arg);
 
+/* XXX: Temporarily forward declarations, will be removed during cleanup. */
+static unsigned int dpdk_offload_ufid_to_thread_id(const ovs_u128 ufid);
+static unsigned int dpdk_offload_thread_init(void);
+void dpdk_offload_thread_set_thread_nb(unsigned int thread_nb);
+unsigned int dpdk_offload_thread_nb(void);
+unsigned int dpdk_offload_thread_id(void);
+
 static void
 dp_netdev_offload_init(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-    unsigned int nb_offload_thread = netdev_offload_thread_nb();
+    unsigned int nb_offload_thread = dpdk_offload_thread_nb();
     unsigned int tid;
 
     if (!ovsthread_once_start(&once)) {
@@ -434,7 +441,7 @@ dp_netdev_offload_init(void)
         atomic_init(&thread->enqueued_item, 0);
         mov_avg_cma_init(&thread->cma);
         mov_avg_ema_init(&thread->ema, 100);
-        ovs_thread_create("hw_offload", dp_netdev_flow_offload_main, thread);
+        ovs_thread_create("dpdk_offload", dp_netdev_flow_offload_main, thread);
     }
 
     ovsthread_once_done(&once);
@@ -2514,12 +2521,12 @@ static uint32_t
 flow_mark_alloc(void)
 {
     static struct ovsthread_once init_once = OVSTHREAD_ONCE_INITIALIZER;
-    unsigned int tid = netdev_offload_thread_id();
+    unsigned int tid = dpdk_offload_thread_id();
     uint32_t mark;
 
     if (ovsthread_once_start(&init_once)) {
         /* Haven't initiated yet, do it here */
-        flow_mark_pool = id_fpool_create(netdev_offload_thread_nb(),
+        flow_mark_pool = id_fpool_create(dpdk_offload_thread_nb(),
                                          1, MAX_FLOW_MARK);
         ovsthread_once_done(&init_once);
     }
@@ -2534,7 +2541,7 @@ flow_mark_alloc(void)
 static void
 flow_mark_free(uint32_t mark)
 {
-    unsigned int tid = netdev_offload_thread_id();
+    unsigned int tid = dpdk_offload_thread_id();
 
     id_fpool_free_id(flow_mark_pool, tid, mark);
 }
@@ -2545,7 +2552,7 @@ megaflow_to_mark_associate(const ovs_u128 *mega_ufid, uint32_t mark)
 {
     size_t hash = dp_netdev_flow_hash(mega_ufid);
     struct megaflow_to_mark_data *data = xzalloc(sizeof(*data));
-    unsigned int tid = netdev_offload_thread_id();
+    unsigned int tid = dpdk_offload_thread_id();
 
     data->mega_ufid = *mega_ufid;
     data->mark = mark;
@@ -2560,7 +2567,7 @@ megaflow_to_mark_disassociate(const ovs_u128 *mega_ufid)
 {
     size_t hash = dp_netdev_flow_hash(mega_ufid);
     struct megaflow_to_mark_data *data;
-    unsigned int tid = netdev_offload_thread_id();
+    unsigned int tid = dpdk_offload_thread_id();
 
     CMAP_FOR_EACH_WITH_HASH (data, node, hash,
                              &dp_offload_threads[tid].megaflow_to_mark) {
@@ -2581,7 +2588,7 @@ megaflow_to_mark_find(const ovs_u128 *mega_ufid)
 {
     size_t hash = dp_netdev_flow_hash(mega_ufid);
     struct megaflow_to_mark_data *data;
-    unsigned int tid = netdev_offload_thread_id();
+    unsigned int tid = dpdk_offload_thread_id();
 
     CMAP_FOR_EACH_WITH_HASH (data, node, hash,
                              &dp_offload_threads[tid].megaflow_to_mark) {
@@ -2599,7 +2606,7 @@ megaflow_to_mark_find(const ovs_u128 *mega_ufid)
 static void
 mark_to_flow_associate(const uint32_t mark, struct dp_netdev_flow *flow)
 {
-    unsigned int tid = netdev_offload_thread_id();
+    unsigned int tid = dpdk_offload_thread_id();
     dp_netdev_flow_ref(flow);
 
     cmap_insert(&dp_offload_threads[tid].mark_to_flow,
@@ -2614,7 +2621,7 @@ mark_to_flow_associate(const uint32_t mark, struct dp_netdev_flow *flow)
 static bool
 flow_mark_has_no_ref(uint32_t mark)
 {
-    unsigned int tid = netdev_offload_thread_id();
+    unsigned int tid = dpdk_offload_thread_id();
     struct dp_netdev_flow *flow;
 
     CMAP_FOR_EACH_WITH_HASH (flow, mark_node, hash_int(mark, 0),
@@ -2634,7 +2641,7 @@ mark_to_flow_disassociate(struct dp_netdev *dp,
     const char *dpif_type_str = dpif_normalize_type(dp->class->type);
     struct cmap_node *mark_node = CONST_CAST(struct cmap_node *,
                                              &flow->mark_node);
-    unsigned int tid = netdev_offload_thread_id();
+    unsigned int tid = dpdk_offload_thread_id();
     uint32_t mark = flow->mark;
     int ret = 0;
 
@@ -2690,7 +2697,7 @@ mark_to_flow_find(const struct dp_netdev_pmd_thread *pmd,
     }
 
     hash = hash_int(mark, 0);
-    for (tid = 0; tid < netdev_offload_thread_nb(); tid++) {
+    for (tid = 0; tid < dpdk_offload_thread_nb(); tid++) {
         CMAP_FOR_EACH_WITH_HASH (flow, mark_node, hash,
                                  &dp_offload_threads[tid].mark_to_flow) {
             if (flow->mark == mark && flow->pmd_id == pmd->core_id &&
@@ -2776,7 +2783,7 @@ dp_netdev_offload_flow_enqueue(struct dp_offload_thread_item *item)
 
     ovs_assert(item->type == DP_OFFLOAD_FLOW);
 
-    tid = netdev_offload_ufid_to_thread_id(flow_offload->flow->mega_ufid);
+    tid = dpdk_offload_ufid_to_thread_id(flow_offload->flow->mega_ufid);
     dp_netdev_append_offload(item, tid);
 }
 
@@ -3124,7 +3131,7 @@ dp_netdev_offload_flush_enqueue(struct dp_netdev *dp,
     unsigned int tid;
     long long int now_us = time_usec();
 
-    for (tid = 0; tid < netdev_offload_thread_nb(); tid++) {
+    for (tid = 0; tid < dpdk_offload_thread_nb(); tid++) {
         struct dp_offload_thread_item *item;
         struct dp_offload_flush_item *flush;
 
@@ -3181,7 +3188,7 @@ dp_netdev_offload_flush(struct dp_netdev *dp,
     ovs_mutex_lock(&flush_mutex);
 
     /* This thread and the offload threads. */
-    ovs_barrier_init(&barrier, 1 + netdev_offload_thread_nb());
+    ovs_barrier_init(&barrier, 1 + dpdk_offload_thread_nb());
 
     netdev = netdev_ref(port->netdev);
     dp_netdev_offload_flush_enqueue(dp, netdev, &barrier);
@@ -4771,7 +4778,7 @@ dpif_netdev_offload_stats_get(struct dpif *dpif,
         return EINVAL;
     }
 
-    nb_thread = netdev_offload_thread_nb();
+    nb_thread = dpdk_offload_thread_nb();
     if (!nb_thread) {
         return EINVAL;
     }
@@ -10562,4 +10569,86 @@ dpcls_lookup(struct dpcls *cls, const struct netdev_flow_key *keys[],
         *num_lookups_p = lookups_match;
     }
     return false;
+}
+/* XXX: Temporarily duplicates definition in dpif-offload-dpdk.c. */
+#define DEFAULT_OFFLOAD_THREAD_NB 1
+static unsigned int offload_thread_nb = DEFAULT_OFFLOAD_THREAD_NB;
+
+DECLARE_EXTERN_PER_THREAD_DATA(unsigned int, dpdk_offload_thread_id);
+DEFINE_EXTERN_PER_THREAD_DATA(dpdk_offload_thread_id, OVSTHREAD_ID_UNSET);
+
+unsigned int
+dpdk_offload_thread_id(void)
+{
+    unsigned int id = *dpdk_offload_thread_id_get();
+
+    if (OVS_UNLIKELY(id == OVSTHREAD_ID_UNSET)) {
+        id = dpdk_offload_thread_init();
+    }
+
+    return id;
+}
+
+unsigned int
+dpdk_offload_thread_nb(void)
+{
+    return offload_thread_nb;
+}
+
+void
+dpdk_offload_thread_set_thread_nb(unsigned int thread_nb)
+{
+    offload_thread_nb = thread_nb;
+}
+
+static unsigned int
+dpdk_offload_ufid_to_thread_id(const ovs_u128 ufid)
+{
+    uint32_t ufid_hash;
+
+    if (dpdk_offload_thread_nb() == 1) {
+        return 0;
+    }
+
+    ufid_hash = hash_words64_inline(
+            (const uint64_t [2]){ ufid.u64.lo,
+                                  ufid.u64.hi }, 2, 1);
+    return ufid_hash % dpdk_offload_thread_nb();
+}
+
+static unsigned int
+dpdk_offload_thread_init(void)
+{
+    static atomic_count next_id = ATOMIC_COUNT_INIT(0);
+    bool thread_is_hw_offload;
+    bool thread_is_rcu;
+
+    thread_is_hw_offload = !strncmp(get_subprogram_name(),
+                                    "dpdk_offload", strlen("dpdk_offload"));
+    thread_is_rcu = !strncmp(get_subprogram_name(), "urcu", strlen("urcu"));
+
+    /* Panic if any other thread besides offload and RCU tries
+     * to initialize their thread ID. */
+    ovs_assert(thread_is_hw_offload || thread_is_rcu);
+
+    if (*dpdk_offload_thread_id_get() == OVSTHREAD_ID_UNSET) {
+        unsigned int id;
+
+        if (thread_is_rcu) {
+            /* RCU will compete with other threads for shared object access.
+             * Reclamation functions using a thread ID must be thread-safe.
+             * For that end, and because RCU must consider all potential shared
+             * objects anyway, its thread-id can be whichever, so return 0.
+             */
+            id = 0;
+        } else {
+            /* Only the actual offload threads have their own ID. */
+            id = atomic_count_inc(&next_id);
+        }
+        /* Panic if any offload thread is getting a spurious ID. */
+        ovs_assert(id < dpdk_offload_thread_nb());
+        return *dpdk_offload_thread_id_get() = id;
+    } else {
+        return *dpdk_offload_thread_id_get();
+    }
 }
