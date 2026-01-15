@@ -78,7 +78,14 @@ static int
 dpif_offload_tc_enable_offload(struct dpif_offload *dpif_offload,
                                struct dpif_offload_port_mgr_port *port)
 {
+    int ret = netdev_offload_tc_init(port->netdev);
+    if (ret) {
+        VLOG_WARN("%s: Failed assigning flow API 'tc', error %d",
+                  netdev_get_name(port->netdev), ret);
+        return ret;
+    }
     dpif_offload_set_netdev_offload(port->netdev, dpif_offload);
+    VLOG_INFO("%s: Assigned flow API 'tc'", netdev_get_name(port->netdev));
     return 0;
 }
 
@@ -544,7 +551,7 @@ dpif_offload_tc_parse_flow_put(struct dpif_offload_tc *offload_tc,
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
     struct dpif_offload_port_mgr_port *port;
     const struct nlattr *nla;
-    struct offload_info info;
+    struct tc_offload_info info;
     struct match match;
     odp_port_t in_port;
     size_t left;
@@ -589,7 +596,7 @@ dpif_offload_tc_parse_flow_put(struct dpif_offload_tc *offload_tc,
 
     info.recirc_id_shared_with_tc = offload_tc->recirc_id_shared;
 
-    err = netdev_offload_tc_flow_put(port->netdev, &match,
+    err = netdev_offload_tc_flow_put(dpif, port->netdev, &match,
                                      CONST_CAST(struct nlattr *, put->actions),
                                      put->actions_len,
                                      CONST_CAST(ovs_u128 *, put->ufid),
@@ -765,6 +772,21 @@ dpif_offload_tc_operate(struct dpif *dpif, const struct dpif_offload *offload,
             op->error = error;
         }
     }
+}
+
+odp_port_t
+dpif_offload_tc_get_port_id_by_ifindex(const struct dpif_offload *offload,
+                                       int ifindex)
+{
+    struct dpif_offload_tc *offload_tc = dpif_offload_tc_cast(offload);
+    struct dpif_offload_port_mgr_port *port;
+
+    port = dpif_offload_port_mgr_find_by_ifindex(offload_tc->port_mgr,
+                                                 ifindex);
+    if (port) {
+        return port->port_no;
+    }
+    return ODPP_NONE;
 }
 
 struct dpif_offload_class dpif_offload_tc_class = {

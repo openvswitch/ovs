@@ -258,16 +258,6 @@ netdev_uninit_flow_api(struct netdev *netdev)
     ovs_refcount_unref(&rfa->refcnt);
 }
 
-uint32_t
-netdev_get_block_id(struct netdev *netdev)
-{
-    const struct netdev_class *class = netdev->netdev_class;
-
-    return (class->get_block_id
-            ? class->get_block_id(netdev)
-            : 0);
-}
-
 /*
  * Get the value of the hw info parameter specified by type.
  * Returns the value on success (>= 0). Returns -1 on failure.

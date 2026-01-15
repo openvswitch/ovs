@@ -62,18 +62,12 @@ enum hw_info_type {
 
 /* Flow offloading. */
 struct offload_info {
-    bool recirc_id_shared_with_tc;  /* Indicates whever tc chains will be in
-                                     * sync with datapath recirc ids. */
-
     /*
      * The flow mark id assigned to the flow. If any pkts hit the flow,
      * it will be in the pkt meta data.
      */
     uint32_t flow_mark;
 
-    bool tc_modify_flow; /* Indicates tc modified the flow. */
-    bool tc_modify_flow_deleted; /* Indicate the tc modify flow put success
-                                  * to delete the original flow. */
     odp_port_t orig_in_port; /* Originating in_port for tnl flows. */
 };
 
@@ -87,7 +81,6 @@ int netdev_flow_del(struct netdev *, const ovs_u128 *,
                     struct dpif_flow_stats *);
 int netdev_init_flow_api(struct netdev *);
 void netdev_uninit_flow_api(struct netdev *);
-uint32_t netdev_get_block_id(struct netdev *);
 int netdev_get_hw_info(struct netdev *, int);
 void netdev_set_hw_info(struct netdev *, int, int);
 bool netdev_any_oor(void);

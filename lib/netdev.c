@@ -154,8 +154,6 @@ netdev_initialize(void)
         netdev_register_provider(&netdev_internal_class);
         netdev_register_provider(&netdev_tap_class);
         netdev_vport_tunnel_register();
-
-        netdev_register_flow_api_provider(&netdev_offload_tc);
 #ifdef HAVE_AF_XDP
         netdev_register_provider(&netdev_afxdp_class);
         netdev_register_provider(&netdev_afxdp_nonpmd_class);
@@ -2454,4 +2452,14 @@ netdev_free_custom_stats_counters(struct netdev_custom_stats *custom_stats)
             custom_stats->size = 0;
         }
     }
+}
+
+uint32_t
+netdev_get_block_id(struct netdev *netdev)
+{
+    const struct netdev_class *class = netdev->netdev_class;
+
+    return (class->get_block_id
+            ? class->get_block_id(netdev)
+            : 0);
 }

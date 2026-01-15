@@ -216,6 +216,7 @@ int netdev_set_tx_multiq(struct netdev *, unsigned int n_txq);
 enum netdev_pt_mode netdev_get_pt_mode(const struct netdev *);
 void netdev_set_dpif_type(struct netdev *, const char *);
 const char *netdev_get_dpif_type(const struct netdev *);
+uint32_t netdev_get_block_id(struct netdev *);
 
 /* Packet reception. */
 int netdev_rxq_open(struct netdev *, struct netdev_rxq **, int id);

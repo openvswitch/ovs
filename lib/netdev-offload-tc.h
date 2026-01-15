@@ -29,8 +29,19 @@ struct netdev_tc_flow_dump {
     bool terse;
 };
 
+/* Flow offloading. */
+struct tc_offload_info {
+    bool recirc_id_shared_with_tc;  /* Indicates whether tc chains will be in
+                                     * sync with datapath recirc ids. */
+
+    bool tc_modify_flow; /* Indicates tc modified the flow. */
+    bool tc_modify_flow_deleted; /* Indicate the tc modify flow put success
+                                  * to delete the original flow. */
+};
+
 /* Netdev-specific offload functions.  These should only be used by the
  * associated dpif offload provider. */
+int netdev_offload_tc_init(struct netdev *);
 int tc_flow_flush(struct netdev *);
 int tc_flow_dump_create(struct netdev *, struct netdev_tc_flow_dump **,
                         bool terse);
@@ -39,9 +50,9 @@ bool tc_flow_dump_next(struct netdev_tc_flow_dump *, struct match *,
                        struct nlattr **actions, struct dpif_flow_stats *,
                        struct dpif_flow_attrs *, ovs_u128 *ufid,
                        struct ofpbuf *rbuffer, struct ofpbuf *wbuffer);
-int netdev_offload_tc_flow_put(struct netdev *, struct match *,
+int netdev_offload_tc_flow_put(struct dpif *, struct netdev *, struct match *,
                                struct nlattr *actions, size_t actions_len,
-                               const ovs_u128 *ufid, struct offload_info *,
+                               const ovs_u128 *ufid, struct tc_offload_info *,
                                struct dpif_flow_stats *);
 int netdev_offload_tc_flow_del(const ovs_u128 *ufid, struct dpif_flow_stats *);
 int netdev_offload_tc_flow_get(struct netdev *, struct match *,
@@ -56,5 +67,7 @@ int dpif_offload_tc_meter_get(const struct dpif_offload *, ofproto_meter_id,
 int dpif_offload_tc_meter_del(const struct dpif_offload *, ofproto_meter_id,
                               struct ofputil_meter_stats *);
 uint64_t dpif_offload_tc_flow_count(const struct dpif_offload *);
+odp_port_t dpif_offload_tc_get_port_id_by_ifindex(const struct dpif_offload *,
+                                                  int ifindex);
 
 #endif /* NETDEV_OFFLOAD_TC_H */
