@@ -1467,14 +1467,6 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
     }
 }
 
-int dpif_offload_stats_get(struct dpif *dpif,
-                           struct netdev_custom_stats *stats)
-{
-    return (dpif->dpif_class->offload_stats_get
-            ? dpif->dpif_class->offload_stats_get(dpif, stats)
-            : EOPNOTSUPP);
-}
-
 /* Returns a string that represents 'type', for use in log messages. */
 const char *
 dpif_upcall_type_to_string(enum dpif_upcall_type type)

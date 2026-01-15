@@ -4736,101 +4736,6 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
     }
 }
 
-static int
-dpif_netdev_offload_stats_get(struct dpif *dpif,
-                              struct netdev_custom_stats *stats)
-{
-    enum {
-        DP_NETDEV_HW_OFFLOADS_STATS_ENQUEUED,
-        DP_NETDEV_HW_OFFLOADS_STATS_INSERTED,
-        DP_NETDEV_HW_OFFLOADS_STATS_LAT_CMA_MEAN,
-        DP_NETDEV_HW_OFFLOADS_STATS_LAT_CMA_STDDEV,
-        DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_MEAN,
-        DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_STDDEV,
-    };
-    struct {
-        const char *name;
-        uint64_t total;
-    } hwol_stats[] = {
-        [DP_NETDEV_HW_OFFLOADS_STATS_ENQUEUED] =
-            { "                Enqueued offloads", 0 },
-        [DP_NETDEV_HW_OFFLOADS_STATS_INSERTED] =
-            { "                Inserted offloads", 0 },
-        [DP_NETDEV_HW_OFFLOADS_STATS_LAT_CMA_MEAN] =
-            { "  Cumulative Average latency (us)", 0 },
-        [DP_NETDEV_HW_OFFLOADS_STATS_LAT_CMA_STDDEV] =
-            { "   Cumulative Latency stddev (us)", 0 },
-        [DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_MEAN] =
-            { " Exponential Average latency (us)", 0 },
-        [DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_STDDEV] =
-            { "  Exponential Latency stddev (us)", 0 },
-    };
-
-    unsigned int nb_thread;
-    unsigned int tid;
-    size_t i;
-
-    if (!dpif_offload_enabled()) {
-        return EINVAL;
-    }
-
-    nb_thread = dpdk_offload_thread_nb();
-    if (!nb_thread) {
-        return EINVAL;
-    }
-
-    /* nb_thread counters for the overall total as well. */
-    stats->size = ARRAY_SIZE(hwol_stats) * (nb_thread + 1);
-    stats->counters = xcalloc(stats->size, sizeof *stats->counters);
-
-    for (tid = 0; tid < nb_thread; tid++) {
-        uint64_t counts[ARRAY_SIZE(hwol_stats)];
-        size_t idx = ((tid + 1) * ARRAY_SIZE(hwol_stats));
-
-        memset(counts, 0, sizeof counts);
-        if (dp_offload_threads != NULL) {
-            atomic_read_relaxed(&dp_offload_threads[tid].enqueued_item,
-                                &counts[DP_NETDEV_HW_OFFLOADS_STATS_ENQUEUED]);
-
-            counts[DP_NETDEV_HW_OFFLOADS_STATS_LAT_CMA_MEAN] =
-                mov_avg_cma(&dp_offload_threads[tid].cma);
-            counts[DP_NETDEV_HW_OFFLOADS_STATS_LAT_CMA_STDDEV] =
-                mov_avg_cma_std_dev(&dp_offload_threads[tid].cma);
-
-            counts[DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_MEAN] =
-                mov_avg_ema(&dp_offload_threads[tid].ema);
-            counts[DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_STDDEV] =
-                mov_avg_ema_std_dev(&dp_offload_threads[tid].ema);
-        }
-
-        for (i = 0; i < ARRAY_SIZE(hwol_stats); i++) {
-            snprintf(stats->counters[idx + i].name,
-                     sizeof(stats->counters[idx + i].name),
-                     "  [%3u] %s", tid, hwol_stats[i].name);
-            stats->counters[idx + i].value = counts[i];
-            hwol_stats[i].total += counts[i];
-        }
-    }
-
-    /* Do an average of the average for the aggregate. */
-    hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_LAT_CMA_MEAN].total /= nb_thread;
-    hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_LAT_CMA_STDDEV].total /= nb_thread;
-    hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_MEAN].total /= nb_thread;
-    hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_STDDEV].total /= nb_thread;
-
-    /* Get the total offload count. */
-    hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_INSERTED].total =
-        dpif_offload_flow_count(dpif);
-
-    for (i = 0; i < ARRAY_SIZE(hwol_stats); i++) {
-        snprintf(stats->counters[i].name, sizeof(stats->counters[i].name),
-                 "  Total %s", hwol_stats[i].name);
-        stats->counters[i].value = hwol_stats[i].total;
-    }
-
-    return 0;
-}
-
 /* Enable or Disable PMD auto load balancing. */
 static void
 set_pmd_auto_lb(struct dp_netdev *dp, bool state, bool always_log)
@@ -9993,7 +9898,6 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_flow_dump_thread_destroy,
     dpif_netdev_flow_dump_next,
     dpif_netdev_operate,
-    dpif_netdev_offload_stats_get,
     NULL,                       /* recv_set */
     NULL,                       /* handlers_set */
     dpif_netdev_number_handlers_required,

@@ -367,13 +367,6 @@ struct dpif_class {
      * dpif_op. */
     void (*operate)(struct dpif *dpif, struct dpif_op **ops, size_t n_ops);
 
-    /* Get hardware-offloads activity counters from a dataplane.
-     * Those counters are not offload statistics (which are accessible through
-     * netdev statistics), but a status of hardware offload management:
-     * how many offloads are currently waiting, inserted, etc. */
-    int (*offload_stats_get)(struct dpif *dpif,
-                             struct netdev_custom_stats *stats);
-
     /* Enables or disables receiving packets with dpif_recv() for 'dpif'.
      * Turning packet receive off and then back on is allowed to change Netlink
      * PID assignments (see ->port_get_pid()).  The client is responsible for

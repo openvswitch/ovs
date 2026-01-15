@@ -793,14 +793,6 @@ struct dpif_op {
 void dpif_operate(struct dpif *, struct dpif_op **ops, size_t n_ops,
                   enum dpif_offload_type);
 
-/* Queries the datapath for hardware offloads stats.
- *
- * Statistics are written in 'stats' following the 'netdev_custom_stats'
- * format. They are allocated on the heap and must be freed by the caller,
- * using 'netdev_free_custom_stats_counters'.
- */
-int dpif_offload_stats_get(struct dpif *dpif,
-                           struct netdev_custom_stats *stats);
 
 /* Upcalls. */
 

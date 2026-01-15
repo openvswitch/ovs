@@ -10261,6 +10261,22 @@ AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - offload - ovs-appctl dpctl/offload-stats-show])
+AT_KEYWORDS([dpif-offload])
+OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy], [], [],
+  [], [-- set Open_vSwitch . other_config:hw-offload=true])
+
+AT_CHECK([ovs-appctl dpctl/offload-stats-show], [0], [dnl
+HW Offload stats:
+  dummy[[dummy@ovs-dummy]]:
+    Offloaded port count:      3
+  dummy_x[[dummy@ovs-dummy]]:
+    Offloaded port count:      0
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl ----------------------------------------------------------------------
 AT_BANNER([ofproto-dpif -- megaflows])
 

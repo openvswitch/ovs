@@ -132,6 +132,18 @@ int dpif_offload_port_dump_done(struct dpif_offload_port_dump *);
           : (dpif_offload_port_dump_done(DUMP), false));           \
         )
 
+/* Queries the datapath for hardware offload stats.
+ *
+ * On success, '*stats' will point to a heap-allocated array of
+ * 'netdev_custom_stats' structures, and '*n_stats' will be set to the
+ * number of statistics returned.
+ *
+ * The caller is responsible for freeing the memory using
+ * 'netdev_free_custom_stats_counters()' on each 'stats' object, and
+ * call free() on 'stats'. */
+int dpif_offload_stats_get(struct dpif *, struct netdev_custom_stats **stats,
+                           size_t *n_stats);
+
 
 /* Netdev specific function, which can be used in the fast path. */
 bool dpif_offload_netdev_same_offload(const struct netdev *,

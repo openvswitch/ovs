@@ -130,6 +130,14 @@ struct dpif_offload_class {
     void (*get_debug)(const struct dpif_offload *offload, struct ds *ds,
                       struct json *json);
 
+    /* Get hardware offload activity counters from the data plane.
+     * These counters are not interface offload statistics, but rather a status
+     * report of hardware offload management: how many offloads are currently
+     * waiting, inserted, etc.  If this function returns an error, the 'stats'
+     * structure should not be touched, that is, it remains uninitialized. */
+    int (*get_global_stats)(const struct dpif_offload *offload,
+                            struct netdev_custom_stats *stats);
+
     /* Verifies whether the offload provider supports offloading flows for the
      * given 'netdev'.  Returns 'false' if the provider lacks the capabilities
      * to offload on this port, otherwise returns 'true'. */

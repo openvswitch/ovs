@@ -101,6 +101,7 @@ struct netdev_custom_counter {
 
 /* Structure representation of custom statistics */
 struct netdev_custom_stats {
+    char *label; /* Optional label/description for this set of counters. */
     uint16_t size;
     struct netdev_custom_counter *counters;
 };
