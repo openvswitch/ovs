@@ -119,6 +119,8 @@ dpif_offload_tc_open(const struct dpif_offload_class *offload_class,
     offload_tc->once_enable =
         (struct ovsthread_once) OVSTHREAD_ONCE_INITIALIZER;
 
+    dpif_offload_tc_meter_init();
+
     *dpif_offload = &offload_tc->offload;
     return 0;
 }
@@ -246,5 +248,8 @@ struct dpif_offload_class dpif_offload_tc_class = {
     .port_add = dpif_offload_tc_port_add,
     .port_del = dpif_offload_tc_port_del,
     .flow_flush = dpif_offload_tc_flow_flush,
+    .meter_set = dpif_offload_tc_meter_set,
+    .meter_get = dpif_offload_tc_meter_get,
+    .meter_del = dpif_offload_tc_meter_del,
     .netdev_flow_flush = dpif_offload_tc_netdev_flow_flush,
 };

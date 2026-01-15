@@ -4226,18 +4226,11 @@ static int
 dpif_netlink_meter_set(struct dpif *dpif_, ofproto_meter_id meter_id,
                        struct ofputil_meter_config *config)
 {
-    int err;
-
     if (probe_broken_meters(dpif_)) {
         return ENOMEM;
     }
 
-    err = dpif_netlink_meter_set__(dpif_, meter_id, config);
-    if (!err && dpif_offload_enabled()) {
-        meter_offload_set(meter_id, config);
-    }
-
-    return err;
+    return dpif_netlink_meter_set__(dpif_, meter_id, config);
 }
 
 /* Retrieve statistics and/or delete meter 'meter_id'.  Statistics are
@@ -4336,30 +4329,16 @@ static int
 dpif_netlink_meter_get(const struct dpif *dpif, ofproto_meter_id meter_id,
                        struct ofputil_meter_stats *stats, uint16_t max_bands)
 {
-    int err;
-
-    err = dpif_netlink_meter_get_stats(dpif, meter_id, stats, max_bands,
-                                       OVS_METER_CMD_GET);
-    if (!err && dpif_offload_enabled()) {
-        meter_offload_get(meter_id, stats);
-    }
-
-    return err;
+    return dpif_netlink_meter_get_stats(dpif, meter_id, stats, max_bands,
+                                        OVS_METER_CMD_GET);
 }
 
 static int
 dpif_netlink_meter_del(struct dpif *dpif, ofproto_meter_id meter_id,
                        struct ofputil_meter_stats *stats, uint16_t max_bands)
 {
-    int err;
-
-    err  = dpif_netlink_meter_get_stats(dpif, meter_id, stats,
+    return dpif_netlink_meter_get_stats(dpif, meter_id, stats,
                                         max_bands, OVS_METER_CMD_DEL);
-    if (!err && dpif_offload_enabled()) {
-        meter_offload_del(meter_id, stats);
-    }
-
-    return err;
 }
 
 static bool

@@ -51,6 +51,12 @@ void dpif_offload_dump_start(struct dpif_offload_dump *, const struct dpif *);
 bool dpif_offload_dump_next(struct dpif_offload_dump *,
                             struct dpif_offload **);
 int dpif_offload_dump_done(struct dpif_offload_dump *);
+void dpif_offload_meter_set(const struct dpif *dpif, ofproto_meter_id meter_id,
+                            struct ofputil_meter_config *);
+void dpif_offload_meter_get(const struct dpif *dpif, ofproto_meter_id meter_id,
+                            struct ofputil_meter_stats *);
+void dpif_offload_meter_del(const struct dpif *dpif, ofproto_meter_id meter_id,
+                            struct ofputil_meter_stats *);
 
 /* Iterates through each DPIF_OFFLOAD in DPIF, using DUMP as state.
  *

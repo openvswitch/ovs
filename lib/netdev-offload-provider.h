@@ -91,33 +91,6 @@ struct netdev_flow_api {
      * takes ownership of a packet if errno != EOPNOTSUPP. */
     int (*hw_miss_packet_recover)(struct netdev *, struct dp_packet *);
 
-    /* Offloads or modifies the offloaded meter in HW with the given 'meter_id'
-     * and the configuration in 'config'. On failure, a non-zero error code is
-     * returned.
-     *
-     * The meter id specified through 'config->meter_id' is ignored. */
-    int (*meter_set)(ofproto_meter_id meter_id,
-                     struct ofputil_meter_config *config);
-
-    /* Queries HW for meter stats with the given 'meter_id'. Store the stats
-     * of dropped packets to band 0. On failure, a non-zero error code is
-     * returned.
-     *
-     * Note that the 'stats' structure is already initialized, and only the
-     * available statistics should be incremented, not replaced. Those fields
-     * are packet_in_count, byte_in_count and band[]->byte_count and
-     * band[]->packet_count. */
-    int (*meter_get)(ofproto_meter_id meter_id,
-                     struct ofputil_meter_stats *stats);
-
-    /* Removes meter 'meter_id' from HW. Store the stats of dropped packets to
-     * band 0. On failure, a non-zero error code is returned.
-     *
-     * 'stats' may be passed in as NULL if no stats are needed, See the above
-     * function for additional details on the 'stats' usage. */
-    int (*meter_del)(ofproto_meter_id meter_id,
-                     struct ofputil_meter_stats *stats);
-
     /* Initializies the netdev flow api.
      * Return 0 if successful, otherwise returns a positive errno value. */
     int (*init_flow_api)(struct netdev *);

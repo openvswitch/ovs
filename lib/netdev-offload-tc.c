@@ -42,6 +42,7 @@
 #include "tc.h"
 #include "unaligned.h"
 #include "util.h"
+#include "dpif-offload.h"
 #include "dpif-provider.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_offload_tc);
@@ -3148,6 +3149,22 @@ tc_cleanup_policer_actions(struct id_pool *police_ids,
     hmap_destroy(&map);
 }
 
+void
+dpif_offload_tc_meter_init(void)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+
+    if (ovsthread_once_start(&once)) {
+        ovs_mutex_lock(&meter_police_ids_mutex);
+        meter_police_ids = id_pool_create(
+            METER_POLICE_IDS_BASE,
+            METER_POLICE_IDS_MAX - METER_POLICE_IDS_BASE + 1);
+        ovs_mutex_unlock(&meter_police_ids_mutex);
+
+        ovsthread_once_done(&once);
+    }
+}
+
 static int
 netdev_tc_init_flow_api(struct netdev *netdev)
 {
@@ -3202,9 +3219,9 @@ netdev_tc_init_flow_api(struct netdev *netdev)
         probe_vxlan_gbp_support(ifindex);
         probe_enc_flags_support(ifindex);
 
+        dpif_offload_tc_meter_init();
+
         ovs_mutex_lock(&meter_police_ids_mutex);
-        meter_police_ids = id_pool_create(METER_POLICE_IDS_BASE,
-                            METER_POLICE_IDS_MAX - METER_POLICE_IDS_BASE + 1);
         tc_cleanup_policer_actions(meter_police_ids, METER_POLICE_IDS_BASE,
                                    METER_POLICE_IDS_MAX);
         ovs_mutex_unlock(&meter_police_ids_mutex);
@@ -3330,9 +3347,10 @@ meter_free_police_index(uint32_t police_index)
     ovs_mutex_unlock(&meter_police_ids_mutex);
 }
 
-static int
-meter_tc_set_policer(ofproto_meter_id meter_id,
-                     struct ofputil_meter_config *config)
+int
+dpif_offload_tc_meter_set(const struct dpif_offload *offload OVS_UNUSED,
+                         ofproto_meter_id meter_id,
+                         struct ofputil_meter_config *config)
 {
     uint32_t police_index;
     uint32_t rate, burst;
@@ -3384,9 +3402,10 @@ meter_tc_set_policer(ofproto_meter_id meter_id,
     return err;
 }
 
-static int
-meter_tc_get_policer(ofproto_meter_id meter_id,
-                     struct ofputil_meter_stats *stats)
+int
+dpif_offload_tc_meter_get(const struct dpif_offload *offload OVS_UNUSED,
+                          ofproto_meter_id meter_id,
+                          struct ofputil_meter_stats *stats)
 {
     uint32_t police_index;
     int err = ENOENT;
@@ -3403,9 +3422,10 @@ meter_tc_get_policer(ofproto_meter_id meter_id,
     return err;
 }
 
-static int
-meter_tc_del_policer(ofproto_meter_id meter_id,
-                     struct ofputil_meter_stats *stats)
+int
+dpif_offload_tc_meter_del(const struct dpif_offload *offload OVS_UNUSED,
+                          ofproto_meter_id meter_id,
+                          struct ofputil_meter_stats *stats)
 {
     uint32_t police_index;
     int err = ENOENT;
@@ -3434,8 +3454,5 @@ const struct netdev_flow_api netdev_offload_tc = {
    .flow_get = netdev_tc_flow_get,
    .flow_del = netdev_tc_flow_del,
    .flow_get_n_flows = netdev_tc_get_n_flows,
-   .meter_set = meter_tc_set_policer,
-   .meter_get = meter_tc_get_policer,
-   .meter_del = meter_tc_del_policer,
    .init_flow_api = netdev_tc_init_flow_api,
 };

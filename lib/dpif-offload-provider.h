@@ -128,6 +128,32 @@ struct dpif_offload_class {
      * successful, otherwise returns a positive errno value. */
     int (*flow_flush)(const struct dpif_offload *);
 
+    /* Adds or modifies the meter in 'dpif_offload' with the given 'meter_id'
+     * and the configuration in 'config'.
+     *
+     * The meter id specified through 'config->meter_id' is ignored. */
+    int (*meter_set)(const struct dpif_offload *, ofproto_meter_id meter_id,
+                     struct ofputil_meter_config *);
+
+    /* Queries HW for meter stats with the given 'meter_id'.  Store the stats
+     * of dropped packets to band 0.  On failure, a non-zero error code is
+     * returned.
+     *
+     * Note that the 'stats' structure is already initialized, and only the
+     * available statistics should be incremented, not replaced.  Those fields
+     * are packet_in_count, byte_in_count and band[]->byte_count and
+     * band[]->packet_count. */
+    int (*meter_get)(const struct dpif_offload *, ofproto_meter_id meter_id,
+                     struct ofputil_meter_stats *);
+
+    /* Removes meter 'meter_id' from HW.  Store the stats of dropped packets to
+     * band 0.  On failure, a non-zero error code is returned.
+     *
+     * 'stats' may be passed in as NULL if no stats are needed.  See the above
+     * function for additional details on the 'stats' usage. */
+    int (*meter_del)(const struct dpif_offload *, ofproto_meter_id meter_id,
+                     struct ofputil_meter_stats *);
+
 
     /* These APIs operate directly on the provided netdev for performance
      * reasons.  They are intended for use in fast path processing and should
