@@ -6493,7 +6493,7 @@ out:
 }
 
 bool
-netdev_dpdk_flow_api_supported(struct netdev *netdev)
+netdev_dpdk_flow_api_supported(struct netdev *netdev, bool check_only)
 {
     struct netdev_dpdk *dev;
     bool ret = false;
@@ -6512,7 +6512,7 @@ netdev_dpdk_flow_api_supported(struct netdev *netdev)
     dev = netdev_dpdk_cast(netdev);
     ovs_mutex_lock(&dev->mutex);
     if (dev->type == DPDK_DEV_ETH) {
-        if (dev->requested_rx_steer_flags) {
+        if (dev->requested_rx_steer_flags && !check_only) {
             VLOG_WARN("%s: rx-steering is mutually exclusive with hw-offload,"
                       " falling back to default rss mode",
                       netdev_get_name(netdev));

@@ -15,27 +15,153 @@
  */
 
 #include <config.h>
+#include <errno.h>
 
 #include "dpif.h"
 #include "dpif-offload.h"
 #include "dpif-offload-provider.h"
+#include "dummy.h"
+#include "netdev-provider.h"
 #include "util.h"
+
+struct dpif_offload_dummy {
+    struct dpif_offload offload;
+    struct dpif_offload_port_mgr *port_mgr;
+
+    /* Configuration specific variables. */
+    struct ovsthread_once once_enable; /* Track first-time enablement. */
+};
+
+static struct dpif_offload_dummy *
+dpif_offload_dummy_cast(const struct dpif_offload *offload)
+{
+    return CONTAINER_OF(offload, struct dpif_offload_dummy, offload);
+}
+
+static void
+dpif_offload_dummy_enable_offload(struct dpif_offload *dpif_offload,
+                                  struct dpif_offload_port_mgr_port *port)
+{
+    dpif_offload_set_netdev_offload(port->netdev, dpif_offload);
+}
+
+static void
+dpif_offload_dummy_cleanup_offload(struct dpif_offload_port_mgr_port *port)
+{
+    dpif_offload_set_netdev_offload(port->netdev, NULL);
+}
+
+static int
+dpif_offload_dummy_port_add(struct dpif_offload *dpif_offload,
+                            struct netdev *netdev, odp_port_t port_no)
+{
+    struct dpif_offload_port_mgr_port *port = xmalloc(sizeof *port);
+    struct dpif_offload_dummy *offload_dummy;
+
+    offload_dummy = dpif_offload_dummy_cast(dpif_offload);
+    if (dpif_offload_port_mgr_add(offload_dummy->port_mgr, port, netdev,
+                                  port_no, false)) {
+
+        if (dpif_offload_enabled()) {
+            dpif_offload_dummy_enable_offload(dpif_offload, port);
+        }
+        return 0;
+    }
+
+    free(port);
+    return EEXIST;
+}
+
+static void
+dpif_offload_dummy_free_port(struct dpif_offload_port_mgr_port *port)
+{
+    netdev_close(port->netdev);
+    free(port);
+}
+
+static int
+dpif_offload_dummy_port_del(struct dpif_offload *dpif_offload,
+                            odp_port_t port_no)
+{
+    struct dpif_offload_dummy *offload_dummy;
+    struct dpif_offload_port_mgr_port *port;
+
+    offload_dummy = dpif_offload_dummy_cast(dpif_offload);
+
+    port = dpif_offload_port_mgr_remove(offload_dummy->port_mgr, port_no);
+    if (port) {
+        if (dpif_offload_enabled()) {
+            dpif_offload_dummy_cleanup_offload(port);
+        }
+        ovsrcu_postpone(dpif_offload_dummy_free_port, port);
+    }
+    return 0;
+}
 
 static int
 dpif_offload_dummy_open(const struct dpif_offload_class *offload_class,
                         struct dpif *dpif, struct dpif_offload **dpif_offload)
 {
-    struct dpif_offload *offload = xmalloc(sizeof *offload);
+    struct dpif_offload_dummy *offload_dummy;
 
-    dpif_offload_init(offload, offload_class, dpif);
-    *dpif_offload = offload;
+    offload_dummy = xmalloc(sizeof *offload_dummy);
+
+    dpif_offload_init(&offload_dummy->offload, offload_class, dpif);
+    offload_dummy->port_mgr = dpif_offload_port_mgr_init();
+    offload_dummy->once_enable =
+        (struct ovsthread_once) OVSTHREAD_ONCE_INITIALIZER;
+
+    *dpif_offload = &offload_dummy->offload;
     return 0;
 }
 
 static void
 dpif_offload_dummy_close(struct dpif_offload *dpif_offload)
 {
-    free(dpif_offload);
+    struct dpif_offload_dummy *offload_dummy;
+
+    offload_dummy = dpif_offload_dummy_cast(dpif_offload);
+
+    /* The ofproto layer may not call dpif_port_del() for all ports,
+     * especially internal ones, so we need to clean up any remaining ports. */
+    struct dpif_offload_port_mgr_port *port;
+
+    DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload_dummy->port_mgr) {
+        dpif_offload_dummy_port_del(dpif_offload, port->port_no);
+    }
+
+    dpif_offload_port_mgr_uninit(offload_dummy->port_mgr);
+    ovsthread_once_destroy(&offload_dummy->once_enable);
+    free(offload_dummy);
+}
+
+static void
+dpif_offload_dummy_set_config(struct dpif_offload *dpif_offload,
+                              const struct smap *other_cfg)
+{
+    struct dpif_offload_dummy *offload_dummy;
+
+    offload_dummy = dpif_offload_dummy_cast(dpif_offload);
+
+    if (smap_get_bool(other_cfg, "hw-offload", false)) {
+        if (ovsthread_once_start(&offload_dummy->once_enable)) {
+            struct dpif_offload_port_mgr_port *port;
+
+            DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port,
+                                                 offload_dummy->port_mgr) {
+                dpif_offload_dummy_enable_offload(dpif_offload, port);
+            }
+
+            ovsthread_once_done(&offload_dummy->once_enable);
+        }
+    }
+}
+
+static bool
+dpif_offload_dummy_can_offload(struct dpif_offload *dpif_offload OVS_UNUSED,
+                               struct netdev *netdev)
+{
+    return is_dummy_netdev_class(netdev->netdev_class);
 }
 
 #define DEFINE_DPIF_DUMMY_CLASS(NAME, TYPE_STR)                        \
@@ -44,6 +170,10 @@ dpif_offload_dummy_close(struct dpif_offload *dpif_offload)
         .supported_dpif_types = (const char *const[]) {"dummy", NULL}, \
         .open = dpif_offload_dummy_open,                               \
         .close = dpif_offload_dummy_close,                             \
+        .set_config = dpif_offload_dummy_set_config,                   \
+        .can_offload = dpif_offload_dummy_can_offload,                 \
+        .port_add = dpif_offload_dummy_port_add,                       \
+        .port_del = dpif_offload_dummy_port_del,                       \
     }
 
 DEFINE_DPIF_DUMMY_CLASS(dpif_offload_dummy_class, "dummy");

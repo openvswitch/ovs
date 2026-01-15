@@ -18,6 +18,8 @@
 
 #include "dpif-offload.h"
 #include "dpif-offload-provider.h"
+#include "netdev-provider.h"
+#include "netdev-vport.h"
 #include "util.h"
 
 #include "openvswitch/vlog.h"
@@ -98,12 +100,27 @@ dpif_offload_dpdk_set_config(struct dpif_offload *offload_,
     }
 }
 
+static bool
+dpif_offload_dpdk_can_offload(struct dpif_offload *offload OVS_UNUSED,
+                              struct netdev *netdev)
+{
+    if (netdev_vport_is_vport_class(netdev->netdev_class)
+        && strcmp(netdev_get_dpif_type(netdev), "netdev")) {
+        VLOG_DBG("%s: vport doesn't belong to the netdev datapath, skipping",
+                 netdev_get_name(netdev));
+        return false;
+    }
+
+    return netdev_dpdk_flow_api_supported(netdev, true);
+}
+
 struct dpif_offload_class dpif_offload_dpdk_class = {
     .type = "dpdk",
     .supported_dpif_types = (const char *const[]) {"netdev", NULL},
     .open = dpif_offload_dpdk_open,
     .close = dpif_offload_dpdk_close,
     .set_config = dpif_offload_dpdk_set_config,
+    .can_offload = dpif_offload_dpdk_can_offload,
 };
 
 /* XXX: Temporary functions below, which will be removed once fully

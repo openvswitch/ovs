@@ -213,8 +213,8 @@ static void dummy_packet_stream_close(struct dummy_packet_stream *);
 static void pkt_list_delete(struct ovs_list *);
 static void addr_list_delete(struct ovs_list *);
 
-static bool
-is_dummy_class(const struct netdev_class *class)
+bool
+is_dummy_netdev_class(const struct netdev_class *class)
 {
     return class->construct == netdev_dummy_construct;
 }
@@ -222,14 +222,14 @@ is_dummy_class(const struct netdev_class *class)
 static struct netdev_dummy *
 netdev_dummy_cast(const struct netdev *netdev)
 {
-    ovs_assert(is_dummy_class(netdev_get_class(netdev)));
+    ovs_assert(is_dummy_netdev_class(netdev_get_class(netdev)));
     return CONTAINER_OF(netdev, struct netdev_dummy, up);
 }
 
 static struct netdev_rxq_dummy *
 netdev_rxq_dummy_cast(const struct netdev_rxq *rx)
 {
-    ovs_assert(is_dummy_class(netdev_get_class(rx->netdev)));
+    ovs_assert(is_dummy_netdev_class(netdev_get_class(rx->netdev)));
     return CONTAINER_OF(rx, struct netdev_rxq_dummy, up);
 }
 
@@ -1929,7 +1929,7 @@ static const struct netdev_class dummy_pmd_class = {
 static int
 netdev_dummy_offloads_init_flow_api(struct netdev *netdev)
 {
-    return is_dummy_class(netdev->netdev_class) ? 0 : EOPNOTSUPP;
+    return is_dummy_netdev_class(netdev->netdev_class) ? 0 : EOPNOTSUPP;
 }
 
 static const struct netdev_flow_api netdev_offload_dummy = {
@@ -2101,7 +2101,7 @@ netdev_dummy_receive(struct unixctl_conn *conn,
     int i, k = 1, rx_qid = 0;
 
     netdev = netdev_from_name(argv[k++]);
-    if (!netdev || !is_dummy_class(netdev->netdev_class)) {
+    if (!netdev || !is_dummy_netdev_class(netdev->netdev_class)) {
         unixctl_command_reply_error(conn, "no such dummy netdev");
         goto exit_netdev;
     }
@@ -2192,7 +2192,7 @@ netdev_dummy_set_admin_state(struct unixctl_conn *conn, int argc,
 
     if (argc > 2) {
         struct netdev *netdev = netdev_from_name(argv[1]);
-        if (netdev && is_dummy_class(netdev->netdev_class)) {
+        if (netdev && is_dummy_netdev_class(netdev->netdev_class)) {
             struct netdev_dummy *dummy_dev = netdev_dummy_cast(netdev);
 
             ovs_mutex_lock(&dummy_dev->mutex);
@@ -2254,7 +2254,7 @@ netdev_dummy_conn_state(struct unixctl_conn *conn, int argc,
         const char *dev_name = argv[1];
         struct netdev *netdev = netdev_from_name(dev_name);
 
-        if (netdev && is_dummy_class(netdev->netdev_class)) {
+        if (netdev && is_dummy_netdev_class(netdev->netdev_class)) {
             struct netdev_dummy *dummy_dev = netdev_dummy_cast(netdev);
 
             ovs_mutex_lock(&dummy_dev->mutex);
@@ -2289,7 +2289,7 @@ netdev_dummy_ip4addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     struct netdev *netdev = netdev_from_name(argv[1]);
 
-    if (netdev && is_dummy_class(netdev->netdev_class)) {
+    if (netdev && is_dummy_netdev_class(netdev->netdev_class)) {
         struct in_addr ip, mask;
         struct in6_addr ip6;
         uint32_t plen;
@@ -2326,7 +2326,7 @@ netdev_dummy_ip6addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     struct netdev *netdev = netdev_from_name(argv[1]);
 
-    if (netdev && is_dummy_class(netdev->netdev_class)) {
+    if (netdev && is_dummy_netdev_class(netdev->netdev_class)) {
         struct in6_addr ip6;
         char *error;
         uint32_t plen;

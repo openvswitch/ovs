@@ -359,10 +359,11 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
         const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
         struct dpif_port_dump port_dump;
         struct dpif_port dpif_port;
+        bool new_offload_provider;
 
         ovs_assert(dpif->dpif_class == registered_class->dpif_class);
 
-        dpif_attach_offload_providers(dpif);
+        new_offload_provider = dpif_attach_offload_providers(dpif) != EEXIST;
 
         DPIF_PORT_FOR_EACH(&dpif_port, &port_dump, dpif) {
             struct netdev *netdev;
@@ -377,6 +378,9 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
             if (!err) {
                 netdev_set_dpif_type(netdev, dpif_type_str);
                 netdev_ports_insert(netdev, &dpif_port);
+                if (new_offload_provider) {
+                    dpif_offload_port_add(dpif, netdev, dpif_port.port_no);
+                }
                 netdev_close(netdev);
             } else {
                 VLOG_WARN("could not open netdev %s type %s: %s",
@@ -621,6 +625,8 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, odp_port_t *port_nop)
             dpif_port.name = CONST_CAST(char *, netdev_name);
             dpif_port.port_no = port_no;
             netdev_ports_insert(netdev, &dpif_port);
+
+            dpif_offload_port_add(dpif, netdev, port_no);
         }
     } else {
         VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
@@ -651,6 +657,8 @@ dpif_port_del(struct dpif *dpif, odp_port_t port_no, bool local_delete)
             log_operation(dpif, "port_del", error);
         }
     }
+
+    dpif_offload_port_del(dpif, port_no);
 
     netdev_ports_remove(port_no, dpif_normalize_type(dpif_type(dpif)));
     return error;
@@ -703,6 +711,7 @@ dpif_port_set_config(struct dpif *dpif, odp_port_t port_no,
         if (error) {
             log_operation(dpif, "port_set_config", error);
         }
+        dpif_offload_port_set_config(dpif, port_no, cfg);
     }
 
     return error;

@@ -18,8 +18,14 @@
 
 #include "dpif-offload.h"
 #include "dpif-offload-provider.h"
+#include "netdev-provider.h"
+#include "netdev-vport.h"
 #include "tc.h"
 #include "util.h"
+
+#include "openvswitch/vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(dpif_offload_tc);
 
 /* dpif offload interface for the tc implementation. */
 struct dpif_offload_tc {
@@ -78,10 +84,24 @@ dpif_offload_tc_set_config(struct dpif_offload *offload,
     }
 }
 
+static bool
+dpif_offload_tc_can_offload(struct dpif_offload *dpif_offload OVS_UNUSED,
+                            struct netdev *netdev)
+{
+    if (netdev_vport_is_vport_class(netdev->netdev_class) &&
+        strcmp(netdev_get_dpif_type(netdev), "system")) {
+        VLOG_DBG("%s: vport doesn't belong to the system datapath, skipping",
+                 netdev_get_name(netdev));
+        return false;
+    }
+    return true;
+}
+
 struct dpif_offload_class dpif_offload_tc_class = {
     .type = "tc",
     .supported_dpif_types = (const char *const[]) {"system", NULL},
     .open = dpif_offload_tc_open,
     .close = dpif_offload_tc_close,
     .set_config = dpif_offload_tc_set_config,
+    .can_offload = dpif_offload_tc_can_offload,
 };

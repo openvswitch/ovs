@@ -20,6 +20,7 @@
 #include "dpif-offload.h"
 #include "dpif-offload-provider.h"
 #include "dpif-provider.h"
+#include "netdev-provider.h"
 #include "unixctl.h"
 #include "util.h"
 #include "openvswitch/dynamic-string.h"
@@ -149,7 +150,8 @@ dpif_offload_module_init(void)
 
     for (int i = 0; i < ARRAY_SIZE(base_dpif_offload_classes); i++) {
         ovs_assert(base_dpif_offload_classes[i]->open
-                   && base_dpif_offload_classes[i]->close);
+                   && base_dpif_offload_classes[i]->close
+                   && base_dpif_offload_classes[i]->can_offload);
 
         dpif_offload_register_provider(base_dpif_offload_classes[i]);
     }
@@ -286,11 +288,14 @@ dpif_attach_new_offload_provider_collection(struct dpif *dpif)
     return 0;
 }
 
+/* This function returns 0 if a new provider set was attached to the dpif,
+ * returns EEXIST if an existing set of providers was attached, and
+ * returns a negative error code on error. */
 int
 dpif_attach_offload_providers(struct dpif *dpif)
 {
     struct dpif_offload_provider_collection *collection;
-    int rc = 0;
+    int rc = EEXIST;
 
     ovs_mutex_lock(&dpif_offload_mutex);
 
@@ -407,6 +412,96 @@ dpif_offload_rebalance_policy_enabled(void)
 
     atomic_read_relaxed(&offload_rebalance_policy, &enabled);
     return enabled;
+}
+
+void
+dpif_offload_set_netdev_offload(struct netdev *netdev,
+                                struct dpif_offload *offload)
+{
+    ovsrcu_set(&netdev->dpif_offload, offload);
+}
+
+void
+dpif_offload_port_add(struct dpif *dpif, struct netdev *netdev,
+                      odp_port_t port_no)
+{
+    struct dpif_offload_provider_collection *collection;
+    struct dpif_offload *offload;
+
+    collection = dpif_get_offload_provider_collection(dpif);
+    if (!collection) {
+        return;
+    }
+
+    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+        if (!offload->class->port_add) {
+            continue;
+        }
+
+        if (offload->class->can_offload(offload, netdev)) {
+            int err = offload->class->port_add(offload, netdev, port_no);
+            if (!err) {
+                VLOG_DBG("netdev %s added to dpif-offload provider %s",
+                         netdev_get_name(netdev), dpif_offload_name(offload));
+                break;
+            } else {
+                VLOG_ERR("Failed adding netdev %s to dpif-offload provider "
+                         "%s, error %s",
+                         netdev_get_name(netdev), dpif_offload_name(offload),
+                         ovs_strerror(err));
+            }
+        } else {
+            VLOG_DBG(
+                "netdev %s failed can_offload for dpif-offload provider %s",
+                netdev_get_name(netdev), dpif_offload_name(offload));
+        }
+    }
+}
+
+void
+dpif_offload_port_del(struct dpif *dpif, odp_port_t port_no)
+{
+    struct dpif_offload_provider_collection *collection;
+    struct dpif_offload *offload;
+
+    collection = dpif_get_offload_provider_collection(dpif);
+    if (!collection) {
+        return;
+    }
+
+    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+        int err;
+
+        if (!offload->class->port_del) {
+            continue;
+        }
+
+        err = offload->class->port_del(offload, port_no);
+        if (err) {
+            VLOG_ERR("Failed deleting port_no %d from dpif-offload provider "
+                     "%s, error %s", port_no, dpif_offload_name(offload),
+                     ovs_strerror(err));
+        }
+    }
+}
+
+void
+dpif_offload_port_set_config(struct dpif *dpif, odp_port_t port_no,
+                             const struct smap *cfg)
+{
+    struct dpif_offload_provider_collection *collection;
+    struct dpif_offload *offload;
+
+    collection = dpif_get_offload_provider_collection(dpif);
+    if (!collection) {
+        return;
+    }
+
+    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+        if (offload->class->port_set_config) {
+            offload->class->port_set_config(offload, port_no, cfg);
+        }
+    }
 }
 
 void
@@ -542,4 +637,161 @@ dpif_offload_set_global_cfg(const struct smap *other_cfg)
             ovsthread_once_done(&once_enable);
         }
     }
+}
+
+
+struct dpif_offload_port_mgr *
+dpif_offload_port_mgr_init(void)
+{
+    struct dpif_offload_port_mgr *mgr = xmalloc(sizeof *mgr);
+
+    ovs_mutex_init(&mgr->cmap_mod_lock);
+
+    cmap_init(&mgr->odp_port_to_port);
+    cmap_init(&mgr->netdev_to_port);
+    cmap_init(&mgr->ifindex_to_port);
+
+    return mgr;
+}
+
+void
+dpif_offload_port_mgr_uninit(struct dpif_offload_port_mgr *mgr)
+{
+    if (!mgr) {
+        return;
+    }
+
+    ovs_assert(cmap_count(&mgr->odp_port_to_port) == 0);
+    ovs_assert(cmap_count(&mgr->netdev_to_port) == 0);
+    ovs_assert(cmap_count(&mgr->ifindex_to_port) == 0);
+
+    cmap_destroy(&mgr->odp_port_to_port);
+    cmap_destroy(&mgr->netdev_to_port);
+    cmap_destroy(&mgr->ifindex_to_port);
+    free(mgr);
+}
+
+struct dpif_offload_port_mgr_port *
+dpif_offload_port_mgr_find_by_ifindex(struct dpif_offload_port_mgr *mgr,
+                                      int ifindex)
+{
+    struct dpif_offload_port_mgr_port *port;
+
+    if (ifindex < 0) {
+        return NULL;
+    }
+
+    CMAP_FOR_EACH_WITH_HASH (port, ifindex_node, hash_int(ifindex, 0),
+                             &mgr->ifindex_to_port) {
+        if (port->ifindex == ifindex) {
+            return port;
+        }
+    }
+    return NULL;
+}
+
+struct dpif_offload_port_mgr_port *
+dpif_offload_port_mgr_find_by_netdev(struct dpif_offload_port_mgr *mgr,
+                                     struct netdev *netdev)
+{
+    struct dpif_offload_port_mgr_port *port;
+
+    if (!netdev) {
+        return NULL;
+    }
+
+    CMAP_FOR_EACH_WITH_HASH (port, netdev_node, hash_pointer(netdev, 0),
+                             &mgr->netdev_to_port) {
+        if (port->netdev == netdev) {
+            return port;
+        }
+    }
+    return NULL;
+}
+
+struct dpif_offload_port_mgr_port *
+dpif_offload_port_mgr_find_by_odp_port(struct dpif_offload_port_mgr *mgr,
+                                       odp_port_t port_no)
+{
+    struct dpif_offload_port_mgr_port *port;
+
+    CMAP_FOR_EACH_WITH_HASH (port, odp_port_node,
+                             hash_int(odp_to_u32(port_no), 0),
+                             &mgr->odp_port_to_port) {
+        if (port->port_no == port_no) {
+            return port;
+        }
+    }
+    return NULL;
+}
+
+struct dpif_offload_port_mgr_port *
+dpif_offload_port_mgr_remove(struct dpif_offload_port_mgr *mgr,
+                             odp_port_t port_no)
+{
+    /* Note that it is the caller's responsibility to release the netdev
+     * after port removal.  This should probably be done through the
+     * ovsrcu_postpone() API. */
+    struct dpif_offload_port_mgr_port *port;
+
+    ovs_mutex_lock(&mgr->cmap_mod_lock);
+
+    port = dpif_offload_port_mgr_find_by_odp_port(mgr, port_no);
+
+    if (port) {
+        cmap_remove(&mgr->odp_port_to_port, &port->odp_port_node,
+                    hash_int(odp_to_u32(port_no), 0));
+        cmap_remove(&mgr->netdev_to_port, &port->netdev_node,
+                    hash_pointer(port->netdev, 0));
+
+        if (port->ifindex >= 0) {
+            cmap_remove(&mgr->ifindex_to_port, &port->ifindex_node,
+                        hash_int(port->ifindex, 0));
+        }
+    }
+
+    ovs_mutex_unlock(&mgr->cmap_mod_lock);
+    return port;
+}
+
+bool
+dpif_offload_port_mgr_add(struct dpif_offload_port_mgr *mgr,
+                          struct dpif_offload_port_mgr_port *port,
+                          struct netdev *netdev, odp_port_t port_no,
+                          bool need_ifindex)
+{
+    /* Note that this function takes a reference to the passed-in netdev.
+     * However, on port removal it is the caller's responsibility to
+     * release this reference. */
+    ovs_assert(netdev);
+
+    memset(port, 0, sizeof *port);
+    port->port_no = port_no;
+    port->ifindex = need_ifindex ? netdev_get_ifindex(netdev) : -1;
+
+    ovs_mutex_lock(&mgr->cmap_mod_lock);
+
+    if (dpif_offload_port_mgr_find_by_odp_port(mgr, port_no)
+        || dpif_offload_port_mgr_find_by_ifindex(mgr, port->ifindex)
+        || dpif_offload_port_mgr_find_by_netdev(mgr, netdev)) {
+
+        ovs_mutex_unlock(&mgr->cmap_mod_lock);
+        return false;
+    }
+
+    port->netdev = netdev_ref(netdev);
+
+    cmap_insert(&mgr->odp_port_to_port, &port->odp_port_node,
+                hash_int(odp_to_u32(port_no), 0));
+
+    cmap_insert(&mgr->netdev_to_port, &port->netdev_node,
+                hash_pointer(netdev, 0));
+
+    if (port->ifindex >= 0) {
+        cmap_insert(&mgr->ifindex_to_port, &port->ifindex_node,
+                    hash_int(port->ifindex, 0));
+    }
+
+    ovs_mutex_unlock(&mgr->cmap_mod_lock);
+    return true;
 }

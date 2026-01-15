@@ -17,6 +17,7 @@
 #ifndef DPIF_OFFLOAD_PROVIDER_H
 #define DPIF_OFFLOAD_PROVIDER_H
 
+#include "cmap.h"
 #include "dpif-provider.h"
 #include "ovs-thread.h"
 #include "smap.h"
@@ -89,6 +90,30 @@ struct dpif_offload_class {
     /* Pass custom configuration options to the offload provider. */
     void (*set_config)(struct dpif_offload *,
                        const struct smap *other_config);
+
+    /* Verifies whether the offload provider supports offloading flows for the
+     * given 'netdev'.  Returns 'false' if the provider lacks the capabilities
+     * to offload on this port, otherwise returns 'true'. */
+    bool (*can_offload)(struct dpif_offload *,
+                        struct netdev *);
+
+    /* This callback is invoked when a 'netdev' port has been successfully
+     * added to the dpif and should be handled by this offload provider.
+     * It is assumed that the 'can_offload' callback was previously called
+     * and returned 'true' before this function is executed. */
+    int (*port_add)(struct dpif_offload *, struct netdev *,
+                    odp_port_t port_no);
+
+    /* This callback is invoked when the 'port_no' port has been successfully
+     * removed from the dpif.  Note that it is called for every deleted port,
+     * even if 'port_added' was never called, as the framework does not track
+     * added ports. */
+    int (*port_del)(struct dpif_offload *, odp_port_t port_no);
+
+    /* Refreshes the configuration of 'port_no' port.  The same note as above
+     * in 'port_deleted' applies here. */
+    void (*port_set_config)(struct dpif_offload *, odp_port_t port_no,
+                            const struct smap *cfg);
 };
 
 
@@ -98,9 +123,52 @@ extern struct dpif_offload_class dpif_offload_dpdk_class;
 extern struct dpif_offload_class dpif_offload_tc_class;
 
 
+/* Structure used by the common dpif port management library functions. */
+struct dpif_offload_port_mgr {
+    struct ovs_mutex cmap_mod_lock;
+
+    struct cmap odp_port_to_port;
+    struct cmap netdev_to_port;
+    struct cmap ifindex_to_port;
+};
+
+struct dpif_offload_port_mgr_port {
+    struct cmap_node odp_port_node;
+    struct cmap_node netdev_node;
+    struct cmap_node ifindex_node;
+    struct netdev *netdev;
+    odp_port_t port_no;
+    int ifindex;
+};
+
+
+/* Global dpif port management library functions. */
+struct dpif_offload_port_mgr *dpif_offload_port_mgr_init(void);
+bool dpif_offload_port_mgr_add(struct dpif_offload_port_mgr *,
+                               struct dpif_offload_port_mgr_port *,
+                               struct netdev *netdev, odp_port_t,
+                               bool need_ifindex);
+struct dpif_offload_port_mgr_port *dpif_offload_port_mgr_remove(
+    struct dpif_offload_port_mgr *, odp_port_t);
+void dpif_offload_port_mgr_uninit(struct dpif_offload_port_mgr *);
+struct dpif_offload_port_mgr_port *dpif_offload_port_mgr_find_by_ifindex(
+    struct dpif_offload_port_mgr *, int ifindex);
+struct dpif_offload_port_mgr_port *dpif_offload_port_mgr_find_by_netdev(
+    struct dpif_offload_port_mgr *, struct netdev *);
+struct dpif_offload_port_mgr_port *dpif_offload_port_mgr_find_by_odp_port(
+    struct dpif_offload_port_mgr *, odp_port_t);
+
+#define DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH(PORT, PORT_MGR) \
+    CMAP_FOR_EACH (PORT, odp_port_node, &(PORT_MGR)->odp_port_to_port)
+
 /* Global functions, called by the dpif layer or offload providers. */
 void dpif_offload_module_init(void);
 void dpif_offload_set_config(struct dpif *, const struct smap *other_cfg);
+void dpif_offload_port_add(struct dpif *, struct netdev *, odp_port_t);
+void dpif_offload_port_del(struct dpif *, odp_port_t);
+void dpif_offload_port_set_config(struct dpif *, odp_port_t,
+                                  const struct smap *cfg);
+void dpif_offload_set_netdev_offload(struct netdev *, struct dpif_offload *);
 
 static inline void
 dpif_offload_assert_class(const struct dpif_offload *dpif_offload,
