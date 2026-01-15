@@ -941,3 +941,26 @@ AT_CHECK([ovs-vsctl del-port br10 p1], [], [stdout], [stderr])
 OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
+
+dnl --------------------------------------------------------------------------
+AT_SETUP([OVS-DPDK - ovs-appctl dpif/offload/show])
+AT_KEYWORDS([dpdk dpif-offload])
+OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START([--no-pci])
+AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
+
+AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
+netdev@ovs-netdev:
+  dpdk
+])
+
+AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
+{
+  "netdev@ovs-netdev": {
+    "providers": [[
+      "dpdk"]]}}
+])
+
+OVS_DPDK_STOP_VSWITCHD
+AT_CLEANUP
+dnl --------------------------------------------------------------------------

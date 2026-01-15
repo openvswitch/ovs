@@ -507,6 +507,7 @@ endif
 if DPDK_NETDEV
 lib_libopenvswitch_la_SOURCES += \
 	lib/dpdk.c \
+	lib/dpif-offload-dpdk.c \
 	lib/netdev-dpdk.c \
 	lib/netdev-offload-dpdk.c
 else

@@ -40,6 +40,9 @@ static const struct dpif_offload_class *base_dpif_offload_classes[] = {
 #if defined(__linux__)
     &dpif_offload_tc_class,
 #endif
+#ifdef DPDK_NETDEV
+    &dpif_offload_dpdk_class,
+#endif
     &dpif_offload_dummy_class,
     &dpif_offload_dummy_x_class,
 };
