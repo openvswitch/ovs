@@ -23,7 +23,14 @@ struct netdev;
 
 /* Netdev-specific offload functions.  These should only be used by the
  * associated dpif offload provider. */
-int netdev_offload_tc_flow_flush(struct netdev *);
+int tc_flow_flush(struct netdev *);
+int tc_flow_dump_create(struct netdev *, struct netdev_flow_dump **,
+                        bool terse);
+int tc_flow_dump_destroy(struct netdev_flow_dump *);
+bool tc_flow_dump_next(struct netdev_flow_dump *, struct match *,
+                       struct nlattr **actions, struct dpif_flow_stats *,
+                       struct dpif_flow_attrs *, ovs_u128 *ufid,
+                       struct ofpbuf *rbuffer, struct ofpbuf *wbuffer);
 void dpif_offload_tc_meter_init(void);
 int dpif_offload_tc_meter_set(const struct dpif_offload *, ofproto_meter_id,
                               struct ofputil_meter_config *);

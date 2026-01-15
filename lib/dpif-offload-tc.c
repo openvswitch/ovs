@@ -19,13 +19,16 @@
 
 #include "dpif-offload.h"
 #include "dpif-offload-provider.h"
+#include "netdev-offload.h"
 #include "netdev-offload-tc.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
+#include "odp-util.h"
 #include "tc.h"
 #include "util.h"
 
 #include "openvswitch/json.h"
+#include "openvswitch/match.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_offload_tc);
@@ -37,6 +40,30 @@ struct dpif_offload_tc {
 
     /* Configuration specific variables. */
     struct ovsthread_once once_enable; /* Track first-time enablement. */
+};
+
+/* tc's flow dump specific data structures. */
+struct dpif_offload_tc_flow_dump {
+    struct dpif_offload_flow_dump dump;
+    struct ovs_mutex netdev_dump_mutex;
+    size_t netdev_dump_index;
+    size_t netdev_dump_count;
+    struct netdev_flow_dump *netdev_dumps[];
+};
+
+#define FLOW_DUMP_MAX_BATCH 50
+
+struct dpif_offload_tc_flow_dump_thread {
+    struct dpif_offload_flow_dump_thread thread;
+    struct dpif_offload_tc_flow_dump *dump;
+    bool netdev_dump_done;
+    size_t netdev_dump_index;
+
+    /* (Flows/Key/Mask/Actions) Buffers for netdev dumping. */
+    struct ofpbuf nl_flows;
+    struct odputil_keybuf keybuf[FLOW_DUMP_MAX_BATCH];
+    struct odputil_keybuf maskbuf[FLOW_DUMP_MAX_BATCH];
+    struct odputil_keybuf actbuf[FLOW_DUMP_MAX_BATCH];
 };
 
 static struct dpif_offload_tc *
@@ -217,7 +244,7 @@ static int
 dpif_offload_tc_netdev_flow_flush(const struct dpif_offload *offload
                                   OVS_UNUSED, struct netdev *netdev)
 {
-    return netdev_offload_tc_flow_flush(netdev);
+    return tc_flow_flush(netdev);
 }
 
 static int
@@ -228,7 +255,7 @@ dpif_offload_tc_flow_flush(const struct dpif_offload *offload)
     int error = 0;
 
     DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload_tc->port_mgr) {
-        int rc = netdev_offload_tc_flow_flush(port->netdev);
+        int rc = tc_flow_flush(port->netdev);
 
         if (rc && !error) {
             error = rc;
@@ -237,46 +264,225 @@ dpif_offload_tc_flow_flush(const struct dpif_offload *offload)
     return error;
 }
 
+static struct dpif_offload_tc_flow_dump *
+dpif_offload_tc_flow_dump_cast(struct dpif_offload_flow_dump *dump)
+{
+    return CONTAINER_OF(dump, struct dpif_offload_tc_flow_dump, dump);
+}
+
+static struct dpif_offload_tc_flow_dump_thread *
+dpif_offload_tc_flow_dump_thread_cast(
+    struct dpif_offload_flow_dump_thread *thread)
+{
+    return CONTAINER_OF(thread, struct dpif_offload_tc_flow_dump_thread,
+                        thread);
+}
+
 static struct dpif_offload_flow_dump *
-dpif_offload_tc_flow_dump_create(const struct dpif_offload *offload,
+dpif_offload_tc_flow_dump_create(const struct dpif_offload *offload_,
                                  bool terse)
 {
-    struct dpif_offload_flow_dump *dump;
+    struct dpif_offload_tc *offload = dpif_offload_tc_cast(offload_);
+    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_tc_flow_dump *dump;
+    size_t added_port_count = 0;
+    size_t port_count;
 
-    dump = xmalloc(sizeof *dump);
-    dpif_offload_flow_dump_init(dump, offload, terse);
-    return dump;
+    port_count = dpif_offload_port_mgr_port_count(offload->port_mgr);
+
+    dump = xmalloc(sizeof *dump +
+                   (port_count * sizeof(struct netdev_flow_dump)));
+
+    dpif_offload_flow_dump_init(&dump->dump, offload_, terse);
+
+    DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+        if (added_port_count >= port_count) {
+            break;
+        }
+        if (tc_flow_dump_create(
+            port->netdev, &dump->netdev_dumps[added_port_count], terse)) {
+            continue;
+        }
+        dump->netdev_dumps[added_port_count]->port = port->port_no;
+        added_port_count++;
+    }
+    dump->netdev_dump_count = added_port_count;
+    dump->netdev_dump_index = 0;
+    ovs_mutex_init(&dump->netdev_dump_mutex);
+    return &dump->dump;
 }
 
 static int
-dpif_offload_tc_flow_dump_next(struct dpif_offload_flow_dump_thread *thread,
+tc_netdev_match_to_dpif_flow(struct match *match, struct ofpbuf *key_buf,
+                             struct ofpbuf *mask_buf, struct nlattr *actions,
+                             struct dpif_flow_stats *stats,
+                             struct dpif_flow_attrs *attrs, ovs_u128 *ufid,
+                             struct dpif_flow *flow, bool terse)
+{
+    memset(flow, 0, sizeof *flow);
+
+    if (!terse) {
+        struct odp_flow_key_parms odp_parms = {
+            .flow = &match->flow,
+            .mask = &match->wc.masks,
+            .support = {
+                .max_vlan_headers = 2,
+                .recirc = true,
+                .ct_state = true,
+                .ct_zone = true,
+                .ct_mark = true,
+                .ct_label = true,
+            },
+        };
+        size_t offset;
+
+        /* Key */
+        offset = key_buf->size;
+        flow->key = ofpbuf_tail(key_buf);
+        odp_flow_key_from_flow(&odp_parms, key_buf);
+        flow->key_len = key_buf->size - offset;
+
+        /* Mask */
+        offset = mask_buf->size;
+        flow->mask = ofpbuf_tail(mask_buf);
+        odp_parms.key_buf = key_buf;
+        odp_flow_key_from_mask(&odp_parms, mask_buf);
+        flow->mask_len = mask_buf->size - offset;
+
+        /* Actions */
+        flow->actions = nl_attr_get(actions);
+        flow->actions_len = nl_attr_get_size(actions);
+    }
+
+    /* Stats */
+    memcpy(&flow->stats, stats, sizeof *stats);
+
+    /* UFID */
+    flow->ufid_present = true;
+    flow->ufid = *ufid;
+
+    flow->pmd_id = PMD_ID_NULL;
+
+    memcpy(&flow->attrs, attrs, sizeof *attrs);
+
+    return 0;
+}
+
+static void
+dpif_offload_tc_advance_provider_dump(
+    struct dpif_offload_tc_flow_dump_thread *thread)
+{
+    struct dpif_offload_tc_flow_dump *dump = thread->dump;
+
+    ovs_mutex_lock(&dump->netdev_dump_mutex);
+
+    /* If we haven't finished (dumped all providers). */
+    if (dump->netdev_dump_index < dump->netdev_dump_count) {
+        /* If we are the first to find that current dump is finished
+         * advance it. */
+        if (thread->netdev_dump_index == dump->netdev_dump_index) {
+            thread->netdev_dump_index = ++dump->netdev_dump_index;
+            /* Did we just finish the last dump? If so we are done. */
+            if (dump->netdev_dump_index == dump->netdev_dump_count) {
+                thread->netdev_dump_done = true;
+            }
+        } else {
+            /* Otherwise, we are behind, catch up. */
+            thread->netdev_dump_index = dump->netdev_dump_index;
+        }
+    } else {
+        /* Some other thread finished. */
+        thread->netdev_dump_done = true;
+    }
+
+    ovs_mutex_unlock(&dump->netdev_dump_mutex);
+}
+
+static int
+dpif_offload_tc_flow_dump_next(struct dpif_offload_flow_dump_thread *thread_,
                                struct dpif_flow *flows, int max_flows)
 {
-    ovs_assert(thread && flows && max_flows);
-    return 0;
+    struct dpif_offload_tc_flow_dump_thread *thread;
+    int n_flows = 0;
+
+    thread = dpif_offload_tc_flow_dump_thread_cast(thread_);
+    max_flows = MIN(max_flows, FLOW_DUMP_MAX_BATCH);
+
+    while (!thread->netdev_dump_done && n_flows < max_flows) {
+        struct odputil_keybuf *maskbuf = &thread->maskbuf[n_flows];
+        struct odputil_keybuf *keybuf = &thread->keybuf[n_flows];
+        struct odputil_keybuf *actbuf = &thread->actbuf[n_flows];
+        struct dpif_flow *f = &flows[n_flows];
+        struct netdev_flow_dump *netdev_dump;
+        int cur = thread->netdev_dump_index;
+        struct ofpbuf key, mask, act;
+        struct dpif_flow_stats stats;
+        struct dpif_flow_attrs attrs;
+        struct nlattr *actions;
+        struct match match;
+        ovs_u128 ufid;
+        bool has_next;
+
+        netdev_dump = thread->dump->netdev_dumps[cur];
+        ofpbuf_use_stack(&key, keybuf, sizeof *keybuf);
+        ofpbuf_use_stack(&act, actbuf, sizeof *actbuf);
+        ofpbuf_use_stack(&mask, maskbuf, sizeof *maskbuf);
+        has_next = tc_flow_dump_next(netdev_dump, &match, &actions, &stats,
+                                     &attrs, &ufid, &thread->nl_flows, &act);
+        if (has_next) {
+            tc_netdev_match_to_dpif_flow(&match, &key, &mask, actions, &stats,
+                                         &attrs, &ufid, f,
+                                         thread->dump->dump.terse);
+            n_flows++;
+        } else {
+            dpif_offload_tc_advance_provider_dump(thread);
+        }
+    }
+    return n_flows;
 }
 
 static int
-dpif_offload_tc_flow_dump_destroy(struct dpif_offload_flow_dump *dump)
+dpif_offload_tc_flow_dump_destroy(struct dpif_offload_flow_dump *dump_)
 {
+    struct dpif_offload_tc_flow_dump *dump;
+    int error = 0;
+
+    dump = dpif_offload_tc_flow_dump_cast(dump_);
+    for (int i = 0; i < dump->netdev_dump_count; i++) {
+        struct netdev_flow_dump *dump_netdev = dump->netdev_dumps[i];
+        int rc = tc_flow_dump_destroy(dump_netdev);
+
+        if (rc && !error) {
+            error = rc;
+        }
+    }
+    ovs_mutex_destroy(&dump->netdev_dump_mutex);
     free(dump);
-    return 0;
+    return error;
 }
 
 static struct dpif_offload_flow_dump_thread *
 dpif_offload_tc_flow_dump_thread_create(struct dpif_offload_flow_dump *dump)
 {
-    struct dpif_offload_flow_dump_thread *thread;
+    struct dpif_offload_tc_flow_dump_thread *thread;
 
     thread = xmalloc(sizeof *thread);
-    dpif_offload_flow_dump_thread_init(thread, dump);
-    return thread;
+    dpif_offload_flow_dump_thread_init(&thread->thread, dump);
+    thread->dump = dpif_offload_tc_flow_dump_cast(dump);
+    thread->netdev_dump_index = 0;
+    thread->netdev_dump_done = !thread->dump->netdev_dump_count;
+    ofpbuf_init(&thread->nl_flows, NL_DUMP_BUFSIZE);
+    return &thread->thread;
 }
 
 static void
 dpif_offload_tc_flow_dump_thread_destroy(
-    struct dpif_offload_flow_dump_thread *thread)
+    struct dpif_offload_flow_dump_thread *thread_)
 {
+    struct dpif_offload_tc_flow_dump_thread *thread;
+
+    thread = dpif_offload_tc_flow_dump_thread_cast(thread_);
+    ofpbuf_uninit(&thread->nl_flows);
     free(thread);
 }
 

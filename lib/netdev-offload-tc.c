@@ -565,7 +565,7 @@ delete_chains_from_netdev(struct netdev *netdev, struct tcf_id *id)
 }
 
 int
-netdev_offload_tc_flow_flush(struct netdev *netdev)
+tc_flow_flush(struct netdev *netdev)
 {
     struct ufid_tc_data *data;
     int err;
@@ -586,10 +586,9 @@ netdev_offload_tc_flow_flush(struct netdev *netdev)
     return 0;
 }
 
-static int
-netdev_tc_flow_dump_create(struct netdev *netdev,
-                           struct netdev_flow_dump **dump_out,
-                           bool terse)
+int
+tc_flow_dump_create(struct netdev *netdev, struct netdev_flow_dump **dump_out,
+                    bool terse)
 {
     enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
     struct netdev_flow_dump *dump;
@@ -618,9 +617,8 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
 
     return 0;
 }
-
-static int
-netdev_tc_flow_dump_destroy(struct netdev_flow_dump *dump)
+int
+tc_flow_dump_destroy(struct netdev_flow_dump *dump)
 {
     nl_dump_done(dump->nl_dump);
     netdev_close(dump->netdev);
@@ -1351,15 +1349,11 @@ parse_tc_flower_to_match(const struct netdev *netdev,
     return 0;
 }
 
-static bool
-netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
-                         struct match *match,
-                         struct nlattr **actions,
-                         struct dpif_flow_stats *stats,
-                         struct dpif_flow_attrs *attrs,
-                         ovs_u128 *ufid,
-                         struct ofpbuf *rbuffer,
-                         struct ofpbuf *wbuffer)
+bool
+tc_flow_dump_next(struct netdev_flow_dump *dump, struct match *match,
+                  struct nlattr **actions, struct dpif_flow_stats *stats,
+                  struct dpif_flow_attrs *attrs, ovs_u128 *ufid,
+                  struct ofpbuf *rbuffer, struct ofpbuf *wbuffer)
 {
     struct netdev *netdev = dump->netdev;
     struct ofpbuf nl_flow;
@@ -3441,9 +3435,6 @@ dpif_offload_tc_meter_del(const struct dpif_offload *offload OVS_UNUSED,
 
 const struct netdev_flow_api netdev_offload_tc = {
    .type = "linux_tc",
-   .flow_dump_create = netdev_tc_flow_dump_create,
-   .flow_dump_destroy = netdev_tc_flow_dump_destroy,
-   .flow_dump_next = netdev_tc_flow_dump_next,
    .flow_put = netdev_tc_flow_put,
    .flow_get = netdev_tc_flow_get,
    .flow_del = netdev_tc_flow_del,

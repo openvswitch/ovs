@@ -276,6 +276,7 @@ bool dpif_offload_port_mgr_add(struct dpif_offload_port_mgr *,
 struct dpif_offload_port_mgr_port *dpif_offload_port_mgr_remove(
     struct dpif_offload_port_mgr *, odp_port_t);
 void dpif_offload_port_mgr_uninit(struct dpif_offload_port_mgr *);
+size_t dpif_offload_port_mgr_port_count(struct dpif_offload_port_mgr *);
 struct dpif_offload_port_mgr_port *dpif_offload_port_mgr_find_by_ifindex(
     struct dpif_offload_port_mgr *, int ifindex);
 struct dpif_offload_port_mgr_port *dpif_offload_port_mgr_find_by_netdev(
