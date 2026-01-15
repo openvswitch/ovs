@@ -1166,3 +1166,23 @@ OVS_WAIT_WHILE(
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([offloads - ovs-appctl dpif/offload/show - offloads enabled])
+AT_KEYWORDS([dpif-offload])
+OVS_TRAFFIC_VSWITCHD_START([], [],
+  [-- set Open_vSwitch . other_config:hw-offload=true])
+
+AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
+system@ovs-system:
+  tc
+])
+
+AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
+{
+  "system@ovs-system": {
+    "providers": [[
+      "tc"]]}}
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

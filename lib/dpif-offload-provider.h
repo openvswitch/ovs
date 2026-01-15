@@ -17,6 +17,7 @@
 #ifndef DPIF_OFFLOAD_PROVIDER_H
 #define DPIF_OFFLOAD_PROVIDER_H
 
+#include "dpif-provider.h"
 #include "ovs-thread.h"
 
 #include "openvswitch/list.h"
@@ -88,6 +89,7 @@ struct dpif_offload_class {
 
 extern struct dpif_offload_class dpif_offload_dummy_class;
 extern struct dpif_offload_class dpif_offload_dummy_x_class;
+extern struct dpif_offload_class dpif_offload_tc_class;
 
 
 /* Global function, called by the dpif layer. */

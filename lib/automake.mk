@@ -475,6 +475,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/dpif-netlink.h \
 	lib/dpif-netlink-rtnl.c \
 	lib/dpif-netlink-rtnl.h \
+	lib/dpif-offload-tc.c \
 	lib/if-notifier.c \
 	lib/netdev-linux.c \
 	lib/netdev-linux.h \
