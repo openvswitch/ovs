@@ -228,6 +228,7 @@ struct dpif_class {
     int (*get_stats)(const struct dpif *dpif, struct dpif_dp_stats *stats);
 
     int (*set_features)(struct dpif *dpif, uint32_t user_features);
+    uint32_t (*get_features)(struct dpif *dpif);
 
     /* Adds 'netdev' as a new port in 'dpif'.  If '*port_no' is not
      * ODPP_NONE, attempts to use that as the port's port number.

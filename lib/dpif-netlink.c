@@ -121,6 +121,8 @@ static int dpif_netlink_dp_get(const struct dpif *,
                                struct ofpbuf **bufp);
 static int
 dpif_netlink_set_features(struct dpif *dpif_, uint32_t new_features);
+static uint32_t
+dpif_netlink_get_features(struct dpif *dpif_);
 
 static void
 dpif_netlink_unixctl_dispatch_mode(struct unixctl_conn *conn, int argc,
@@ -878,6 +880,14 @@ dpif_netlink_set_features(struct dpif *dpif_, uint32_t new_features)
     }
 
     return error;
+}
+
+static uint32_t
+dpif_netlink_get_features(struct dpif *dpif_)
+{
+    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+
+    return dpif->user_features;
 }
 
 static const char *
@@ -4370,6 +4380,7 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* wait */
     dpif_netlink_get_stats,
     dpif_netlink_set_features,
+    dpif_netlink_get_features,
     dpif_netlink_port_add,
     dpif_netlink_port_del,
     NULL,                       /* port_set_config */

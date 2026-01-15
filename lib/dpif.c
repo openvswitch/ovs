@@ -565,10 +565,20 @@ dpif_get_dp_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 int
 dpif_set_features(struct dpif *dpif, uint32_t new_features)
 {
-    int error = dpif->dpif_class->set_features(dpif, new_features);
+    int error = dpif->dpif_class->set_features
+                    ? dpif->dpif_class->set_features(dpif, new_features)
+                    : EOPNOTSUPP;
 
     log_operation(dpif, "set_features", error);
     return error;
+}
+
+uint32_t
+dpif_get_features(struct dpif *dpif)
+{
+    return dpif->dpif_class->get_features
+               ? dpif->dpif_class->get_features(dpif)
+               : 0;
 }
 
 const char *

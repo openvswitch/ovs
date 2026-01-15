@@ -9976,6 +9976,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_wait,
     dpif_netdev_get_stats,
     NULL,                      /* set_features */
+    NULL,                      /* get_features */
     dpif_netdev_port_add,
     dpif_netdev_port_del,
     dpif_netdev_port_set_config,
