@@ -10113,6 +10113,41 @@ OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy])
 
 AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
 dummy@ovs-dummy:
+  dummy
+  dummy_x
+])
+
+AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
+{
+  "dummy@ovs-dummy": {
+    "providers": [[
+      "dummy",
+      "dummy_x"]]}}
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - offload - priority order - warning])
+AT_KEYWORDS([dpif-offload])
+OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy], [], [],
+  [], [-- set Open_vSwitch . other_config:hw-offload-priority=none,dummy])
+
+OVS_WAIT_UNTIL(
+  [grep "hw-offload-priority configuration has an unknown type; none" \
+        ovs-vswitchd.log])
+
+OVS_VSWITCHD_STOP(
+  ["/hw-offload-priority configuration has an unknown type;/d"])
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - offload - priority order])
+AT_KEYWORDS([dpif-offload])
+OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy], [], [],
+  [], [-- set Open_vSwitch . other_config:hw-offload-priority=dummy_x,dummy])
+
+AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
+dummy@ovs-dummy:
   dummy_x
   dummy
 ])

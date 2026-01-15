@@ -43,9 +43,15 @@ static const struct dpif_offload_class *base_dpif_offload_classes[] = {
 #ifdef DPDK_NETDEV
     &dpif_offload_dpdk_class,
 #endif
+    /* While adding a new offload class to this structure make sure to also
+     * update the dpif_offload_provider_priority_list below. */
     &dpif_offload_dummy_class,
     &dpif_offload_dummy_x_class,
 };
+
+#define DEFAULT_PROVIDER_PRIORITY_LIST "tc,dpdk,dummy,dummy_x"
+
+static char *dpif_offload_provider_priority_list = NULL;
 
 static int
 dpif_offload_register_provider__(const struct dpif_offload_class *class)
@@ -131,6 +137,11 @@ dpif_offload_module_init(void)
         return;
     }
 
+    if (!dpif_offload_provider_priority_list) {
+        dpif_offload_provider_priority_list =
+            xstrdup(DEFAULT_PROVIDER_PRIORITY_LIST);
+    }
+
     unixctl_command_register("dpif/offload/classes", NULL, 0, 0,
                              dpif_offload_show_classes, NULL);
 
@@ -149,6 +160,19 @@ dpif_get_offload_provider_collection(const struct dpif *dpif)
 {
     return ovsrcu_get(struct dpif_offload_provider_collection *,
                       &dpif->offload_provider_collection);
+}
+
+static void
+dpif_attach_offload_provider_collection(
+    struct dpif *dpif, struct dpif_offload_provider_collection *collection)
+    OVS_REQUIRES(dpif_offload_mutex)
+{
+    /* When called, 'collection' should still have a refcount > 0, which is
+     * guaranteed by holding the lock from the shash lookup up to this point.
+     * If, for any reason, the refcount is not > 0, ovs_refcount_ref() will
+     * assert. */
+    ovs_refcount_ref(&collection->ref_cnt);
+    ovsrcu_set(&dpif->offload_provider_collection, collection);
 }
 
 static int
@@ -172,25 +196,34 @@ provider_collection_add(struct dpif_offload_provider_collection *collection,
 }
 
 static void
-dpif_attach_offload_provider_collection(
-    struct dpif *dpif, struct dpif_offload_provider_collection *collection)
+move_provider_to_collection(
+    struct dpif_offload_provider_collection *collection,
+    struct dpif_offload *offload)
     OVS_REQUIRES(dpif_offload_mutex)
 {
-    /* When called, 'collection' should still have a refcount > 0, which is
-     * guaranteed by holding the lock from the shash lookup up to this point.
-     * If, for any reason, the refcount is not > 0, ovs_refcount_ref() will
-     * assert. */
-    ovs_refcount_ref(&collection->ref_cnt);
-    ovsrcu_set(&dpif->offload_provider_collection, collection);
+    int error;
+
+    ovs_list_remove(&offload->dpif_list_node);
+    error = provider_collection_add(collection, offload);
+    if (error) {
+        VLOG_WARN("failed to add dpif offload provider %s to %s: %s",
+                  dpif_offload_type(offload), collection->dpif_name,
+                  ovs_strerror(error));
+
+        offload->class->close(offload);
+    }
 }
 
 static int
 dpif_attach_new_offload_provider_collection(struct dpif *dpif)
     OVS_REQUIRES(dpif_offload_mutex)
 {
+    struct ovs_list provider_list = OVS_LIST_INITIALIZER(&provider_list);
     const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
     struct dpif_offload_provider_collection *collection;
+    struct dpif_offload *offload;
     struct shash_node *node;
+    char *tokens, *saveptr;
 
     /* Allocate and attach collection to dpif. */
     collection = xmalloc(sizeof *collection);
@@ -200,37 +233,52 @@ dpif_attach_new_offload_provider_collection(struct dpif *dpif)
     ovs_list_init(&collection->list);
     shash_add(&dpif_offload_providers, collection->dpif_name, collection);
 
-    /* Attach all the providers supporting this dpif type. */
+    /* Open all the providers supporting this dpif type. */
     SHASH_FOR_EACH (node, &dpif_offload_classes) {
         const struct dpif_offload_class *class = node->data;
 
         for (size_t i = 0; class->supported_dpif_types[i] != NULL; i++) {
             if (!strcmp(class->supported_dpif_types[i], dpif_type_str)) {
-                struct dpif_offload *offload;
-                int error;
+                int error = class->open(class, dpif, &offload);
 
-                error = class->open(class, dpif, &offload);
-                if (!error) {
-                    error = provider_collection_add(collection, offload);
-                    if (error) {
-                        VLOG_WARN("failed to add dpif offload provider "
-                                  "%s to %s: %s",
-                                  class->type, dpif_name(dpif),
-                                  ovs_strerror(error));
-                        class->close(offload);
-                    }
-                } else {
+                if (error) {
                     VLOG_WARN("failed to initialize dpif offload provider "
                               "%s for %s: %s",
                               class->type, dpif_name(dpif),
                               ovs_strerror(error));
+                } else {
+                    ovs_list_push_back(&provider_list,
+                                       &offload->dpif_list_node);
                 }
                 break;
             }
         }
     }
 
-    /* Attach offload collection to dpif. */
+    /* Attach all the providers based on the priority list. */
+    tokens = xstrdup(dpif_offload_provider_priority_list);
+
+    for (char *name = strtok_r(tokens, ",", &saveptr);
+         name;
+         name = strtok_r(NULL, ",", &saveptr)) {
+
+        LIST_FOR_EACH_SAFE (offload, dpif_list_node, &provider_list) {
+            if (strcmp(name, offload->class->type)) {
+                continue;
+            }
+
+            move_provider_to_collection(collection, offload);
+            break;
+        }
+    }
+    free(tokens);
+
+    /* Add remaining entries in order. */
+    LIST_FOR_EACH_SAFE (offload, dpif_list_node, &provider_list) {
+        move_provider_to_collection(collection, offload);
+    }
+
+    /* Attach the new collection to the dpif. */
     ovsrcu_set(&dpif->offload_provider_collection, collection);
 
     return 0;
@@ -396,4 +444,47 @@ int
 dpif_offload_dump_done(struct dpif_offload_dump *dump)
 {
     return dump->error == EOF ? 0 : dump->error;
+}
+
+void
+dpif_offload_set_global_cfg(const struct smap *other_cfg)
+{
+    static struct ovsthread_once init_once = OVSTHREAD_ONCE_INITIALIZER;
+    const char *priority = smap_get(other_cfg, "hw-offload-priority");
+
+    /* The 'hw-offload-priority' parameter can only be set at startup,
+     * any successive change needs a restart. */
+    if (ovsthread_once_start(&init_once)) {
+        /* Initialize the dpif-offload layer in case it's not yet initialized
+         * at the first invocation of setting the configuration. */
+        dpif_offload_module_init();
+
+        /* If priority is not set keep the default value. */
+        if (priority) {
+            char *tokens = xstrdup(priority);
+            char *saveptr;
+
+            free(dpif_offload_provider_priority_list);
+            dpif_offload_provider_priority_list = xstrdup(priority);
+
+            /* Log a warning for unknown offload providers. */
+            for (char *name = strtok_r(tokens, ",", &saveptr);
+                 name;
+                 name = strtok_r(NULL, ",", &saveptr)) {
+
+                if (!shash_find(&dpif_offload_classes, name)) {
+                    VLOG_WARN("hw-offload-priority configuration has an "
+                              "unknown type; %s", name);
+                }
+            }
+            free(tokens);
+        }
+        ovsthread_once_done(&init_once);
+    } else {
+        if (priority && strcmp(priority,
+                               dpif_offload_provider_priority_list)) {
+            VLOG_INFO_ONCE("hw-offload-priority configuration changed; "
+                           "restart required");
+        }
+    }
 }

@@ -254,6 +254,25 @@
         </p>
       </column>
 
+      <column name="other_config" key="hw-offload-priority"
+              type='{"type": "string"}'>
+        <p>
+          This configuration sets the order of the hardware offload providers
+          to try when multiple exist for a given datapath implementation.
+          The argument provided should be a list of comma-separated hardware
+          offload provider names.
+        </p>
+        <p>
+          If implementations are missing from the list, they are added at the
+          end in undefined order.
+        </p>
+        <p>
+          The default value is <code>tc,dpdk</code>.  Changing this value
+          requires restarting the daemon if hardware offload is already
+          enabled.
+        </p>
+      </column>
+
       <column name="other_config" key="n-offload-threads"
               type='{"type": "integer", "minInteger": 1, "maxInteger": 10}'>
         <p>

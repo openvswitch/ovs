@@ -31,6 +31,10 @@ struct dpif_offload_dump {
 };
 
 
+/* Global functions. */
+void dpif_offload_set_global_cfg(const struct smap *other_cfg);
+
+
 /* Per dpif specific functions. */
 void dpif_offload_init(struct dpif_offload *,
                        const struct dpif_offload_class *, struct dpif *);
