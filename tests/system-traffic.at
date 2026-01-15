@@ -9893,7 +9893,7 @@ NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
 
 dnl Check the expected de-capsulated TCP packet on the egress interface
 OVS_WAIT_UNTIL([ovs-pcap p1.pcap | grep -q \
-    "^$(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT')\$"])
+    "^$(ovs-ofctl compose-packet --bare 'TCP_SYN_PKT')0*\$"])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
