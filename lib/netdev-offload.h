@@ -47,7 +47,8 @@ struct ovs_action_push_tnl;
 /* Offload-capable (HW) netdev information */
 struct netdev_hw_info {
     bool oor;                         /* Out of Offload Resources ? */
-    atomic_bool miss_api_supported;   /* hw_miss_packet_recover() supported.*/
+    /* Is hw_post_process() supported. */
+    atomic_bool post_process_api_supported;
     int offload_count;                /* Offloaded flow count */
     int pending_count;                /* Pending (non-offloaded) flow count */
     OVSRCU_TYPE(void *) offload_data; /* Offload metadata. */
@@ -110,7 +111,6 @@ bool netdev_flow_dump_next(struct netdev_flow_dump *, struct match *,
 int netdev_flow_put(struct netdev *, struct match *, struct nlattr *actions,
                     size_t actions_len, const ovs_u128 *,
                     struct offload_info *, struct dpif_flow_stats *);
-int netdev_hw_miss_packet_recover(struct netdev *, struct dp_packet *);
 int netdev_flow_get(struct netdev *, struct match *, struct nlattr **actions,
                     const ovs_u128 *, struct dpif_flow_stats *,
                     struct dpif_flow_attrs *, struct ofpbuf *wbuffer);

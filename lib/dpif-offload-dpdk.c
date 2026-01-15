@@ -249,6 +249,14 @@ dpif_offload_dpdk_netdev_flow_flush(const struct dpif_offload *offload
     return netdev_offload_dpdk_flow_flush(netdev);
 }
 
+static int
+dpif_offload_dpdk_netdev_hw_post_process(
+    const struct dpif_offload *offload_ OVS_UNUSED, struct netdev *netdev,
+    struct dp_packet *packet)
+{
+    return netdev_offload_dpdk_hw_miss_packet_recover(netdev, packet);
+}
+
 struct dpif_offload_class dpif_offload_dpdk_class = {
     .type = "dpdk",
     .supported_dpif_types = (const char *const[]) {"netdev", NULL},
@@ -261,6 +269,7 @@ struct dpif_offload_class dpif_offload_dpdk_class = {
     .port_del = dpif_offload_dpdk_port_del,
     .flow_count = dpif_offload_dpdk_flow_count,
     .netdev_flow_flush = dpif_offload_dpdk_netdev_flow_flush,
+    .netdev_hw_post_process = dpif_offload_dpdk_netdev_hw_post_process,
 };
 
 /* XXX: Temporary functions below, which will be removed once fully

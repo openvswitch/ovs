@@ -165,6 +165,17 @@ struct dpif_offload_class {
     /* Deletes all offloaded flows on this netdev.  Return 0 if successful,
      * otherwise returns a positive errno value. */
     int (*netdev_flow_flush)(const struct dpif_offload *, struct netdev *);
+
+    /* Recover and/or set the packet state (contents and metadata) for
+     * continued processing in software, and/or perform any additional
+     * post-processing required by the offload provider.
+     *
+     * Return 0 if successful and the packet requires further processing;
+     * otherwise, return a positive errno value and take ownership of the
+     * packet if errno != EOPNOTSUPP.  Return ECANCELED if the packet was
+     * fully consumed by the provider for non-error conditions. */
+    int (*netdev_hw_post_process)(const struct dpif_offload *, struct netdev *,
+                                  struct dp_packet *);
 };
 
 

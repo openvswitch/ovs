@@ -75,5 +75,6 @@ void dpif_offload_meter_del(const struct dpif *dpif, ofproto_meter_id meter_id,
 
 /* Netdev specific function, which can be used in the fast path. */
 int dpif_offload_netdev_flush_flows(struct netdev *);
+int dpif_offload_netdev_hw_post_process(struct netdev *, struct dp_packet *);
 
 #endif /* DPIF_OFFLOAD_H */

@@ -2685,7 +2685,7 @@ get_vport_netdev(const char *dpif_type,
     return aux.vport;
 }
 
-static int
+int
 netdev_offload_dpdk_hw_miss_packet_recover(struct netdev *netdev,
                                            struct dp_packet *packet)
 {
@@ -2803,5 +2803,4 @@ const struct netdev_flow_api netdev_offload_dpdk = {
     .init_flow_api = netdev_offload_dpdk_init_flow_api,
     .uninit_flow_api = netdev_offload_dpdk_uninit_flow_api,
     .flow_get = netdev_offload_dpdk_flow_get,
-    .hw_miss_packet_recover = netdev_offload_dpdk_hw_miss_packet_recover,
 };

@@ -435,7 +435,8 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                     seq_read(netdev->reconfigure_seq);
                 ovsrcu_set(&netdev->flow_api, NULL);
                 netdev->hw_info.oor = false;
-                atomic_init(&netdev->hw_info.miss_api_supported, false);
+                atomic_init(&netdev->hw_info.post_process_api_supported,
+                            false);
                 netdev->node = shash_add(&netdev_shash, name, netdev);
 
                 /* By default enable one tx and rx queue per netdev. */

@@ -186,7 +186,8 @@ netdev_assign_flow_api(struct netdev *netdev)
     CMAP_FOR_EACH (rfa, cmap_node, &netdev_flow_apis) {
         if (!rfa->flow_api->init_flow_api(netdev)) {
             ovs_refcount_ref(&rfa->refcnt);
-            atomic_store_relaxed(&netdev->hw_info.miss_api_supported, true);
+            atomic_store_relaxed(&netdev->hw_info.post_process_api_supported,
+                                 true);
             ovsrcu_set(&netdev->flow_api, rfa->flow_api);
             VLOG_INFO("%s: Assigned flow API '%s'.",
                       netdev_get_name(netdev), rfa->flow_api->type);
@@ -195,7 +196,7 @@ netdev_assign_flow_api(struct netdev *netdev)
         VLOG_DBG("%s: flow API '%s' is not suitable.",
                  netdev_get_name(netdev), rfa->flow_api->type);
     }
-    atomic_store_relaxed(&netdev->hw_info.miss_api_supported, false);
+    atomic_store_relaxed(&netdev->hw_info.post_process_api_supported, false);
     VLOG_INFO("%s: No suitable flow API found.", netdev_get_name(netdev));
 
     return -1;
@@ -252,34 +253,6 @@ netdev_flow_put(struct netdev *netdev, struct match *match,
            ? flow_api->flow_put(netdev, match, actions, act_len, ufid,
                                 info, stats)
            : EOPNOTSUPP;
-}
-
-int
-netdev_hw_miss_packet_recover(struct netdev *netdev,
-                              struct dp_packet *packet)
-{
-    const struct netdev_flow_api *flow_api;
-    bool miss_api_supported;
-    int rv;
-
-    atomic_read_relaxed(&netdev->hw_info.miss_api_supported,
-                        &miss_api_supported);
-    if (!miss_api_supported) {
-        return EOPNOTSUPP;
-    }
-
-    flow_api = ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api);
-    if (!flow_api || !flow_api->hw_miss_packet_recover) {
-        return EOPNOTSUPP;
-    }
-
-    rv = flow_api->hw_miss_packet_recover(netdev, packet);
-    if (rv == EOPNOTSUPP) {
-        /* API unsupported by the port; avoid subsequent calls. */
-        atomic_store_relaxed(&netdev->hw_info.miss_api_supported, false);
-    }
-
-    return rv;
 }
 
 int

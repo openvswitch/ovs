@@ -24,5 +24,7 @@ struct netdev;
  * associated dpif offload provider. */
 int netdev_offload_dpdk_flow_flush(struct netdev *);
 uint64_t netdev_offload_dpdk_flow_count(struct netdev *);
+int netdev_offload_dpdk_hw_miss_packet_recover(struct netdev *,
+                                               struct dp_packet *);
 
 #endif /* NETDEV_OFFLOAD_DPDK_H */
