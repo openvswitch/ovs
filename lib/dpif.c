@@ -1417,12 +1417,11 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
                 ops_left = dpif_offload_operate(dpif, ops_copy, chunk,
                                                 offload_type);
                 if (ops_left) {
-                    dpif->dpif_class->operate(dpif, ops_copy, ops_left,
-                                              offload_type);
+                    dpif->dpif_class->operate(dpif, ops_copy, ops_left);
                 }
                 free(ops_copy);
             } else {
-                dpif->dpif_class->operate(dpif, ops, chunk, offload_type);
+                dpif->dpif_class->operate(dpif, ops, chunk);
             }
 
             for (i = 0; i < chunk; i++) {
