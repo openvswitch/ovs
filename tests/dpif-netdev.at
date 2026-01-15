@@ -414,7 +414,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD],
    AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg netdev_dummy:file:dbg])
 
    AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
-   OVS_WAIT_UNTIL([grep "netdev: Flow API Enabled" ovs-vswitchd.log])
+   OVS_WAIT_UNTIL([grep "Flow HW offload is enabled" ovs-vswitchd.log])
 
    AT_CHECK([ovs-ofctl del-flows br0])
    AT_CHECK([ovs-ofctl add-flow br0 in_port=1,actions=IN_PORT])
@@ -477,7 +477,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS],
    AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg netdev_dummy:file:dbg])
 
    AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
-   OVS_WAIT_UNTIL([grep "netdev: Flow API Enabled" ovs-vswitchd.log])
+   OVS_WAIT_UNTIL([grep "Flow HW offload is enabled" ovs-vswitchd.log])
 
    AT_CHECK([ovs-ofctl del-flows br0])
 
@@ -554,7 +554,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP],
    AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg netdev_dummy:file:dbg])
 
    AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
-   OVS_WAIT_UNTIL([grep "netdev: Flow API Enabled" ovs-vswitchd.log])
+   OVS_WAIT_UNTIL([grep "Flow HW offload is enabled" ovs-vswitchd.log])
 
    AT_CHECK([ovs-ofctl del-flows br0])
 

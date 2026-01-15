@@ -348,6 +348,25 @@ dpif_detach_offload_providers(struct dpif *dpif)
     }
 }
 
+void
+dpif_offload_set_config(struct dpif *dpif, const struct smap *other_cfg)
+{
+    struct dpif_offload_provider_collection *collection;
+    struct dpif_offload *offload;
+
+    collection = dpif_get_offload_provider_collection(dpif);
+
+    if (!collection) {
+        return;
+    }
+
+    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+        if (offload->class->set_config) {
+            offload->class->set_config(offload, other_cfg);
+        }
+    }
+}
+
 
 void
 dpif_offload_init(struct dpif_offload *offload,
@@ -514,6 +533,7 @@ dpif_offload_set_global_cfg(const struct smap *other_cfg)
 
         if (ovsthread_once_start(&once_enable)) {
             atomic_store_relaxed(&offload_global_enabled, true);
+            VLOG_INFO("Flow HW offload is enabled");
 
             if (smap_get_bool(other_cfg, "offload-rebalance", false)) {
                 atomic_store_relaxed(&offload_rebalance_policy, true);

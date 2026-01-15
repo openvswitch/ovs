@@ -161,6 +161,12 @@ ovsthread_once_start(struct ovsthread_once *once)
     return OVS_UNLIKELY(!once->done && ovsthread_once_start__(once));
 }
 
+static inline void
+ovsthread_once_destroy(struct ovsthread_once *once)
+{
+    ovs_mutex_destroy(&once->mutex);
+}
+
 #ifdef __cplusplus
 }
 #endif

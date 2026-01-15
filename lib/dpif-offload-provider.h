@@ -19,6 +19,8 @@
 
 #include "dpif-provider.h"
 #include "ovs-thread.h"
+#include "smap.h"
+#include "util.h"
 
 #include "openvswitch/list.h"
 
@@ -84,6 +86,9 @@ struct dpif_offload_class {
      * open() above.  If implementation accesses this provider using
      * RCU pointers, it's responsible for handling deferred deallocation. */
     void (*close)(struct dpif_offload *);
+    /* Pass custom configuration options to the offload provider. */
+    void (*set_config)(struct dpif_offload *,
+                       const struct smap *other_config);
 };
 
 
@@ -93,8 +98,15 @@ extern struct dpif_offload_class dpif_offload_dpdk_class;
 extern struct dpif_offload_class dpif_offload_tc_class;
 
 
-/* Global function, called by the dpif layer. */
+/* Global functions, called by the dpif layer or offload providers. */
 void dpif_offload_module_init(void);
+void dpif_offload_set_config(struct dpif *, const struct smap *other_cfg);
 
+static inline void
+dpif_offload_assert_class(const struct dpif_offload *dpif_offload,
+                          const struct dpif_offload_class *dpif_offload_class)
+{
+    ovs_assert(dpif_offload->class == dpif_offload_class);
+}
 
 #endif /* DPIF_OFFLOAD_PROVIDER_H */

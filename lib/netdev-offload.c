@@ -61,10 +61,16 @@ VLOG_DEFINE_THIS_MODULE(netdev_offload);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-#define DEFAULT_OFFLOAD_THREAD_NB 1
+/* XXX: Temporarily duplicates definition in dpif-offload-dpdk.c. */
 #define MAX_OFFLOAD_THREAD_NB 10
-
+#define DEFAULT_OFFLOAD_THREAD_NB 1
 static unsigned int offload_thread_nb = DEFAULT_OFFLOAD_THREAD_NB;
+
+unsigned int dpif_offload_dpdk_get_thread_nb(void); /* XXX: Temporarily
+                                                     * external declaration
+                                                     * until fully refactored.
+                                                     */
+
 DEFINE_EXTERN_PER_THREAD_DATA(netdev_offload_thread_id, OVSTHREAD_ID_UNSET);
 
 /* Protects 'netdev_flow_apis'.  */
@@ -853,37 +859,18 @@ netdev_ports_flow_init(void)
 }
 
 void
-netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
+netdev_set_flow_api_enabled(const struct smap *ovs_other_config OVS_UNUSED)
 {
     if (dpif_offload_enabled()) {
         static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
         if (ovsthread_once_start(&once)) {
 
-            offload_thread_nb = smap_get_ullong(ovs_other_config,
-                                                "n-offload-threads",
-                                                DEFAULT_OFFLOAD_THREAD_NB);
-            if (offload_thread_nb == 0 ||
-                offload_thread_nb > MAX_OFFLOAD_THREAD_NB) {
-                VLOG_WARN("netdev: Invalid number of threads requested: %u",
-                          offload_thread_nb);
-                offload_thread_nb = DEFAULT_OFFLOAD_THREAD_NB;
-            }
-
-            if (smap_get(ovs_other_config, "n-offload-threads")) {
-                VLOG_INFO("netdev: Flow API Enabled, using %u thread%s",
-                          offload_thread_nb,
-                          offload_thread_nb > 1 ? "s" : "");
-            } else {
-                VLOG_INFO("netdev: Flow API Enabled");
-            }
-
-#ifdef __linux__
-            tc_set_policy(smap_get_def(ovs_other_config, "tc-policy",
-                                       TC_POLICY_DEFAULT));
+#ifdef DPDK_NETDEV
+            offload_thread_nb = dpif_offload_dpdk_get_thread_nb();
 #endif
-            netdev_ports_flow_init();
 
+            netdev_ports_flow_init();
             ovsthread_once_done(&once);
         }
     }

@@ -224,7 +224,7 @@ m4_define([_OVS_VSWITCHD_START],
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d
 /dpdk|INFO|DPDK Disabled - Use other_config:dpdk-init to enable/d
 /netlink_socket|INFO|netlink: could not enable listening to all nsid/d
-/netdev_offload|INFO|netdev: Flow API Enabled/d
+/dpif_offload|INFO|Flow HW offload is enabled/d
 /probe tc:/d
 /setting extended ack support failed/d
 /tc: Using policy/d
