@@ -195,6 +195,18 @@ struct dpif_offload_class {
 
     void (*flow_dump_thread_destroy)(struct dpif_offload_flow_dump_thread *);
 
+    /* Executes each of the 'n_ops' operations in 'ops' in order if their
+     * 'error' field is negative, placing each operation's results in the
+     * 'output' members documented in comments and the 'error' member of each
+     * dpif_op.  Operations with a non-negative 'error' value have already been
+     * processed by a higher priority offload provider.
+     *
+     * Note that only the DPIF_OP_FLOW_PUT/DEL/GET operations should be
+     * handled, and this is only needed for the
+     * DPIF_OFFLOAD_IMPL_FLOWS_PROVIDER_ONLY type of offload providers. */
+    void (*operate)(struct dpif *, const struct dpif_offload *,
+                    struct dpif_op **, size_t n_ops);
+
     /* Returns the number of flows offloaded by the offload provider. */
     uint64_t (*flow_count)(const struct dpif_offload *);
 
@@ -315,6 +327,8 @@ int dpif_offload_flow_dump_next(struct dpif_flow_dump_thread *,
 void dpif_offload_flow_dump_thread_create(struct dpif_flow_dump_thread *,
                                           struct dpif_flow_dump *);
 void dpif_offload_flow_dump_thread_destroy(struct dpif_flow_dump_thread *);
+size_t dpif_offload_operate(struct dpif *, struct dpif_op **, size_t n_ops,
+                            enum dpif_offload_type offload_type);
 
 static inline void
 dpif_offload_assert_class(const struct dpif_offload *dpif_offload,

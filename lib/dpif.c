@@ -1396,7 +1396,24 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
              * handle itself, without help. */
             size_t i;
 
-            dpif->dpif_class->operate(dpif, ops, chunk, offload_type);
+            /* See if we can handle some flow add/del/get through the
+             * dpif-offload provider. */
+            if (offload_type != DPIF_OFFLOAD_NEVER && dpif_offload_enabled()) {
+                struct dpif_op **ops_copy;
+                size_t ops_left;
+
+                ops_copy = xmemdup(ops, sizeof(*ops_copy) * chunk);
+
+                ops_left = dpif_offload_operate(dpif, ops_copy, chunk,
+                                                offload_type);
+                if (ops_left) {
+                    dpif->dpif_class->operate(dpif, ops_copy, ops_left,
+                                              offload_type);
+                }
+                free(ops_copy);
+            } else {
+                dpif->dpif_class->operate(dpif, ops, chunk, offload_type);
+            }
 
             for (i = 0; i < chunk; i++) {
                 struct dpif_op *op = ops[i];

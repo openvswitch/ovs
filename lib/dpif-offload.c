@@ -31,7 +31,7 @@
 
 VLOG_DEFINE_THIS_MODULE(dpif_offload);
 
-static struct vlog_rate_limit rl_dbg = VLOG_RATE_LIMIT_INIT(1, 5);
+static struct vlog_rate_limit rl_dbg = VLOG_RATE_LIMIT_INIT(100, 100);
 
 static struct ovs_mutex dpif_offload_mutex = OVS_MUTEX_INITIALIZER;
 static struct shash dpif_offload_classes \
@@ -1123,6 +1123,89 @@ dpif_offload_get_netdev_by_port_id(struct dpif *dpif,
     }
 
     return netdev;
+}
+
+/* This function tries to offload the operations to the dpif-offload
+ * providers.  It will return the number of operations not handled, whose
+ * pointers are re-arranged and available in **ops. */
+size_t
+dpif_offload_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
+                     enum dpif_offload_type offload_type)
+{
+    struct dpif_offload_provider_collection *collection;
+    const struct dpif_offload *offload;
+    size_t n_ops_left = 0;
+
+    collection = dpif_get_offload_provider_collection(dpif);
+    if (!collection || !dpif_offload_enabled()) {
+        return n_ops;
+    }
+
+    for (size_t i = 0; i < n_ops; i++) {
+        ops[i]->error = -1;
+    }
+
+    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+        if (offload->class->impl_type == DPIF_OFFLOAD_IMPL_FLOWS_PROVIDER_ONLY
+            && offload->class->operate) {
+
+            offload->class->operate(dpif, offload, ops, n_ops);
+
+            for (size_t i = 0; i < n_ops; i++) {
+                struct dpif_op *op = ops[i];
+
+                if (op->error == EOPNOTSUPP) {
+                    /* Not supported by this offload provider, try next one. */
+                    op->error = -1;
+                } else {
+                    VLOG_DBG("Tried offloading %d to dpif-offload provider "
+                             "%s, error %d",
+                             op->type,
+                             dpif_offload_name(offload), op->error);
+
+                    switch (op->type) {
+                    case DPIF_OP_FLOW_PUT:
+                        log_flow_put_message(dpif, &this_module,
+                                             &op->flow_put, 0);
+                        break;
+                    case DPIF_OP_FLOW_DEL:
+                        log_flow_del_message(dpif, &this_module,
+                                             &op->flow_del, 0);
+                        break;
+                    case DPIF_OP_FLOW_GET:
+                        log_flow_get_message(dpif, &this_module,
+                                             &op->flow_get, 0);
+                        break;
+                    case DPIF_OP_EXECUTE:
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < n_ops; i++) {
+        struct dpif_op *op = ops[i];
+
+        if (offload_type == DPIF_OFFLOAD_ALWAYS) {
+            /* For DPIF_OFFLOAD_ALWAYS, we should keep the error values,
+             * and mark the unprocessed ones as EOPNOTSUPP.  This way, they
+             * will not be processed by the dpif layer. */
+            if (op->error < 0) {
+                op->error = EOPNOTSUPP;
+            }
+            continue;
+        }
+
+        /* For the other offload types, operations that were not handled or
+         * failed to offload should be processed by the dpif layer. */
+        if (op->error != 0 && op->error != EEXIST) {
+            op->error = 0;
+            ops[n_ops_left++] = op;
+        }
+    }
+
+    return n_ops_left;
 }
 
 
