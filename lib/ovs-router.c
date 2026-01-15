@@ -1030,8 +1030,7 @@ ovs_router_rule_add_cmd(struct unixctl_conn *conn, int argc OVS_UNUSED,
         uint32_t prev_prio = 0;
 
         PVECTOR_FOR_EACH (rule, &rules) {
-            if ((!prio && rule->prio) ||
-                (rule->prio - prev_prio > 1)) {
+            if (rule->prio && (!prio || (rule->prio - prev_prio > 1))) {
                 prio = rule->prio - 1;
             }
             prev_prio = rule->prio;
