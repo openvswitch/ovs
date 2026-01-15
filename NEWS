@@ -23,6 +23,9 @@ Post-v3.6.0
      * New global configuration option 'other-config:hw-offload-priority'
        that allows to set the order of the hardware offload providers
        to try when multiple exist for a given datapath implementation.
+     * New per-port configuration option 'other-config:hw-offload-priority'
+       that allows to set order of the hardware offload providers or disable
+       flow offloading on a particular port.
    - OVSDB-IDL:
      * New ovsdb_idl_txn_assert_read_only() interface to mark transactions
        as read-only and trigger assertion failure when application attempts

@@ -23,6 +23,8 @@
 #include "netdev-provider.h"
 #include "unixctl.h"
 #include "util.h"
+#include "vswitch-idl.h"
+
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/shash.h"
 #include "openvswitch/vlog.h"
@@ -55,6 +57,7 @@ static const struct dpif_offload_class *base_dpif_offload_classes[] = {
 static char *dpif_offload_provider_priority_list = NULL;
 static atomic_bool offload_global_enabled = false;
 static atomic_bool offload_rebalance_policy = false;
+static struct smap port_order_cfg = SMAP_INITIALIZER(&port_order_cfg);
 
 static int
 dpif_offload_register_provider__(const struct dpif_offload_class *class)
@@ -423,11 +426,37 @@ dpif_offload_set_netdev_offload(struct netdev *netdev,
     ovsrcu_set(&netdev->dpif_offload, offload);
 }
 
+static bool
+dpif_offload_try_port_add(struct dpif_offload *offload, struct netdev *netdev,
+                          odp_port_t port_no)
+{
+    if (offload->class->can_offload(offload, netdev)) {
+        int err = offload->class->port_add(offload, netdev, port_no);
+
+        if (!err) {
+            VLOG_DBG("netdev %s added to dpif-offload provider %s",
+                     netdev_get_name(netdev), dpif_offload_name(offload));
+            return true;
+        } else {
+            VLOG_ERR("Failed adding netdev %s to dpif-offload provider "
+                     "%s, error %s",
+                     netdev_get_name(netdev), dpif_offload_name(offload),
+                     ovs_strerror(err));
+        }
+    } else {
+        VLOG_DBG("netdev %s failed can_offload for dpif-offload provider %s",
+                 netdev_get_name(netdev), dpif_offload_name(offload));
+    }
+    return false;
+}
+
 void
 dpif_offload_port_add(struct dpif *dpif, struct netdev *netdev,
                       odp_port_t port_no)
 {
     struct dpif_offload_provider_collection *collection;
+    const char *port_priority = smap_get(&port_order_cfg,
+                                         netdev_get_name(netdev));
     struct dpif_offload *offload;
 
     collection = dpif_get_offload_provider_collection(dpif);
@@ -435,23 +464,40 @@ dpif_offload_port_add(struct dpif *dpif, struct netdev *netdev,
         return;
     }
 
-    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
-        if (offload->class->can_offload(offload, netdev)) {
-            int err = offload->class->port_add(offload, netdev, port_no);
-            if (!err) {
-                VLOG_DBG("netdev %s added to dpif-offload provider %s",
-                         netdev_get_name(netdev), dpif_offload_name(offload));
+    if (port_priority) {
+        char *tokens = xstrdup(port_priority);
+        char *saveptr;
+
+        VLOG_DBG("for netdev %s using port priority %s",
+                 netdev_get_name(netdev), port_priority);
+
+        for (char *name = strtok_r(tokens, ",", &saveptr);
+             name;
+             name = strtok_r(NULL, ",", &saveptr)) {
+            bool provider_added = false;
+
+            if (!strcmp("none", name)) {
                 break;
-            } else {
-                VLOG_ERR("Failed adding netdev %s to dpif-offload provider "
-                         "%s, error %s",
-                         netdev_get_name(netdev), dpif_offload_name(offload),
-                         ovs_strerror(err));
             }
-        } else {
-            VLOG_DBG(
-                "netdev %s failed can_offload for dpif-offload provider %s",
-                netdev_get_name(netdev), dpif_offload_name(offload));
+
+            LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+                if (!strcmp(name, offload->class->type)) {
+                    provider_added = dpif_offload_try_port_add(offload, netdev,
+                                                               port_no);
+                    break;
+                }
+            }
+
+            if (provider_added) {
+                break;
+            }
+        }
+        free(tokens);
+    } else {
+        LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+            if (dpif_offload_try_port_add(offload, netdev, port_no)) {
+                break;
+            }
         }
     }
 }
@@ -574,13 +620,16 @@ dpif_offload_dump_done(struct dpif_offload_dump *dump)
 }
 
 void
-dpif_offload_set_global_cfg(const struct smap *other_cfg)
+dpif_offload_set_global_cfg(const struct ovsrec_open_vswitch *cfg)
 {
     static struct ovsthread_once init_once = OVSTHREAD_ONCE_INITIALIZER;
-    const char *priority = smap_get(other_cfg, "hw-offload-priority");
+    const struct smap *other_cfg = &cfg->other_config;
+    const char *priority;
 
     /* The 'hw-offload-priority' parameter can only be set at startup,
      * any successive change needs a restart. */
+    priority = smap_get(other_cfg, "hw-offload-priority");
+
     if (ovsthread_once_start(&init_once)) {
         /* Initialize the dpif-offload layer in case it's not yet initialized
          * at the first invocation of setting the configuration. */
@@ -628,6 +677,25 @@ dpif_offload_set_global_cfg(const struct smap *other_cfg)
             }
 
             ovsthread_once_done(&once_enable);
+        }
+    }
+
+    /* Filter out the 'hw-offload-priority' per port setting we need it before
+     * ports are added, so we can assign the correct offload-provider.
+     * Note that we can safely rebuild the map here, as we only access this
+     * from the same (main) thread. */
+    smap_clear(&port_order_cfg);
+    for (int i = 0; i < cfg->n_bridges; i++) {
+        const struct ovsrec_bridge *br_cfg = cfg->bridges[i];
+
+        for (int j = 0; j < br_cfg->n_ports; j++) {
+            const struct ovsrec_port *port_cfg = br_cfg->ports[j];
+
+            priority = smap_get(&port_cfg->other_config,
+                                "hw-offload-priority");
+            if (priority) {
+                smap_add(&port_order_cfg, port_cfg->name, priority);
+            }
         }
     }
 }

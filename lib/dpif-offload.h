@@ -32,7 +32,7 @@ struct dpif_offload_dump {
 
 
 /* Global functions. */
-void dpif_offload_set_global_cfg(const struct smap *other_cfg);
+void dpif_offload_set_global_cfg(const struct ovsrec_open_vswitch *);
 bool dpif_offload_enabled(void);
 bool dpif_offload_rebalance_policy_enabled(void);
 
