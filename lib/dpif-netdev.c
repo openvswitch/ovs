@@ -3084,7 +3084,7 @@ queue_netdev_flow_put(struct dp_netdev_pmd_thread *pmd,
     flow_offload = &item->data->flow;
     flow_offload->match = *match;
     flow_offload->actions = xmalloc(actions_len);
-    memcpy(flow_offload->actions, actions, actions_len);
+    nullable_memcpy(flow_offload->actions, actions, actions_len);
     flow_offload->actions_len = actions_len;
     flow_offload->orig_in_port = flow->orig_in_port;
 
