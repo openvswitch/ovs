@@ -165,14 +165,6 @@ struct dpif_class {
      * datapaths that can not exist without it (e.g. netdev datapath).  */
     bool cleanup_required;
 
-    /* If 'true' the specific dpif implementation synchronizes the various
-     * datapath implementation layers, i.e., the dpif's layer in combination
-     * with the underlying netdev offload layers. For example, dpif-netlink
-     * does not sync its kernel flows with the tc ones, i.e., only one gets
-     * installed. On the other hand, dpif-netdev installs both flows,
-     * internally keeps track of both, and represents them as one. */
-    bool synced_dp_layers;
-
     /* Called when the dpif provider is registered, typically at program
      * startup.  Returning an error from this function will prevent any
      * datapath with this class from being created.

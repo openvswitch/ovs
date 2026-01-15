@@ -224,6 +224,7 @@ dpif_offload_dummy_can_offload(struct dpif_offload *dpif_offload OVS_UNUSED,
 #define DEFINE_DPIF_DUMMY_CLASS(NAME, TYPE_STR)                        \
     struct dpif_offload_class NAME = {                                 \
         .type = TYPE_STR,                                              \
+        .impl_type = DPIF_OFFLOAD_IMPL_FLOWS_DPIF_SYNCED,              \
         .supported_dpif_types = (const char *const[]) {"dummy", NULL}, \
         .open = dpif_offload_dummy_open,                               \
         .close = dpif_offload_dummy_close,                             \

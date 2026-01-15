@@ -18,6 +18,7 @@
 #define DPIF_OFFLOAD_PROVIDER_H
 
 #include "cmap.h"
+#include "dpif-offload.h"
 #include "dpif-provider.h"
 #include "ovs-thread.h"
 #include "smap.h"
@@ -95,6 +96,9 @@ struct dpif_offload_class {
      * type strings.  For more details on these type strings, see the
      * 'struct dpif_class' definition. */
     const char *const *supported_dpif_types;
+
+    /* Type of flow implementation for this DPIF offload provider. */
+    enum dpif_offload_impl_type impl_type;
 
     /* Called when the dpif offload provider class is registered.  Note that
      * this is the global initialization, not the per dpif one. */

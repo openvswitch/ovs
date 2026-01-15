@@ -943,7 +943,6 @@ char *dpif_get_dp_version(const struct dpif *);
 bool dpif_supports_tnl_push_pop(const struct dpif *);
 bool dpif_may_support_explicit_drop_action(const struct dpif *);
 bool dpif_may_support_psample(const struct dpif *);
-bool dpif_synced_dp_layers(struct dpif *);
 
 /* Log functions. */
 struct vlog_module;

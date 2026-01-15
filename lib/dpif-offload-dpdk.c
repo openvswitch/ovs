@@ -273,6 +273,7 @@ dpif_offload_dpdk_netdev_hw_post_process(
 
 struct dpif_offload_class dpif_offload_dpdk_class = {
     .type = "dpdk",
+    .impl_type = DPIF_OFFLOAD_IMPL_FLOWS_DPIF_SYNCED,
     .supported_dpif_types = (const char *const[]) {"netdev", NULL},
     .open = dpif_offload_dpdk_open,
     .close = dpif_offload_dpdk_close,
