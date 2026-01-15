@@ -287,8 +287,32 @@ struct dpif_offload_class {
      * fully consumed by the provider for non-error conditions. */
     int (*netdev_hw_post_process)(const struct dpif_offload *, struct netdev *,
                                   struct dp_packet *);
-};
 
+    /* Add or modify the specified flow directly in the offload datapath.
+     * The actual implementation may choose to handle the offload
+     * asynchronously by returning EINPROGRESS and invoking the supplied
+     * 'callback' once completed.  For successful synchronous handling, the
+     * callback must not be called, and 0 should be returned.  If this call is
+     * not successful, a positive errno value should be returned. */
+    int (*netdev_flow_put)(const struct dpif_offload *, struct netdev *,
+                           struct dpif_offload_flow_put *,
+                           uint32_t *flow_mark);
+
+    /* Delete the specified flow directly from the offloaded datapath.  See the
+     * above 'netdev_flow_put' for implementation details. */
+    int (*netdev_flow_del)(const struct dpif_offload *, struct netdev *,
+                           struct dpif_offload_flow_del *,
+                           uint32_t *flow_mark);
+
+    /* Get offload statistics based on the flows 'ufid'.  Note that this API
+     * does NOT support asynchronous handling.  Returns 'true' if the flow was
+     * offloaded, 'false' if not.  In the latter case, 'stats' and 'attrs'
+     * are not valid. */
+    bool (*netdev_flow_stats)(const struct dpif_offload *, struct netdev *,
+                              const ovs_u128 *ufid,
+                              struct dpif_flow_stats *stats,
+                              struct dpif_flow_attrs *attrs);
+};
 
 extern struct dpif_offload_class dpif_offload_dummy_class;
 extern struct dpif_offload_class dpif_offload_dummy_x_class;

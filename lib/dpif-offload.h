@@ -139,4 +139,63 @@ bool dpif_offload_netdev_same_offload(const struct netdev *,
 int dpif_offload_netdev_flush_flows(struct netdev *);
 int dpif_offload_netdev_hw_post_process(struct netdev *, struct dp_packet *);
 
+
+/* Callback invoked when a hardware flow offload operation (put/del) completes.
+ * This callback is used for asynchronous flow offload operations.  When the
+ * offload provider cannot complete an operation synchronously (returns
+ * EINPROGRESS), it will invoke this callback later to notify the caller of
+ * completion. */
+typedef void dpif_offload_flow_op_cb(void *aux_dp, void *aux_flow,
+                                     struct dpif_flow_stats *stats,
+                                     uint32_t flow_mark, int error);
+
+/* Supporting structures for flow modification functions. */
+struct dpif_offload_flow_cb_data {
+    dpif_offload_flow_op_cb *callback;
+    void *callback_aux_dp;
+    void *callback_aux_flow;
+};
+
+struct dpif_offload_flow_put {
+    bool modify;
+    odp_port_t in_port;
+    odp_port_t orig_in_port;  /* Originating in_port for tunneled packets. */
+    const ovs_u128 *ufid;
+    struct match *match;
+    const struct nlattr *actions;
+    size_t actions_len;
+    struct dpif_flow_stats *stats;
+    struct dpif_offload_flow_cb_data cb_data;
+};
+
+struct dpif_offload_flow_del {
+    odp_port_t in_port;
+    const ovs_u128 *ufid;
+    struct dpif_flow_stats *stats;
+    struct dpif_offload_flow_cb_data cb_data;
+};
+
+/* Flow modification functions, which can be used in the fast path. */
+int dpif_offload_datapath_flow_put(const char *dpif_name,
+                                   struct dpif_offload_flow_put *,
+                                   uint32_t *flow_mark);
+int dpif_offload_datapath_flow_del(const char *dpif_name,
+                                   struct dpif_offload_flow_del *,
+                                   uint32_t *flow_mark);
+bool dpif_offload_datapath_flow_stats(const char *dpif_name,
+                                      odp_port_t in_port, const ovs_u128 *ufid,
+                                      struct dpif_flow_stats *,
+                                      struct dpif_flow_attrs *);
+
+static inline void
+dpif_offload_datapath_flow_op_continue(struct dpif_offload_flow_cb_data *cb,
+                                       struct dpif_flow_stats *stats,
+                                       uint32_t flow_mark, int error)
+{
+    if (cb && cb->callback) {
+        cb->callback(cb->callback_aux_dp, cb->callback_aux_flow,
+                     stats, flow_mark, error);
+    }
+}
+
 #endif /* DPIF_OFFLOAD_H */

@@ -48,6 +48,7 @@ enum OVS_PACKED_ENUM dp_packet_source {
 };
 
 #define DP_PACKET_CONTEXT_SIZE 64
+#define INVALID_FLOW_MARK 0
 
 /* Bit masks for the 'offloads' member of the 'dp_packet' structure. */
 enum OVS_PACKED_ENUM dp_packet_offload_mask {
