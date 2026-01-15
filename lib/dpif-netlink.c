@@ -2215,7 +2215,7 @@ out:
              * Change flags to create the flow in kernel */
             put->flags &= ~DPIF_FP_MODIFY;
             put->flags |= DPIF_FP_CREATE;
-        } else if (del_err != ENOENT) {
+        } else if (del_err != ENOENT && del_err != EOPNOTSUPP) {
             VLOG_ERR_RL(&rl, "failed to delete offloaded flow: %s",
                         ovs_strerror(del_err));
             /* stop proccesing the flow in kernel */

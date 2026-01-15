@@ -40,6 +40,7 @@ struct dpif_offload_tc {
 
     /* Configuration specific variables. */
     struct ovsthread_once once_enable; /* Track first-time enablement. */
+    bool recirc_id_shared;
 };
 
 /* tc's flow dump specific data structures. */
@@ -190,6 +191,11 @@ dpif_offload_tc_open(const struct dpif_offload_class *offload_class,
     offload_tc->port_mgr = dpif_offload_port_mgr_init();
     offload_tc->once_enable =
         (struct ovsthread_once) OVSTHREAD_ONCE_INITIALIZER;
+    offload_tc->recirc_id_shared = !!(dpif_get_features(dpif)
+                                      & OVS_DP_F_TC_RECIRC_SHARING);
+
+    VLOG_DBG("Datapath %s recirculation id sharing ",
+             offload_tc->recirc_id_shared ? "supports" : "does not support");
 
     dpif_offload_tc_meter_init();
 
@@ -531,6 +537,236 @@ dpif_offload_tc_flow_dump_thread_destroy(
     free(thread);
 }
 
+static int
+dpif_offload_tc_parse_flow_put(struct dpif_offload_tc *offload_tc,
+                               struct dpif *dpif, struct dpif_flow_put *put)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+    struct dpif_offload_port_mgr_port *port;
+    const struct nlattr *nla;
+    struct offload_info info;
+    struct match match;
+    odp_port_t in_port;
+    size_t left;
+    int err;
+
+    info.tc_modify_flow_deleted = false;
+    info.tc_modify_flow = false;
+
+    if (put->flags & DPIF_FP_PROBE) {
+        return EOPNOTSUPP;
+    }
+
+    err = parse_key_and_mask_to_match(put->key, put->key_len, put->mask,
+                                      put->mask_len, &match);
+    if (err) {
+        return err;
+    }
+
+    in_port = match.flow.in_port.odp_port;
+    port = dpif_offload_port_mgr_find_by_odp_port(offload_tc->port_mgr,
+                                                  in_port);
+    if (!port) {
+        return EOPNOTSUPP;
+    }
+
+    /* Check the output port for a tunnel. */
+    NL_ATTR_FOR_EACH (nla, left, put->actions, put->actions_len) {
+        if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
+            struct dpif_offload_port_mgr_port *mgr_port;
+            odp_port_t out_port;
+
+            out_port = nl_attr_get_odp_port(nla);
+            mgr_port = dpif_offload_port_mgr_find_by_odp_port(
+                offload_tc->port_mgr, out_port);
+
+            if (!mgr_port) {
+                err = EOPNOTSUPP;
+                goto out;
+            }
+        }
+    }
+
+    info.recirc_id_shared_with_tc = offload_tc->recirc_id_shared;
+
+    err = netdev_offload_tc_flow_put(port->netdev, &match,
+                                     CONST_CAST(struct nlattr *, put->actions),
+                                     put->actions_len,
+                                     CONST_CAST(ovs_u128 *, put->ufid),
+                                     &info, put->stats);
+
+    if (!err) {
+        if (put->flags & DPIF_FP_MODIFY && !info.tc_modify_flow) {
+            struct dpif_op *opp;
+            struct dpif_op op;
+
+            op.type = DPIF_OP_FLOW_DEL;
+            op.flow_del.key = put->key;
+            op.flow_del.key_len = put->key_len;
+            op.flow_del.ufid = put->ufid;
+            op.flow_del.pmd_id = put->pmd_id;
+            op.flow_del.stats = NULL;
+            op.flow_del.terse = false;
+
+            opp = &op;
+            dpif_operate(dpif, &opp, 1, DPIF_OFFLOAD_NEVER);
+        }
+
+        VLOG_DBG("added flow");
+    } else if (err != EEXIST) {
+        struct netdev *oor_netdev = NULL;
+        enum vlog_level level;
+
+        if (err == ENOSPC && dpif_offload_rebalance_policy_enabled()) {
+            /*
+             * We need to set OOR on the input netdev (i.e, 'dev') for the
+             * flow.  But if the flow has a tunnel attribute (i.e, decap
+             * action, with a virtual device like a VxLAN interface as its
+             * in-port), then lookup and set OOR on the underlying tunnel
+             * (real) netdev. */
+            oor_netdev = flow_get_tunnel_netdev(&match.flow.tunnel);
+            if (!oor_netdev) {
+                /* Not a 'tunnel' flow. */
+                oor_netdev = port->netdev;
+            }
+            netdev_set_hw_info(oor_netdev, HW_INFO_TYPE_OOR, true);
+        }
+        level = (err == ENOSPC || err == EOPNOTSUPP) ? VLL_DBG : VLL_ERR;
+        VLOG_RL(&rl, level, "failed to offload flow: %s: %s",
+                ovs_strerror(err),
+                (oor_netdev ? netdev_get_name(oor_netdev) :
+                              netdev_get_name(port->netdev)));
+    }
+
+out:
+    if (err && err != EEXIST && (put->flags & DPIF_FP_MODIFY)) {
+        /* Modified rule can't be offloaded, try and delete from HW. */
+        int del_err = 0;
+
+        if (!info.tc_modify_flow_deleted) {
+            del_err = netdev_offload_tc_flow_del(put->ufid, put->stats);
+        }
+
+        if (!del_err) {
+            /* Delete from hw success, so old flow was offloaded.
+             * Change flags to create the flow at the dpif level. */
+            put->flags &= ~DPIF_FP_MODIFY;
+            put->flags |= DPIF_FP_CREATE;
+        } else if (del_err != ENOENT) {
+            VLOG_ERR_RL(&rl, "failed to delete offloaded flow: %s",
+                        ovs_strerror(del_err));
+            /* Stop processing the flow in kernel. */
+            err = 0;
+        }
+    }
+
+    return err;
+}
+
+static int
+dpif_offload_tc_parse_flow_get(struct dpif_offload_tc *offload_tc,
+                               struct dpif_flow_get *get)
+{
+    struct dpif_offload_port_mgr_port *port;
+    struct dpif_flow *dpif_flow = get->flow;
+    struct odputil_keybuf maskbuf;
+    struct odputil_keybuf keybuf;
+    struct odputil_keybuf actbuf;
+    struct ofpbuf key, mask, act;
+    struct dpif_flow_stats stats;
+    struct dpif_flow_attrs attrs;
+    uint64_t act_buf[1024 / 8];
+    struct nlattr *actions;
+    struct match match;
+    struct ofpbuf buf;
+    int err = ENOENT;
+
+    ofpbuf_use_stack(&buf, &act_buf, sizeof act_buf);
+
+    DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload_tc->port_mgr) {
+        if (!netdev_offload_tc_flow_get(port->netdev, &match, &actions,
+                                        get->ufid, &stats, &attrs, &buf)) {
+            err = 0;
+            break;
+        }
+    }
+
+    if (err) {
+        return err;
+    }
+
+    VLOG_DBG("found flow from netdev, translating to dpif flow");
+
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    ofpbuf_use_stack(&act, &actbuf, sizeof actbuf);
+    ofpbuf_use_stack(&mask, &maskbuf, sizeof maskbuf);
+    tc_netdev_match_to_dpif_flow(&match, &key, &mask, actions, &stats, &attrs,
+                                 (ovs_u128 *) get->ufid, dpif_flow, false);
+    ofpbuf_put(get->buffer, nl_attr_get(actions), nl_attr_get_size(actions));
+    dpif_flow->actions = ofpbuf_at(get->buffer, 0, 0);
+    dpif_flow->actions_len = nl_attr_get_size(actions);
+
+    return 0;
+}
+
+static void
+dpif_offload_tc_operate(struct dpif *dpif, const struct dpif_offload *offload,
+                        struct dpif_op **ops, size_t n_ops)
+{
+    struct dpif_offload_tc *offload_tc = dpif_offload_tc_cast(offload);
+
+    for (size_t i = 0; i < n_ops; i++) {
+        struct dpif_op *op = ops[i];
+        int error = EOPNOTSUPP;
+
+        if (op->error >= 0) {
+            continue;
+        }
+
+        switch (op->type) {
+        case DPIF_OP_FLOW_PUT: {
+            struct dpif_flow_put *put = &op->flow_put;
+
+            if (!put->ufid) {
+                break;
+            }
+
+            error = dpif_offload_tc_parse_flow_put(offload_tc, dpif, put);
+            break;
+        }
+        case DPIF_OP_FLOW_DEL: {
+            struct dpif_flow_del *del = &op->flow_del;
+
+            if (!del->ufid) {
+                break;
+            }
+
+            error = netdev_offload_tc_flow_del(del->ufid, del->stats);
+            break;
+        }
+        case DPIF_OP_FLOW_GET: {
+            struct dpif_flow_get *get = &op->flow_get;
+
+            if (!get->ufid) {
+                break;
+            }
+
+            error = dpif_offload_tc_parse_flow_get(offload_tc, get);
+            break;
+        }
+        case DPIF_OP_EXECUTE:
+            break;
+        } /* End of 'switch (op->type)'. */
+
+        if (error != EOPNOTSUPP && error != ENOENT) {
+            /* If the operation is unsupported or the entry was not found,
+             * we are skipping this flow operation.  Otherwise, it was
+             * processed and we should report the result. */
+            op->error = error;
+        }
+    }
+}
+
 struct dpif_offload_class dpif_offload_tc_class = {
     .type = "tc",
     .impl_type = DPIF_OFFLOAD_IMPL_FLOWS_PROVIDER_ONLY,
@@ -551,6 +787,7 @@ struct dpif_offload_class dpif_offload_tc_class = {
     .flow_dump_destroy = dpif_offload_tc_flow_dump_destroy,
     .flow_dump_thread_create = dpif_offload_tc_flow_dump_thread_create,
     .flow_dump_thread_destroy = dpif_offload_tc_flow_dump_thread_destroy,
+    .operate = dpif_offload_tc_operate,
     .flow_count = dpif_offload_tc_flow_count,
     .meter_set = dpif_offload_tc_meter_set,
     .meter_get = dpif_offload_tc_meter_get,

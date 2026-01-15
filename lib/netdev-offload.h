@@ -71,6 +71,7 @@ struct offload_info {
      */
     uint32_t flow_mark;
 
+    bool tc_modify_flow; /* Indicates tc modified the flow. */
     bool tc_modify_flow_deleted; /* Indicate the tc modify flow put success
                                   * to delete the original flow. */
     odp_port_t orig_in_port; /* Originating in_port for tnl flows. */
