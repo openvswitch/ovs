@@ -203,44 +203,6 @@ netdev_assign_flow_api(struct netdev *netdev)
 }
 
 int
-netdev_flow_dump_create(struct netdev *netdev, struct netdev_flow_dump **dump,
-                        bool terse)
-{
-    const struct netdev_flow_api *flow_api =
-        ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api);
-
-    return (flow_api && flow_api->flow_dump_create)
-           ? flow_api->flow_dump_create(netdev, dump, terse)
-           : EOPNOTSUPP;
-}
-
-int
-netdev_flow_dump_destroy(struct netdev_flow_dump *dump)
-{
-    const struct netdev_flow_api *flow_api =
-        ovsrcu_get(const struct netdev_flow_api *, &dump->netdev->flow_api);
-
-    return (flow_api && flow_api->flow_dump_destroy)
-           ? flow_api->flow_dump_destroy(dump)
-           : EOPNOTSUPP;
-}
-
-bool
-netdev_flow_dump_next(struct netdev_flow_dump *dump, struct match *match,
-                      struct nlattr **actions, struct dpif_flow_stats *stats,
-                      struct dpif_flow_attrs *attrs, ovs_u128 *ufid,
-                      struct ofpbuf *rbuffer, struct ofpbuf *wbuffer)
-{
-    const struct netdev_flow_api *flow_api =
-        ovsrcu_get(const struct netdev_flow_api *, &dump->netdev->flow_api);
-
-    return (flow_api && flow_api->flow_dump_next)
-           ? flow_api->flow_dump_next(dump, match, actions, stats, attrs,
-                                      ufid, rbuffer, wbuffer)
-           : false;
-}
-
-int
 netdev_flow_put(struct netdev *netdev, struct match *match,
                 struct nlattr *actions, size_t act_len,
                 const ovs_u128 *ufid, struct offload_info *info,
@@ -497,45 +459,6 @@ netdev_ports_traverse(const char *dpif_type,
         }
     }
     ovs_rwlock_unlock(&port_to_netdev_rwlock);
-}
-
-struct netdev_flow_dump **
-netdev_ports_flow_dump_create(const char *dpif_type, int *ports, bool terse)
-{
-    struct netdev_flow_dump **dumps = NULL;
-    struct port_to_netdev_data *data;
-    int count = 0;
-    int i = 0;
-
-    ovs_rwlock_rdlock(&port_to_netdev_rwlock);
-    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
-        if (netdev_get_dpif_type(data->netdev) == dpif_type) {
-            count++;
-        }
-    }
-
-    if (!count) {
-        goto unlock;
-    }
-
-    dumps = xzalloc(sizeof *dumps * count);
-
-    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
-        if (netdev_get_dpif_type(data->netdev) == dpif_type) {
-            if (netdev_flow_dump_create(data->netdev, &dumps[i], terse)) {
-                continue;
-            }
-
-            dumps[i]->port = data->dpif_port.port_no;
-            i++;
-        }
-    }
-
-unlock:
-    ovs_rwlock_unlock(&port_to_netdev_rwlock);
-
-    *ports = i;
-    return dumps;
 }
 
 int

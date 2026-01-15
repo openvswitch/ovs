@@ -31,29 +31,6 @@ extern "C" {
 struct netdev_flow_api {
     char *type;
 
-    /* Flow dumping interface.
-     *
-     * This is the back-end for the flow dumping interface described in
-     * dpif.h.  Please read the comments there first, because this code
-     * closely follows it.
-     *
-     * On success returns 0 and allocates data, on failure returns
-     * positive errno. */
-    int (*flow_dump_create)(struct netdev *, struct netdev_flow_dump **dump,
-                            bool terse);
-    int (*flow_dump_destroy)(struct netdev_flow_dump *);
-
-    /* Returns true if there are more flows to dump.
-     * 'rbuffer' is used as a temporary buffer and needs to be pre allocated
-     * by the caller.  While there are more flows the same 'rbuffer'
-     * should be provided. 'wbuffer' is used to store dumped actions and needs
-     * to be pre allocated by the caller. */
-    bool (*flow_dump_next)(struct netdev_flow_dump *, struct match *,
-                           struct nlattr **actions,
-                           struct dpif_flow_stats *stats,
-                           struct dpif_flow_attrs *attrs, ovs_u128 *ufid,
-                           struct ofpbuf *rbuffer, struct ofpbuf *wbuffer);
-
     /* Offload the given flow on netdev.
      * To modify a flow, use the same ufid.
      * 'actions' are in netlink format, as with struct dpif_flow_put.

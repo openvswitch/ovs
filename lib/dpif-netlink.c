@@ -79,7 +79,6 @@ enum { MAX_PORTS = USHRT_MAX };
  * missing if we have old headers. */
 #define ETH_FLAG_LRO      (1 << 15)    /* LRO is enabled */
 
-#define FLOW_DUMP_MAX_BATCH 50
 #define OPERATE_MAX_OPS 50
 
 #ifndef EPOLLEXCLUSIVE
@@ -1602,50 +1601,12 @@ struct dpif_netlink_flow_dump {
     struct dpif_flow_dump up;
     struct nl_dump nl_dump;
     atomic_int status;
-    struct netdev_flow_dump **netdev_dumps;
-    int netdev_dumps_num;                    /* Number of netdev_flow_dumps */
-    struct ovs_mutex netdev_lock;            /* Guards the following. */
-    int netdev_current_dump OVS_GUARDED;     /* Shared current dump */
-    struct dpif_flow_dump_types types;       /* Type of dump */
 };
 
 static struct dpif_netlink_flow_dump *
 dpif_netlink_flow_dump_cast(struct dpif_flow_dump *dump)
 {
     return CONTAINER_OF(dump, struct dpif_netlink_flow_dump, up);
-}
-
-static void
-start_netdev_dump(const struct dpif *dpif_,
-                  struct dpif_netlink_flow_dump *dump)
-{
-    ovs_mutex_init(&dump->netdev_lock);
-
-    if (!(dump->types.offloaded_flows)) {
-        dump->netdev_dumps_num = 0;
-        dump->netdev_dumps = NULL;
-        return;
-    }
-
-    ovs_mutex_lock(&dump->netdev_lock);
-    dump->netdev_current_dump = 0;
-    dump->netdev_dumps
-        = netdev_ports_flow_dump_create(dpif_normalize_type(dpif_type(dpif_)),
-                                        &dump->netdev_dumps_num,
-                                        dump->up.terse);
-    ovs_mutex_unlock(&dump->netdev_lock);
-}
-
-static void
-dpif_netlink_populate_flow_dump_types(struct dpif_netlink_flow_dump *dump,
-                                      struct dpif_flow_dump_types *types)
-{
-    if (!types) {
-        dump->types.ovs_flows = true;
-        dump->types.offloaded_flows = true;
-    } else {
-        memcpy(&dump->types, types, sizeof *types);
-    }
 }
 
 static struct dpif_flow_dump *
@@ -1660,23 +1621,17 @@ dpif_netlink_flow_dump_create(const struct dpif *dpif_, bool terse,
     dump = xmalloc(sizeof *dump);
     dpif_flow_dump_init(&dump->up, dpif_, terse, types);
 
-    dpif_netlink_populate_flow_dump_types(dump, types);
+    dpif_netlink_flow_init(&request);
+    request.cmd = OVS_FLOW_CMD_GET;
+    request.dp_ifindex = dpif->dp_ifindex;
+    request.ufid_present = false;
+    request.ufid_terse = terse;
 
-    if (dump->types.ovs_flows) {
-        dpif_netlink_flow_init(&request);
-        request.cmd = OVS_FLOW_CMD_GET;
-        request.dp_ifindex = dpif->dp_ifindex;
-        request.ufid_present = false;
-        request.ufid_terse = terse;
-
-        buf = ofpbuf_new(1024);
-        dpif_netlink_flow_to_ofpbuf(&request, buf);
-        nl_dump_start(&dump->nl_dump, NETLINK_GENERIC, buf);
-        ofpbuf_delete(buf);
-    }
+    buf = ofpbuf_new(1024);
+    dpif_netlink_flow_to_ofpbuf(&request, buf);
+    nl_dump_start(&dump->nl_dump, NETLINK_GENERIC, buf);
+    ofpbuf_delete(buf);
     atomic_init(&dump->status, 0);
-
-    start_netdev_dump(dpif_, dump);
 
     return &dump->up;
 }
@@ -1685,23 +1640,8 @@ static int
 dpif_netlink_flow_dump_destroy(struct dpif_flow_dump *dump_)
 {
     struct dpif_netlink_flow_dump *dump = dpif_netlink_flow_dump_cast(dump_);
-    unsigned int nl_status = 0;
+    unsigned int nl_status = nl_dump_done(&dump->nl_dump);
     int dump_status;
-
-    if (dump->types.ovs_flows) {
-        nl_status = nl_dump_done(&dump->nl_dump);
-    }
-
-    for (int i = 0; i < dump->netdev_dumps_num; i++) {
-        int err = netdev_flow_dump_destroy(dump->netdev_dumps[i]);
-
-        if (err != 0 && err != EOPNOTSUPP) {
-            VLOG_ERR("failed dumping netdev: %s", ovs_strerror(err));
-        }
-    }
-
-    free(dump->netdev_dumps);
-    ovs_mutex_destroy(&dump->netdev_lock);
 
     /* No other thread has access to 'dump' at this point. */
     atomic_read_relaxed(&dump->status, &dump_status);
@@ -1716,13 +1656,6 @@ struct dpif_netlink_flow_dump_thread {
     struct dpif_flow_stats stats;
     struct ofpbuf nl_flows;     /* Always used to store flows. */
     struct ofpbuf *nl_actions;  /* Used if kernel does not supply actions. */
-    int netdev_dump_idx;        /* This thread current netdev dump index */
-    bool netdev_done;           /* If we are finished dumping netdevs */
-
-    /* (Key/Mask/Actions) Buffers for netdev dumping */
-    struct odputil_keybuf keybuf[FLOW_DUMP_MAX_BATCH];
-    struct odputil_keybuf maskbuf[FLOW_DUMP_MAX_BATCH];
-    struct odputil_keybuf actbuf[FLOW_DUMP_MAX_BATCH];
 };
 
 static struct dpif_netlink_flow_dump_thread *
@@ -1742,8 +1675,6 @@ dpif_netlink_flow_dump_thread_create(struct dpif_flow_dump *dump_)
     thread->dump = dump;
     ofpbuf_init(&thread->nl_flows, NL_DUMP_BUFSIZE);
     thread->nl_actions = NULL;
-    thread->netdev_dump_idx = 0;
-    thread->netdev_done = !(thread->netdev_dump_idx < dump->netdev_dumps_num);
 
     return &thread->up;
 }
@@ -1782,39 +1713,6 @@ dpif_netlink_flow_to_dpif_flow(struct dpif_flow *dpif_flow,
     dpif_flow->attrs.offloaded = false;
     dpif_flow->attrs.dp_layer = "ovs";
     dpif_flow->attrs.dp_extra_info = NULL;
-}
-
-/* The design is such that all threads are working together on the first dump
- * to the last, in order (at first they all on dump 0).
- * When the first thread finds that the given dump is finished,
- * they all move to the next. If two or more threads find the same dump
- * is finished at the same time, the first one will advance the shared
- * netdev_current_dump and the others will catch up. */
-static void
-dpif_netlink_advance_netdev_dump(struct dpif_netlink_flow_dump_thread *thread)
-{
-    struct dpif_netlink_flow_dump *dump = thread->dump;
-
-    ovs_mutex_lock(&dump->netdev_lock);
-    /* if we haven't finished (dumped everything) */
-    if (dump->netdev_current_dump < dump->netdev_dumps_num) {
-        /* if we are the first to find that current dump is finished
-         * advance it. */
-        if (thread->netdev_dump_idx == dump->netdev_current_dump) {
-            thread->netdev_dump_idx = ++dump->netdev_current_dump;
-            /* did we just finish the last dump? done. */
-            if (dump->netdev_current_dump == dump->netdev_dumps_num) {
-                thread->netdev_done = true;
-            }
-        } else {
-            /* otherwise, we are behind, catch up */
-            thread->netdev_dump_idx = dump->netdev_current_dump;
-        }
-    } else {
-        /* some other thread finished */
-        thread->netdev_done = true;
-    }
-    ovs_mutex_unlock(&dump->netdev_lock);
 }
 
 static int
@@ -1885,55 +1783,10 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
         = dpif_netlink_flow_dump_thread_cast(thread_);
     struct dpif_netlink_flow_dump *dump = thread->dump;
     struct dpif_netlink *dpif = dpif_netlink_cast(thread->up.dump->dpif);
-    int n_flows;
+    int n_flows = 0;
 
     ofpbuf_delete(thread->nl_actions);
     thread->nl_actions = NULL;
-
-    n_flows = 0;
-    max_flows = MIN(max_flows, FLOW_DUMP_MAX_BATCH);
-
-    while (!thread->netdev_done && n_flows < max_flows) {
-        struct odputil_keybuf *maskbuf = &thread->maskbuf[n_flows];
-        struct odputil_keybuf *keybuf = &thread->keybuf[n_flows];
-        struct odputil_keybuf *actbuf = &thread->actbuf[n_flows];
-        struct ofpbuf key, mask, act;
-        struct dpif_flow *f = &flows[n_flows];
-        int cur = thread->netdev_dump_idx;
-        struct netdev_flow_dump *netdev_dump = dump->netdev_dumps[cur];
-        struct match match;
-        struct nlattr *actions;
-        struct dpif_flow_stats stats;
-        struct dpif_flow_attrs attrs;
-        ovs_u128 ufid;
-        bool has_next;
-
-        ofpbuf_use_stack(&key, keybuf, sizeof *keybuf);
-        ofpbuf_use_stack(&act, actbuf, sizeof *actbuf);
-        ofpbuf_use_stack(&mask, maskbuf, sizeof *maskbuf);
-        has_next = netdev_flow_dump_next(netdev_dump, &match,
-                                        &actions, &stats, &attrs,
-                                        &ufid,
-                                        &thread->nl_flows,
-                                        &act);
-        if (has_next) {
-            dpif_netlink_netdev_match_to_dpif_flow(&match,
-                                                   &key, &mask,
-                                                   actions,
-                                                   &stats,
-                                                   &attrs,
-                                                   &ufid,
-                                                   f,
-                                                   dump->up.terse);
-            n_flows++;
-        } else {
-            dpif_netlink_advance_netdev_dump(thread);
-        }
-    }
-
-    if (!(dump->types.ovs_flows)) {
-        return n_flows;
-    }
 
     while (!n_flows
            || (n_flows < max_flows && thread->nl_flows.size)) {

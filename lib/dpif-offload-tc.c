@@ -48,7 +48,7 @@ struct dpif_offload_tc_flow_dump {
     struct ovs_mutex netdev_dump_mutex;
     size_t netdev_dump_index;
     size_t netdev_dump_count;
-    struct netdev_flow_dump *netdev_dumps[];
+    struct netdev_tc_flow_dump *netdev_dumps[];
 };
 
 #define FLOW_DUMP_MAX_BATCH 50
@@ -291,7 +291,7 @@ dpif_offload_tc_flow_dump_create(const struct dpif_offload *offload_,
     port_count = dpif_offload_port_mgr_port_count(offload->port_mgr);
 
     dump = xmalloc(sizeof *dump +
-                   (port_count * sizeof(struct netdev_flow_dump)));
+                   (port_count * sizeof(struct netdev_tc_flow_dump)));
 
     dpif_offload_flow_dump_init(&dump->dump, offload_, terse);
 
@@ -412,8 +412,8 @@ dpif_offload_tc_flow_dump_next(struct dpif_offload_flow_dump_thread *thread_,
         struct odputil_keybuf *maskbuf = &thread->maskbuf[n_flows];
         struct odputil_keybuf *keybuf = &thread->keybuf[n_flows];
         struct odputil_keybuf *actbuf = &thread->actbuf[n_flows];
+        struct netdev_tc_flow_dump *netdev_dump;
         struct dpif_flow *f = &flows[n_flows];
-        struct netdev_flow_dump *netdev_dump;
         int cur = thread->netdev_dump_index;
         struct ofpbuf key, mask, act;
         struct dpif_flow_stats stats;
@@ -449,7 +449,7 @@ dpif_offload_tc_flow_dump_destroy(struct dpif_offload_flow_dump *dump_)
 
     dump = dpif_offload_tc_flow_dump_cast(dump_);
     for (int i = 0; i < dump->netdev_dump_count; i++) {
-        struct netdev_flow_dump *dump_netdev = dump->netdev_dumps[i];
+        struct netdev_tc_flow_dump *dump_netdev = dump->netdev_dumps[i];
         int rc = tc_flow_dump_destroy(dump_netdev);
 
         if (rc && !error) {

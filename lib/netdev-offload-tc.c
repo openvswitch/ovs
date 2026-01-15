@@ -501,7 +501,7 @@ static int
 get_chains_from_netdev(struct netdev *netdev, struct tcf_id *id,
                        struct hmap *map)
 {
-    struct netdev_flow_dump *dump;
+    struct netdev_tc_flow_dump *dump;
     struct chain_node *chain_node;
     struct ofpbuf rbuffer, reply;
     uint32_t chain;
@@ -587,11 +587,11 @@ tc_flow_flush(struct netdev *netdev)
 }
 
 int
-tc_flow_dump_create(struct netdev *netdev, struct netdev_flow_dump **dump_out,
-                    bool terse)
+tc_flow_dump_create(struct netdev *netdev,
+                    struct netdev_tc_flow_dump **dump_out, bool terse)
 {
     enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
-    struct netdev_flow_dump *dump;
+    struct netdev_tc_flow_dump *dump;
     uint32_t block_id = 0;
     struct tcf_id id;
     int prio = 0;
@@ -618,7 +618,7 @@ tc_flow_dump_create(struct netdev *netdev, struct netdev_flow_dump **dump_out,
     return 0;
 }
 int
-tc_flow_dump_destroy(struct netdev_flow_dump *dump)
+tc_flow_dump_destroy(struct netdev_tc_flow_dump *dump)
 {
     nl_dump_done(dump->nl_dump);
     netdev_close(dump->netdev);
@@ -1350,7 +1350,7 @@ parse_tc_flower_to_match(const struct netdev *netdev,
 }
 
 bool
-tc_flow_dump_next(struct netdev_flow_dump *dump, struct match *match,
+tc_flow_dump_next(struct netdev_tc_flow_dump *dump, struct match *match,
                   struct nlattr **actions, struct dpif_flow_stats *stats,
                   struct dpif_flow_attrs *attrs, ovs_u128 *ufid,
                   struct ofpbuf *rbuffer, struct ofpbuf *wbuffer)
@@ -3064,7 +3064,7 @@ tc_get_policer_action_ids(struct hmap *map)
 {
     uint32_t police_idx[TCA_ACT_MAX_PRIO];
     struct policer_node *policer_node;
-    struct netdev_flow_dump *dump;
+    struct netdev_tc_flow_dump *dump;
     struct ofpbuf rbuffer, reply;
     size_t hash;
     int i, err;

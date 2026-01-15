@@ -21,13 +21,21 @@
 struct dpif_offload;
 struct netdev;
 
+/* Per Netdev flow dump structure. */
+struct netdev_tc_flow_dump {
+    struct nl_dump *nl_dump;
+    struct netdev *netdev;
+    odp_port_t port;
+    bool terse;
+};
+
 /* Netdev-specific offload functions.  These should only be used by the
  * associated dpif offload provider. */
 int tc_flow_flush(struct netdev *);
-int tc_flow_dump_create(struct netdev *, struct netdev_flow_dump **,
+int tc_flow_dump_create(struct netdev *, struct netdev_tc_flow_dump **,
                         bool terse);
-int tc_flow_dump_destroy(struct netdev_flow_dump *);
-bool tc_flow_dump_next(struct netdev_flow_dump *, struct match *,
+int tc_flow_dump_destroy(struct netdev_tc_flow_dump *);
+bool tc_flow_dump_next(struct netdev_tc_flow_dump *, struct match *,
                        struct nlattr **actions, struct dpif_flow_stats *,
                        struct dpif_flow_attrs *, ovs_u128 *ufid,
                        struct ofpbuf *rbuffer, struct ofpbuf *wbuffer);

@@ -60,13 +60,6 @@ enum hw_info_type {
     HW_INFO_TYPE_OFFL_COUNT = 3		/* Offloaded flow count */
 };
 
-struct netdev_flow_dump {
-    struct netdev *netdev;
-    odp_port_t port;
-    bool terse;
-    struct nl_dump *nl_dump;
-};
-
 /* Flow offloading. */
 struct offload_info {
     bool recirc_id_shared_with_tc;  /* Indicates whever tc chains will be in
@@ -101,13 +94,6 @@ netdev_offload_thread_id(void)
     return id;
 }
 
-int netdev_flow_dump_create(struct netdev *, struct netdev_flow_dump **dump,
-                            bool terse);
-int netdev_flow_dump_destroy(struct netdev_flow_dump *);
-bool netdev_flow_dump_next(struct netdev_flow_dump *, struct match *,
-                          struct nlattr **actions, struct dpif_flow_stats *,
-                          struct dpif_flow_attrs *, ovs_u128 *ufid,
-                          struct ofpbuf *rbuffer, struct ofpbuf *wbuffer);
 int netdev_flow_put(struct netdev *, struct match *, struct nlattr *actions,
                     size_t actions_len, const ovs_u128 *,
                     struct offload_info *, struct dpif_flow_stats *);
@@ -138,10 +124,6 @@ odp_port_t netdev_ifindex_to_odp_port(int ifindex);
 void netdev_ports_traverse(const char *dpif_type,
                            bool (*cb)(struct netdev *, odp_port_t, void *),
                            void *aux);
-struct netdev_flow_dump **netdev_ports_flow_dump_create(
-                                        const char *dpif_type,
-                                        int *ports,
-                                        bool terse);
 int netdev_ports_flow_del(const char *dpif_type, const ovs_u128 *ufid,
                           struct dpif_flow_stats *stats);
 int netdev_ports_flow_get(const char *dpif_type, struct match *match,
