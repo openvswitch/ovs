@@ -24,6 +24,7 @@
 #include "cmap.h"
 #include "lib/dpif-provider.h"
 #include "dpif.h"
+#include "dpif-offload.h"
 #include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
 #include "guarded-list.h"
@@ -1070,7 +1071,7 @@ udpif_revalidator(void *arg)
 
             dpif_flow_dump_destroy(udpif->dump);
             seq_change(udpif->dump_seq);
-            if (netdev_is_offload_rebalance_policy_enabled()) {
+            if (dpif_offload_rebalance_policy_enabled()) {
                 udpif_run_flow_rebalance(udpif);
             }
 
@@ -2963,7 +2964,7 @@ revalidate(struct revalidator *revalidator)
             }
             ukey->dump_seq = dump_seq;
 
-            if (netdev_is_offload_rebalance_policy_enabled() &&
+            if (dpif_offload_rebalance_policy_enabled() &&
                 result != UKEY_DELETE) {
                 udpif_update_flow_pps(udpif, ukey, f);
             }

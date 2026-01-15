@@ -1173,12 +1173,15 @@ OVS_TRAFFIC_VSWITCHD_START([], [],
   [-- set Open_vSwitch . other_config:hw-offload=true])
 
 AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
+Globally enabled: true
+Datapaths:
 system@ovs-system:
   tc
 ])
 
 AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
 {
+  "enabled": true,
   "system@ovs-system": {
     "providers": [[
       "tc"]]}}

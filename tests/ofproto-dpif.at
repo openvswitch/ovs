@@ -10112,6 +10112,8 @@ AT_KEYWORDS([dpif-offload])
 OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy])
 
 AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
+Globally enabled: false
+Datapaths:
 dummy@ovs-dummy:
   dummy
   dummy_x
@@ -10122,7 +10124,8 @@ AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
   "dummy@ovs-dummy": {
     "providers": [[
       "dummy",
-      "dummy_x"]]}}
+      "dummy_x"]]},
+  "enabled": false}
 ])
 
 OVS_VSWITCHD_STOP
@@ -10147,6 +10150,8 @@ OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy], [], [],
   [], [-- set Open_vSwitch . other_config:hw-offload-priority=dummy_x,dummy])
 
 AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
+Globally enabled: false
+Datapaths:
 dummy@ovs-dummy:
   dummy_x
   dummy
@@ -10157,7 +10162,8 @@ AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
   "dummy@ovs-dummy": {
     "providers": [[
       "dummy_x",
-      "dummy"]]}}
+      "dummy"]]},
+  "enabled": false}
 ])
 
 OVS_VSWITCHD_STOP

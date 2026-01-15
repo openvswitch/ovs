@@ -52,6 +52,7 @@
 #include "dp-packet.h"
 #include "dpif-netlink.h"
 #include "dpif-netdev.h"
+#include "dpif-offload.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
@@ -3065,7 +3066,7 @@ netdev_linux_set_policing(struct netdev *netdev_, uint32_t kbits_rate,
     COVERAGE_INC(netdev_set_policing);
 
     /* Use matchall for policing when offloadling ovs with tc-flower. */
-    if (netdev_is_flow_api_enabled()) {
+    if (dpif_offload_enabled()) {
         error = tc_del_matchall_policer(netdev_);
         if (kbits_rate || kpkts_rate) {
             error = tc_add_matchall_policer(netdev_, kbits_rate, kbits_burst,

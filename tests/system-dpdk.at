@@ -950,12 +950,15 @@ OVS_DPDK_START([--no-pci])
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
 
 AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
+Globally enabled: false
+Datapaths:
 netdev@ovs-netdev:
   dpdk
 ])
 
 AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
 {
+  "enabled": false,
   "netdev@ovs-netdev": {
     "providers": [[
       "dpdk"]]}}

@@ -18,6 +18,7 @@
 #include "dpif-netdev.h"
 #include "dpif-netdev-private.h"
 #include "dpif-netdev-private-dfc.h"
+#include "dpif-offload.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -2993,7 +2994,7 @@ queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
 {
     struct dp_offload_thread_item *offload;
 
-    if (!netdev_is_flow_api_enabled()) {
+    if (!dpif_offload_enabled()) {
         return;
     }
 
@@ -3077,7 +3078,7 @@ queue_netdev_flow_put(struct dp_netdev_pmd_thread *pmd,
     struct dp_offload_thread_item *item;
     struct dp_offload_flow_item *flow_offload;
 
-    if (!netdev_is_flow_api_enabled()) {
+    if (!dpif_offload_enabled()) {
         return;
     }
 
@@ -3171,7 +3172,7 @@ dp_netdev_offload_flush(struct dp_netdev *dp,
     static struct ovs_barrier barrier OVS_GUARDED_BY(flush_mutex);
     struct netdev *netdev;
 
-    if (!netdev_is_flow_api_enabled()) {
+    if (!dpif_offload_enabled()) {
         return;
     }
 
@@ -3700,7 +3701,7 @@ dpif_netdev_get_flow_offload_status(const struct dp_netdev *dp,
 
     int ret = 0;
 
-    if (!netdev_is_flow_api_enabled()) {
+    if (!dpif_offload_enabled()) {
         return false;
     }
 
@@ -4769,7 +4770,7 @@ dpif_netdev_offload_stats_get(struct dpif *dpif,
     unsigned int tid;
     size_t i;
 
-    if (!netdev_is_flow_api_enabled()) {
+    if (!dpif_offload_enabled()) {
         return EINVAL;
     }
 
@@ -8516,7 +8517,7 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
                size_t *n_flows, uint8_t *index_map,
                bool md_is_valid, odp_port_t port_no)
 {
-    const bool netdev_flow_api = netdev_is_flow_api_enabled();
+    const bool netdev_flow_api = dpif_offload_enabled();
     const uint32_t recirc_depth = *recirc_depth_get();
     const size_t cnt = dp_packet_batch_size(packets_);
     size_t n_missed = 0, n_emc_hit = 0, n_phwol_hit = 0;

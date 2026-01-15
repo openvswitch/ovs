@@ -1341,7 +1341,7 @@ void
 dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
              enum dpif_offload_type offload_type)
 {
-    if (offload_type == DPIF_OFFLOAD_ALWAYS && !netdev_is_flow_api_enabled()) {
+    if (offload_type == DPIF_OFFLOAD_ALWAYS && !dpif_offload_enabled()) {
         size_t i;
         for (i = 0; i < n_ops; i++) {
             struct dpif_op *op = ops[i];
@@ -1929,7 +1929,7 @@ bool
 dpif_may_support_explicit_drop_action(const struct dpif *dpif)
 {
     /* TC does not support offloading this action. */
-    return dpif_is_netdev(dpif) || !netdev_is_flow_api_enabled();
+    return dpif_is_netdev(dpif) || !dpif_offload_enabled();
 }
 
 bool

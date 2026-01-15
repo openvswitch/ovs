@@ -29,6 +29,7 @@
 #include "cmap.h"
 #include "coverage.h"
 #include "dpif.h"
+#include "dpif-offload.h"
 #include "dp-packet.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
@@ -59,7 +60,6 @@ VLOG_DEFINE_THIS_MODULE(netdev_offload);
 
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-static bool netdev_flow_api_enabled = false;
 
 #define DEFAULT_OFFLOAD_THREAD_NB 1
 #define MAX_OFFLOAD_THREAD_NB 10
@@ -389,7 +389,7 @@ netdev_flow_get_n_flows(struct netdev *netdev, uint64_t *n_flows)
 int
 netdev_init_flow_api(struct netdev *netdev)
 {
-    if (!netdev_is_flow_api_enabled()) {
+    if (!dpif_offload_enabled()) {
         return EOPNOTSUPP;
     }
 
@@ -525,12 +525,6 @@ netdev_any_oor(void)
     ovs_rwlock_unlock(&port_to_netdev_rwlock);
 
     return oor;
-}
-
-bool
-netdev_is_flow_api_enabled(void)
-{
-    return netdev_flow_api_enabled;
 }
 
 unsigned int
@@ -846,14 +840,6 @@ netdev_ifindex_to_odp_port(int ifindex)
     return ret;
 }
 
-static bool netdev_offload_rebalance_policy = false;
-
-bool
-netdev_is_offload_rebalance_policy_enabled(void)
-{
-    return netdev_offload_rebalance_policy;
-}
-
 static void
 netdev_ports_flow_init(void)
 {
@@ -869,11 +855,10 @@ netdev_ports_flow_init(void)
 void
 netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
 {
-    if (smap_get_bool(ovs_other_config, "hw-offload", false)) {
+    if (dpif_offload_enabled()) {
         static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
         if (ovsthread_once_start(&once)) {
-            netdev_flow_api_enabled = true;
 
             offload_thread_nb = smap_get_ullong(ovs_other_config,
                                                 "n-offload-threads",
@@ -897,11 +882,6 @@ netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
             tc_set_policy(smap_get_def(ovs_other_config, "tc-policy",
                                        TC_POLICY_DEFAULT));
 #endif
-
-            if (smap_get_bool(ovs_other_config, "offload-rebalance", false)) {
-                netdev_offload_rebalance_policy = true;
-            }
-
             netdev_ports_flow_init();
 
             ovsthread_once_done(&once);

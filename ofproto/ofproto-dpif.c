@@ -6752,6 +6752,9 @@ ofproto_unixctl_dpif_offload_show(struct unixctl_conn *conn,
         struct json *backers = json_object_create();
         const struct shash_node *backer;
 
+        json_object_put(backers, "enabled",
+            json_boolean_create(dpif_offload_enabled()));
+
         SHASH_FOR_EACH (backer, &all_dpif_backers) {
             dpif_offload_show_backer_json(backers, backer->data);
         }
@@ -6759,6 +6762,9 @@ ofproto_unixctl_dpif_offload_show(struct unixctl_conn *conn,
     } else {
         const struct shash_node **backers = shash_sort(&all_dpif_backers);
         struct ds ds = DS_EMPTY_INITIALIZER;
+
+        ds_put_format(&ds, "Globally enabled: %s\nDatapaths:\n",
+                      dpif_offload_enabled() ? "true" : "false");
 
         for (int i = 0; i < shash_count(&all_dpif_backers); i++) {
             dpif_offload_show_backer_text(backers[i]->data, &ds);

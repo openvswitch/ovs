@@ -52,6 +52,8 @@ static const struct dpif_offload_class *base_dpif_offload_classes[] = {
 #define DEFAULT_PROVIDER_PRIORITY_LIST "tc,dpdk,dummy,dummy_x"
 
 static char *dpif_offload_provider_priority_list = NULL;
+static atomic_bool offload_global_enabled = false;
+static atomic_bool offload_rebalance_policy = false;
 
 static int
 dpif_offload_register_provider__(const struct dpif_offload_class *class)
@@ -370,6 +372,24 @@ dpif_offload_type(const struct dpif_offload *offload)
     return offload->class->type;
 }
 
+bool
+dpif_offload_enabled(void)
+{
+    bool enabled;
+
+    atomic_read_relaxed(&offload_global_enabled, &enabled);
+    return enabled;
+}
+
+bool
+dpif_offload_rebalance_policy_enabled(void)
+{
+    bool enabled;
+
+    atomic_read_relaxed(&offload_rebalance_policy, &enabled);
+    return enabled;
+}
+
 void
 dpif_offload_dump_start(struct dpif_offload_dump *dump,
                         const struct dpif *dpif)
@@ -485,6 +505,21 @@ dpif_offload_set_global_cfg(const struct smap *other_cfg)
                                dpif_offload_provider_priority_list)) {
             VLOG_INFO_ONCE("hw-offload-priority configuration changed; "
                            "restart required");
+        }
+    }
+
+    /* Handle other global configuration settings. */
+     if (smap_get_bool(other_cfg, "hw-offload", false)) {
+        static struct ovsthread_once once_enable = OVSTHREAD_ONCE_INITIALIZER;
+
+        if (ovsthread_once_start(&once_enable)) {
+            atomic_store_relaxed(&offload_global_enabled, true);
+
+            if (smap_get_bool(other_cfg, "offload-rebalance", false)) {
+                atomic_store_relaxed(&offload_rebalance_policy, true);
+            }
+
+            ovsthread_once_done(&once_enable);
         }
     }
 }
