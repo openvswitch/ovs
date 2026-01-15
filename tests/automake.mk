@@ -7,6 +7,7 @@ EXTRA_DIST += \
 	$(SYSTEM_TSO_TESTSUITE_AT) \
 	$(SYSTEM_AFXDP_TESTSUITE_AT) \
 	$(SYSTEM_OFFLOADS_TESTSUITE_AT) \
+	$(SYSTEM_DPDK_OFFLOADS_TESTSUITE_AT) \
 	$(SYSTEM_DPDK_TESTSUITE_AT) \
 	$(OVSDB_CLUSTER_TESTSUITE_AT) \
 	$(TESTSUITE) \
@@ -15,6 +16,7 @@ EXTRA_DIST += \
 	$(SYSTEM_TSO_TESTSUITE) \
 	$(SYSTEM_AFXDP_TESTSUITE) \
 	$(SYSTEM_OFFLOADS_TESTSUITE) \
+	$(SYSTEM_DPDK_OFFLOADS_TESTSUITE) \
 	$(SYSTEM_DPDK_TESTSUITE) \
 	$(OVSDB_CLUSTER_TESTSUITE) \
 	tests/atlocal.in \
@@ -186,6 +188,13 @@ SYSTEM_OFFLOADS_TESTSUITE_AT = \
 	tests/system-offloads-testsuite.at \
 	tests/system-offloads-testsuite-macros.at
 
+SYSTEM_DPDK_OFFLOADS_TESTSUITE_AT = \
+	tests/system-common-macros.at \
+	tests/system-dpdk-macros.at \
+	tests/system-dpdk-offloads.at \
+	tests/system-dpdk-offloads-macros.at \
+	tests/system-dpdk-offloads-testsuite.at
+
 SYSTEM_DPDK_TESTSUITE_AT = \
 	tests/system-common-macros.at \
 	tests/system-dpdk-macros.at \
@@ -202,6 +211,7 @@ SYSTEM_USERSPACE_TESTSUITE = $(srcdir)/tests/system-userspace-testsuite
 SYSTEM_TSO_TESTSUITE = $(srcdir)/tests/system-tso-testsuite
 SYSTEM_AFXDP_TESTSUITE = $(srcdir)/tests/system-afxdp-testsuite
 SYSTEM_OFFLOADS_TESTSUITE = $(srcdir)/tests/system-offloads-testsuite
+SYSTEM_DPDK_OFFLOADS_TESTSUITE = $(srcdir)/tests/system-dpdk-offloads-testsuite
 SYSTEM_DPDK_TESTSUITE = $(srcdir)/tests/system-dpdk-testsuite
 OVSDB_CLUSTER_TESTSUITE = $(srcdir)/tests/ovsdb-cluster-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
@@ -315,6 +325,12 @@ check-offloads-valgrind: all $(valgrind_wrappers) $(check_DATA)
 	@echo '----------------------------------------------------------------------'
 	@echo 'Valgrind output can be found in tests/system-offloads-testsuite.dir/*/valgrind.*'
 	@echo '----------------------------------------------------------------------'
+check-dpdk-offloads-valgrind: all $(valgrind_wrappers) $(check_DATA)
+	$(SHELL) '$(SYSTEM_DPDK_OFFLOADS_TESTSUITE)' -C tests VALGRIND='$(VALGRIND)' AUTOTEST_PATH='tests/valgrind:$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS) -j1
+	@echo
+	@echo '----------------------------------------------------------------------'
+	@echo 'Valgrind output can be found in tests/system-dpdk-offloads-testsuite.dir/*/valgrind.*'
+	@echo '----------------------------------------------------------------------'
 check-tso-valgrind: all $(valgrind_wrappers) $(check_DATA)
 	$(SHELL) '$(SYSTEM_TSO_TESTSUITE)' -C tests VALGRIND='$(VALGRIND)' AUTOTEST_PATH='tests/valgrind:$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS) -j1
 	@echo
@@ -355,6 +371,10 @@ check-afxdp: all
 
 check-offloads: all
 	set $(SHELL) '$(SYSTEM_OFFLOADS_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)'; \
+	"$$@" $(TESTSUITEFLAGS) -j1 || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
+
+check-dpdk-offloads: all
+	set $(SHELL) '$(SYSTEM_DPDK_OFFLOADS_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)'; \
 	"$$@" $(TESTSUITEFLAGS) -j1 || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
 
 check-dpdk: all
@@ -399,6 +419,10 @@ $(SYSTEM_AFXDP_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_AFXDP_TEST
 	$(AM_V_at)mv $@.tmp $@
 
 $(SYSTEM_OFFLOADS_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_OFFLOADS_TESTSUITE_AT) $(COMMON_MACROS_AT)
+	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
+	$(AM_V_at)mv $@.tmp $@
+
+$(SYSTEM_DPDK_OFFLOADS_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_DPDK_OFFLOADS_TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
 	$(AM_V_at)mv $@.tmp $@
 

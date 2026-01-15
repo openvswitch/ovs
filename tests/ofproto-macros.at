@@ -9,9 +9,9 @@ s/ duration=[0-9.]*s,//
 s/ cookie=0x0,//
 s/ table=0,//
 s/ n_packets=0,//
-s/ n_offload_packets=0,//
+s/ n_offload_packets=[0-9]*,//
 s/ n_bytes=0,//
-s/ n_offload_bytes=0,//
+s/ n_offload_bytes=[0-9]*,//
 s/ idle_age=[0-9]*,//
 s/ hard_age=[0-9]*,//
 s/dp_hash=0x[0-9a-f]*\//dp_hash=0x0\//
@@ -127,7 +127,7 @@ strip_xids () {
 
 # Changes all 'used:...' to say 'used:0.0', to make output easier to compare.
 strip_used () {
-    sed 's/used:[[0-9]]\.[[0-9]]*/used:0.0/'
+    sed -E 's/used:[[0-9]]+\.[[0-9]]*/used:0.0/'
 }
 
 # Removes all 'duration=...' to make output easier to compare.

@@ -32,6 +32,11 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
    RETIS_CHECK_AND_RUN()
 ])
 
+# CHECK_NO_DPDK_OFFLOAD
+#
+# The kernel module tests do not use dpdk's rte_flow offload.
+m4_define([CHECK_NO_DPDK_OFFLOAD])
+
 # Macro to exclude tests that will fail with TC offload enabled.
 # We currently have the below tests disabled in system-traffic.at
 # for the following reasons:

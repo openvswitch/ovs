@@ -2456,6 +2456,7 @@ OVS_TRAFFIC_VSWITCHD_STOP(["/WARN/d"])
 AT_CLEANUP
 
 AT_SETUP([datapath - simulated flow action update])
+CHECK_NO_DPDK_OFFLOAD()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2520,6 +2521,7 @@ AT_CLEANUP
 
 AT_SETUP([datapath - netdev offload software fallback])
 AT_SKIP_IF([test $HAVE_NC = no])
+CHECK_NO_DPDK_OFFLOAD()
 OVS_TRAFFIC_VSWITCHD_START()
 
 AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
@@ -4520,6 +4522,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - ICMP related])
 AT_SKIP_IF([test $HAVE_NC = no])
+CHECK_NO_DPDK_OFFLOAD()
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
 
@@ -5252,6 +5255,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation + vlan])
+CHECK_NO_DPDK_OFFLOAD()
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
 
@@ -5898,6 +5902,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - resubmit to ct multiple times])
+CHECK_NO_DPDK_OFFLOAD()
 CHECK_CONNTRACK()
 
 OVS_TRAFFIC_VSWITCHD_START(
@@ -7717,6 +7722,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - ICMP related with NAT])
 AT_SKIP_IF([test $HAVE_NC = no])
 AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+CHECK_NO_DPDK_OFFLOAD()
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -9243,6 +9249,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - Multiple ICMP traverse])
 dnl This tracks sending ICMP packets via conntrack multiple times for the
 dnl same packet
+CHECK_NO_DPDK_OFFLOAD()
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
 OVS_CHECK_CT_CLEAR()

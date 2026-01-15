@@ -264,6 +264,11 @@ m4_define([VSCTL_ADD_DATAPATH_TABLE],
 # specific regression.
 m4_define([CHECK_L3L4_CONNTRACK_REASM])
 
+# CHECK_NO_DPDK_OFFLOAD
+#
+# The kernel module tests do not use dpdk's rte_flow offload.
+m4_define([CHECK_NO_DPDK_OFFLOAD])
+
 # CHECK_NO_TC_OFFLOAD
 #
 # The kernel module tests do not use TC offload.

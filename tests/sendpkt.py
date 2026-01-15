@@ -36,6 +36,9 @@ parser = OptionParser(usage=usage)
 parser.add_option("-t", "--type", type="string", dest="packet_type",
                   help="packet type ('eth' is the default PACKET_TYPE)",
                   default="eth")
+parser.add_option("-c", "--count", type="int", dest="packet_count",
+                  help="number of packets to send (default: 1)",
+                  default=1)
 
 (options, args) = parser.parse_args()
 
@@ -44,9 +47,13 @@ if len(args) < 2:
     parser.print_help()
     sys.exit(1)
 
-# validate the "-t" or "--type" option
+# validate the options
 if options.packet_type != "eth":
     parser.error('invalid argument to "-t"/"--type". Allowed value is "eth".')
+if options.packet_count < 1:
+    parser.error('invalid argument to "-c"/"--count". '
+                  'Allowed value must be 1 or higher.')
+
 
 # Strip '0x' prefixes from hex input, combine into a single string and
 # convert to bytes.
@@ -68,7 +75,8 @@ except socket.error as msg:
     sys.exit(2)
 
 try:
-    sockfd.send(pkt)
+    for i in range(options.packet_count):
+        sockfd.send(pkt)
 except socket.error as msg:
     print('unable to send packet! error code: ' + str(msg[0]) + ' : '
                                                                     + msg[1])

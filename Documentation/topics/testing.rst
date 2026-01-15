@@ -363,6 +363,25 @@ manual to figure out how to `Configure hugepages`_.
 All the features documented under `Unit Tests`_ are available for the DPDK
 testsuite.
 
+Userspace datapath with DPDK offload
+''''''''''''''''''''''''''''''''''''
+
+To invoke the userspace datapath tests with DPDK and its rte_flow offload,
+the same prerequisites apply as above. In addition, six Virtual Function (VF)
+interfaces must be preconfigured and capable of hardware offloading traffic
+between each other.
+
+These six VFs need to be passed as a list of PF PCI addresses with their
+corresponding VF indexes in the OVS_DPDK_VF_PCI_ADDRS variable.
+For example::
+
+    OVS_DPDK_VF_PCI_ADDRS="0000:17:00.0,0 0000:17:00.0,1 0000:17:00.0,2 0000:17:00.0,3 0000:17:00.0,4 0000:17:00.0,5"
+
+To invoke the dpdk offloads testsuite with the userspace datapath, run::
+
+    make check-dpdk-offloads \
+        OVS_DPDK_VF_PCI_ADDRS="0000:17:00.0,0 0000:17:00.0,1 0000:17:00.0,2 0000:17:00.0,3 0000:17:00.0,4 0000:17:00.0,5"
+
 Userspace datapath: Testing and Validation of CPU-specific Optimizations
 ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 

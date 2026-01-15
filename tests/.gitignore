@@ -32,6 +32,9 @@
 /system-offloads-testsuite
 /system-offloads-testsuite.dir/
 /system-offloads-testsuite.log
+/system-dpdk-offloads-testsuite
+/system-dpdk-offloads-testsuite.dir/
+/system-dpdk-offloads-testsuite.log
 /test-aes128
 /test-atomic
 /test-bundle

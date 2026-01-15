@@ -1,0 +1,236 @@
+AT_COPYRIGHT([Copyright (c) 2025 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.])
+
+# Macro to exclude tests that will fail with dpdk offload enabled.
+# We currently have the below tests disabled in system-traffic.at
+# for the following reasons:
+#
+#  For dpdk offload_mutex there is no kernel side of the simulated VETH
+#  interface.  Therefore the following tests are disabled, as they assume
+#  kernel ports exist since they have dependencies on their behavior.
+#    - 'datapath - netdev offload software fallback'
+#
+#  DPDK offload does not update flow statistics when a hardware offloaded flow
+#  is removed, which means the statistics are incorrect. Until this changes,
+#  the following test needs to be disabled:
+#    - 'datapath - simulated flow action update'
+#
+#  The dpdk offload test cases use VF interfaces, which are Ethernet devices
+#  with a minimum frame size of 64 bytes.  As a result, received packets appear
+#  larger than expected.  Virtual interfaces, however, report the actual size.
+#  To avoid adding complex counter adjustments in tests that rely on these
+#  values, we skip them.
+#    - 'conntrack - ICMP related'
+#    - 'conntrack - resubmit to ct multiple times'
+#    - 'conntrack - ICMP related with NAT'
+#    - 'conntrack - Multiple ICMP traverse'
+#
+# There is a kernel problem where it will not accept fragmented ICMPv6 packets
+# for the same session if they are batched together. Due to DUT-specific
+# circumstances, this can occasionally happen for the test below. To avoid
+# adding complex detection for this, we simply skip the test.
+#    - 'conntrack - IPv6 fragmentation + vlan'
+#
+m4_define([CHECK_NO_DPDK_OFFLOAD],
+[
+     AT_SKIP_IF([:])
+])
+
+# OVS_DPDK_OFFLOAD_PRE_CHECK()
+#
+# Check prerequisites for DPDK rte_flow tests. Following settings are checked:
+#  - Existence of at least six VFs and their representors.
+#
+m4_define([OVS_DPDK_OFFLOAD_PRE_CHECK], [
+  OVS_DPDK_PRE_CHECK()
+  AT_SKIP_IF(
+    [test "$(printf '%s' "$OVS_DPDK_VF_PCI_ADDRS" | wc -w)" -ne 6])
+
+  AT_SKIP_IF([! ovs_dpdk_verify_vf_cfg "$OVS_DPDK_VF_PCI_ADDRS"])
+])
+
+# OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [dbinit-aux-args])
+#
+# This is a copy from system-dpdk-macro.at with two small changes:
+#  1) Use OVS_DPDK_OFFLOAD_PRE_CHECK() instead of OVS_DPDK_PRE_CHECK().
+#  2) Start with pci enabled for PF devices.
+#
+m4_define([OVS_TRAFFIC_VSWITCHD_START],
+  [
+   OVS_DPDK_OFFLOAD_PRE_CHECK()
+   OVS_WAIT_WHILE([ip link show ovs-netdev])
+   ALLOW_LIST=$(echo "$OVS_DPDK_VF_PCI_ADDRS" | awk '{
+     for (i=1; i<=NF; i++) {
+       split($i, parts, ",");
+       addr = parts[1];
+       if (addr != "" && !seen[addr]) {
+         seen[addr] = 1;
+         if (result == "")
+           result = "--allow " addr;
+         else
+           result = result " --allow " addr;
+        }
+     }
+     print result;
+   }')
+   OVS_DPDK_START([$ALLOW_LIST], [--disable-system],
+                  [-- set Open_vSwitch . other_config:hw-offload=true $3])
+   dnl Add bridges, ports, etc.
+   OVS_WAIT_WHILE([ip link show br0])
+   AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [],
+            [| uuidfilt])], [0], [$2])
+])
+
+# OVS_TRAFFIC_VSWITCHD_STOP([ALLOWLIST], [extra_cmds])
+#
+# This is a copy from system-dpdk-macro.at adding some dpdk offload specific
+# error message exclusion.
+#
+m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
+  [OVS_DPDK_STOP_VSWITCHD([dnl
+$1";/mlx5_net: Failed to update link status: /d"])
+   AT_CHECK([:; $2])
+])
+
+# ADD_{VF|VETH}([port], [namespace], [ovs-br], [ip_addr] [mac_addr], [gateway],
+#               [ip_addr_flags])
+#
+# Simulate the ADD_VETH() macro defined in system-common-macros.at, allowing
+# us to run the existing system-traffic unit tests without any test-specific
+# changes.  This is consistent with how DPDK and AF_XDP run the system tests,
+# except that we are not using actual veth devices, but VF representer ports.
+#
+m4_define([ADD_VF],
+    [ USER_PORT=$1
+      case "$USER_PORT" in
+        client) PORT_NO=0 ;;
+        server) PORT_NO=1 ;;
+        *) PORT_NO=${USER_PORT##*[!0-9]} ;;
+      esac
+
+      AT_CHECK([[[ "$PORT_NO" -ge 0 ]] && [[ "$PORT_NO" -le 6 ]] || return 66])
+      PORT_CFG=$(echo $OVS_DPDK_VF_PCI_ADDRS | cut -d' ' -f$((PORT_NO+1)))
+      PF_PCI=$(ovs_dpdk_get_pci_id "$PORT_CFG")
+      VF_IDX=$(ovs_dpdk_get_vf_idx "$PORT_CFG")
+      REP=$(ovs_dpdk_get_representor_netdev $PF_PCI $VF_IDX)
+      AT_CHECK([test $? -eq 0])
+
+      AT_CHECK([ip link set $REP name $1])
+      AT_CHECK([ip link set $1 netns $2])
+      AT_CHECK([ovs-vsctl add-port $3 ovs-$1 -- \
+                set interface ovs-$1 external-ids:iface-id="$1" -- \
+                set interface ovs-$1 type=dpdk -- \
+                set interface ovs-$1 \
+                  options:dpdk-devargs=$PF_PCI,representor=vf$VF_IDX])
+      NS_CHECK_EXEC([$2], [ip addr add $4 dev $1 $7])
+      NS_CHECK_EXEC([$2], [ip link set dev $1 up])
+      if test -n "$5"; then
+        NS_CHECK_EXEC([$2], [ip link set dev $1 address $5])
+      else
+        NS_CHECK_EXEC([$2],
+                      [ip link set dev $1 address 02:00:00:00:EC:0$PORT_NO])
+      fi
+      if test -n "$6"; then
+        NS_CHECK_EXEC([$2], [ip route add default via $6])
+      fi
+      on_exit "ip netns exec $2 ip link set $1 netns 1; \
+               ip link property del dev $1 altname $REP; \
+               ip link set $1 name $REP"
+    ]
+)
+m4_define([ADD_VETH], [ADD_VF($@)])
+
+# DUMP_DP_IP_CLEAN_SORTED()
+#
+# Clean up and sort the ovs-dpctl dump-flow output for comparing.
+#
+m4_define([DUMP_DP_IP_CLEAN_SORTED], [dnl
+  grep 'eth_type(0x0800)' \
+    | sed -e 's/eth(src=[[a-z0-9:]]*,dst=[[a-z0-9:]]*)/eth(macs)/;s/recirc_id(0),//' \
+    | strip_used | strip_ptype | sort])
+
+OVS_START_SHELL_HELPERS
+
+# ovs_dpdk_is_valid_pci_vf_addr()
+#
+# Check if the given PF PCI address and the VF number are valid.
+#
+ovs_dpdk_is_valid_pci_vf_addr() {
+    PCI_ID='[[0-9a-fA-F]]{4}:[[0-9a-fA-F]]{2}:[[0-9a-fA-F]]{2}\.[[0-7]]'
+    echo "$1" | grep -E -q "^$PCI_ID,[[0-9]]+$" && return 0 || return 1
+}
+
+# ovs_dpdk_get_pci_id()
+#
+ovs_dpdk_get_pci_id() {
+    printf '%s\n' "${1%%,*}"
+}
+
+# ovs_dpdk_get_vf_idx()
+#
+ovs_dpdk_get_vf_idx() {
+    printf '%s\n' "${1##*,}"
+}
+
+# ovs_dpdk_get_representor_netdev(<PF_PCI>, <VF_INDEX>)
+#
+# This function tries to find the representor netdev for the given PF's VF.
+#
+ovs_dpdk_get_representor_netdev() {
+    PF_PCI=$1
+    VF_IDX=$2
+
+    VF_NET_DIR="/sys/bus/pci/devices/$PF_PCI/virtfn$VF_IDX/net"
+
+    if [[ ! -d "$VF_NET_DIR" ]]; then
+        echo "ERROR: VF $VF_IDX for PF $PF_PCI does not exist" >&2
+        return 1
+    fi
+
+    for iface in "$VF_NET_DIR"/*; do
+        if [[ -e "$iface" ]]; then
+            basename "$iface"
+            return 0
+        fi
+    done
+
+    echo "ERROR: No representor netdev found for VF $VF_IDX on PF $PF_PCI" >&2
+    return 1
+}
+
+# ovs_dpdk_verify_vf_cfg()
+#
+# Verify that the given PF PCI addresses and corresponding VF IDs in
+# OVS_DPDK_VF_PCI_ADDRS are valid, exist, and have corresponding
+# representor ports.
+#
+ovs_dpdk_verify_vf_cfg() {
+    i=0
+
+    for addr in $1; do
+        ovs_dpdk_is_valid_pci_vf_addr "$addr" || return 1
+
+        PCI_ID=$(ovs_dpdk_get_pci_id "$addr")
+        VF_IDX=$(ovs_dpdk_get_vf_idx "$addr")
+
+        REP=$(ovs_dpdk_get_representor_netdev $PCI_ID $VF_IDX) || return 1
+
+        echo "ovs-p$i: PF PCI $PCI_ID with VF $VF_IDX has representor $REP"
+        i=$((i + 1))
+    done
+
+    return 0
+}
+
+OVS_END_SHELL_HELPERS
