@@ -133,6 +133,22 @@ dpif_offload_tc_port_del(struct dpif_offload *dpif_offload,
     return ret;
 }
 
+static struct netdev *
+dpif_offload_tc_get_netdev(struct dpif_offload *dpif_offload,
+                           odp_port_t port_no)
+{
+    struct dpif_offload_tc *offload_tc = dpif_offload_tc_cast(dpif_offload);
+    struct dpif_offload_port_mgr_port *port;
+
+    port = dpif_offload_port_mgr_find_by_odp_port(offload_tc->port_mgr,
+                                                  port_no);
+    if (!port) {
+        return NULL;
+    }
+
+    return port->netdev;
+}
+
 static int
 dpif_offload_tc_open(const struct dpif_offload_class *offload_class,
                      struct dpif *dpif, struct dpif_offload **dpif_offload)
@@ -506,5 +522,6 @@ struct dpif_offload_class dpif_offload_tc_class = {
     .meter_set = dpif_offload_tc_meter_set,
     .meter_get = dpif_offload_tc_meter_get,
     .meter_del = dpif_offload_tc_meter_del,
+    .get_netdev = dpif_offload_tc_get_netdev,
     .netdev_flow_flush = dpif_offload_tc_netdev_flow_flush,
 };

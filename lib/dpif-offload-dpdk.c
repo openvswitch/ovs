@@ -109,6 +109,20 @@ dpif_offload_dpdk_port_del(struct dpif_offload *offload_, odp_port_t port_no)
     return ret;
 }
 
+static struct netdev *
+dpif_offload_dpdk_get_netdev(struct dpif_offload *offload_, odp_port_t port_no)
+{
+    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpif_offload_port_mgr_port *port;
+
+    port = dpif_offload_port_mgr_find_by_odp_port(offload->port_mgr, port_no);
+    if (!port) {
+        return NULL;
+    }
+
+    return port->netdev;
+}
+
 static int
 dpif_offload_dpdk_open(const struct dpif_offload_class *offload_class,
                        struct dpif *dpif, struct dpif_offload **offload_)
@@ -268,6 +282,7 @@ struct dpif_offload_class dpif_offload_dpdk_class = {
     .port_add = dpif_offload_dpdk_port_add,
     .port_del = dpif_offload_dpdk_port_del,
     .flow_count = dpif_offload_dpdk_flow_count,
+    .get_netdev = dpif_offload_dpdk_get_netdev,
     .netdev_flow_flush = dpif_offload_dpdk_netdev_flow_flush,
     .netdev_hw_post_process = dpif_offload_dpdk_netdev_hw_post_process,
 };

@@ -220,6 +220,14 @@ struct dpif_offload_class {
     int (*meter_del)(const struct dpif_offload *, ofproto_meter_id meter_id,
                      struct ofputil_meter_stats *);
 
+    /* Return the 'netdev' associated with the port_no if this offload
+     * provider is handling offload for this port/netdev.  The returned
+     * netdev is owned by the port manager and its reference count is
+     * NOT incremented.  Callers needing to hold a reference must call
+     * netdev_ref() on the returned netdev.  Returns NULL if port_no is
+     * not found. */
+    struct netdev *(*get_netdev)(struct dpif_offload *, odp_port_t port_no);
+
 
     /* These APIs operate directly on the provided netdev for performance
      * reasons.  They are intended for use in fast path processing and should

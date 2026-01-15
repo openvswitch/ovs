@@ -100,6 +100,24 @@ dpif_offload_dummy_port_del(struct dpif_offload *dpif_offload,
     return 0;
 }
 
+static struct netdev *
+dpif_offload_dummy_get_netdev(struct dpif_offload *dpif_offload,
+                              odp_port_t port_no)
+{
+    struct dpif_offload_dummy *offload_dummy;
+    struct dpif_offload_port_mgr_port *port;
+
+    offload_dummy = dpif_offload_dummy_cast(dpif_offload);
+
+    port = dpif_offload_port_mgr_find_by_odp_port(offload_dummy->port_mgr,
+                                                  port_no);
+    if (!port) {
+        return NULL;
+    }
+
+    return port->netdev;
+}
+
 static int
 dpif_offload_dummy_open(const struct dpif_offload_class *offload_class,
                         struct dpif *dpif, struct dpif_offload **dpif_offload)
@@ -214,6 +232,7 @@ dpif_offload_dummy_can_offload(struct dpif_offload *dpif_offload OVS_UNUSED,
         .can_offload = dpif_offload_dummy_can_offload,                 \
         .port_add = dpif_offload_dummy_port_add,                       \
         .port_del = dpif_offload_dummy_port_del,                       \
+        .get_netdev = dpif_offload_dummy_get_netdev,                   \
     }
 
 DEFINE_DPIF_DUMMY_CLASS(dpif_offload_dummy_class, "dummy");

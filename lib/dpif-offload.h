@@ -58,6 +58,9 @@ void dpif_offload_meter_get(const struct dpif *dpif, ofproto_meter_id meter_id,
                             struct ofputil_meter_stats *);
 void dpif_offload_meter_del(const struct dpif *dpif, ofproto_meter_id meter_id,
                             struct ofputil_meter_stats *);
+struct netdev *dpif_offload_get_netdev_by_port_id(struct dpif *,
+                                                  struct dpif_offload **,
+                                                  odp_port_t);
 
 /* Iterates through each DPIF_OFFLOAD in DPIF, using DUMP as state.
  *
