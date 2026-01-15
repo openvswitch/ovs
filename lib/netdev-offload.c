@@ -310,17 +310,6 @@ netdev_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
 }
 
 int
-netdev_flow_get_n_flows(struct netdev *netdev, uint64_t *n_flows)
-{
-    const struct netdev_flow_api *flow_api =
-        ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api);
-
-    return (flow_api && flow_api->flow_get_n_flows)
-           ? flow_api->flow_get_n_flows(netdev, n_flows)
-           : EOPNOTSUPP;
-}
-
-int
 netdev_init_flow_api(struct netdev *netdev)
 {
     if (!dpif_offload_enabled()) {
@@ -714,31 +703,6 @@ netdev_ports_remove(odp_port_t port_no, const char *dpif_type)
     }
     ovs_rwlock_unlock(&port_to_netdev_rwlock);
 
-    return ret;
-}
-
-int
-netdev_ports_get_n_flows(const char *dpif_type, odp_port_t port_no,
-                         uint64_t *n_flows)
-{
-    struct port_to_netdev_data *data;
-    int ret = EOPNOTSUPP;
-
-    ovs_rwlock_rdlock(&port_to_netdev_rwlock);
-    data = netdev_ports_lookup(port_no, dpif_type);
-    if (data) {
-        uint64_t thread_n_flows[MAX_OFFLOAD_THREAD_NB] = {0};
-        unsigned int tid;
-
-        ret = netdev_flow_get_n_flows(data->netdev, thread_n_flows);
-        *n_flows = 0;
-        if (!ret) {
-            for (tid = 0; tid < netdev_offload_thread_nb(); tid++) {
-                *n_flows += thread_n_flows[tid];
-            }
-        }
-    }
-    ovs_rwlock_unlock(&port_to_netdev_rwlock);
     return ret;
 }
 

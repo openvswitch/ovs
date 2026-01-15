@@ -2089,29 +2089,6 @@ dpif_bond_stats_get(struct dpif *dpif, uint32_t bond_id,
 }
 
 int
-dpif_get_n_offloaded_flows(struct dpif *dpif, uint64_t *n_flows)
-{
-    const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
-    struct dpif_port_dump port_dump;
-    struct dpif_port dpif_port;
-    int ret, n_devs = 0;
-    uint64_t nflows;
-
-    *n_flows = 0;
-    DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
-        ret = netdev_ports_get_n_flows(dpif_type_str, dpif_port.port_no,
-                                       &nflows);
-        if (!ret) {
-            *n_flows += nflows;
-        } else if (ret == EOPNOTSUPP) {
-            continue;
-        }
-        n_devs++;
-    }
-    return n_devs ? 0 : EOPNOTSUPP;
-}
-
-int
 dpif_cache_get_supported_levels(struct dpif *dpif, uint32_t *levels)
 {
     return dpif->dpif_class->cache_get_supported_levels

@@ -830,11 +830,7 @@ udpif_get_n_flows(struct udpif *udpif)
         if (!dpif_synced_dp_layers(udpif->dpif)) {
             /* If the dpif layer does not sync the flows, we need to include
              * the hardware offloaded flows separately. */
-            uint64_t hw_flows;
-
-            if (!dpif_get_n_offloaded_flows(udpif->dpif, &hw_flows)) {
-                flow_count += hw_flows;
-            }
+            flow_count += dpif_offload_flow_count(udpif->dpif);
         }
 
         atomic_store_relaxed(&udpif->n_flows, flow_count);
@@ -3171,7 +3167,8 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         ds_put_format(&ds, "  flows         : (current %lu)"
             " (avg %u) (max %u) (limit %u)\n", udpif_get_n_flows(udpif),
             udpif->avg_n_flows, udpif->max_n_flows, flow_limit);
-        if (!dpif_get_n_offloaded_flows(udpif->dpif, &n_offloaded_flows)) {
+        n_offloaded_flows = dpif_offload_flow_count(udpif->dpif);
+        if (n_offloaded_flows) {
             ds_put_format(&ds, "  offloaded flows : %"PRIu64"\n",
                           n_offloaded_flows);
         }

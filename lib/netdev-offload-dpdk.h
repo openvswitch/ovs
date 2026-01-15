@@ -23,5 +23,6 @@ struct netdev;
 /* Netdev-specific offload functions.  These should only be used by the
  * associated dpif offload provider. */
 int netdev_offload_dpdk_flow_flush(struct netdev *);
+uint64_t netdev_offload_dpdk_flow_count(struct netdev *);
 
 #endif /* NETDEV_OFFLOAD_DPDK_H */

@@ -441,8 +441,6 @@ int dpif_get_dp_stats(const struct dpif *, struct dpif_dp_stats *);
 
 int dpif_set_features(struct dpif *, uint32_t new_features);
 
-int dpif_get_n_offloaded_flows(struct dpif *dpif, uint64_t *n_flows);
-
 
 /* Port operations. */
 

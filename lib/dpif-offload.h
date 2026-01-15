@@ -51,6 +51,7 @@ void dpif_offload_dump_start(struct dpif_offload_dump *, const struct dpif *);
 bool dpif_offload_dump_next(struct dpif_offload_dump *,
                             struct dpif_offload **);
 int dpif_offload_dump_done(struct dpif_offload_dump *);
+uint64_t dpif_offload_flow_count(const struct dpif *);
 void dpif_offload_meter_set(const struct dpif *dpif, ofproto_meter_id meter_id,
                             struct ofputil_meter_config *);
 void dpif_offload_meter_get(const struct dpif *dpif, ofproto_meter_id meter_id,

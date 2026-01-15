@@ -738,6 +738,27 @@ dpif_offload_flow_flush(struct dpif *dpif)
     }
 }
 
+uint64_t
+dpif_offload_flow_count(const struct dpif *dpif)
+{
+    struct dpif_offload_provider_collection *collection;
+    const struct dpif_offload *offload;
+    uint64_t flow_count = 0;
+
+    collection = dpif_get_offload_provider_collection(dpif);
+    if (!collection || !dpif_offload_enabled()) {
+        return 0;
+    }
+
+    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+        if (offload->class->flow_count) {
+            flow_count += offload->class->flow_count(offload);
+        }
+    }
+
+    return flow_count;
+}
+
 void
 dpif_offload_meter_set(const struct dpif *dpif, ofproto_meter_id meter_id,
                        struct ofputil_meter_config *config)

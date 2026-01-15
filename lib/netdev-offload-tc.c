@@ -2794,22 +2794,16 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
     return del_filter_and_ufid_mapping(&id, ufid, stats);
 }
 
-static int
-netdev_tc_get_n_flows(struct netdev *netdev, uint64_t *n_flows)
+uint64_t
+dpif_offload_tc_flow_count(const struct dpif_offload *offload OVS_UNUSED)
 {
-    struct ufid_tc_data *data;
-    uint64_t total = 0;
+    uint64_t total;
 
     ovs_mutex_lock(&ufid_lock);
-    HMAP_FOR_EACH (data, tc_to_ufid_node, &tc_to_ufid) {
-        if (data->netdev == netdev) {
-            total++;
-        }
-    }
+    total = hmap_count(&tc_to_ufid);
     ovs_mutex_unlock(&ufid_lock);
 
-    *n_flows = total;
-    return 0;
+    return total;
 }
 
 static void
@@ -3453,6 +3447,5 @@ const struct netdev_flow_api netdev_offload_tc = {
    .flow_put = netdev_tc_flow_put,
    .flow_get = netdev_tc_flow_get,
    .flow_del = netdev_tc_flow_del,
-   .flow_get_n_flows = netdev_tc_get_n_flows,
    .init_flow_api = netdev_tc_init_flow_api,
 };

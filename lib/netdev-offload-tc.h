@@ -31,5 +31,6 @@ int dpif_offload_tc_meter_get(const struct dpif_offload *, ofproto_meter_id,
                               struct ofputil_meter_stats *);
 int dpif_offload_tc_meter_del(const struct dpif_offload *, ofproto_meter_id,
                               struct ofputil_meter_stats *);
+uint64_t dpif_offload_tc_flow_count(const struct dpif_offload *);
 
 #endif /* NETDEV_OFFLOAD_TC_H */

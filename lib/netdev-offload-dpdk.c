@@ -2776,24 +2776,24 @@ close_vport_netdev:
     return ret;
 }
 
-static int
-netdev_offload_dpdk_get_n_flows(struct netdev *netdev,
-                                uint64_t *n_flows)
+uint64_t
+netdev_offload_dpdk_flow_count(struct netdev *netdev)
 {
     struct netdev_offload_dpdk_data *data;
+    uint64_t total = 0;
     unsigned int tid;
 
     data = (struct netdev_offload_dpdk_data *)
         ovsrcu_get(void *, &netdev->hw_info.offload_data);
     if (!data) {
-        return -1;
+        return 0;
     }
 
     for (tid = 0; tid < netdev_offload_thread_nb(); tid++) {
-        n_flows[tid] = data->rte_flow_counters[tid];
+        total += data->rte_flow_counters[tid];
     }
 
-    return 0;
+    return total;
 }
 
 const struct netdev_flow_api netdev_offload_dpdk = {
@@ -2804,5 +2804,4 @@ const struct netdev_flow_api netdev_offload_dpdk = {
     .uninit_flow_api = netdev_offload_dpdk_uninit_flow_api,
     .flow_get = netdev_offload_dpdk_flow_get,
     .hw_miss_packet_recover = netdev_offload_dpdk_hw_miss_packet_recover,
-    .flow_get_n_flows = netdev_offload_dpdk_get_n_flows,
 };

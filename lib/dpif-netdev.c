@@ -4762,11 +4762,8 @@ dpif_netdev_offload_stats_get(struct dpif *dpif,
         [DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_STDDEV] =
             { "  Exponential Latency stddev (us)", 0 },
     };
-    struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct dp_netdev_port *port;
+
     unsigned int nb_thread;
-    uint64_t *port_nb_offloads;
-    uint64_t *nb_offloads;
     unsigned int tid;
     size_t i;
 
@@ -4783,29 +4780,11 @@ dpif_netdev_offload_stats_get(struct dpif *dpif,
     stats->size = ARRAY_SIZE(hwol_stats) * (nb_thread + 1);
     stats->counters = xcalloc(stats->size, sizeof *stats->counters);
 
-    nb_offloads = xcalloc(nb_thread, sizeof *nb_offloads);
-    port_nb_offloads = xcalloc(nb_thread, sizeof *port_nb_offloads);
-
-    ovs_rwlock_rdlock(&dp->port_rwlock);
-    HMAP_FOR_EACH (port, node, &dp->ports) {
-        memset(port_nb_offloads, 0, nb_thread * sizeof *port_nb_offloads);
-        /* Do not abort on read error from a port, just report 0. */
-        if (!netdev_flow_get_n_flows(port->netdev, port_nb_offloads)) {
-            for (i = 0; i < nb_thread; i++) {
-                nb_offloads[i] += port_nb_offloads[i];
-            }
-        }
-    }
-    ovs_rwlock_unlock(&dp->port_rwlock);
-
-    free(port_nb_offloads);
-
     for (tid = 0; tid < nb_thread; tid++) {
         uint64_t counts[ARRAY_SIZE(hwol_stats)];
         size_t idx = ((tid + 1) * ARRAY_SIZE(hwol_stats));
 
         memset(counts, 0, sizeof counts);
-        counts[DP_NETDEV_HW_OFFLOADS_STATS_INSERTED] = nb_offloads[tid];
         if (dp_offload_threads != NULL) {
             atomic_read_relaxed(&dp_offload_threads[tid].enqueued_item,
                                 &counts[DP_NETDEV_HW_OFFLOADS_STATS_ENQUEUED]);
@@ -4830,13 +4809,15 @@ dpif_netdev_offload_stats_get(struct dpif *dpif,
         }
     }
 
-    free(nb_offloads);
-
     /* Do an average of the average for the aggregate. */
     hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_LAT_CMA_MEAN].total /= nb_thread;
     hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_LAT_CMA_STDDEV].total /= nb_thread;
     hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_MEAN].total /= nb_thread;
     hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_LAT_EMA_STDDEV].total /= nb_thread;
+
+    /* Get the total offload count. */
+    hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_INSERTED].total =
+        dpif_offload_flow_count(dpif);
 
     for (i = 0; i < ARRAY_SIZE(hwol_stats); i++) {
         snprintf(stats->counters[i].name, sizeof(stats->counters[i].name),

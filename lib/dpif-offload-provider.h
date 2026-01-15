@@ -128,6 +128,9 @@ struct dpif_offload_class {
      * successful, otherwise returns a positive errno value. */
     int (*flow_flush)(const struct dpif_offload *);
 
+    /* Returns the number of flows offloaded by the offload provider. */
+    uint64_t (*flow_count)(const struct dpif_offload *);
+
     /* Adds or modifies the meter in 'dpif_offload' with the given 'meter_id'
      * and the configuration in 'config'.
      *

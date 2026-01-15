@@ -123,7 +123,6 @@ int netdev_get_hw_info(struct netdev *, int);
 void netdev_set_hw_info(struct netdev *, int, int);
 bool netdev_any_oor(void);
 void netdev_set_flow_api_enabled(const struct smap *ovs_other_config);
-int netdev_flow_get_n_flows(struct netdev *netdev, uint64_t *n_flows);
 
 struct dpif_port;
 int netdev_ports_insert(struct netdev *, struct dpif_port *);
@@ -151,8 +150,6 @@ int netdev_ports_flow_get(const char *dpif_type, struct match *match,
                           struct dpif_flow_stats *stats,
                           struct dpif_flow_attrs *attrs,
                           struct ofpbuf *buf);
-int netdev_ports_get_n_flows(const char *dpif_type,
-                             odp_port_t port_no, uint64_t *n_flows);
 
 #ifdef  __cplusplus
 }
