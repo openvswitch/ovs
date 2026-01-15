@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <errno.h>
 
 #include "dpif-offload.h"
 #include "dpif-offload-provider.h"
@@ -34,6 +35,7 @@ static unsigned int offload_thread_nb = DEFAULT_OFFLOAD_THREAD_NB;
 /* dpif offload interface for the dpdk rte_flow implementation. */
 struct dpif_offload_dpdk {
     struct dpif_offload offload;
+    struct dpif_offload_port_mgr *port_mgr;
 
     /* Configuration specific variables. */
     struct ovsthread_once once_enable; /* Track first-time enablement. */
@@ -47,6 +49,65 @@ dpif_offload_dpdk_cast(const struct dpif_offload *offload)
 }
 
 static int
+dpif_offload_dpdk_enable_offload(struct dpif_offload *offload_,
+                                 struct dpif_offload_port_mgr_port *port)
+{
+    dpif_offload_set_netdev_offload(port->netdev, offload_);
+    return 0;
+}
+
+static int
+dpif_offload_dpdk_cleanup_offload(struct dpif_offload *offload_ OVS_UNUSED,
+                                  struct dpif_offload_port_mgr_port *port)
+{
+    dpif_offload_set_netdev_offload(port->netdev, NULL);
+    return 0;
+}
+
+static int
+dpif_offload_dpdk_port_add(struct dpif_offload *offload_,
+                           struct netdev *netdev, odp_port_t port_no)
+{
+    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpif_offload_port_mgr_port *port = xmalloc(sizeof *port);
+
+    if (dpif_offload_port_mgr_add(offload->port_mgr, port, netdev,
+                                  port_no, false)) {
+        if (dpif_offload_enabled()) {
+            return dpif_offload_dpdk_enable_offload(offload_, port);
+        }
+        return 0;
+    }
+
+    free(port);
+    return EEXIST;
+}
+
+static void
+dpif_offload_dpdk_free_port(struct dpif_offload_port_mgr_port *port)
+{
+    netdev_close(port->netdev);
+    free(port);
+}
+
+static int
+dpif_offload_dpdk_port_del(struct dpif_offload *offload_, odp_port_t port_no)
+{
+    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpif_offload_port_mgr_port *port;
+    int ret = 0;
+
+    port = dpif_offload_port_mgr_remove(offload->port_mgr, port_no);
+    if (port) {
+        if (dpif_offload_enabled()) {
+            ret = dpif_offload_dpdk_cleanup_offload(offload_, port);
+        }
+        ovsrcu_postpone(dpif_offload_dpdk_free_port, port);
+    }
+    return ret;
+}
+
+static int
 dpif_offload_dpdk_open(const struct dpif_offload_class *offload_class,
                        struct dpif *dpif, struct dpif_offload **offload_)
 {
@@ -55,6 +116,7 @@ dpif_offload_dpdk_open(const struct dpif_offload_class *offload_class,
     offload = xmalloc(sizeof *offload);
 
     dpif_offload_init(&offload->offload, offload_class, dpif);
+    offload->port_mgr = dpif_offload_port_mgr_init();
     offload->once_enable = (struct ovsthread_once) OVSTHREAD_ONCE_INITIALIZER;
 
     *offload_ = &offload->offload;
@@ -65,7 +127,13 @@ static void
 dpif_offload_dpdk_close(struct dpif_offload *offload_)
 {
     struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpif_offload_port_mgr_port *port;
 
+    DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+        dpif_offload_dpdk_port_del(offload_, port->port_no);
+    }
+
+    dpif_offload_port_mgr_uninit(offload->port_mgr);
     ovsthread_once_destroy(&offload->once_enable);
     free(offload);
 }
@@ -78,6 +146,7 @@ dpif_offload_dpdk_set_config(struct dpif_offload *offload_,
 
     if (smap_get_bool(other_cfg, "hw-offload", false)) {
         if (ovsthread_once_start(&offload->once_enable)) {
+            struct dpif_offload_port_mgr_port *port;
 
             offload_thread_nb = smap_get_ullong(other_cfg,
                                                 "n-offload-threads",
@@ -93,6 +162,10 @@ dpif_offload_dpdk_set_config(struct dpif_offload *offload_,
                 VLOG_INFO("Flow API using %u thread%s",
                           offload_thread_nb,
                           offload_thread_nb > 1 ? "s" : "");
+            }
+
+            DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+                dpif_offload_dpdk_enable_offload(offload_, port);
             }
 
             ovsthread_once_done(&offload->once_enable);
@@ -121,6 +194,8 @@ struct dpif_offload_class dpif_offload_dpdk_class = {
     .close = dpif_offload_dpdk_close,
     .set_config = dpif_offload_dpdk_set_config,
     .can_offload = dpif_offload_dpdk_can_offload,
+    .port_add = dpif_offload_dpdk_port_add,
+    .port_del = dpif_offload_dpdk_port_del,
 };
 
 /* XXX: Temporary functions below, which will be removed once fully
