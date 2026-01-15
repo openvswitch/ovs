@@ -2309,6 +2309,12 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         return -ifindex;
     }
 
+    if (key->recirc_id > TC_ACT_EXT_VAL_MASK) {
+        VLOG_DBG_RL(&rl, "flow recirc_id %u exceeds the chain id upper limit",
+                    key->recirc_id);
+        return EOPNOTSUPP;
+    }
+
     memset(&flower, 0, sizeof flower);
 
     exact_match_on_dl_type = mask->dl_type == htons(0xffff);
