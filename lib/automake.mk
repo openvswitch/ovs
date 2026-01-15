@@ -481,6 +481,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/netdev-linux.h \
 	lib/netdev-linux-private.h \
 	lib/netdev-offload-tc.c \
+	lib/netdev-offload-tc.h \
 	lib/netlink-conntrack.c \
 	lib/netlink-conntrack.h \
 	lib/netlink-notifier.c \
@@ -509,7 +510,8 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/dpdk.c \
 	lib/dpif-offload-dpdk.c \
 	lib/netdev-dpdk.c \
-	lib/netdev-offload-dpdk.c
+	lib/netdev-offload-dpdk.c \
+	lib/netdev-offload-dpdk.h
 else
 lib_libopenvswitch_la_SOURCES += \
 	lib/dpdk-stub.c

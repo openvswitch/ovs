@@ -25,6 +25,7 @@
 
 #include "cmap.h"
 #include "dpif-netdev.h"
+#include "netdev-offload-dpdk.h"
 #include "netdev-offload-provider.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
@@ -2609,7 +2610,7 @@ flush_in_vport_cb(struct netdev *vport,
     return false;
 }
 
-static int
+int
 netdev_offload_dpdk_flow_flush(struct netdev *netdev)
 {
     flush_netdev_flows_in_related(netdev, netdev);
@@ -2802,7 +2803,6 @@ const struct netdev_flow_api netdev_offload_dpdk = {
     .init_flow_api = netdev_offload_dpdk_init_flow_api,
     .uninit_flow_api = netdev_offload_dpdk_uninit_flow_api,
     .flow_get = netdev_offload_dpdk_flow_get,
-    .flow_flush = netdev_offload_dpdk_flow_flush,
     .hw_miss_packet_recover = netdev_offload_dpdk_hw_miss_packet_recover,
     .flow_get_n_flows = netdev_offload_dpdk_get_n_flows,
 };

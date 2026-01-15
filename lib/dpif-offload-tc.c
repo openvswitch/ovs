@@ -19,6 +19,7 @@
 
 #include "dpif-offload.h"
 #include "dpif-offload-provider.h"
+#include "netdev-offload-tc.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "tc.h"
@@ -210,6 +211,30 @@ dpif_offload_tc_can_offload(struct dpif_offload *dpif_offload OVS_UNUSED,
     return true;
 }
 
+static int
+dpif_offload_tc_netdev_flow_flush(const struct dpif_offload *offload
+                                  OVS_UNUSED, struct netdev *netdev)
+{
+    return netdev_offload_tc_flow_flush(netdev);
+}
+
+static int
+dpif_offload_tc_flow_flush(const struct dpif_offload *offload)
+{
+    struct dpif_offload_tc *offload_tc = dpif_offload_tc_cast(offload);
+    struct dpif_offload_port_mgr_port *port;
+    int error = 0;
+
+    DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload_tc->port_mgr) {
+        int rc = netdev_offload_tc_flow_flush(port->netdev);
+
+        if (rc && !error) {
+            error = rc;
+        }
+    }
+    return error;
+}
+
 struct dpif_offload_class dpif_offload_tc_class = {
     .type = "tc",
     .supported_dpif_types = (const char *const[]) {"system", NULL},
@@ -220,4 +245,6 @@ struct dpif_offload_class dpif_offload_tc_class = {
     .can_offload = dpif_offload_tc_can_offload,
     .port_add = dpif_offload_tc_port_add,
     .port_del = dpif_offload_tc_port_del,
+    .flow_flush = dpif_offload_tc_flow_flush,
+    .netdev_flow_flush = dpif_offload_tc_netdev_flow_flush,
 };

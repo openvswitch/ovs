@@ -30,9 +30,6 @@ extern "C" {
 
 struct netdev_flow_api {
     char *type;
-    /* Flush all offloaded flows from a netdev.
-     * Return 0 if successful, otherwise returns a positive errno value. */
-    int (*flow_flush)(struct netdev *);
 
     /* Flow dumping interface.
      *

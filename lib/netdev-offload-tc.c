@@ -32,6 +32,7 @@
 #include "openvswitch/vlog.h"
 #include "netdev-linux.h"
 #include "netdev-offload-provider.h"
+#include "netdev-offload-tc.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netlink.h"
@@ -562,8 +563,8 @@ delete_chains_from_netdev(struct netdev *netdev, struct tcf_id *id)
     return error;
 }
 
-static int
-netdev_tc_flow_flush(struct netdev *netdev)
+int
+netdev_offload_tc_flow_flush(struct netdev *netdev)
 {
     struct ufid_tc_data *data;
     int err;
@@ -3426,7 +3427,6 @@ meter_tc_del_policer(ofproto_meter_id meter_id,
 
 const struct netdev_flow_api netdev_offload_tc = {
    .type = "linux_tc",
-   .flow_flush = netdev_tc_flow_flush,
    .flow_dump_create = netdev_tc_flow_dump_create,
    .flow_dump_destroy = netdev_tc_flow_dump_destroy,
    .flow_dump_next = netdev_tc_flow_dump_next,

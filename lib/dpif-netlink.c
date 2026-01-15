@@ -1309,17 +1309,12 @@ dpif_netlink_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
 static int
 dpif_netlink_flow_flush(struct dpif *dpif_)
 {
-    const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif_));
     const struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     struct dpif_netlink_flow flow;
 
     dpif_netlink_flow_init(&flow);
     flow.cmd = OVS_FLOW_CMD_DEL;
     flow.dp_ifindex = dpif->dp_ifindex;
-
-    if (dpif_offload_enabled()) {
-        netdev_ports_flow_flush(dpif_type_str);
-    }
 
     return dpif_netlink_flow_transact(&flow, NULL, NULL);
 }

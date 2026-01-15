@@ -123,6 +123,19 @@ struct dpif_offload_class {
      * in 'port_deleted' applies here. */
     void (*port_set_config)(struct dpif_offload *, odp_port_t port_no,
                             const struct smap *cfg);
+
+    /* Deletes all offloaded flows for this offload_provider.  Return 0 if
+     * successful, otherwise returns a positive errno value. */
+    int (*flow_flush)(const struct dpif_offload *);
+
+
+    /* These APIs operate directly on the provided netdev for performance
+     * reasons.  They are intended for use in fast path processing and should
+     * be designed with speed and efficiency in mind. */
+
+    /* Deletes all offloaded flows on this netdev.  Return 0 if successful,
+     * otherwise returns a positive errno value. */
+    int (*netdev_flow_flush)(const struct dpif_offload *, struct netdev *);
 };
 
 

@@ -100,7 +100,6 @@ netdev_offload_thread_id(void)
     return id;
 }
 
-int netdev_flow_flush(struct netdev *);
 int netdev_flow_dump_create(struct netdev *, struct netdev_flow_dump **dump,
                             bool terse);
 int netdev_flow_dump_destroy(struct netdev_flow_dump *);
@@ -144,7 +143,6 @@ struct netdev_flow_dump **netdev_ports_flow_dump_create(
                                         const char *dpif_type,
                                         int *ports,
                                         bool terse);
-void netdev_ports_flow_flush(const char *dpif_type);
 int netdev_ports_flow_del(const char *dpif_type, const ovs_u128 *ufid,
                           struct dpif_flow_stats *stats);
 int netdev_ports_flow_get(const char *dpif_type, struct match *match,

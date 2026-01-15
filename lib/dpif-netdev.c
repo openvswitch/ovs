@@ -2911,7 +2911,7 @@ dp_offload_flush(struct dp_offload_thread_item *item)
     struct dp_offload_flush_item *flush = &item->data->flush;
 
     ovs_rwlock_rdlock(&item->dp->port_rwlock);
-    netdev_flow_flush(flush->netdev);
+    dpif_offload_netdev_flush_flows(flush->netdev);
     ovs_rwlock_unlock(&item->dp->port_rwlock);
 
     ovs_barrier_block(flush->barrier);

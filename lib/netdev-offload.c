@@ -263,17 +263,6 @@ meter_offload_del(ofproto_meter_id meter_id, struct ofputil_meter_stats *stats)
 }
 
 int
-netdev_flow_flush(struct netdev *netdev)
-{
-    const struct netdev_flow_api *flow_api =
-        ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api);
-
-    return (flow_api && flow_api->flow_flush)
-           ? flow_api->flow_flush(netdev)
-           : EOPNOTSUPP;
-}
-
-int
 netdev_flow_dump_create(struct netdev *netdev, struct netdev_flow_dump **dump,
                         bool terse)
 {
@@ -589,20 +578,6 @@ netdev_offload_thread_init(void)
     } else {
         return *netdev_offload_thread_id_get();
     }
-}
-
-void
-netdev_ports_flow_flush(const char *dpif_type)
-{
-    struct port_to_netdev_data *data;
-
-    ovs_rwlock_rdlock(&port_to_netdev_rwlock);
-    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
-        if (netdev_get_dpif_type(data->netdev) == dpif_type) {
-            netdev_flow_flush(data->netdev);
-        }
-    }
-    ovs_rwlock_unlock(&port_to_netdev_rwlock);
 }
 
 void

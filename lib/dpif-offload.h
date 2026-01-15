@@ -46,6 +46,7 @@ const char *dpif_offload_name(const struct dpif_offload *);
 const char *dpif_offload_type(const struct dpif_offload *);
 bool dpif_offload_get_debug(const struct dpif_offload *, struct ds *,
                             struct json *);
+void dpif_offload_flow_flush(struct dpif *);
 void dpif_offload_dump_start(struct dpif_offload_dump *, const struct dpif *);
 bool dpif_offload_dump_next(struct dpif_offload_dump *,
                             struct dpif_offload **);
@@ -63,5 +64,9 @@ int dpif_offload_dump_done(struct dpif_offload_dump *);
           ? true                                         \
           : (dpif_offload_dump_done(DUMP), false));      \
         )
+
+
+/* Netdev specific function, which can be used in the fast path. */
+int dpif_offload_netdev_flush_flows(struct netdev *);
 
 #endif /* DPIF_OFFLOAD_H */

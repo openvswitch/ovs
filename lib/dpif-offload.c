@@ -712,6 +712,44 @@ dpif_offload_set_global_cfg(const struct ovsrec_open_vswitch *cfg)
     }
 }
 
+void
+dpif_offload_flow_flush(struct dpif *dpif)
+{
+    struct dpif_offload_provider_collection *collection;
+    struct dpif_offload *offload;
+
+    collection = dpif_get_offload_provider_collection(dpif);
+    if (!collection) {
+        return;
+    }
+
+    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+        if (offload->class->flow_flush) {
+            int err = offload->class->flow_flush(offload);
+
+            if (err) {
+                VLOG_ERR(
+                    "Failed flow flush on dpif-offload provider %s, error %s",
+                    dpif_offload_name(offload), ovs_strerror(err));
+            }
+        }
+    }
+}
+
+
+int
+dpif_offload_netdev_flush_flows(struct netdev *netdev)
+{
+    const struct dpif_offload *offload;
+
+    offload = ovsrcu_get(const struct dpif_offload *, &netdev->dpif_offload);
+
+    if (offload && offload->class->netdev_flow_flush) {
+        return offload->class->netdev_flow_flush(offload, netdev);
+    }
+    return EOPNOTSUPP;
+}
+
 
 struct dpif_offload_port_mgr *
 dpif_offload_port_mgr_init(void)
