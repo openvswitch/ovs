@@ -6719,6 +6719,7 @@ dpif_offload_show_backer_text(const struct dpif_backer *backer, struct ds *ds)
 
     DPIF_OFFLOAD_FOR_EACH (offload, &dump, backer->dpif) {
         ds_put_format(ds, "  %s\n", dpif_offload_type(offload));
+        dpif_offload_get_debug(offload, ds, NULL);
     }
 }
 
@@ -6726,16 +6727,25 @@ static struct json *
 dpif_offload_show_backer_json(struct json *backers,
                               const struct dpif_backer *backer)
 {
-    struct json *json_providers = json_array_create_empty();
+    struct json *json_providers = json_object_create();
+    struct json *json_priority = json_array_create_empty();
     struct json *json_backer = json_object_create();
     struct dpif_offload_dump dump;
     struct dpif_offload *offload;
 
     DPIF_OFFLOAD_FOR_EACH (offload, &dump, backer->dpif) {
-        json_array_add(json_providers,
+        struct json *debug_data = json_object_create();
+
+        json_array_add(json_priority,
                        json_string_create(dpif_offload_type(offload)));
+
+        dpif_offload_get_debug(offload, NULL, debug_data);
+
+        json_object_put(json_providers, dpif_offload_type(offload),
+                        debug_data);
     }
 
+    json_object_put(json_backer, "priority", json_priority);
     json_object_put(json_backer, "providers", json_providers);
     json_object_put(backers, dpif_name(backer->dpif), json_backer);
     return json_backer;

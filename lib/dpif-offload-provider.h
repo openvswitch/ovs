@@ -91,6 +91,15 @@ struct dpif_offload_class {
     void (*set_config)(struct dpif_offload *,
                        const struct smap *other_config);
 
+    /* Retrieve debug information from the offload provider in either string
+     * (ds) or JSON format.  If both formats are requested, the provider may
+     * choose which one to return.  Note that the actual format is unspecified,
+     * it's up to the provider to decide what to return.  If 'ds' is supplied,
+     * it should be initialized, and might already contain data.  The caller is
+     * responsible for freeing any returned 'ds' or 'json' pointers. */
+    void (*get_debug)(const struct dpif_offload *offload, struct ds *ds,
+                      struct json *json);
+
     /* Verifies whether the offload provider supports offloading flows for the
      * given 'netdev'.  Returns 'false' if the provider lacks the capabilities
      * to offload on this port, otherwise returns 'true'. */

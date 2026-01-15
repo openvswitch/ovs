@@ -948,20 +948,29 @@ AT_KEYWORDS([dpdk dpif-offload])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START([--no-pci])
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br0 p1 \
+  -- set Interface p1 type=dpdk options:dpdk-devargs=net_null0,no-rx=1],
+  [], [stdout], [stderr])
 
 AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
 Globally enabled: false
 Datapaths:
 netdev@ovs-netdev:
   dpdk
+  - p1: port_no: 2
 ])
 
 AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
 {
   "enabled": false,
   "netdev@ovs-netdev": {
-    "providers": [[
-      "dpdk"]]}}
+    "priority": [[
+      "dpdk"]],
+    "providers": {
+      "dpdk": {
+        "ports": {
+          "p1": {
+            "port_no": 2}}}}}}
 ])
 
 OVS_DPDK_STOP_VSWITCHD

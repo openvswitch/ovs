@@ -24,6 +24,8 @@
 #include "netdev-provider.h"
 #include "util.h"
 
+#include "openvswitch/json.h"
+
 struct dpif_offload_dummy {
     struct dpif_offload offload;
     struct dpif_offload_port_mgr *port_mgr;
@@ -157,6 +159,43 @@ dpif_offload_dummy_set_config(struct dpif_offload *dpif_offload,
     }
 }
 
+static void
+dpif_offload_dummy_get_debug(const struct dpif_offload *offload, struct ds *ds,
+                             struct json *json)
+{
+    struct dpif_offload_dummy *offload_dummy;
+
+    offload_dummy = dpif_offload_dummy_cast(offload);
+
+    if (json) {
+        struct json *json_ports = json_object_create();
+        struct dpif_offload_port_mgr_port *port;
+
+        DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload_dummy->port_mgr) {
+            struct json *json_port = json_object_create();
+
+            json_object_put(json_port, "port_no",
+                            json_integer_create(odp_to_u32(port->port_no)));
+
+            json_object_put(json_ports, netdev_get_name(port->netdev),
+                            json_port);
+        }
+
+        if (!json_object_is_empty(json_ports)) {
+            json_object_put(json, "ports", json_ports);
+        } else {
+            json_destroy(json_ports);
+        }
+    } else if (ds) {
+        struct dpif_offload_port_mgr_port *port;
+
+        DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload_dummy->port_mgr) {
+            ds_put_format(ds, "  - %s: port_no: %u\n",
+                          netdev_get_name(port->netdev), port->port_no);
+        }
+    }
+}
+
 static bool
 dpif_offload_dummy_can_offload(struct dpif_offload *dpif_offload OVS_UNUSED,
                                struct netdev *netdev)
@@ -171,6 +210,7 @@ dpif_offload_dummy_can_offload(struct dpif_offload *dpif_offload OVS_UNUSED,
         .open = dpif_offload_dummy_open,                               \
         .close = dpif_offload_dummy_close,                             \
         .set_config = dpif_offload_dummy_set_config,                   \
+        .get_debug = dpif_offload_dummy_get_debug,                     \
         .can_offload = dpif_offload_dummy_can_offload,                 \
         .port_add = dpif_offload_dummy_port_add,                       \
         .port_del = dpif_offload_dummy_port_del,                       \

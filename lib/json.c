@@ -397,6 +397,13 @@ json_object_create(void)
     return json;
 }
 
+bool
+json_object_is_empty(struct json *json)
+{
+    return json && json->type == JSON_OBJECT
+           && shash_is_empty(json->object);
+}
+
 struct json *
 json_integer_create(long long int integer)
 {

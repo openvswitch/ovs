@@ -1172,19 +1172,42 @@ AT_KEYWORDS([dpif-offload])
 OVS_TRAFFIC_VSWITCHD_START([], [],
   [-- set Open_vSwitch . other_config:hw-offload=true])
 
-AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
+sort_dpif_offload_show () {
+    awk '
+        /^  -/ { dashlines[[++n]] = $0; next }
+        { print }
+        END {
+            asort(dashlines)
+            for (i=1; i<=n; i++) print dashlines[[i]]
+        }
+    ' | sed -E 's/ifindex: [[0-9]]+/ifindex: 0/g'
+}
+
+AT_CHECK([ovs-appctl dpif/offload/show | sort_dpif_offload_show], [0], [dnl
 Globally enabled: true
 Datapaths:
 system@ovs-system:
   tc
+  - br0: port_no: 1, ifindex: 0
+  - ovs-system: port_no: 0, ifindex: 0
 ])
 
-AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
+AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show \
+            | sed -E 's/"ifindex": [[0-9]]+/"ifindex": 0/g'], [0], [dnl
 {
   "enabled": true,
   "system@ovs-system": {
-    "providers": [[
-      "tc"]]}}
+    "priority": [[
+      "tc"]],
+    "providers": {
+      "tc": {
+        "ports": {
+          "br0": {
+            "ifindex": 0,
+            "port_no": 1},
+          "ovs-system": {
+            "ifindex": 0,
+            "port_no": 0}}}}}}
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
