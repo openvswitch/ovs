@@ -10107,6 +10107,27 @@ AT_CHECK([ovs-appctl ofproto/trace br0 in_port=p0,tcp --ct-next 'trk,est' | dnl
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - offload - ovs-appctl dpif/offload/])
+AT_KEYWORDS([dpif-offload])
+OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy])
+
+AT_CHECK([ovs-appctl dpif/offload/show], [0], [dnl
+dummy@ovs-dummy:
+  dummy_x
+  dummy
+])
+
+AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
+{
+  "dummy@ovs-dummy": {
+    "providers": [[
+      "dummy_x",
+      "dummy"]]}}
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl ----------------------------------------------------------------------
 AT_BANNER([ofproto-dpif -- megaflows])
 
