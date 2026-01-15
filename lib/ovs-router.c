@@ -855,11 +855,12 @@ ovs_router_rules_show_json(struct json *rule_entries, bool ipv6)
     struct ds ds;
 
     PVECTOR_FOR_EACH (rule, &rules) {
-        struct json *entry = json_object_create();
+        struct json *entry;
 
         if (rule->ipv4 == ipv6) {
             continue;
         }
+        entry = json_object_create();
 
         json_object_put(entry, "priority", json_integer_create(rule->prio));
         json_object_put(entry, "user", json_integer_create(rule->user));
