@@ -154,6 +154,30 @@ struct dpif_offload_class {
     void (*port_set_config)(struct dpif_offload *, odp_port_t port_no,
                             const struct smap *cfg);
 
+    /* Attempts to begin dumping the ports in a dpif_offload.  On success,
+     * returns 0 and initializes '*statep' with any data needed for iteration.
+     * On failure, returns a positive errno value. */
+    int (*port_dump_start)(const struct dpif_offload *, void **statep);
+
+    /* Attempts to retrieve another port from 'dpif_offload' for 'state', which
+     * was initialized by a successful call to the 'port_dump_start' function
+     * for 'dpif_offload'.  On success, stores a new dpif_offload_port into
+     * 'port' and returns 0.  Returns EOF if the end of the port table has been
+     * reached, or a positive errno value on error.  This function will not be
+     * called again once it returns nonzero once for a given iteration (but
+     * the 'port_dump_done' function will be called afterward).
+     *
+     * The dpif provider retains ownership of the data stored in 'port'.  It
+     * must remain valid until at least the next call to 'port_dump_next' or
+     * 'port_dump_done' for 'state'. */
+    int (*port_dump_next)(const struct dpif_offload *, void *state,
+                          struct dpif_offload_port *);
+
+    /* Releases resources from 'dpif_offload' for 'state', which was
+     * initialized by a successful call to the 'port_dump_start' function for
+     * 'dpif_offload'. */
+    int (*port_dump_done)(const struct dpif_offload *dpif, void *state);
+
     /* Deletes all offloaded flows for this offload_provider.  Return 0 if
      * successful, otherwise returns a positive errno value. */
     int (*flow_flush)(const struct dpif_offload *);
@@ -307,6 +331,13 @@ struct dpif_offload_port_mgr_port *dpif_offload_port_mgr_find_by_netdev(
     struct dpif_offload_port_mgr *, struct netdev *);
 struct dpif_offload_port_mgr_port *dpif_offload_port_mgr_find_by_odp_port(
     struct dpif_offload_port_mgr *, odp_port_t);
+int dpif_offload_port_mgr_port_dump_start(struct dpif_offload_port_mgr *,
+                                          void **statep);
+int dpif_offload_port_mgr_port_dump_next(struct dpif_offload_port_mgr *,
+                                         void *state,
+                                         struct dpif_offload_port *);
+int dpif_offload_port_mgr_port_dump_done(struct dpif_offload_port_mgr *,
+                                         void *state);
 
 #define DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH(PORT, PORT_MGR) \
     CMAP_FOR_EACH (PORT, odp_port_node, &(PORT_MGR)->odp_port_to_port)

@@ -133,6 +133,35 @@ dpif_offload_tc_port_del(struct dpif_offload *dpif_offload,
     return ret;
 }
 
+static int
+dpif_offload_tc_port_dump_start(const struct dpif_offload *offload_,
+                                void **statep)
+{
+    struct dpif_offload_tc *offload = dpif_offload_tc_cast(offload_);
+
+    return dpif_offload_port_mgr_port_dump_start(offload->port_mgr, statep);
+}
+
+static int
+dpif_offload_tc_port_dump_next(const struct dpif_offload *offload_,
+                               void *state,
+                               struct dpif_offload_port *port)
+{
+    struct dpif_offload_tc *offload = dpif_offload_tc_cast(offload_);
+
+    return dpif_offload_port_mgr_port_dump_next(offload->port_mgr, state,
+                                                port);
+}
+
+static int
+dpif_offload_tc_port_dump_done(const struct dpif_offload *offload_,
+                               void *state)
+{
+    struct dpif_offload_tc *offload = dpif_offload_tc_cast(offload_);
+
+    return dpif_offload_port_mgr_port_dump_done(offload->port_mgr, state);
+}
+
 static struct netdev *
 dpif_offload_tc_get_netdev(struct dpif_offload *dpif_offload,
                            odp_port_t port_no)
@@ -513,6 +542,9 @@ struct dpif_offload_class dpif_offload_tc_class = {
     .can_offload = dpif_offload_tc_can_offload,
     .port_add = dpif_offload_tc_port_add,
     .port_del = dpif_offload_tc_port_del,
+    .port_dump_start = dpif_offload_tc_port_dump_start,
+    .port_dump_next = dpif_offload_tc_port_dump_next,
+    .port_dump_done = dpif_offload_tc_port_dump_done,
     .flow_flush = dpif_offload_tc_flow_flush,
     .flow_dump_create = dpif_offload_tc_flow_dump_create,
     .flow_dump_next = dpif_offload_tc_flow_dump_next,

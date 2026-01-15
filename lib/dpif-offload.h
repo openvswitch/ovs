@@ -100,6 +100,37 @@ enum dpif_offload_impl_type dpif_offload_get_impl_type_by_class(
           : (dpif_offload_dump_done(DUMP), false));      \
         )
 
+struct dpif_offload_port {
+    struct netdev *netdev;
+    odp_port_t port_no;
+};
+
+struct dpif_offload_port_dump {
+    const struct dpif *dpif;
+    const struct dpif_offload *offload;
+    int error;
+    void *state;
+};
+
+void dpif_offload_port_dump_start(struct dpif_offload_port_dump *,
+                                  const struct dpif *);
+bool dpif_offload_port_dump_next(struct dpif_offload_port_dump *,
+                                 struct dpif_offload_port *);
+int dpif_offload_port_dump_done(struct dpif_offload_port_dump *);
+
+/* Iterates through each DPIF_OFFLOAD_PORT in DPIF, using DUMP as state.
+ *
+ * Arguments all have pointer type.
+ *
+ * If you break out of the loop, then you need to free the dump structure by
+ * hand using dpif_offload_port_dump_done(). */
+#define DPIF_OFFLOAD_PORT_FOR_EACH(DPIF_OFFLOAD_PORT, DUMP, DPIF)  \
+    for (dpif_offload_port_dump_start(DUMP, DPIF);                 \
+         (dpif_offload_port_dump_next(DUMP, DPIF_OFFLOAD_PORT)     \
+          ? true                                                   \
+          : (dpif_offload_port_dump_done(DUMP), false));           \
+        )
+
 
 /* Netdev specific function, which can be used in the fast path. */
 int dpif_offload_netdev_flush_flows(struct netdev *);

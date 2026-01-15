@@ -109,6 +109,35 @@ dpif_offload_dpdk_port_del(struct dpif_offload *offload_, odp_port_t port_no)
     return ret;
 }
 
+static int
+dpif_offload_dpdk_port_dump_start(const struct dpif_offload *offload_,
+                                  void **statep)
+{
+    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+
+    return dpif_offload_port_mgr_port_dump_start(offload->port_mgr, statep);
+}
+
+static int
+dpif_offload_dpdk_port_dump_next(const struct dpif_offload *offload_,
+                                 void *state,
+                                 struct dpif_offload_port *port)
+{
+    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+
+    return dpif_offload_port_mgr_port_dump_next(offload->port_mgr, state,
+                                                port);
+}
+
+static int
+dpif_offload_dpdk_port_dump_done(const struct dpif_offload *offload_,
+                                 void *state)
+{
+    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+
+    return dpif_offload_port_mgr_port_dump_done(offload->port_mgr, state);
+}
+
 static struct netdev *
 dpif_offload_dpdk_get_netdev(struct dpif_offload *offload_, odp_port_t port_no)
 {
@@ -287,6 +316,9 @@ struct dpif_offload_class dpif_offload_dpdk_class = {
     .can_offload = dpif_offload_dpdk_can_offload,
     .port_add = dpif_offload_dpdk_port_add,
     .port_del = dpif_offload_dpdk_port_del,
+    .port_dump_start = dpif_offload_dpdk_port_dump_start,
+    .port_dump_next = dpif_offload_dpdk_port_dump_next,
+    .port_dump_done = dpif_offload_dpdk_port_dump_done,
     .flow_count = dpif_offload_dpdk_flow_count,
     .get_netdev = dpif_offload_dpdk_get_netdev,
     .netdev_flow_flush = dpif_offload_dpdk_netdev_flow_flush,
