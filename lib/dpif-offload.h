@@ -82,6 +82,7 @@ struct netdev *dpif_offload_get_netdev_by_port_id(struct dpif *,
                                                   odp_port_t);
 struct dpif_offload *dpif_offload_port_offloaded_by(const struct dpif *,
                                                     odp_port_t);
+bool dpif_offload_netdevs_out_of_resources(struct dpif *);
 enum dpif_offload_impl_type dpif_offload_get_impl_type(
     const struct dpif_offload *);
 enum dpif_offload_impl_type dpif_offload_get_impl_type_by_class(

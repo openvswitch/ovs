@@ -326,31 +326,6 @@ struct port_to_netdev_data {
     int ifindex;
 };
 
-/*
- * Find if any netdev is in OOR state. Return true if there's at least
- * one netdev that's in OOR state; otherwise return false.
- */
-bool
-netdev_any_oor(void)
-    OVS_EXCLUDED(port_to_netdev_rwlock)
-{
-    struct port_to_netdev_data *data;
-    bool oor = false;
-
-    ovs_rwlock_rdlock(&port_to_netdev_rwlock);
-    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
-        struct netdev *dev = data->netdev;
-
-        if (dev->hw_info.oor) {
-            oor = true;
-            break;
-        }
-    }
-    ovs_rwlock_unlock(&port_to_netdev_rwlock);
-
-    return oor;
-}
-
 void
 netdev_ports_traverse(const char *dpif_type,
                       bool (*cb)(struct netdev *, odp_port_t, void *),

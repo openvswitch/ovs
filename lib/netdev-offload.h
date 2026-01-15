@@ -83,7 +83,6 @@ int netdev_init_flow_api(struct netdev *);
 void netdev_uninit_flow_api(struct netdev *);
 int netdev_get_hw_info(struct netdev *, int);
 void netdev_set_hw_info(struct netdev *, int, int);
-bool netdev_any_oor(void);
 void netdev_set_flow_api_enabled(const struct smap *ovs_other_config);
 
 struct dpif_port;

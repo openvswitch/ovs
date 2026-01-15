@@ -1223,6 +1223,30 @@ dpif_offload_get_netdev_by_port_id(struct dpif *dpif,
     return netdev;
 }
 
+bool
+dpif_offload_netdevs_out_of_resources(struct dpif *dpif)
+{
+    struct dpif_offload_provider_collection *collection;
+    struct dpif_offload_port_dump dump;
+    struct dpif_offload_port port;
+    bool oor = false;
+
+    collection = dpif_get_offload_provider_collection(dpif);
+    if (!collection || !dpif_offload_enabled()) {
+        return false;
+    }
+
+    DPIF_OFFLOAD_PORT_FOR_EACH (&port, &dump, dpif) {
+        if (port.netdev->hw_info.oor) {
+            oor = true;
+            dpif_offload_port_dump_done(&dump);
+            break;
+        }
+    }
+
+    return oor;
+}
+
 /* This function tries to offload the operations to the dpif-offload
  * providers.  It will return the number of operations not handled, whose
  * pointers are re-arranged and available in **ops. */
