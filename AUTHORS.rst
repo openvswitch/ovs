@@ -180,6 +180,7 @@ Faicker Mo                         faicker.mo@ucloud.cn
 fang                               fangjiannan@cmss.chinamobile.com
 Fangrui Song                       maskray@google.com
 Felix Huettner                     felix.huettner@mail.schwarz
+Felix Moebius                      felix.moebius@mail.schwarz
 Fengqi Li                          lifengqi@inspur.com
 Flavio Fernandes                   flavio@flaviof.com
 Flavio Leitner                     fbl@redhat.com
