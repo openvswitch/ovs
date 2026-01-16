@@ -1,8 +1,8 @@
-openvswitch (3.6.90-1) unstable; urgency=low
+openvswitch (3.7.0-1) unstable; urgency=low
 
    * New upstream version
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 18 Aug 2025 14:10:11 +0200
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 16 Jan 2026 13:00:00 +0100
 
 openvswitch (3.6.0-1) unstable; urgency=low
 
