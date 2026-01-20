@@ -41,33 +41,34 @@ struct tc_offload_info {
 
 /* Netdev-specific offload functions.  These should only be used by the
  * associated dpif offload provider. */
-int netdev_offload_tc_init(struct netdev *);
-int tc_flow_flush(struct netdev *);
-int tc_flow_dump_create(struct netdev *, struct netdev_tc_flow_dump **,
-                        bool terse);
-int tc_flow_dump_destroy(struct netdev_tc_flow_dump *);
-bool tc_flow_dump_next(struct netdev_tc_flow_dump *, struct match *,
-                       struct nlattr **actions, struct dpif_flow_stats *,
-                       struct dpif_flow_attrs *, ovs_u128 *ufid,
-                       struct ofpbuf *rbuffer, struct ofpbuf *wbuffer);
-int netdev_offload_tc_flow_put(struct dpif *, struct netdev *, struct match *,
-                               struct nlattr *actions, size_t actions_len,
-                               const ovs_u128 *ufid, struct tc_offload_info *,
-                               struct dpif_flow_stats *);
-int netdev_offload_tc_flow_del(const ovs_u128 *ufid, struct dpif_flow_stats *);
-int netdev_offload_tc_flow_get(struct netdev *, struct match *,
-                               struct nlattr **actions, const ovs_u128 *ufid,
-                               struct dpif_flow_stats *,
-                               struct dpif_flow_attrs *, struct ofpbuf *);
-void dpif_offload_tc_meter_init(void);
-int dpif_offload_tc_meter_set(const struct dpif_offload *, ofproto_meter_id,
+int tc_netdev_init(struct netdev *);
+int tc_netdev_flow_flush(struct netdev *);
+int tc_netdev_flow_dump_create(struct netdev *, struct netdev_tc_flow_dump **,
+                               bool terse);
+int tc_netdev_flow_dump_destroy(struct netdev_tc_flow_dump *);
+bool tc_netdev_flow_dump_next(struct netdev_tc_flow_dump *, struct match *,
+                              struct nlattr **actions,
+                              struct dpif_flow_stats *,
+                              struct dpif_flow_attrs *, ovs_u128 *ufid,
+                              struct ofpbuf *rbuffer, struct ofpbuf *wbuffer);
+int tc_netdev_flow_put(struct dpif *, struct netdev *, struct match *,
+                       struct nlattr *actions, size_t actions_len,
+                       const ovs_u128 *ufid, struct tc_offload_info *,
+                       struct dpif_flow_stats *);
+int tc_netdev_flow_del(const ovs_u128 *ufid, struct dpif_flow_stats *);
+int tc_netdev_flow_get(struct netdev *, struct match *,
+                       struct nlattr **actions, const ovs_u128 *ufid,
+                       struct dpif_flow_stats *, struct dpif_flow_attrs *,
+                       struct ofpbuf *);
+
+void tc_meter_init(void);
+int tc_meter_set(const struct dpif_offload *, ofproto_meter_id,
                               struct ofputil_meter_config *);
-int dpif_offload_tc_meter_get(const struct dpif_offload *, ofproto_meter_id,
+int tc_meter_get(const struct dpif_offload *, ofproto_meter_id,
                               struct ofputil_meter_stats *);
-int dpif_offload_tc_meter_del(const struct dpif_offload *, ofproto_meter_id,
+int tc_meter_del(const struct dpif_offload *, ofproto_meter_id,
                               struct ofputil_meter_stats *);
-uint64_t dpif_offload_tc_flow_count(const struct dpif_offload *);
-odp_port_t dpif_offload_tc_get_port_id_by_ifindex(const struct dpif_offload *,
-                                                  int ifindex);
+uint64_t tc_flow_count(const struct dpif_offload *);
+odp_port_t tc_get_port_id_by_ifindex(const struct dpif_offload *, int ifindex);
 
 #endif /* DPIF_OFFLOAD_TC_PRIVATE_H */

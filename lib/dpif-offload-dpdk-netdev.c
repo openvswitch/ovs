@@ -36,7 +36,7 @@
 #include "packets.h"
 #include "uuid.h"
 
-VLOG_DEFINE_THIS_MODULE(netdev_offload_dpdk);
+VLOG_DEFINE_THIS_MODULE(dpif_offload_dpdk_netdev);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
 /* Thread-safety
@@ -86,7 +86,7 @@ struct ufid_to_rte_flow_data {
     bool dead;
 };
 
-struct netdev_offload_dpdk_data {
+struct dpdk_offload_netdev_data {
     struct cmap ufid_to_rte_flow;
     struct cmap mark_to_rte_flow;
     uint64_t *rte_flow_counters;
@@ -94,7 +94,7 @@ struct netdev_offload_dpdk_data {
 };
 
 static struct pmd_data *
-netdev_offload_dpdk_pmd_data_init(void)
+pmd_data_init(void)
 {
     struct pmd_data *mapping = xmalloc(sizeof *mapping);
 
@@ -104,8 +104,8 @@ netdev_offload_dpdk_pmd_data_init(void)
 }
 
 static void
-netdev_offload_dpdk_pmd_data_associate(struct pmd_data *mapping,
-                                       unsigned pmd_id, void *flow_reference)
+pmd_data_associate(struct pmd_data *mapping, unsigned pmd_id,
+                   void *flow_reference)
 {
     struct pmd_id_to_flow_ref_data *pmd_data = xmalloc(sizeof *pmd_data);
 
@@ -119,8 +119,7 @@ netdev_offload_dpdk_pmd_data_associate(struct pmd_data *mapping,
 }
 
 static void
-netdev_offload_dpdk_pmd_data_disassociate(struct pmd_data *mapping,
-                                          unsigned pmd_id)
+pmd_data_disassociate(struct pmd_data *mapping, unsigned pmd_id)
 {
     struct pmd_id_to_flow_ref_data *data;
     size_t hash = hash_int(pmd_id, 0);
@@ -140,8 +139,7 @@ netdev_offload_dpdk_pmd_data_disassociate(struct pmd_data *mapping,
 }
 
 static struct pmd_id_to_flow_ref_data*
-netdev_offload_dpdk_pmd_data_get_data(
-    const struct ufid_to_rte_flow_data *flow_data, unsigned pmd_id)
+pmd_data_get(const struct ufid_to_rte_flow_data *flow_data, unsigned pmd_id)
 {
     struct pmd_id_to_flow_ref_data *data;
     size_t hash = hash_int(pmd_id, 0);
@@ -162,13 +160,12 @@ netdev_offload_dpdk_pmd_data_get_data(
 }
 
 static bool
-netdev_offload_dpdk_pmd_data_pmd_update(
-    const struct ufid_to_rte_flow_data *flow_data, unsigned pmd_id,
-    void *new_flow_reference, void **previous_flow_reference)
+pmd_data_update(const struct ufid_to_rte_flow_data *flow_data, unsigned pmd_id,
+                void *new_flow_reference, void **previous_flow_reference)
 {
     struct pmd_id_to_flow_ref_data *data;
 
-    data = netdev_offload_dpdk_pmd_data_get_data(flow_data, pmd_id);
+    data = pmd_data_get(flow_data, pmd_id);
     if (!data) {
         return false;
     }
@@ -179,9 +176,8 @@ netdev_offload_dpdk_pmd_data_pmd_update(
 }
 
 static bool
-netdev_offload_dpdk_pmd_data_find_pmd_and_delete(
-    const struct ufid_to_rte_flow_data *flow_data, unsigned pmd_id,
-    void *flow_reference)
+pmd_data_find_and_delete(const struct ufid_to_rte_flow_data *flow_data,
+                         unsigned pmd_id, void *flow_reference)
 {
     struct pmd_data *mapping = ovsrcu_get(struct pmd_data *,
                                           &flow_data->pmd_mapping);
@@ -207,8 +203,7 @@ netdev_offload_dpdk_pmd_data_find_pmd_and_delete(
 }
 
 static void
-netdev_offload_dpdk_pmd_data_cleanup_mappings(
-    struct dpif_offload_dpdk *offload, struct pmd_data *mapping)
+pmd_data_cleanup(struct dpdk_offload *offload, struct pmd_data *mapping)
 {
     struct pmd_id_to_flow_ref_data *data;
 
@@ -222,8 +217,7 @@ netdev_offload_dpdk_pmd_data_cleanup_mappings(
         cmap_remove(&mapping->pmd_id_to_flow_ref, &data->node,
                     hash_int(data->pmd_id, 0));
 
-        dpif_offload_dpdk_flow_unreference(offload, data->pmd_id,
-                                           data->flow_reference);
+        dpdk_flow_unreference(offload, data->pmd_id, data->flow_reference);
         ovsrcu_postpone(free, data);
     }
 
@@ -231,7 +225,7 @@ netdev_offload_dpdk_pmd_data_cleanup_mappings(
 }
 
 static void
-netdev_offload_dpdk_pmd_data_cleanup_mapping(struct pmd_data *mapping)
+pmd_data_destroy(struct pmd_data *mapping)
 {
     if (mapping) {
         ovs_mutex_destroy(&mapping->map_lock);
@@ -243,7 +237,7 @@ netdev_offload_dpdk_pmd_data_cleanup_mapping(struct pmd_data *mapping)
 static int
 offload_data_init(struct netdev *netdev, unsigned int offload_thread_count)
 {
-    struct netdev_offload_dpdk_data *data;
+    struct dpdk_offload_netdev_data *data;
 
     data = xzalloc(sizeof *data);
     ovs_mutex_init(&data->map_lock);
@@ -259,7 +253,7 @@ offload_data_init(struct netdev *netdev, unsigned int offload_thread_count)
 }
 
 static void
-offload_data_destroy__(struct netdev_offload_dpdk_data *data)
+offload_data_destroy__(struct dpdk_offload_netdev_data *data)
 {
     ovs_mutex_destroy(&data->map_lock);
     free(data->rte_flow_counters);
@@ -269,10 +263,10 @@ offload_data_destroy__(struct netdev_offload_dpdk_data *data)
 static void
 offload_data_destroy(struct netdev *netdev)
 {
-    struct netdev_offload_dpdk_data *data;
+    struct dpdk_offload_netdev_data *data;
     struct ufid_to_rte_flow_data *node;
 
-    data = (struct netdev_offload_dpdk_data *)
+    data = (struct dpdk_offload_netdev_data *)
         ovsrcu_get(void *, &netdev->hw_info.offload_data);
     if (data == NULL) {
         return;
@@ -298,9 +292,9 @@ static void
 offload_data_lock(struct netdev *netdev)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    struct netdev_offload_dpdk_data *data;
+    struct dpdk_offload_netdev_data *data;
 
-    data = (struct netdev_offload_dpdk_data *)
+    data = (struct dpdk_offload_netdev_data *)
         ovsrcu_get(void *, &netdev->hw_info.offload_data);
     if (!data) {
         return;
@@ -312,9 +306,9 @@ static void
 offload_data_unlock(struct netdev *netdev)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    struct netdev_offload_dpdk_data *data;
+    struct dpdk_offload_netdev_data *data;
 
-    data = (struct netdev_offload_dpdk_data *)
+    data = (struct dpdk_offload_netdev_data *)
         ovsrcu_get(void *, &netdev->hw_info.offload_data);
     if (!data) {
         return;
@@ -325,9 +319,9 @@ offload_data_unlock(struct netdev *netdev)
 static struct cmap *
 offload_data_map(struct netdev *netdev)
 {
-    struct netdev_offload_dpdk_data *data;
+    struct dpdk_offload_netdev_data *data;
 
-    data = (struct netdev_offload_dpdk_data *)
+    data = (struct dpdk_offload_netdev_data *)
         ovsrcu_get(void *, &netdev->hw_info.offload_data);
 
     return data ? &data->ufid_to_rte_flow : NULL;
@@ -337,9 +331,9 @@ static bool
 offload_data_maps(struct netdev *netdev, struct cmap **ufid_map,
                   struct cmap **mark_map)
 {
-    struct netdev_offload_dpdk_data *data;
+    struct dpdk_offload_netdev_data *data;
 
-    data = (struct netdev_offload_dpdk_data *)
+    data = (struct dpdk_offload_netdev_data *)
         ovsrcu_get(void *, &netdev->hw_info.offload_data);
 
     if (!data) {
@@ -354,9 +348,9 @@ offload_data_maps(struct netdev *netdev, struct cmap **ufid_map,
 static struct cmap *
 offload_data_mark_map(struct netdev *netdev)
 {
-    struct netdev_offload_dpdk_data *data;
+    struct dpdk_offload_netdev_data *data;
 
-    data = (struct netdev_offload_dpdk_data *)
+    data = (struct dpdk_offload_netdev_data *)
         ovsrcu_get(void *, &netdev->hw_info.offload_data);
 
     return data ? &data->mark_to_rte_flow : NULL;
@@ -393,8 +387,8 @@ ufid_to_rte_flow_data_find_pmd_and_update(struct netdev *netdev,
     struct ufid_to_rte_flow_data *data = ufid_to_rte_flow_data_find(netdev,
                                                                     ufid);
     if (data) {
-        *found_pmd = netdev_offload_dpdk_pmd_data_pmd_update(
-            data, pmd_id, new_flow_reference, previous_flow_reference);
+        *found_pmd = pmd_data_update(data, pmd_id, new_flow_reference,
+                                     previous_flow_reference);
     } else {
         *found_pmd = false;
     }
@@ -494,7 +488,7 @@ rte_flow_data_unref(struct ufid_to_rte_flow_data *data)
     struct pmd_data *pmd_mapping = ovsrcu_get(struct pmd_data *,
                                               &data->pmd_mapping);
 
-    netdev_offload_dpdk_pmd_data_cleanup_mapping(pmd_mapping);
+    pmd_data_destroy(pmd_mapping);
     ovs_mutex_destroy(&data->lock);
     free(data);
 }
@@ -1157,11 +1151,10 @@ dump_flow(struct ds *s, struct ds *s_extra,
 }
 
 static struct rte_flow *
-netdev_offload_dpdk_flow_create(struct netdev *netdev,
-                                const struct rte_flow_attr *attr,
-                                struct flow_patterns *flow_patterns,
-                                struct flow_actions *flow_actions,
-                                struct rte_flow_error *error)
+dpdk_flow_create(struct netdev *netdev, const struct rte_flow_attr *attr,
+                 struct flow_patterns *flow_patterns,
+                 struct flow_actions *flow_actions,
+                 struct rte_flow_error *error)
 {
     const struct rte_flow_action *actions = flow_actions->actions;
     const struct rte_flow_item *items = flow_patterns->items;
@@ -1172,10 +1165,10 @@ netdev_offload_dpdk_flow_create(struct netdev *netdev,
 
     flow = netdev_dpdk_rte_flow_create(netdev, attr, items, actions, error);
     if (flow) {
-        struct netdev_offload_dpdk_data *data;
+        struct dpdk_offload_netdev_data *data;
         unsigned int tid = dpdk_offload_thread_id();
 
-        data = (struct netdev_offload_dpdk_data *)
+        data = (struct dpdk_offload_netdev_data *)
             ovsrcu_get(void *, &netdev->hw_info.offload_data);
         data->rte_flow_counters[tid]++;
 
@@ -1391,7 +1384,7 @@ vport_to_rte_tunnel(struct netdev *vport,
 }
 
 static int
-add_vport_match(struct dpif_offload_dpdk *offload,
+add_vport_match(struct dpdk_offload *offload,
                 struct flow_patterns *patterns,
                 odp_port_t orig_in_port,
                 struct netdev *tnldev)
@@ -1403,7 +1396,7 @@ add_vport_match(struct dpif_offload_dpdk *offload,
     struct netdev *physdev;
     int ret;
 
-    physdev = dpif_offload_dpdk_get_netdev(offload, orig_in_port);
+    physdev = dpdk_offload_get_netdev(offload, orig_in_port);
     if (physdev == NULL) {
         return -1;
     }
@@ -1613,7 +1606,7 @@ parse_gre_match(struct flow_patterns *patterns,
 }
 
 static int OVS_UNUSED
-parse_flow_tnl_match(struct dpif_offload_dpdk *offload,
+parse_flow_tnl_match(struct dpdk_offload *offload,
                      struct netdev *tnldev,
                      struct flow_patterns *patterns,
                      odp_port_t orig_in_port,
@@ -1637,7 +1630,7 @@ parse_flow_tnl_match(struct dpif_offload_dpdk *offload,
 }
 
 static int
-parse_flow_match(struct dpif_offload_dpdk *offload OVS_UNUSED,
+parse_flow_match(struct dpdk_offload *offload OVS_UNUSED,
                  struct netdev *netdev,
                  odp_port_t orig_in_port OVS_UNUSED,
                  struct flow_patterns *patterns,
@@ -2022,9 +2015,8 @@ add_flow_mark_rss_actions(struct flow_actions *actions,
 }
 
 static struct rte_flow *
-netdev_offload_dpdk_mark_rss(struct flow_patterns *patterns,
-                             struct netdev *netdev,
-                             uint32_t flow_mark)
+dpdk_offload_mark_rss(struct flow_patterns *patterns, struct netdev *netdev,
+                      uint32_t flow_mark)
 {
     struct flow_actions actions = {
         .actions = NULL,
@@ -2042,8 +2034,7 @@ netdev_offload_dpdk_mark_rss(struct flow_patterns *patterns,
 
     add_flow_mark_rss_actions(&actions, flow_mark, netdev);
 
-    flow = netdev_offload_dpdk_flow_create(netdev, &flow_attr, patterns,
-                                           &actions, &error);
+    flow = dpdk_flow_create(netdev, &flow_attr, patterns, &actions, &error);
 
     free_flow_actions(&actions);
     return flow;
@@ -2078,7 +2069,7 @@ add_represented_port_action(struct flow_actions *actions,
 }
 
 static int
-add_output_action(struct dpif_offload_dpdk *offload,
+add_output_action(struct dpdk_offload *offload,
                   struct netdev *netdev,
                   struct flow_actions *actions,
                   const struct nlattr *nla)
@@ -2088,7 +2079,7 @@ add_output_action(struct dpif_offload_dpdk *offload,
     int ret = 0;
 
     port = nl_attr_get_odp_port(nla);
-    outdev = dpif_offload_dpdk_get_netdev(offload, port);
+    outdev = dpdk_offload_get_netdev(offload, port);
     if (outdev == NULL) {
         VLOG_DBG_RL(&rl, "Cannot find netdev for odp port %"PRIu32, port);
         return -1;
@@ -2370,7 +2361,7 @@ add_tunnel_push_action(struct flow_actions *actions,
 }
 
 static int
-parse_clone_actions(struct dpif_offload_dpdk *offload,
+parse_clone_actions(struct dpdk_offload *offload,
                     struct netdev *netdev,
                     struct flow_actions *actions,
                     const struct nlattr *clone_actions,
@@ -2412,7 +2403,7 @@ add_jump_action(struct flow_actions *actions, uint32_t group)
 }
 
 static int OVS_UNUSED
-add_tnl_pop_action(struct dpif_offload_dpdk *offload,
+add_tnl_pop_action(struct dpdk_offload *offload,
                    struct netdev *netdev,
                    struct flow_actions *actions,
                    const struct nlattr *nla)
@@ -2426,7 +2417,7 @@ add_tnl_pop_action(struct dpif_offload_dpdk *offload,
     int ret;
 
     port = nl_attr_get_odp_port(nla);
-    vport = dpif_offload_dpdk_get_netdev(offload, port);
+    vport = dpdk_offload_get_netdev(offload, port);
     if (vport == NULL) {
         return -1;
     }
@@ -2456,7 +2447,7 @@ add_tnl_pop_action(struct dpif_offload_dpdk *offload,
 }
 
 static int
-parse_flow_actions(struct dpif_offload_dpdk *offload,
+parse_flow_actions(struct dpdk_offload *offload,
                    struct netdev *netdev,
                    struct flow_actions *actions,
                    struct nlattr *nl_actions,
@@ -2524,11 +2515,11 @@ parse_flow_actions(struct dpif_offload_dpdk *offload,
 }
 
 static struct rte_flow *
-netdev_offload_dpdk_actions(struct dpif_offload_dpdk *offload,
-                            struct netdev *netdev,
-                            struct flow_patterns *patterns,
-                            struct nlattr *nl_actions,
-                            size_t actions_len)
+dpdk_offload_with_actions(struct dpdk_offload *offload,
+                          struct netdev *netdev,
+                          struct flow_patterns *patterns,
+                          struct nlattr *nl_actions,
+                          size_t actions_len)
 {
     const struct rte_flow_attr flow_attr = { .transfer = 1, };
     struct flow_actions actions = {
@@ -2545,23 +2536,18 @@ netdev_offload_dpdk_actions(struct dpif_offload_dpdk *offload,
     if (ret) {
         goto out;
     }
-    flow = netdev_offload_dpdk_flow_create(netdev, &flow_attr, patterns,
-                                           &actions, &error);
+    flow = dpdk_flow_create(netdev, &flow_attr, patterns, &actions, &error);
 out:
     free_flow_actions(&actions);
     return flow;
 }
 
 static struct ufid_to_rte_flow_data *
-netdev_offload_dpdk_add_flow(struct dpif_offload_dpdk *offload,
-                             struct pmd_data *pmd_mapping,
-                             struct netdev *netdev,
-                             struct match *match,
-                             struct nlattr *nl_actions,
-                             size_t actions_len,
-                             const ovs_u128 *ufid,
-                             uint32_t flow_mark,
-                             odp_port_t orig_in_port)
+dpdk_offload_add_flow(struct dpdk_offload *offload,
+                      struct pmd_data *pmd_mapping, struct netdev *netdev,
+                      struct match *match, struct nlattr *nl_actions,
+                      size_t actions_len, const ovs_u128 *ufid,
+                      uint32_t flow_mark, odp_port_t orig_in_port)
 {
     struct flow_patterns patterns = {
         .items = NULL,
@@ -2578,14 +2564,13 @@ netdev_offload_dpdk_add_flow(struct dpif_offload_dpdk *offload,
         goto out;
     }
 
-    flow = netdev_offload_dpdk_actions(offload, patterns.physdev, &patterns,
-                                       nl_actions, actions_len);
+    flow = dpdk_offload_with_actions(offload, patterns.physdev, &patterns,
+                                     nl_actions, actions_len);
     if (!flow && !netdev_vport_is_vport_class(netdev->netdev_class)) {
         /* If we failed to offload the rule actions fallback to MARK+RSS
          * actions.
          */
-        flow = netdev_offload_dpdk_mark_rss(&patterns, netdev,
-                                            flow_mark);
+        flow = dpdk_offload_mark_rss(&patterns, netdev, flow_mark);
         actions_offloaded = false;
     }
 
@@ -2605,9 +2590,9 @@ out:
 }
 
 static int
-netdev_offload_dpdk_flow_destroy(struct dpif_offload_dpdk *offload,
-                                 struct ufid_to_rte_flow_data *rte_flow_data,
-                                 bool force_destroy, bool keep_flow_mark)
+dpdk_flow_destroy(struct dpdk_offload *offload,
+                  struct ufid_to_rte_flow_data *rte_flow_data,
+                  bool force_destroy, bool keep_flow_mark)
 {
     struct pmd_data *pmd_mapping;
     struct rte_flow_error error;
@@ -2631,7 +2616,7 @@ netdev_offload_dpdk_flow_destroy(struct dpif_offload_dpdk *offload,
     }
 
     if (force_destroy) {
-        netdev_offload_dpdk_pmd_data_cleanup_mappings(offload, pmd_mapping);
+        pmd_data_cleanup(offload, pmd_mapping);
     }
 
     rte_flow_data->dead = true;
@@ -2644,10 +2629,10 @@ netdev_offload_dpdk_flow_destroy(struct dpif_offload_dpdk *offload,
     ret = netdev_dpdk_rte_flow_destroy(physdev, rte_flow, &error);
 
     if (ret == 0) {
-        struct netdev_offload_dpdk_data *data;
+        struct dpdk_offload_netdev_data *data;
         unsigned int tid = dpdk_offload_thread_id();
 
-        data = (struct netdev_offload_dpdk_data *)
+        data = (struct dpdk_offload_netdev_data *)
             ovsrcu_get(void *, &physdev->hw_info.offload_data);
         data->rte_flow_counters[tid]--;
 
@@ -2664,8 +2649,7 @@ netdev_offload_dpdk_flow_destroy(struct dpif_offload_dpdk *offload,
         if (!keep_flow_mark) {
             /* Do this after ufid_to_rte_flow_disassociate(), as it needs a
              * valid flow mark to do its work. */
-            dpif_offload_dpdk_free_flow_mark(offload,
-                                             rte_flow_data->flow_mark);
+            dpdk_free_flow_mark(offload, rte_flow_data->flow_mark);
             rte_flow_data->flow_mark = INVALID_FLOW_MARK;
         }
     } else {
@@ -2700,13 +2684,12 @@ get_netdev_odp_cb(struct netdev *netdev,
 }
 
 int
-netdev_offload_dpdk_flow_put(struct dpif_offload_dpdk *offload,
-                             unsigned pmd_id, void *flow_reference,
-                             struct netdev *netdev, struct match *match,
-                             struct nlattr *actions, size_t actions_len,
-                             const ovs_u128 *ufid, odp_port_t orig_in_port,
-                             void **previous_flow_reference,
-                             struct dpif_flow_stats *stats)
+dpdk_netdev_flow_put(struct dpdk_offload *offload, unsigned pmd_id,
+                     void *flow_reference, struct netdev *netdev,
+                     struct match *match, struct nlattr *actions,
+                     size_t actions_len, const ovs_u128 *ufid,
+                     odp_port_t orig_in_port, void **previous_flow_reference,
+                     struct dpif_flow_stats *stats)
 {
     struct ufid_to_rte_flow_data *rte_flow_data;
     struct dpif_flow_stats old_stats;
@@ -2733,7 +2716,7 @@ netdev_offload_dpdk_flow_put(struct dpif_offload_dpdk *offload,
         /* Extract the orig_in_port from physdev as in case of modify the one
          * provided by upper layer cannot be used.
          */
-        dpif_offload_dpdk_traverse_ports(offload, get_netdev_odp_cb, &aux);
+        dpdk_offload_traverse_ports(offload, get_netdev_odp_cb, &aux);
         orig_in_port = aux.odp_port;
         old_stats = rte_flow_data->stats;
         modification = true;
@@ -2742,41 +2725,34 @@ netdev_offload_dpdk_flow_put(struct dpif_offload_dpdk *offload,
         ovsrcu_set(&rte_flow_data->pmd_mapping, NULL);
         flow_mark = rte_flow_data->flow_mark;
 
-        ret = netdev_offload_dpdk_flow_destroy(offload, rte_flow_data,
-                                               false, true);
+        ret = dpdk_flow_destroy(offload, rte_flow_data, false, true);
         if (ret < 0) {
             return ret;
         }
     } else if (!rte_flow_data) {
-        pmd_mapping = netdev_offload_dpdk_pmd_data_init();
-        netdev_offload_dpdk_pmd_data_associate(pmd_mapping, pmd_id,
-                                               flow_reference);
+        pmd_mapping = pmd_data_init();
+        pmd_data_associate(pmd_mapping, pmd_id, flow_reference);
         *previous_flow_reference = NULL;
-        flow_mark = dpif_offload_dpdk_allocate_flow_mark(offload);
+        flow_mark = dpdk_allocate_flow_mark(offload);
     } else /* if (rte_flow_data) */ {
         pmd_mapping = ovsrcu_get(struct pmd_data *,
                                  &rte_flow_data->pmd_mapping);
 
-        netdev_offload_dpdk_pmd_data_associate(pmd_mapping, pmd_id,
-                                               flow_reference);
+        pmd_data_associate(pmd_mapping, pmd_id, flow_reference);
         *previous_flow_reference = NULL;
     }
 
     if (modification || !rte_flow_data) {
-        rte_flow_data = netdev_offload_dpdk_add_flow(offload, pmd_mapping,
-                                                     netdev, match,
-                                                     actions, actions_len,
-                                                     ufid, flow_mark,
-                                                     orig_in_port);
+        rte_flow_data = dpdk_offload_add_flow(offload, pmd_mapping, netdev,
+                                              match, actions, actions_len,
+                                              ufid, flow_mark, orig_in_port);
         if (!rte_flow_data) {
             /* Clean up existing mappings, except for the current pmd_id one,
              * as this is handled through the callback. */
-            netdev_offload_dpdk_pmd_data_disassociate(pmd_mapping, pmd_id);
-            netdev_offload_dpdk_pmd_data_cleanup_mappings(offload,
-                                                          pmd_mapping);
-            ovsrcu_postpone(netdev_offload_dpdk_pmd_data_cleanup_mapping,
-                            pmd_mapping);
-            dpif_offload_dpdk_free_flow_mark(offload, flow_mark);
+            pmd_data_disassociate(pmd_mapping, pmd_id);
+            pmd_data_cleanup(offload, pmd_mapping);
+            ovsrcu_postpone(pmd_data_destroy, pmd_mapping);
+            dpdk_free_flow_mark(offload, flow_mark);
             return -1;
         }
     }
@@ -2791,11 +2767,9 @@ netdev_offload_dpdk_flow_put(struct dpif_offload_dpdk *offload,
 }
 
 int
-netdev_offload_dpdk_flow_del(struct dpif_offload_dpdk *offload,
-                             struct netdev *netdev, unsigned pmd_id,
-                             const ovs_u128 *ufid,
-                             void *flow_reference,
-                             struct dpif_flow_stats *stats)
+dpdk_netdev_flow_del(struct dpdk_offload *offload, struct netdev *netdev,
+                     unsigned pmd_id, const ovs_u128 *ufid,
+                     void *flow_reference, struct dpif_flow_stats *stats)
 {
     struct ufid_to_rte_flow_data *rte_flow_data;
 
@@ -2804,22 +2778,18 @@ netdev_offload_dpdk_flow_del(struct dpif_offload_dpdk *offload,
         return -1;
     }
 
-    if (!netdev_offload_dpdk_pmd_data_find_pmd_and_delete(rte_flow_data,
-                                                          pmd_id,
-                                                          flow_reference)) {
+    if (!pmd_data_find_and_delete(rte_flow_data, pmd_id, flow_reference)) {
         return ENOENT;
     }
 
     if (stats) {
         memset(stats, 0, sizeof *stats);
     }
-    return netdev_offload_dpdk_flow_destroy(offload, rte_flow_data,
-                                            false, false);
+    return dpdk_flow_destroy(offload, rte_flow_data, false, false);
 }
 
-int
-netdev_offload_dpdk_init(struct netdev *netdev,
-                         unsigned int offload_thread_count)
+int dpdk_netdev_offload_init(struct netdev *netdev,
+                             unsigned int offload_thread_count)
 {
     int ret = EOPNOTSUPP;
 
@@ -2838,7 +2808,7 @@ netdev_offload_dpdk_init(struct netdev *netdev,
 }
 
 void
-netdev_offload_dpdk_uninit(struct netdev *netdev)
+dpdk_netdev_offload_uninit(struct netdev *netdev)
 {
     if (netdev_dpdk_flow_api_supported(netdev, true)) {
         offload_data_destroy(netdev);
@@ -2846,13 +2816,11 @@ netdev_offload_dpdk_uninit(struct netdev *netdev)
 }
 
 int
-netdev_offload_dpdk_flow_get(struct netdev *netdev,
-                             struct match *match OVS_UNUSED,
-                             struct nlattr **actions OVS_UNUSED,
-                             const ovs_u128 *ufid,
-                             struct dpif_flow_stats *stats,
-                             struct dpif_flow_attrs *attrs,
-                             struct ofpbuf *buf OVS_UNUSED)
+dpdk_netdev_flow_get(struct netdev *netdev, struct match *match OVS_UNUSED,
+                     struct nlattr **actions OVS_UNUSED, const ovs_u128 *ufid,
+                     struct dpif_flow_stats *stats,
+                     struct dpif_flow_attrs *attrs,
+                     struct ofpbuf *buf OVS_UNUSED)
 {
     struct rte_flow_query_count query = { .reset = 1 };
     struct ufid_to_rte_flow_data *rte_flow_data;
@@ -2904,7 +2872,7 @@ out:
 }
 
 static void
-flush_netdev_flows_in_related(struct dpif_offload_dpdk *offload,
+flush_netdev_flows_in_related(struct dpdk_offload *offload,
                               struct netdev *netdev, struct netdev *related)
 {
     unsigned int tid = dpdk_offload_thread_id();
@@ -2920,12 +2888,12 @@ flush_netdev_flows_in_related(struct dpif_offload_dpdk *offload,
             continue;
         }
         if (data->creation_tid == tid) {
-            netdev_offload_dpdk_flow_destroy(offload, data, true, false);
+            dpdk_flow_destroy(offload, data, true, false);
         }
     }
 }
 struct flush_in_vport_aux {
-    struct dpif_offload_dpdk *offload;
+    struct dpdk_offload *offload;
     struct netdev *netdev;
 };
 
@@ -2945,8 +2913,7 @@ flush_in_vport_cb(struct netdev *vport,
 }
 
 int
-netdev_offload_dpdk_flow_flush(struct dpif_offload_dpdk *offload,
-                               struct netdev *netdev)
+dpdk_netdev_flow_flush(struct dpdk_offload *offload, struct netdev *netdev)
 {
     flush_netdev_flows_in_related(offload, netdev, netdev);
 
@@ -2956,7 +2923,7 @@ netdev_offload_dpdk_flow_flush(struct dpif_offload_dpdk *offload,
             .netdev = netdev
         };
 
-        dpif_offload_dpdk_traverse_ports(offload, flush_in_vport_cb, &aux);
+        dpdk_offload_traverse_ports(offload, flush_in_vport_cb, &aux);
     }
 
     return 0;
@@ -3004,7 +2971,7 @@ out:
 }
 
 static struct netdev *
-get_vport_netdev(struct dpif_offload_dpdk *offload,
+get_vport_netdev(struct dpdk_offload *offload,
                  struct rte_flow_tunnel *tunnel,
                  odp_port_t *odp_port)
 {
@@ -3020,14 +2987,16 @@ get_vport_netdev(struct dpif_offload_dpdk *offload,
     } else if (tunnel->type == RTE_FLOW_ITEM_TYPE_GRE) {
         aux.type = "gre";
     }
-    dpif_offload_dpdk_traverse_ports(offload, get_vport_netdev_cb, &aux);
+    dpdk_offload_traverse_ports(offload, get_vport_netdev_cb, &aux);
 
     return aux.vport;
 }
 
-int netdev_offload_dpdk_hw_miss_packet_recover(
-    struct dpif_offload_dpdk *offload, struct netdev *netdev, unsigned pmd_id,
-    struct dp_packet *packet, void **flow_reference)
+int
+dpdk_netdev_hw_miss_packet_recover(struct dpdk_offload *offload,
+                                   struct netdev *netdev, unsigned pmd_id,
+                                   struct dp_packet *packet,
+                                   void **flow_reference)
 {
     struct pmd_id_to_flow_ref_data *pmd_data = NULL;
     struct rte_flow_restore_info rte_restore_info;
@@ -3044,7 +3013,7 @@ int netdev_offload_dpdk_hw_miss_packet_recover(
 
         data = mark_to_rte_flow_data_find(netdev, flow_mark);
         if (data) {
-             pmd_data = netdev_offload_dpdk_pmd_data_get_data(data, pmd_id);
+             pmd_data = pmd_data_get(data, pmd_id);
         }
     }
     if (pmd_data) {
@@ -3132,14 +3101,14 @@ close_vport_netdev:
 }
 
 uint64_t
-netdev_offload_dpdk_flow_count(struct netdev *netdev,
-                               unsigned int offload_thread_count)
+dpdk_netdev_flow_count(struct netdev *netdev,
+                       unsigned int offload_thread_count)
 {
-    struct netdev_offload_dpdk_data *data;
+    struct dpdk_offload_netdev_data *data;
     uint64_t total = 0;
     unsigned int tid;
 
-    data = (struct netdev_offload_dpdk_data *)
+    data = (struct dpdk_offload_netdev_data *)
         ovsrcu_get(void *, &netdev->hw_info.offload_data);
     if (!data) {
         return 0;
@@ -3153,12 +3122,11 @@ netdev_offload_dpdk_flow_count(struct netdev *netdev,
 }
 
 uint64_t
-netdev_offload_dpdk_flow_count_by_thread(struct netdev *netdev,
-                                         unsigned int tid)
+dpdk_netdev_flow_count_by_thread(struct netdev *netdev, unsigned int tid)
 {
-    struct netdev_offload_dpdk_data *data;
+    struct dpdk_offload_netdev_data *data;
 
-    data = (struct netdev_offload_dpdk_data *)
+    data = (struct dpdk_offload_netdev_data *)
         ovsrcu_get(void *, &netdev->hw_info.offload_data);
     if (!data) {
         return 0;
