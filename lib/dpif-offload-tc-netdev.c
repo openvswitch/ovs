@@ -44,7 +44,7 @@
 #include "dpif-offload-tc-private.h"
 #include "dpif-provider.h"
 
-VLOG_DEFINE_THIS_MODULE(netdev_offload_tc);
+VLOG_DEFINE_THIS_MODULE(dpif_offload_tc_netdev);
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 static struct vlog_rate_limit warn_rl = VLOG_RATE_LIMIT_INIT(10, 2);
@@ -564,7 +564,7 @@ delete_chains_from_netdev(struct netdev *netdev, struct tcf_id *id)
 }
 
 int
-tc_flow_flush(struct netdev *netdev)
+tc_netdev_flow_flush(struct netdev *netdev)
 {
     struct ufid_tc_data *data;
     int err;
@@ -586,8 +586,8 @@ tc_flow_flush(struct netdev *netdev)
 }
 
 int
-tc_flow_dump_create(struct netdev *netdev,
-                    struct netdev_tc_flow_dump **dump_out, bool terse)
+tc_netdev_flow_dump_create(struct netdev *netdev,
+                           struct netdev_tc_flow_dump **dump_out, bool terse)
 {
     enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
     struct netdev_tc_flow_dump *dump;
@@ -617,7 +617,7 @@ tc_flow_dump_create(struct netdev *netdev,
     return 0;
 }
 int
-tc_flow_dump_destroy(struct netdev_tc_flow_dump *dump)
+tc_netdev_flow_dump_destroy(struct netdev_tc_flow_dump *dump)
 {
     nl_dump_done(dump->nl_dump);
     netdev_close(dump->netdev);
@@ -837,7 +837,7 @@ netdev_tc_get_port_id_by_ifindex(const struct netdev *in_netdev, int ifindex)
         return ODPP_NONE;
     }
 
-    return dpif_offload_tc_get_port_id_by_ifindex(offload, ifindex);
+    return tc_get_port_id_by_ifindex(offload, ifindex);
 }
 
 static int
@@ -1364,10 +1364,11 @@ parse_tc_flower_to_match(const struct netdev *netdev,
 }
 
 bool
-tc_flow_dump_next(struct netdev_tc_flow_dump *dump, struct match *match,
-                  struct nlattr **actions, struct dpif_flow_stats *stats,
-                  struct dpif_flow_attrs *attrs, ovs_u128 *ufid,
-                  struct ofpbuf *rbuffer, struct ofpbuf *wbuffer)
+tc_netdev_flow_dump_next(struct netdev_tc_flow_dump *dump, struct match *match,
+                         struct nlattr **actions,
+                         struct dpif_flow_stats *stats,
+                         struct dpif_flow_attrs *attrs, ovs_u128 *ufid,
+                         struct ofpbuf *rbuffer, struct ofpbuf *wbuffer)
 {
     struct netdev *netdev = dump->netdev;
     struct ofpbuf nl_flow;
@@ -2311,11 +2312,11 @@ netdev_tc_parse_nl_actions(struct dpif *dpif, struct netdev *netdev,
 }
 
 int
-netdev_offload_tc_flow_put(struct dpif *dpif, struct netdev *netdev,
-                           struct match *match, struct nlattr *actions,
-                           size_t actions_len, const ovs_u128 *ufid,
-                           struct tc_offload_info *info,
-                           struct dpif_flow_stats *stats)
+tc_netdev_flow_put(struct dpif *dpif, struct netdev *netdev,
+                   struct match *match, struct nlattr *actions,
+                   size_t actions_len, const ovs_u128 *ufid,
+                   struct tc_offload_info *info,
+                   struct dpif_flow_stats *stats)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
     enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
@@ -2739,13 +2740,10 @@ netdev_offload_tc_flow_put(struct dpif *dpif, struct netdev *netdev,
 }
 
 int
-netdev_offload_tc_flow_get(struct netdev *netdev,
-                           struct match *match,
-                           struct nlattr **actions,
-                           const ovs_u128 *ufid,
-                           struct dpif_flow_stats *stats,
-                           struct dpif_flow_attrs *attrs,
-                           struct ofpbuf *buf)
+tc_netdev_flow_get(struct netdev *netdev, struct match *match,
+                   struct nlattr **actions, const ovs_u128 *ufid,
+                   struct dpif_flow_stats *stats,
+                   struct dpif_flow_attrs *attrs, struct ofpbuf *buf)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
     struct tc_flower flower;
@@ -2796,8 +2794,7 @@ netdev_offload_tc_flow_get(struct netdev *netdev,
 }
 
 int
-netdev_offload_tc_flow_del(const ovs_u128 *ufid,
-                           struct dpif_flow_stats *stats)
+tc_netdev_flow_del(const ovs_u128 *ufid, struct dpif_flow_stats *stats)
 {
     struct tcf_id id;
     int error;
@@ -2811,7 +2808,7 @@ netdev_offload_tc_flow_del(const ovs_u128 *ufid,
 }
 
 uint64_t
-dpif_offload_tc_flow_count(const struct dpif_offload *offload OVS_UNUSED)
+tc_flow_count(const struct dpif_offload *offload OVS_UNUSED)
 {
     uint64_t total;
 
@@ -3160,7 +3157,7 @@ tc_cleanup_policer_actions(struct id_pool *police_ids,
 }
 
 void
-dpif_offload_tc_meter_init(void)
+tc_meter_init(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
@@ -3176,7 +3173,7 @@ dpif_offload_tc_meter_init(void)
 }
 
 int
-netdev_offload_tc_init(struct netdev *netdev)
+tc_netdev_init(struct netdev *netdev)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
@@ -3229,7 +3226,7 @@ netdev_offload_tc_init(struct netdev *netdev)
         probe_vxlan_gbp_support(ifindex);
         probe_enc_flags_support(ifindex);
 
-        dpif_offload_tc_meter_init();
+        tc_meter_init();
 
         ovs_mutex_lock(&meter_police_ids_mutex);
         tc_cleanup_policer_actions(meter_police_ids, METER_POLICE_IDS_BASE,
@@ -3358,9 +3355,8 @@ meter_free_police_index(uint32_t police_index)
 }
 
 int
-dpif_offload_tc_meter_set(const struct dpif_offload *offload OVS_UNUSED,
-                         ofproto_meter_id meter_id,
-                         struct ofputil_meter_config *config)
+tc_meter_set(const struct dpif_offload *offload OVS_UNUSED,
+             ofproto_meter_id meter_id, struct ofputil_meter_config *config)
 {
     uint32_t police_index;
     uint32_t rate, burst;
@@ -3413,9 +3409,8 @@ dpif_offload_tc_meter_set(const struct dpif_offload *offload OVS_UNUSED,
 }
 
 int
-dpif_offload_tc_meter_get(const struct dpif_offload *offload OVS_UNUSED,
-                          ofproto_meter_id meter_id,
-                          struct ofputil_meter_stats *stats)
+tc_meter_get(const struct dpif_offload *offload OVS_UNUSED,
+             ofproto_meter_id meter_id, struct ofputil_meter_stats *stats)
 {
     uint32_t police_index;
     int err = ENOENT;
@@ -3433,9 +3428,8 @@ dpif_offload_tc_meter_get(const struct dpif_offload *offload OVS_UNUSED,
 }
 
 int
-dpif_offload_tc_meter_del(const struct dpif_offload *offload OVS_UNUSED,
-                          ofproto_meter_id meter_id,
-                          struct ofputil_meter_stats *stats)
+tc_meter_del(const struct dpif_offload *offload OVS_UNUSED,
+             ofproto_meter_id meter_id, struct ofputil_meter_stats *stats)
 {
     uint32_t police_index;
     int err = ENOENT;

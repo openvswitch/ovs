@@ -53,7 +53,7 @@ struct dpdk_offload_thread {
         atomic_uint64_t enqueued_item;
         struct mov_avg_cma cma;
         struct mov_avg_ema ema;
-        struct dpif_offload_dpdk *offload;
+        struct dpdk_offload *offload;
         pthread_t thread;
     );
 };
@@ -74,7 +74,7 @@ struct dpdk_offload_flow_item {
 
 struct dpdk_offload_flush_item {
     struct netdev *netdev;
-    struct dpif_offload_dpdk *offload;
+    struct dpdk_offload *offload;
     struct ovs_barrier *barrier;
 };
 
@@ -91,7 +91,7 @@ struct dpdk_offload_thread_item {
 };
 
 /* dpif offload interface for the dpdk rte_flow implementation. */
-struct dpif_offload_dpdk {
+struct dpdk_offload {
     struct dpif_offload offload;
     struct dpif_offload_port_mgr *port_mgr;
 
@@ -108,18 +108,18 @@ struct dpif_offload_dpdk {
     unsigned int offload_thread_count; /* Number of offload threads. */
 };
 
-static struct dpif_offload_dpdk *
-dpif_offload_dpdk_cast(const struct dpif_offload *offload)
+static struct dpdk_offload *
+dpdk_offload_cast(const struct dpif_offload *offload)
 {
     dpif_offload_assert_class(offload, &dpif_offload_dpdk_class);
-    return CONTAINER_OF(offload, struct dpif_offload_dpdk, offload);
+    return CONTAINER_OF(offload, struct dpdk_offload, offload);
 }
 
 DECLARE_EXTERN_PER_THREAD_DATA(unsigned int, dpdk_offload_thread_id);
 DEFINE_EXTERN_PER_THREAD_DATA(dpdk_offload_thread_id, OVSTHREAD_ID_UNSET);
 
 uint32_t
-dpif_offload_dpdk_allocate_flow_mark(struct dpif_offload_dpdk *offload)
+dpdk_allocate_flow_mark(struct dpdk_offload *offload)
 {
     static struct ovsthread_once init_once = OVSTHREAD_ONCE_INITIALIZER;
     unsigned int uid = dpdk_offload_thread_id() \
@@ -141,8 +141,7 @@ dpif_offload_dpdk_allocate_flow_mark(struct dpif_offload_dpdk *offload)
 }
 
 void
-dpif_offload_dpdk_free_flow_mark(struct dpif_offload_dpdk *offload,
-                                 uint32_t flow_mark)
+dpdk_free_flow_mark(struct dpdk_offload *offload, uint32_t flow_mark)
 {
     if (flow_mark != INVALID_FLOW_MARK) {
         unsigned int uid = dpdk_offload_thread_id() \
@@ -174,8 +173,7 @@ dpdk_offload_thread_id(void)
 }
 
 static unsigned int
-dpif_offload_dpdk_ufid_to_thread_id(struct dpif_offload_dpdk *offload,
-                                    const ovs_u128 ufid)
+dpdk_ufid_to_thread_id(struct dpdk_offload *offload, const ovs_u128 ufid)
 {
     uint32_t ufid_hash;
 
@@ -190,8 +188,7 @@ dpif_offload_dpdk_ufid_to_thread_id(struct dpif_offload_dpdk *offload,
 }
 
 static bool
-dpif_offload_dpdk_is_offloading_netdev(struct dpif_offload_dpdk *offload,
-                                       struct netdev *netdev)
+dpdk_is_offloading_netdev(struct dpdk_offload *offload, struct netdev *netdev)
 {
     const struct dpif_offload *netdev_offload;
 
@@ -202,7 +199,7 @@ dpif_offload_dpdk_is_offloading_netdev(struct dpif_offload_dpdk *offload,
 }
 
 static struct dpdk_offload_thread_item *
-dpif_offload_dpdk_alloc_flow_offload(int op)
+dpdk_alloc_flow_offload(int op)
 {
     struct dpdk_offload_thread_item *item;
     struct dpdk_offload_flow_item *flow_offload;
@@ -217,7 +214,7 @@ dpif_offload_dpdk_alloc_flow_offload(int op)
 }
 
 static void
-dpif_offload_dpdk_free_flow_offload__(struct dpdk_offload_thread_item *offload)
+dpdk_free_flow_offload__(struct dpdk_offload_thread_item *offload)
 {
     struct dpdk_offload_flow_item *flow_offload = &offload->data->flow;
 
@@ -226,17 +223,17 @@ dpif_offload_dpdk_free_flow_offload__(struct dpdk_offload_thread_item *offload)
 }
 
 static void
-dpif_offload_dpdk_free_flow_offload(struct dpdk_offload_thread_item *offload)
+dpdk_free_flow_offload(struct dpdk_offload_thread_item *offload)
 {
-    ovsrcu_postpone(dpif_offload_dpdk_free_flow_offload__, offload);
+    ovsrcu_postpone(dpdk_free_flow_offload__, offload);
 }
 
 static void
-dpif_offload_dpdk_free_offload(struct dpdk_offload_thread_item *offload)
+dpdk_free_offload(struct dpdk_offload_thread_item *offload)
 {
     switch (offload->type) {
     case DPDK_OFFLOAD_FLOW:
-        dpif_offload_dpdk_free_flow_offload(offload);
+        dpdk_free_flow_offload(offload);
         break;
     case DPDK_OFFLOAD_FLUSH:
         free(offload);
@@ -247,9 +244,8 @@ dpif_offload_dpdk_free_offload(struct dpdk_offload_thread_item *offload)
 }
 
 static void
-dpif_offload_dpdk_append_offload(const struct dpif_offload_dpdk *offload,
-                                 struct dpdk_offload_thread_item *item,
-                                 unsigned int tid)
+dpdk_append_offload(const struct dpdk_offload *offload,
+                    struct dpdk_offload_thread_item *item, unsigned int tid)
 {
     ovs_assert(offload->offload_threads);
 
@@ -258,28 +254,28 @@ dpif_offload_dpdk_append_offload(const struct dpif_offload_dpdk *offload,
 }
 
 static void
-dpif_offload_dpdk_offload_flow_enqueue(struct dpif_offload_dpdk *offload,
-                                       struct dpdk_offload_thread_item *item)
+dpdk_offload_flow_enqueue(struct dpdk_offload *offload,
+                          struct dpdk_offload_thread_item *item)
 {
     struct dpdk_offload_flow_item *flow_offload = &item->data->flow;
     unsigned int tid;
 
     ovs_assert(item->type == DPDK_OFFLOAD_FLOW);
 
-    tid = dpif_offload_dpdk_ufid_to_thread_id(offload, flow_offload->ufid);
-    dpif_offload_dpdk_append_offload(offload, item, tid);
+    tid = dpdk_ufid_to_thread_id(offload, flow_offload->ufid);
+    dpdk_append_offload(offload, item, tid);
 }
 
 static int
-dpif_offload_dpdk_offload_del(struct dpdk_offload_thread *thread,
-                              struct dpdk_offload_thread_item *item)
+dpdk_offload_del(struct dpdk_offload_thread *thread,
+                 struct dpdk_offload_thread_item *item)
 {
     struct dpdk_offload_flow_item *flow = &item->data->flow;
     struct dpif_flow_stats stats;
     struct netdev *netdev;
     int error;
 
-    netdev = dpif_offload_dpdk_get_netdev(thread->offload, flow->in_port);
+    netdev = dpdk_offload_get_netdev(thread->offload, flow->in_port);
 
     if (!netdev) {
         VLOG_DBG("Failed to find netdev for port_id %d", flow->in_port);
@@ -291,11 +287,9 @@ dpif_offload_dpdk_offload_del(struct dpdk_offload_thread *thread,
      * the delete request directly to the dpdk netdev offload code, which
      * will handle the actual hardware offloaded flow.  It will only remove it
      * when no other PMD needs it. */
-    error = netdev_offload_dpdk_flow_del(thread->offload, netdev,
-                                         flow->pmd_id, &flow->ufid,
-                                         flow->flow_reference,
-                                         flow->requested_stats ? &stats
-                                                               : NULL);
+    error = dpdk_netdev_flow_del(thread->offload, netdev, flow->pmd_id,
+                                 &flow->ufid, flow->flow_reference,
+                                 flow->requested_stats ? &stats : NULL);
 
 do_callback:
     dpif_offload_datapath_flow_op_continue(&flow->callback,
@@ -308,8 +302,8 @@ do_callback:
 }
 
 static int
-dpif_offload_dpdk_offload_put(struct dpdk_offload_thread *thread,
-                              struct dpdk_offload_thread_item *item)
+dpdk_offload_put(struct dpdk_offload_thread *thread,
+                 struct dpdk_offload_thread_item *item)
 {
     struct dpdk_offload_flow_item *flow = &item->data->flow;
     void *previous_flow_reference = NULL;
@@ -317,7 +311,7 @@ dpif_offload_dpdk_offload_put(struct dpdk_offload_thread *thread,
     struct netdev *netdev;
     int error;
 
-    netdev = dpif_offload_dpdk_get_netdev(thread->offload, flow->in_port);
+    netdev = dpdk_offload_get_netdev(thread->offload, flow->in_port);
 
     if (!netdev) {
         VLOG_DBG("Failed to find netdev for port_id %d", flow->in_port);
@@ -325,7 +319,7 @@ dpif_offload_dpdk_offload_put(struct dpdk_offload_thread *thread,
         goto do_callback;
     }
 
-    if (!dpif_offload_dpdk_is_offloading_netdev(thread->offload, netdev)) {
+    if (!dpdk_is_offloading_netdev(thread->offload, netdev)) {
         error = EUNATCH;
         goto do_callback;
     }
@@ -334,17 +328,12 @@ dpif_offload_dpdk_offload_put(struct dpdk_offload_thread *thread,
      * the put request directly to the dpdk netdev offload code, which
      * will handle the actual hardware offloaded flow.  It will only add it
      * when no other PMD have it offloaded. */
-    error = netdev_offload_dpdk_flow_put(thread->offload, flow->pmd_id,
-                                         flow->flow_reference,
-                                         netdev, &flow->match,
-                                         CONST_CAST(struct nlattr *,
-                                                    flow->actions),
-                                         flow->actions_len, &flow->ufid,
-                                         flow->orig_in_port,
-                                         &previous_flow_reference,
-                                         flow->requested_stats
-                                             ? &stats
-                                             : NULL);
+    error = dpdk_netdev_flow_put(thread->offload, flow->pmd_id,
+                                 flow->flow_reference, netdev, &flow->match,
+                                 CONST_CAST(struct nlattr *, flow->actions),
+                                 flow->actions_len, &flow->ufid,
+                                 flow->orig_in_port, &previous_flow_reference,
+                                 flow->requested_stats ? &stats : NULL);
 do_callback:
     dpif_offload_datapath_flow_op_continue(&flow->callback,
                                            flow->requested_stats ? &stats
@@ -356,8 +345,8 @@ do_callback:
 }
 
 static void
-dpif_offload_dpdk_offload_flow(struct dpdk_offload_thread *thread,
-                               struct dpdk_offload_thread_item *item)
+dpdk_offload_flow(struct dpdk_offload_thread *thread,
+                  struct dpdk_offload_thread_item *item)
 {
     struct dpdk_offload_flow_item *flow_offload = &item->data->flow;
     const char *op;
@@ -366,11 +355,11 @@ dpif_offload_dpdk_offload_flow(struct dpdk_offload_thread *thread,
     switch (flow_offload->op) {
     case DPDK_NETDEV_FLOW_OFFLOAD_OP_PUT:
         op = "put";
-        ret = dpif_offload_dpdk_offload_put(thread, item);
+        ret = dpdk_offload_put(thread, item);
         break;
     case DPDK_NETDEV_FLOW_OFFLOAD_OP_DEL:
         op = "delete";
-        ret = dpif_offload_dpdk_offload_del(thread, item);
+        ret = dpdk_offload_del(thread, item);
         break;
     default:
         OVS_NOT_REACHED();
@@ -382,11 +371,11 @@ dpif_offload_dpdk_offload_flow(struct dpdk_offload_thread *thread,
 }
 
 static void
-dpif_offload_dpdk_offload_flush(struct dpdk_offload_thread_item *item)
+dpdk_offload_handle_flush(struct dpdk_offload_thread_item *item)
 {
     struct dpdk_offload_flush_item *flush = &item->data->flush;
 
-    netdev_offload_dpdk_flow_flush(flush->offload, flush->netdev);
+    dpdk_netdev_flow_flush(flush->offload, flush->netdev);
     ovs_barrier_block(flush->barrier);
 }
 
@@ -395,7 +384,7 @@ dpif_offload_dpdk_offload_flush(struct dpdk_offload_thread_item *item)
 #define DPDK_OFFLOAD_QUIESCE_INTERVAL_US (10 * 1000) /* 10 ms */
 
 static void *
-dpif_offload_dpdk_offload_thread_main(void *arg)
+dpdk_offload_thread_main(void *arg)
 {
     struct dpdk_offload_thread *ofl_thread = arg;
     struct dpdk_offload_thread_item *offload;
@@ -446,10 +435,10 @@ dpif_offload_dpdk_offload_thread_main(void *arg)
 
             switch (offload->type) {
             case DPDK_OFFLOAD_FLOW:
-                dpif_offload_dpdk_offload_flow(ofl_thread, offload);
+                dpdk_offload_flow(ofl_thread, offload);
                 break;
             case DPDK_OFFLOAD_FLUSH:
-                dpif_offload_dpdk_offload_flush(offload);
+                dpdk_offload_handle_flush(offload);
                 break;
             default:
                 OVS_NOT_REACHED();
@@ -460,7 +449,7 @@ dpif_offload_dpdk_offload_thread_main(void *arg)
             mov_avg_cma_update(&ofl_thread->cma, latency_us);
             mov_avg_ema_update(&ofl_thread->ema, latency_us);
 
-            dpif_offload_dpdk_free_offload(offload);
+            dpdk_free_offload(offload);
 
             /* Do RCU synchronization at fixed interval. */
             if (now > next_rcu) {
@@ -479,7 +468,7 @@ exit_thread:
 }
 
 static void
-dpif_offload_dpdk_offload_threads_init(struct dpif_offload_dpdk *offload)
+dpdk_offload_threads_init(struct dpdk_offload *offload)
 {
     offload->offload_threads = xcalloc(offload->offload_thread_count,
                                        sizeof(struct dpdk_offload_thread));
@@ -493,13 +482,13 @@ dpif_offload_dpdk_offload_threads_init(struct dpif_offload_dpdk *offload)
         mov_avg_cma_init(&thread->cma);
         mov_avg_ema_init(&thread->ema, 100);
         thread->offload = offload;
-        thread->thread = ovs_thread_create(
-            "dpdk_offload", dpif_offload_dpdk_offload_thread_main, thread);
+        thread->thread = ovs_thread_create("dpdk_offload",
+                                           dpdk_offload_thread_main, thread);
     }
 }
 
 static long long int
-dpif_offload_dpdk_get_timestamp(void)
+dpdk_offload_get_timestamp(void)
 {
     /* XXX: We should look for a better, more efficient way to obtain a
      *  timestamp in the fast path, if only used for gathering statistics. */
@@ -507,12 +496,11 @@ dpif_offload_dpdk_get_timestamp(void)
 }
 
 static void
-dpif_offload_dpdk_flush_enqueue(struct dpif_offload_dpdk *offload,
-                                struct netdev *netdev,
-                                struct ovs_barrier *barrier)
+dpdk_offload_flush_enqueue(struct dpdk_offload *offload, struct netdev *netdev,
+                           struct ovs_barrier *barrier)
 {
     unsigned int tid;
-    long long int now_us = dpif_offload_dpdk_get_timestamp();
+    long long int now_us = dpdk_offload_get_timestamp();
 
     if (!dpif_offload_enabled()) {
         return;
@@ -531,7 +519,7 @@ dpif_offload_dpdk_flush_enqueue(struct dpif_offload_dpdk *offload,
         flush->offload = offload;
         flush->barrier = barrier;
 
-        dpif_offload_dpdk_append_offload(offload, item, tid);
+        dpdk_append_offload(offload, item, tid);
     }
 }
 
@@ -545,8 +533,7 @@ dpif_offload_dpdk_flush_enqueue(struct dpif_offload_dpdk *offload,
  * for the port.  This call must be made blocking until the
  * offload provider completed its job. */
 static void
-dpif_offload_dpdk_flush(struct dpif_offload_dpdk *offload,
-                        struct netdev *netdev)
+dpdk_offload_flush(struct dpdk_offload *offload, struct netdev *netdev)
 {
     /* The flush mutex serves to exclude mutual access to the static
      * barrier, and to prevent multiple flush orders to several threads.
@@ -566,16 +553,17 @@ dpif_offload_dpdk_flush(struct dpif_offload_dpdk *offload,
 
     ovs_barrier_init(&barrier, 1 + offload->offload_thread_count);
 
-    dpif_offload_dpdk_flush_enqueue(offload, netdev, &barrier);
+    dpdk_offload_flush_enqueue(offload, netdev, &barrier);
     ovs_barrier_block(&barrier);
     ovs_barrier_destroy(&barrier);
 
     ovs_mutex_unlock(&flush_mutex);
 }
 
-void dpif_offload_dpdk_traverse_ports(
-    const struct dpif_offload_dpdk *offload,
-    bool (*cb)(struct netdev *, odp_port_t, void *), void *aux)
+void
+dpdk_offload_traverse_ports(const struct dpdk_offload *offload,
+                            bool (*cb)(struct netdev *, odp_port_t, void *),
+                            void *aux)
 {
     struct dpif_offload_port_mgr_port *port;
 
@@ -587,39 +575,39 @@ void dpif_offload_dpdk_traverse_ports(
 }
 
 static int
-dpif_offload_dpdk_enable_offload(struct dpif_offload *offload_,
-                                 struct dpif_offload_port_mgr_port *port)
+dpdk_offload_enable(struct dpif_offload *offload_,
+                    struct dpif_offload_port_mgr_port *port)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
     struct netdev *netdev = port->netdev;
 
-    netdev_offload_dpdk_init(netdev, offload->offload_thread_count);
+    dpdk_netdev_offload_init(netdev, offload->offload_thread_count);
     dpif_offload_set_netdev_offload(netdev, offload_);
     return 0;
 }
 
 static int
-dpif_offload_dpdk_cleanup_offload(struct dpif_offload *offload_ OVS_UNUSED,
-                                  struct dpif_offload_port_mgr_port *port)
+dpdk_offload_cleanup(struct dpif_offload *offload_ OVS_UNUSED,
+                     struct dpif_offload_port_mgr_port *port)
 {
     struct netdev *netdev = port->netdev;
 
-    netdev_offload_dpdk_uninit(netdev);
+    dpdk_netdev_offload_uninit(netdev);
     dpif_offload_set_netdev_offload(port->netdev, NULL);
     return 0;
 }
 
 static int
-dpif_offload_dpdk_port_add(struct dpif_offload *offload_,
-                           struct netdev *netdev, odp_port_t port_no)
+dpdk_offload_port_add(struct dpif_offload *offload_, struct netdev *netdev,
+                      odp_port_t port_no)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
     struct dpif_offload_port_mgr_port *port = xmalloc(sizeof *port);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
 
     if (dpif_offload_port_mgr_add(offload->port_mgr, port, netdev,
                                   port_no, false)) {
         if (dpif_offload_enabled()) {
-            return dpif_offload_dpdk_enable_offload(offload_, port);
+            return dpdk_offload_enable(offload_, port);
         }
         return 0;
     }
@@ -629,16 +617,16 @@ dpif_offload_dpdk_port_add(struct dpif_offload *offload_,
 }
 
 static void
-dpif_offload_dpdk_free_port(struct dpif_offload_port_mgr_port *port)
+dpdk_offload_free_port(struct dpif_offload_port_mgr_port *port)
 {
     netdev_close(port->netdev);
     free(port);
 }
 
 static int
-dpif_offload_dpdk_port_del(struct dpif_offload *offload_, odp_port_t port_no)
+dpdk_offload_port_del(struct dpif_offload *offload_, odp_port_t port_no)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
     struct dpif_offload_port_mgr_port *port;
     int ret = 0;
 
@@ -649,51 +637,48 @@ dpif_offload_dpdk_port_del(struct dpif_offload *offload_, odp_port_t port_no)
          * all pending flow operations, especially the pending delete ones,
          * before we remove the netdev from the port_mgr list. */
         dpif_offload_set_netdev_offload(port->netdev, NULL);
-        dpif_offload_dpdk_flush(offload, port->netdev);
+        dpdk_offload_flush(offload, port->netdev);
     }
 
     port = dpif_offload_port_mgr_remove(offload->port_mgr, port_no);
     if (port) {
         if (dpif_offload_enabled()) {
-            ret = dpif_offload_dpdk_cleanup_offload(offload_, port);
+            ret = dpdk_offload_cleanup(offload_, port);
         }
-        ovsrcu_postpone(dpif_offload_dpdk_free_port, port);
+        ovsrcu_postpone(dpdk_offload_free_port, port);
     }
     return ret;
 }
 
 static int
-dpif_offload_dpdk_port_dump_start(const struct dpif_offload *offload_,
-                                  void **statep)
+dpdk_offload_port_dump_start(const struct dpif_offload *offload_,
+                             void **statep)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
 
     return dpif_offload_port_mgr_port_dump_start(offload->port_mgr, statep);
 }
 
 static int
-dpif_offload_dpdk_port_dump_next(const struct dpif_offload *offload_,
-                                 void *state,
-                                 struct dpif_offload_port *port)
+dpdk_offload_port_dump_next(const struct dpif_offload *offload_, void *state,
+                            struct dpif_offload_port *port)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
 
     return dpif_offload_port_mgr_port_dump_next(offload->port_mgr, state,
                                                 port);
 }
 
 static int
-dpif_offload_dpdk_port_dump_done(const struct dpif_offload *offload_,
-                                 void *state)
+dpdk_offload_port_dump_done(const struct dpif_offload *offload_, void *state)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
 
     return dpif_offload_port_mgr_port_dump_done(offload->port_mgr, state);
 }
 
 struct netdev *
-dpif_offload_dpdk_get_netdev(const struct dpif_offload_dpdk *offload,
-                             odp_port_t port_no)
+dpdk_offload_get_netdev(const struct dpdk_offload *offload, odp_port_t port_no)
 {
     struct dpif_offload_port_mgr_port *port;
 
@@ -707,21 +692,18 @@ dpif_offload_dpdk_get_netdev(const struct dpif_offload_dpdk *offload,
 }
 
 static struct netdev *
-dpif_offload_dpdk_get_netdev_(struct dpif_offload *offload_,
-                              odp_port_t port_no)
+dpdk_offload_get_netdev__(struct dpif_offload *offload_, odp_port_t port_no)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
 
-    return dpif_offload_dpdk_get_netdev(offload, port_no);
+    return dpdk_offload_get_netdev(offload, port_no);
 }
 
 static int
-dpif_offload_dpdk_open(const struct dpif_offload_class *offload_class,
-                       struct dpif *dpif, struct dpif_offload **offload_)
+dpdk_offload_open(const struct dpif_offload_class *offload_class,
+                  struct dpif *dpif, struct dpif_offload **offload_)
 {
-    struct dpif_offload_dpdk *offload;
-
-    offload = xmalloc(sizeof *offload);
+    struct dpdk_offload *offload = xmalloc(sizeof *offload);
 
     dpif_offload_init(&offload->offload, offload_class, dpif);
     offload->port_mgr = dpif_offload_port_mgr_init();
@@ -738,13 +720,13 @@ dpif_offload_dpdk_open(const struct dpif_offload_class *offload_class,
 }
 
 static void
-dpif_offload_dpdk_close(struct dpif_offload *offload_)
+dpdk_offload_close(struct dpif_offload *offload_)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
     struct dpif_offload_port_mgr_port *port;
 
     DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
-        dpif_offload_dpdk_port_del(offload_, port->port_no);
+        dpdk_offload_port_del(offload_, port->port_no);
     }
 
     atomic_store_relaxed(&offload->offload_thread_shutdown, true);
@@ -767,10 +749,10 @@ dpif_offload_dpdk_close(struct dpif_offload *offload_)
 }
 
 static void
-dpif_offload_dpdk_set_config(struct dpif_offload *offload_,
-                             const struct smap *other_cfg)
+dpdk_offload_set_config(struct dpif_offload *offload_,
+                        const struct smap *other_cfg)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
 
     if (smap_get_bool(other_cfg, "hw-offload", false)) {
         if (ovsthread_once_start(&offload->once_enable)) {
@@ -791,9 +773,9 @@ dpif_offload_dpdk_set_config(struct dpif_offload *offload_,
 
             offload->offload_thread_count = offload_thread_count;
 
-            dpif_offload_dpdk_offload_threads_init(offload);
+            dpdk_offload_threads_init(offload);
             DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
-                dpif_offload_dpdk_enable_offload(offload_, port);
+                dpdk_offload_enable(offload_, port);
             }
 
             ovsthread_once_done(&offload->once_enable);
@@ -802,10 +784,10 @@ dpif_offload_dpdk_set_config(struct dpif_offload *offload_,
 }
 
 static void
-dpif_offload_dpdk_get_debug(const struct dpif_offload *offload_, struct ds *ds,
-                            struct json *json)
+dpdk_offload_get_debug(const struct dpif_offload *offload_, struct ds *ds,
+                       struct json *json)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
 
     if (json) {
         struct json *json_ports = json_object_create();
@@ -837,8 +819,8 @@ dpif_offload_dpdk_get_debug(const struct dpif_offload *offload_, struct ds *ds,
 }
 
 static bool
-dpif_offload_dpdk_can_offload(struct dpif_offload *offload OVS_UNUSED,
-                              struct netdev *netdev)
+dpdk_can_offload(struct dpif_offload *offload OVS_UNUSED,
+                 struct netdev *netdev)
 {
     if (netdev_vport_is_vport_class(netdev->netdev_class)
         && strcmp(netdev_get_dpif_type(netdev), "netdev")) {
@@ -851,9 +833,9 @@ dpif_offload_dpdk_can_offload(struct dpif_offload *offload OVS_UNUSED,
 }
 
 static uint64_t
-dpif_offload_dpdk_flow_count(const struct dpif_offload *offload_)
+dpdk_flow_count(const struct dpif_offload *offload_)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
     struct dpif_offload_port_mgr_port *port;
     uint64_t total = 0;
 
@@ -862,16 +844,15 @@ dpif_offload_dpdk_flow_count(const struct dpif_offload *offload_)
     }
 
     DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
-        total += netdev_offload_dpdk_flow_count(port->netdev,
-                                                offload->offload_thread_count);
+        total += dpdk_netdev_flow_count(port->netdev,
+                                        offload->offload_thread_count);
     }
 
     return total;
 }
 
 static uint64_t
-dpif_offload_dpdk_flow_count_by_thread(struct dpif_offload_dpdk *offload,
-                                       unsigned int tid)
+dpdk_flow_count_by_thread(struct dpdk_offload *offload, unsigned int tid)
 {
     struct dpif_offload_port_mgr_port *port;
     uint64_t total = 0;
@@ -881,36 +862,35 @@ dpif_offload_dpdk_flow_count_by_thread(struct dpif_offload_dpdk *offload,
     }
 
     DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
-        total += netdev_offload_dpdk_flow_count_by_thread(port->netdev, tid);
+        total += dpdk_netdev_flow_count_by_thread(port->netdev, tid);
     }
 
     return total;
 }
 
 static int
-dpif_offload_dpdk_netdev_hw_post_process(
-    const struct dpif_offload *offload_, struct netdev *netdev,
-    unsigned pmd_id, struct dp_packet *packet, void **flow_reference)
+dpdk_offload_hw_post_process(const struct dpif_offload *offload_,
+                             struct netdev *netdev, unsigned pmd_id,
+                             struct dp_packet *packet, void **flow_reference)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
 
-    return netdev_offload_dpdk_hw_miss_packet_recover(offload, netdev, pmd_id,
-                                                      packet, flow_reference);
+    return dpdk_netdev_hw_miss_packet_recover(offload, netdev, pmd_id, packet,
+                                              flow_reference);
 }
 
 static int
-dpif_offload_dpdk_netdev_flow_put(const struct dpif_offload *offload_,
-                                  struct netdev *netdev OVS_UNUSED,
-                                  struct dpif_offload_flow_put *put,
-                                  void **previous_flow_reference OVS_UNUSED)
+dpdk_flow_put(const struct dpif_offload *offload_,
+              struct netdev *netdev OVS_UNUSED,
+              struct dpif_offload_flow_put *put,
+              void **previous_flow_reference OVS_UNUSED)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
     struct dpdk_offload_thread_item *item;
     struct dpdk_offload_flow_item *flow_offload;
 
-    item = dpif_offload_dpdk_alloc_flow_offload(
-        DPDK_NETDEV_FLOW_OFFLOAD_OP_PUT);
-    item->timestamp = dpif_offload_dpdk_get_timestamp();
+    item = dpdk_alloc_flow_offload(DPDK_NETDEV_FLOW_OFFLOAD_OP_PUT);
+    item->timestamp = dpdk_offload_get_timestamp();
 
     flow_offload = &item->data->flow;
     flow_offload->in_port = put->in_port;
@@ -925,22 +905,21 @@ dpif_offload_dpdk_netdev_flow_put(const struct dpif_offload *offload_,
     flow_offload->requested_stats = !!put->stats;
     flow_offload->callback = put->cb_data;
 
-    dpif_offload_dpdk_offload_flow_enqueue(offload, item);
+    dpdk_offload_flow_enqueue(offload, item);
     return EINPROGRESS;
 }
 
 static int
-dpif_offload_dpdk_netdev_flow_del(const struct dpif_offload *offload_,
-                                  struct netdev *netdev OVS_UNUSED,
-                                  struct dpif_offload_flow_del *del)
+dpdk_flow_del(const struct dpif_offload *offload_,
+              struct netdev *netdev OVS_UNUSED,
+              struct dpif_offload_flow_del *del)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
     struct dpdk_offload_thread_item *item;
     struct dpdk_offload_flow_item *flow_offload;
 
-    item = dpif_offload_dpdk_alloc_flow_offload(
-        DPDK_NETDEV_FLOW_OFFLOAD_OP_DEL);
-    item->timestamp =dpif_offload_dpdk_get_timestamp();
+    item = dpdk_alloc_flow_offload(DPDK_NETDEV_FLOW_OFFLOAD_OP_DEL);
+    item->timestamp =dpdk_offload_get_timestamp();
 
     flow_offload = &item->data->flow;
     flow_offload->in_port = del->in_port;
@@ -950,22 +929,22 @@ dpif_offload_dpdk_netdev_flow_del(const struct dpif_offload *offload_,
     flow_offload->pmd_id = del->pmd_id;
     flow_offload->callback = del->cb_data;
 
-    dpif_offload_dpdk_offload_flow_enqueue(offload, item);
+    dpdk_offload_flow_enqueue(offload, item);
     return EINPROGRESS;
 }
 
 static void
-dpif_offload_dpdk_register_flow_unreference_cb(
-    const struct dpif_offload *offload_, dpif_offload_flow_unreference_cb *cb)
+dpdk_register_flow_unreference_cb(const struct dpif_offload *offload_,
+                                  dpif_offload_flow_unreference_cb *cb)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
 
     offload->unreference_cb = cb;
 }
 
 void
-dpif_offload_dpdk_flow_unreference(struct dpif_offload_dpdk *offload,
-                                   unsigned pmd_id, void *flow_reference)
+dpdk_flow_unreference(struct dpdk_offload *offload, unsigned pmd_id,
+                      void *flow_reference)
 {
     if (offload->unreference_cb) {
         offload->unreference_cb(pmd_id, flow_reference);
@@ -973,11 +952,9 @@ dpif_offload_dpdk_flow_unreference(struct dpif_offload_dpdk *offload,
 }
 
 static bool
-dpif_offload_dpdk_netdev_flow_stats(const struct dpif_offload *ol OVS_UNUSED,
-                                    struct netdev *netdev,
-                                    const ovs_u128 *ufid,
-                                    struct dpif_flow_stats *stats,
-                                    struct dpif_flow_attrs *attrs)
+dpdk_flow_stats(const struct dpif_offload *ol OVS_UNUSED,
+                struct netdev *netdev, const ovs_u128 *ufid,
+                struct dpif_flow_stats *stats, struct dpif_flow_attrs *attrs)
 {
     uint64_t act_buf[1024 / 8];
     struct nlattr *actions;
@@ -986,15 +963,15 @@ dpif_offload_dpdk_netdev_flow_stats(const struct dpif_offload *ol OVS_UNUSED,
 
     ofpbuf_use_stack(&buf, &act_buf, sizeof act_buf);
 
-    return !netdev_offload_dpdk_flow_get(netdev, &match, &actions,
-                                         ufid, stats, attrs, &buf);
+    return !dpdk_netdev_flow_get(netdev, &match, &actions, ufid, stats, attrs,
+                                 &buf);
 }
 
 static int
-dpif_offload_dpdk_get_global_stats(const struct dpif_offload *offload_,
-                                   struct netdev_custom_stats *stats)
+dpdk_get_global_stats(const struct dpif_offload *offload_,
+                      struct netdev_custom_stats *stats)
 {
-    struct dpif_offload_dpdk *offload = dpif_offload_dpdk_cast(offload_);
+    struct dpdk_offload *offload = dpdk_offload_cast(offload_);
     unsigned int nb_thread = offload->offload_thread_count;
     struct dpdk_offload_thread *offload_threads = offload->offload_threads;
     unsigned int tid;
@@ -1044,7 +1021,7 @@ dpif_offload_dpdk_get_global_stats(const struct dpif_offload *offload_,
         memset(counts, 0, sizeof counts);
         if (offload_threads != NULL) {
             counts[DP_NETDEV_HW_OFFLOADS_STATS_INSERTED] =
-                dpif_offload_dpdk_flow_count_by_thread(offload, tid);
+                dpdk_flow_count_by_thread(offload, tid);
 
             atomic_read_relaxed(&offload_threads[tid].enqueued_item,
                                 &counts[DP_NETDEV_HW_OFFLOADS_STATS_ENQUEUED]);
@@ -1077,7 +1054,7 @@ dpif_offload_dpdk_get_global_stats(const struct dpif_offload *offload_,
 
     /* Get the total offload count. */
     hwol_stats[DP_NETDEV_HW_OFFLOADS_STATS_INSERTED].total =
-        dpif_offload_dpdk_flow_count(offload_);
+        dpdk_flow_count(offload_);
 
     for (i = 0; i < ARRAY_SIZE(hwol_stats); i++) {
         snprintf(stats->counters[i].name, sizeof(stats->counters[i].name),
@@ -1092,23 +1069,22 @@ struct dpif_offload_class dpif_offload_dpdk_class = {
     .type = "dpdk",
     .impl_type = DPIF_OFFLOAD_IMPL_FLOWS_DPIF_SYNCED,
     .supported_dpif_types = (const char *const[]) {"netdev", NULL},
-    .open = dpif_offload_dpdk_open,
-    .close = dpif_offload_dpdk_close,
-    .set_config = dpif_offload_dpdk_set_config,
-    .get_debug = dpif_offload_dpdk_get_debug,
-    .get_global_stats = dpif_offload_dpdk_get_global_stats,
-    .can_offload = dpif_offload_dpdk_can_offload,
-    .port_add = dpif_offload_dpdk_port_add,
-    .port_del = dpif_offload_dpdk_port_del,
-    .port_dump_start = dpif_offload_dpdk_port_dump_start,
-    .port_dump_next = dpif_offload_dpdk_port_dump_next,
-    .port_dump_done = dpif_offload_dpdk_port_dump_done,
-    .flow_count = dpif_offload_dpdk_flow_count,
-    .get_netdev = dpif_offload_dpdk_get_netdev_,
-    .netdev_hw_post_process = dpif_offload_dpdk_netdev_hw_post_process,
-    .netdev_flow_put = dpif_offload_dpdk_netdev_flow_put,
-    .netdev_flow_del = dpif_offload_dpdk_netdev_flow_del,
-    .netdev_flow_stats = dpif_offload_dpdk_netdev_flow_stats,
-    .register_flow_unreference_cb =
-        dpif_offload_dpdk_register_flow_unreference_cb,
+    .open = dpdk_offload_open,
+    .close = dpdk_offload_close,
+    .set_config = dpdk_offload_set_config,
+    .get_debug = dpdk_offload_get_debug,
+    .get_global_stats = dpdk_get_global_stats,
+    .can_offload = dpdk_can_offload,
+    .port_add = dpdk_offload_port_add,
+    .port_del = dpdk_offload_port_del,
+    .port_dump_start = dpdk_offload_port_dump_start,
+    .port_dump_next = dpdk_offload_port_dump_next,
+    .port_dump_done = dpdk_offload_port_dump_done,
+    .flow_count = dpdk_flow_count,
+    .get_netdev = dpdk_offload_get_netdev__,
+    .netdev_hw_post_process = dpdk_offload_hw_post_process,
+    .netdev_flow_put = dpdk_flow_put,
+    .netdev_flow_del = dpdk_flow_del,
+    .netdev_flow_stats = dpdk_flow_stats,
+    .register_flow_unreference_cb = dpdk_register_flow_unreference_cb,
 };
