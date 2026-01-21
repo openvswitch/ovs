@@ -863,7 +863,7 @@ ovs_router_rules_show_json(struct json *rule_entries, bool ipv6)
         entry = json_object_create();
 
         json_object_put(entry, "priority", json_integer_create(rule->prio));
-        json_object_put(entry, "user", json_integer_create(rule->user));
+        json_object_put(entry, "user", json_boolean_create(rule->user));
         json_object_put(entry, "invert", json_boolean_create(rule->invert));
         json_object_put(entry, "ipv4", json_boolean_create(rule->ipv4));
         json_object_put(entry, "src-prefix",
