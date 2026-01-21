@@ -258,6 +258,54 @@ Cached: 0: from all lookup local
 Cached: 32766: from all lookup main
 ])
 
+dnl Check JSON output for standard rules.
+AT_CHECK([ovs-appctl --format=json --pretty ovs/route/rule/show], [0], [dnl
+[[
+  {
+    "from": "all",
+    "invert": false,
+    "ipv4": true,
+    "lookup": 255,
+    "priority": 0,
+    "src-prefix": 0,
+    "user": false},
+  {
+    "from": "all",
+    "invert": false,
+    "ipv4": true,
+    "lookup": 254,
+    "priority": 32766,
+    "src-prefix": 0,
+    "user": false},
+  {
+    "from": "all",
+    "invert": false,
+    "ipv4": true,
+    "lookup": 253,
+    "priority": 32767,
+    "src-prefix": 0,
+    "user": false}]]
+])
+AT_CHECK([ovs-appctl --format=json --pretty ovs/route/rule/show -6], [0], [dnl
+[[
+  {
+    "from": "all",
+    "invert": false,
+    "ipv4": false,
+    "lookup": 255,
+    "priority": 0,
+    "src-prefix": 0,
+    "user": false},
+  {
+    "from": "all",
+    "invert": false,
+    "ipv4": false,
+    "lookup": 254,
+    "priority": 32766,
+    "src-prefix": 0,
+    "user": false}]]
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
