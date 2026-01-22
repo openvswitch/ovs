@@ -2600,30 +2600,6 @@
         e.g. <code>fake-bridge-bridge-id</code>.
       </column>
 
-      <column name="other_config" key="hw-offload-priority"
-              type='{"type": "string"}'>
-        <p>
-          This configuration sets an explicit list of hardware offload
-          providers to try on this port.  The argument should be a
-          comma-separated list of hardware offload provider names, or the
-          word <code>none</code>.
-        </p>
-        <p>
-          If <code>none</code> is encountered in the list, further trying of
-          offload providers is stopped. For example, if the list only contains
-          <code>none</code>, hardware offload is disabled on this port even if
-          it is globally enabled. Note that unknown hardware offload provider
-          names are ignored.
-        </p>
-        <p>
-          If not set, uses the global
-          <ref table="Open_vSwitch" column="other_config"
-               key="hw-offload-priority"/>
-          configuration.  Changing this value after offload enablement requires
-          restarting the daemon.
-        </p>
-      </column>
-
       <column name="other_config" key="transient"
               type='{"type": "boolean"}'>
         <p>
@@ -4678,6 +4654,38 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         <p>
           This parameter has an effect only on netdev dpdk interfaces.
         </p>
+      </column>
+    </group>
+
+    <group title="Hardware Offload Configuration">
+      <column name="other_config" key="hw-offload-priority"
+              type='{"type": "string"}'>
+        <p>
+          This configuration sets an explicit list of hardware offload
+          providers to try on this Interface.  The argument should be a
+          comma-separated list of hardware offload provider names, or the
+          word <code>none</code>.
+        </p>
+        <p>
+          If <code>none</code> is encountered in the list, further trying of
+          offload providers is stopped.  For example, if the list only contains
+          <code>none</code>, hardware offload is disabled on this interface
+          even if it is globally enabled.  Note that unknown hardware offload
+          provider names are ignored.
+        </p>
+        <p>
+          If not set, uses the global
+          <ref table="Open_vSwitch" column="other_config"
+               key="hw-offload-priority"/>
+          configuration.  Changing this value after offload enablement requires
+          restarting the daemon.  To avoid restarting the daemon, set this
+          option in the same transaction that adds the port.  For example:
+        </p>
+
+        <pre>
+ovs-vsctl add-port br0 p1 -- \
+          set Interface p1 other_config:hw-offload-priority=none
+       </pre>
       </column>
     </group>
 
