@@ -59,7 +59,7 @@ static const struct dpif_offload_class *base_dpif_offload_classes[] = {
 static char *dpif_offload_provider_priority_list = NULL;
 static atomic_bool offload_global_enabled = false;
 static atomic_bool offload_rebalance_policy = false;
-static struct smap port_order_cfg = SMAP_INITIALIZER(&port_order_cfg);
+static struct smap iface_order_cfg = SMAP_INITIALIZER(&iface_order_cfg);
 
 static int
 dpif_offload_register_provider__(const struct dpif_offload_class *class)
@@ -527,7 +527,7 @@ dpif_offload_port_add(struct dpif *dpif, struct netdev *netdev,
                       odp_port_t port_no)
 {
     struct dpif_offload_provider_collection *collection;
-    const char *port_priority = smap_get(&port_order_cfg,
+    const char *port_priority = smap_get(&iface_order_cfg,
                                          netdev_get_name(netdev));
     struct dpif_offload *offload;
 
@@ -773,21 +773,26 @@ dpif_offload_set_global_cfg(const struct ovsrec_open_vswitch *cfg)
         }
     }
 
-    /* Filter out the 'hw-offload-priority' per port setting we need it before
-     * ports are added, so we can assign the correct offload-provider.
+    /* Filter out the 'hw-offload-priority' per interface setting.  We need it
+     * before ports are added, so we can assign the correct offload-provider.
      * Note that we can safely rebuild the map here, as we only access this
      * from the same (main) thread. */
-    smap_clear(&port_order_cfg);
+    smap_clear(&iface_order_cfg);
     for (int i = 0; i < cfg->n_bridges; i++) {
         const struct ovsrec_bridge *br_cfg = cfg->bridges[i];
 
         for (int j = 0; j < br_cfg->n_ports; j++) {
             const struct ovsrec_port *port_cfg = br_cfg->ports[j];
 
-            priority = smap_get(&port_cfg->other_config,
-                                "hw-offload-priority");
-            if (priority) {
-                smap_add(&port_order_cfg, port_cfg->name, priority);
+            for (int k = 0; k < port_cfg->n_interfaces; k++) {
+                const struct ovsrec_interface *iface_cfg;
+
+                iface_cfg = port_cfg->interfaces[k];
+                priority = smap_get(&iface_cfg->other_config,
+                                    "hw-offload-priority");
+                if (priority) {
+                    smap_add(&iface_order_cfg, iface_cfg->name, priority);
+                }
             }
         }
     }

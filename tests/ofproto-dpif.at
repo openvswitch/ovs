@@ -10242,16 +10242,16 @@ AT_SETUP([ofproto-dpif - offload - port priority order])
 AT_KEYWORDS([dpif-offload])
 OVS_VSWITCHD_START([add-port br0 p1 -- \
   set Interface p1 type=dummy ofport_request=1 -- \
-  set port p1 other_config:hw-offload-priority=dummy_x,dummy -- \
+  set Interface p1 other_config:hw-offload-priority=dummy_x,dummy -- \
   add-port br0 p2 -- \
   set Interface p2 type=dummy ofport_request=2 -- \
-  set port p2 other_config:hw-offload-priority=none -- \
+  set Interface p2 other_config:hw-offload-priority=none -- \
   add-port br0 p3 -- \
   set Interface p3 type=dummy ofport_request=3 -- \
-  set port p3 other_config:hw-offload-priority=dummy_x -- \
+  set Interface p3 other_config:hw-offload-priority=dummy_x -- \
   add-port br0 p4 -- \
   set Interface p4 type=dummy ofport_request=4 -- \
-  set port p4 other_config:hw-offload-priority=dummy])
+  set Interface p4 other_config:hw-offload-priority=dummy])
 
 AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
 {
