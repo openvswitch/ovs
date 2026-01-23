@@ -3293,8 +3293,10 @@ dnl setup controller for br0 before starting the controller
 AT_CHECK([ovs-vsctl -vsyslog:off set-controller br0 unix:testcontroller])
 
 dnl then start listening on the '.snoop' connection
-on_exit 'kill `cat ovs-ofctl-snoop.pid`'
-AT_CHECK([ovs-ofctl -vsyslog:off --detach --no-chdir --pidfile=ovs-ofctl-snoop.pid snoop br0 > snoopbr0.txt 2>&1])
+on_exit 'test -e ovs-ofctl-snoop.pid && kill `cat ovs-ofctl-snoop.pid`'
+AT_CHECK([ovs-ofctl -vsyslog:off --detach --no-chdir \
+            --unixctl=snoop.ctl --pidfile=ovs-ofctl-snoop.pid \
+            snoop br0 > snoopbr0.txt 2>&1])
 
 dnl finally start the controller
 on_exit 'kill `cat ovs-testcontroller.pid`'
@@ -3305,6 +3307,9 @@ dnl check for some of the initial handshake messages
 OVS_WAIT_UNTIL([grep -E "OFPT_FEATURES_REQUEST" snoopbr0.txt >/dev/null 2>&1])
 OVS_WAIT_UNTIL([grep -E "OFPT_FEATURES_REPLY" snoopbr0.txt >/dev/null 2>&1])
 OVS_WAIT_UNTIL([grep -E "OFPT_SET_CONFIG" snoopbr0.txt >/dev/null 2>&1])
+
+AT_CHECK([ovs-appctl -t $(pwd)/snoop.ctl exit])
+OVS_WAIT_WHILE([test -e ovs-ofctl-snoop.pid])
 
 dnl need to suppress the 'connection failed' WARN message in ovs-vswitchd
 dnl because we need ovs-vswitchd to have the controller config before starting
