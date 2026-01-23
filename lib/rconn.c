@@ -1285,6 +1285,7 @@ close_monitor(struct rconn *rc, size_t idx, int retval)
     VLOG_DBG("%s: closing monitor connection to %s: %s",
              rconn_get_name(rc), vconn_get_name(rc->monitors[idx]),
              ovs_retval_to_string(retval));
+    vconn_close(rc->monitors[idx]);
     rc->monitors[idx] = rc->monitors[--rc->n_monitors];
 }
 
