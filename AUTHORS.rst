@@ -104,6 +104,7 @@ Bryan Phillippe                    bp@toroki.com
 Carlo Andreotti                    c.andreotti@m3s.it
 Casey Barker                       crbarker@google.com
 Chandan Somani                     csomani@redhat.com
+Chandler Wu                        chandler0149@gmail.com
 Chandra Sekhar Vejendla            csvejend@us.ibm.com
 Changliang Wu                      changliang.wu@smartx.com
 Chris Riches                       chris.riches@nutanix.com
