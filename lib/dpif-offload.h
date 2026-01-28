@@ -23,13 +23,6 @@
 struct dpif_offload_class;
 struct dpif_offload;
 
-/* Structure used by the dpif_offload_dump_* functions. */
-struct dpif_offload_dump {
-    const struct dpif *dpif;
-    int error;
-    void *state;
-};
-
 /* Definition of the DPIF offload implementation type.
  *
  * The 'DPIF_OFFLOAD_IMPL_FLOWS_DPIF_SYNCED' implementation has a single view,
@@ -64,10 +57,9 @@ const char *dpif_offload_type(const struct dpif_offload *);
 bool dpif_offload_get_debug(const struct dpif_offload *, struct ds *,
                             struct json *);
 void dpif_offload_flow_flush(struct dpif *);
-void dpif_offload_dump_start(struct dpif_offload_dump *, const struct dpif *);
-bool dpif_offload_dump_next(struct dpif_offload_dump *,
-                            struct dpif_offload **);
-int dpif_offload_dump_done(struct dpif_offload_dump *);
+void dpif_offload_dump_start(const struct dpif *, void **statep);
+bool dpif_offload_dump_next(void *state, struct dpif_offload **);
+int dpif_offload_dump_done(void *state);
 uint64_t dpif_offload_flow_count(const struct dpif *);
 uint64_t dpif_offload_flow_count_by_impl(const struct dpif *,
                                          enum dpif_offload_impl_type);
@@ -94,11 +86,11 @@ enum dpif_offload_impl_type dpif_offload_get_impl_type_by_class(
  *
  * If you break out of the loop, then you need to free the dump structure by
  * hand using dpif_offload_dump_done(). */
-#define DPIF_OFFLOAD_FOR_EACH(DPIF_OFFLOAD, DUMP, DPIF)  \
-    for (dpif_offload_dump_start(DUMP, DPIF);            \
-         (dpif_offload_dump_next(DUMP, &DPIF_OFFLOAD)    \
-          ? true                                         \
-          : (dpif_offload_dump_done(DUMP), false));      \
+#define DPIF_OFFLOAD_FOR_EACH(DPIF_OFFLOAD, DUMP_STATE, DPIF)  \
+    for (dpif_offload_dump_start(DPIF, &DUMP_STATE);           \
+         (dpif_offload_dump_next(DUMP_STATE, &DPIF_OFFLOAD)    \
+          ? true                                               \
+          : (dpif_offload_dump_done(DUMP_STATE), false));      \
         )
 
 struct dpif_offload_port {

@@ -188,6 +188,25 @@ dpif_get_offload_provider_collection(const struct dpif *dpif)
                       &dpif->offload_provider_collection);
 }
 
+static struct dpif_offload_provider_collection*
+dpif_get_offload_provider_collection_with_ref(const struct dpif *dpif)
+{
+    struct dpif_offload_provider_collection *collection;
+
+    ovs_mutex_lock(&dpif_offload_mutex);
+
+    collection = ovsrcu_get(struct dpif_offload_provider_collection *,
+                            &dpif->offload_provider_collection);
+
+    if (!collection || !ovs_refcount_try_ref_rcu(&collection->ref_cnt)) {
+        collection = NULL;
+    }
+
+    ovs_mutex_unlock(&dpif_offload_mutex);
+
+    return collection;
+}
+
 static void
 dpif_attach_offload_provider_collection(
     struct dpif *dpif, struct dpif_offload_provider_collection *collection)
@@ -354,6 +373,26 @@ provider_collection_free_rcu(
     free(collection);
 }
 
+static void
+dpif_offload_unref_collection(
+    struct dpif_offload_provider_collection *collection)
+{
+    if (!collection) {
+        return;
+    }
+
+    /* Take dpif_offload_mutex so that, if collection->ref_cnt falls to
+     * zero, we can't get a new reference to 'collection' through the
+     * 'dpif_offload_providers' shash. */
+    ovs_mutex_lock(&dpif_offload_mutex);
+    if (ovs_refcount_unref_relaxed(&collection->ref_cnt) == 1) {
+        shash_find_and_delete(&dpif_offload_providers,
+                              collection->dpif_name);
+        ovsrcu_postpone(provider_collection_free_rcu, collection);
+    }
+    ovs_mutex_unlock(&dpif_offload_mutex);
+}
+
 void
 dpif_detach_offload_providers(struct dpif *dpif)
 {
@@ -361,16 +400,7 @@ dpif_detach_offload_providers(struct dpif *dpif)
 
     collection = dpif_get_offload_provider_collection(dpif);
     if (collection) {
-        /* Take dpif_offload_mutex so that, if collection->ref_cnt falls to
-         * zero, we can't get a new reference to 'collection' through the
-         * 'dpif_offload_providers' shash. */
-        ovs_mutex_lock(&dpif_offload_mutex);
-        if (ovs_refcount_unref_relaxed(&collection->ref_cnt) == 1) {
-            shash_find_and_delete(&dpif_offload_providers,
-                                  collection->dpif_name);
-            ovsrcu_postpone(provider_collection_free_rcu, collection);
-        }
-        ovs_mutex_unlock(&dpif_offload_mutex);
+        dpif_offload_unref_collection(collection);
         ovsrcu_set(&dpif->offload_provider_collection, NULL);
     }
 }
@@ -636,80 +666,78 @@ dpif_offload_port_offloaded_by(const struct dpif *dpif, odp_port_t port_no)
     return offload_return;
 }
 
+struct dpif_offload_dump_state {
+    const struct dpif_offload_provider_collection *collection;
+    struct dpif_offload *entry;
+    int error;
+};
+
 void
-dpif_offload_dump_start(struct dpif_offload_dump *dump,
-                        const struct dpif *dpif)
+dpif_offload_dump_start(const struct dpif *dpif, void **statep)
 {
-    memset(dump, 0, sizeof *dump);
-    dump->dpif = dpif;
+    struct dpif_offload_dump_state *state;
+
+    state = xzalloc(sizeof *state);
+    state->collection = dpif_get_offload_provider_collection_with_ref(dpif);
+    if (!state->collection) {
+        state->error = EIDRM;
+    }
+
+    *statep = state;
 }
 
 bool
-dpif_offload_dump_next(struct dpif_offload_dump *dump,
-                       struct dpif_offload **offload)
+dpif_offload_dump_next(void *state_, struct dpif_offload **offload)
 {
-    struct dpif_offload_provider_collection *collection;
+    struct dpif_offload_dump_state *state = state_;
 
-    if (!offload || !dump || dump->error) {
+    if (!offload || !state || state->error || !state->collection) {
         return false;
     }
 
-    collection = dpif_get_offload_provider_collection(dump->dpif);
-    if (!collection) {
-        return false;
-    }
+    if (state->entry) {
+        struct dpif_offload *entry = state->entry;
 
-    if (dump->state) {
-        struct dpif_offload *offload_entry;
-        bool valid_member = false;
-
-        /* In theory, list entries should not be removed.  However, in case
-         * someone calls this during destruction and the node has disappeared,
-         * we will return EIDRM (Identifier removed). */
-        LIST_FOR_EACH (offload_entry, dpif_list_node, &collection->list) {
-            if (offload_entry == dump->state) {
-                valid_member = true;
-                break;
-            }
+        LIST_FOR_EACH_CONTINUE (entry, dpif_list_node,
+                                &state->collection->list) {
+            state->entry = entry;
+            *offload = entry;
+            return true;
         }
 
-        if (valid_member) {
-            offload_entry = dump->state;
-
-            LIST_FOR_EACH_CONTINUE (offload_entry, dpif_list_node,
-                                    &collection->list) {
-                *offload = offload_entry;
-                dump->state = offload_entry;
-                return true;
-            }
-
-            dump->error = EOF;
-        } else {
-            dump->error = EIDRM;
-        }
+        state->error = EOF;
     } else {
         /* Get the first entry in the list. */
-        struct dpif_offload *offload_entry;
+        struct dpif_offload *entry;
 
-        LIST_FOR_EACH (offload_entry, dpif_list_node, &collection->list) {
+        LIST_FOR_EACH (entry, dpif_list_node, &state->collection->list) {
             break;
         }
 
-        if (offload_entry) {
-            *offload = offload_entry;
-            dump->state = offload_entry;
+        if (entry) {
+            state->entry = entry;
+            *offload = entry;
         } else {
-            dump->error = EOF;
+            state->error = EOF;
         }
     }
 
-    return !dump->error;
+    return !state->error;
 }
 
 int
-dpif_offload_dump_done(struct dpif_offload_dump *dump)
+dpif_offload_dump_done(void *state_)
 {
-    return dump->error == EOF ? 0 : dump->error;
+    struct dpif_offload_dump_state *state = state_;
+    int error;
+
+    dpif_offload_unref_collection(
+        CONST_CAST(struct dpif_offload_provider_collection *,
+                   state->collection));
+    error = state->error == EOF ? 0 : state->error;
+    free(state);
+
+    return error;
 }
 
 void
