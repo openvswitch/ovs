@@ -6712,12 +6712,12 @@ done:
 static void
 dpif_offload_show_backer_text(const struct dpif_backer *backer, struct ds *ds)
 {
-    struct dpif_offload_dump dump;
     struct dpif_offload *offload;
+    void *dump_state;
 
     ds_put_format(ds, "%s:\n", dpif_name(backer->dpif));
 
-    DPIF_OFFLOAD_FOR_EACH (offload, &dump, backer->dpif) {
+    DPIF_OFFLOAD_FOR_EACH (offload, dump_state, backer->dpif) {
         ds_put_format(ds, "  %s\n", dpif_offload_type(offload));
         dpif_offload_get_debug(offload, ds, NULL);
     }
@@ -6730,10 +6730,10 @@ dpif_offload_show_backer_json(struct json *backers,
     struct json *json_providers = json_object_create();
     struct json *json_priority = json_array_create_empty();
     struct json *json_backer = json_object_create();
-    struct dpif_offload_dump dump;
     struct dpif_offload *offload;
+    void *dump_state;
 
-    DPIF_OFFLOAD_FOR_EACH (offload, &dump, backer->dpif) {
+    DPIF_OFFLOAD_FOR_EACH (offload, dump_state, backer->dpif) {
         struct json *debug_data = json_object_create();
 
         json_array_add(json_priority,
