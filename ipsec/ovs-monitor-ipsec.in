@@ -417,7 +417,6 @@ conn %default
 """
 
     CONN_CONF_BASE = """\
-    keyingtries=%forever
     type=transport
     auto=route
 """
@@ -494,6 +493,8 @@ conn prevent_unencrypted_vxlan
             # With v5, LibreSWAN removed the auto command, however, it is
             # still required for older versions
             self.IPSEC_AUTO.append("auto")
+            # keyingtries is obsolete in v5 and has no effect.
+            self.CONN_CONF_BASE += "    keyingtries=%forever\n"
 
         if version >= 4:
             ipsec_d = args.ipsec_d if args.ipsec_d else "/var/lib/ipsec/nss"
