@@ -667,57 +667,47 @@ conn prevent_unencrypted_vxlan
                 self.conns_not_active["added"].pop(conn, None)
                 self.conns_not_active["started"].pop(conn, None)
 
-            # Remove connections that didn't become active after --start
-            # or an explicit --up.
-            for conn in list(loaded):
+            # Remove all the loaded or active but not desired connections.
+            for conn in (loaded | active) - desired:
+                self._delete_ipsec_connection(conn, "is outdated")
+                loaded.discard(conn)
+                active.discard(conn)
+
+            # Check all the loaded but not active connections.
+            for conn in loaded - active:
+                # Remove connections that didn't become active after --start
+                # or an explicit --up.
                 started = self.conns_not_active["started"].get(conn, None)
 
                 if started and self.conn_should_reconcile(started):
                     self._delete_ipsec_connection(conn, "is defunct")
-                    loaded.remove(conn)
-
-            # Remove all the loaded or active but not desired connections.
-            for conn in loaded | active:
-                if conn not in desired:
-                    self._delete_ipsec_connection(conn, "is outdated")
                     loaded.discard(conn)
-                    active.discard(conn)
 
-            # If not all desired are loaded, remove all the loaded and
-            # active for this tunnel and re-load only the desired ones.
-            # Need to do that, because connections for the same tunnel
-            # may share SAs.  If one is loaded and the other is not,
-            # it means the second one failed, so the shared SA may be in
-            # a broken state.
-            if desired != loaded:
-                for conn in loaded | active:
-                    self._delete_ipsec_connection(conn, "is half-loaded")
-                    loaded.discard(conn)
-                    active.discard(conn)
+                # Bring UP connections that were loaded but didn't become
+                # active on their own.
+                added = self.conns_not_active["added"].get(conn, None)
 
-                for conn in desired:
-                    # Start (add + up) outgoing connections and only add
-                    # incoming ones.  If the other side will not initiate
-                    # the connection and it will not become active, we'll
-                    # bring it up during the next refresh.
-                    if re.match(r".*-in-\d+$", conn):
-                        vlog.info("Adding ipsec connection %s" % conn)
-                        self._start_ipsec_connection(conn, "add")
-                    else:
-                        vlog.info("Starting ipsec connection %s" % conn)
-                        self._start_ipsec_connection(conn, "start")
-            else:
-                # Ask pluto to bring UP connections that are loaded,
-                # but not active for some reason.
-                #
-                # desired == loaded and desired >= loaded + active,
-                # so loaded >= active
-                for conn in loaded - active:
-                    added = self.conns_not_active["added"].get(conn, None)
+                if added and self.conn_should_reconcile(added):
+                    vlog.info("Bringing up ipsec connection %s" % conn)
+                    self._start_ipsec_connection(conn, "up")
 
-                    if added and self.conn_should_reconcile(added):
-                        vlog.info("Bringing up ipsec connection %s" % conn)
-                        self._start_ipsec_connection(conn, "up")
+                # Check for connections that were active bafore, but no longer.
+                if not added and not started:
+                    vlog.info("Connection %s went down, bringing it up" % conn)
+                    self._start_ipsec_connection(conn, "up")
+
+            # Load all the desired but not loaded yet connections.
+            for conn in desired - loaded:
+                # Start (add + up) outgoing connections and only add
+                # incoming ones.  If the other side will not initiate
+                # the connection and it will not become active, we'll
+                # bring it up during the next refresh.
+                if re.match(r".*-in-\d+$", conn):
+                    vlog.info("Adding ipsec connection %s" % conn)
+                    self._start_ipsec_connection(conn, "add")
+                else:
+                    vlog.info("Starting ipsec connection %s" % conn)
+                    self._start_ipsec_connection(conn, "start")
 
         # Update shunt policy if changed
         if monitor.conf_in_use["skb_mark"] != monitor.conf["skb_mark"]:
@@ -810,7 +800,8 @@ conn prevent_unencrypted_vxlan
         return conns
 
     def get_active_conns(self):
-        return self.get_conns_from_status(r"#\d+: .*\"(.*)\".*")
+        return self.get_conns_from_status(
+            r"#\d+: .*\"(.*)\".*esp[.:][0-9a-f]+@.*")
 
     def get_loaded_conns(self):
         return self.get_conns_from_status(
