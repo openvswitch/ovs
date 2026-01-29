@@ -88,7 +88,8 @@ RECONCILIATION_INTERVAL = 15  # seconds
 TIMEOUT_EXPIRED = 137  # Exit code for a SIGKILL (128 + 9).
 
 
-def run_command(args, description=None, warn_on_failure=True):
+def run_command(args, description=None,
+                warn_on_failure=True, stderr_ignore=[]):
     """ This function runs the process args[0] with args[1:] arguments
     and returns a tuple: return-code, stdout, stderr. """
 
@@ -109,6 +110,9 @@ def run_command(args, description=None, warn_on_failure=True):
         # as it may be stuck and may not actually be terminated.
         proc.kill()
         ret = TIMEOUT_EXPIRED
+
+    for ignore in stderr_ignore:
+        perr = perr.replace(ignore.encode(), b'')
 
     if (proc.returncode or perr) and warn_on_failure:
         vlog.warn("Failed to %s; exit code: %d"
@@ -881,12 +885,19 @@ conn prevent_unencrypted_vxlan
 
     def _start_ipsec_connection(self, conn, action):
         asynchronous = [] if action == "add" else ["--asynchronous"]
+        # Some versions of Libreswan (5.3+) warn that 'auto' in the config
+        # file is not taken into account while calling ipsec add/start.
+        # This is expected and we shouldn't warn users about this as the
+        # message itself is a bit misleading:
+        #   https://github.com/libreswan/libreswan/issues/2584
+        ignore = ["conn %s: overriding auto=route with auto=add\n" % conn]
         ret, pout, perr = run_command(self.IPSEC_AUTO +
                                       ["--config", self.IPSEC_CONF,
                                       "--ctlsocket", self.IPSEC_CTL,
                                       "--" + action,
                                       *asynchronous, conn],
-                                      "%s %s" % (action, conn))
+                                      "%s %s" % (action, conn),
+                                      stderr_ignore=ignore)
 
         if re.match(r".*[F|f]ailed to initiate connection.*", pout):
             vlog.err('Failed to initiate connection through'
