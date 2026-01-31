@@ -1106,6 +1106,10 @@ for i in $(seq $n); do
              [0], [lmxyz])
 done
 
+# Check that s3 never won a pre-vote.
+AT_CHECK([grep 'send notification, method="vote_request"' s3.log], [0], [stdout])
+AT_CHECK([test $(grep -c vote_request stdout) -eq $(grep -c '"is_prevote":true' stdout)])
+
 for i in $(seq $n); do
     OVS_APP_EXIT_AND_WAIT_BY_TARGET([$(pwd)/s$i], [s$i.pid])
 done

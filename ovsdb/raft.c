@@ -3909,15 +3909,24 @@ raft_handle_vote_request__(struct raft *raft,
 {
     /* Figure 3.1: "If votedFor is null or candidateId, and candidate's vote is
      * at least as up-to-date as receiver's log, grant vote (sections 3.4,
-     * 3.6)." */
-    if (uuid_equals(&raft->vote, &rq->common.sid)) {
-        /* Already voted for this candidate in this term.  Resend vote. */
-        return true;
-    } else if (!uuid_is_zero(&raft->vote)) {
-        /* Already voted for different candidate in this term.  Send a reply
-         * saying what candidate we did vote for.  This isn't a necessary part
-         * of the Raft protocol but it can make debugging easier. */
-        return true;
+     * 3.6)."
+     *
+     * Note: The vote from the current term is not meaningful for the pre-vote,
+     * since the pre-vote supposed to determine if the vote for the *next* term
+     * can be successful or not.  The votedFor will be null at the beginning of
+     * the next term.  Hence the only requirement for granting a pre-vote is
+     * the candidate's log being at least as up-to-date as receiver's. */
+    if (!rq->is_prevote) {
+        if (uuid_equals(&raft->vote, &rq->common.sid)) {
+            /* Already voted for this candidate in this term.  Resend vote. */
+            return true;
+        } else if (!uuid_is_zero(&raft->vote)) {
+            /* Already voted for different candidate in this term.  Send a
+             * reply saying what candidate we did vote for.  This isn't a
+             * necessary part of the Raft protocol but it can make debugging
+             * easier. */
+            return true;
+        }
     }
 
     /* Section 3.6.1: "The RequestVote RPC implements this restriction: the RPC
