@@ -1023,6 +1023,95 @@ done
 
 AT_CLEANUP
 
+AT_SETUP([OVSDB cluster - disruptive server with the old term and outdated log])
+AT_KEYWORDS([ovsdb server negative unix cluster disruptive])
+
+n=3
+cp $top_srcdir/vswitchd/vswitch.ovsschema schema
+AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster \
+            --election-timer=2000 s1.db schema unix:s1.raft], [0], [], [stderr])
+cid=$(ovsdb-tool db-cid s1.db)
+schema_name=$(ovsdb-tool schema-name schema)
+for i in $(seq 2 $n); do
+    AT_CHECK([ovsdb-tool join-cluster s$i.db $schema_name unix:s$i.raft unix:s1.raft])
+done
+
+on_exit 'kill $(cat *.pid)'
+for i in $(seq $n); do
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir \
+                --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i \
+                --remote=punix:s$i.ovsdb s$i.db])
+done
+for i in $(seq $n); do
+    AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
+done
+
+# Create a few transactions.
+AT_CHECK([ovs-vsctl --db=unix:s1.ovsdb --no-wait init], [0], [ignore], [ignore])
+AT_CHECK([ovs-vsctl --db=unix:s1.ovsdb --no-wait create QoS type=x], [0], [ignore], [ignore])
+
+# Stop the s3.
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([$(pwd)/s3], [s3.pid])
+
+# Commit more transactions to s1 and s2.
+AT_CHECK([ovs-vsctl --db=unix:s1.ovsdb --no-wait create QoS type=y], [0], [ignore], [ignore])
+AT_CHECK([ovs-vsctl --db=unix:s1.ovsdb --no-wait create QoS type=z], [0], [ignore], [ignore])
+
+# Stop the leader - s1.
+AT_CHECK([ovs-appctl -t $(pwd)/s1 cluster/status $schema_name | grep -q "Role: leader"])
+AT_CHECK([ovs-appctl -t $(pwd)/s1 cluster/status $schema_name | grep -q "Term: 2"])
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([$(pwd)/s1], [s1.pid])
+
+# Wait for s2 to start election and increase the term.
+OVS_WAIT_UNTIL([ovs-appctl -t $(pwd)/s2 cluster/status $schema_name | grep "Role: candidate"])
+AT_CHECK([ovs-appctl -t $(pwd)/s2 cluster/status $schema_name | grep -q "Term: 3"])
+
+# Stop the s2 as well.
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([$(pwd)/s2], [s2.pid])
+
+# Now we have all the servers down with terms 2, 3, 2, and the s3 behind on the
+# log by two transactions.  Let's bring them back up.
+for i in $(seq $n); do
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir \
+                --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i \
+                --remote=punix:s$i.ovsdb s$i.db])
+done
+
+# Delay elections on s1 and s2 giving s3 time to try a few times.
+for i in $(seq 1 10); do
+    AT_CHECK([ovs-appctl -t $(pwd)/s1 cluster/failure-test delay-election], [0], [ignore])
+    AT_CHECK([ovs-appctl -t $(pwd)/s2 cluster/failure-test delay-election], [0], [ignore])
+    # Election timer is 2 seconds, so delaying every second is enough to keep
+    # s1 and s2 from starting elections.
+    sleep 1
+done
+
+for i in $(seq $n); do
+    AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
+done
+
+# s3 was behind on the log, it must not be a leader.
+AT_CHECK([ovs-appctl -t $(pwd)/s3 cluster/status $schema_name | grep -q "Role: follower"])
+
+# Add some more data.
+AT_CHECK([ovs-vsctl --db=unix:s1.ovsdb --no-leader-only --no-wait create QoS type=l], [0], [ignore], [ignore])
+AT_CHECK([ovs-vsctl --db=unix:s1.ovsdb --no-leader-only --no-wait create QoS type=m], [0], [ignore], [ignore])
+
+# Check that all the servers are in the cluster and have all the data.
+for i in $(seq $n); do
+    AT_CHECK([ovs-appctl -t $(pwd)/s$i cluster/status $schema_name \
+                | grep -qE "Role: (leader|follower)"])
+    AT_CHECK([ovs-vsctl --db=unix:s$i.ovsdb --no-leader-only --bare \
+                --columns=type list QoS | grep . | sort | tr -d '\n'],
+             [0], [lmxyz])
+done
+
+for i in $(seq $n); do
+    OVS_APP_EXIT_AND_WAIT_BY_TARGET([$(pwd)/s$i], [s$i.pid])
+done
+
+AT_CLEANUP
+
 
 AT_BANNER([OVSDB - cluster tests])
 
