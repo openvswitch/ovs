@@ -93,6 +93,41 @@ AT_CHECK([ovs-appctl upcall/show | grep -E "offloaded flows : [[1-9]]"], [0], [i
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([offloads - tc-policy configuration])
+OVS_TRAFFIC_VSWITCHD_START([], [],
+  [-- set Open_vSwitch . other_config:hw-offload=true \
+   -- set Open_vSwitch . other_config:tc-policy=skip_hw])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [ignore])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+10 packets transmitted, 10 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep "eth_type(0x0800)" | DUMP_CLEAN_SORTED], [0], [dnl
+in_port(2),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:756, used:0.001s, actions:output
+in_port(3),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:756, used:0.001s, actions:output
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows type=ovs | grep "eth_type(0x0800)" | DUMP_CLEAN_SORTED], [0], [])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows type=tc,offloaded | grep "eth_type(0x0800)" | DUMP_CLEAN_SORTED], [0], [dnl
+in_port(2),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:756, used:0.001s, actions:output
+in_port(3),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:756, used:0.001s, actions:output
+])
+
+AT_CHECK([ovs-appctl upcall/show | grep -E "offloaded flows : [[1-9]]"], [0], [ignore])
+AT_CHECK([tc -d filter show dev ovs-p0 ingress | grep -q "skip_hw"])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([offloads - set ingress_policing_rate and ingress_policing_burst - offloads disabled])
 AT_KEYWORDS([ingress_policing])
 OVS_CHECK_TC_QDISC()
