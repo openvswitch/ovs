@@ -327,6 +327,7 @@ struct dp_netdev {
 
     struct seq *reconfigure_seq;
     uint64_t last_reconfigure_seq;
+    struct ovsthread_once once_set_config;
 
     /* Cpu mask for pin of pmd threads. */
     char *pmd_cmask;
@@ -1804,6 +1805,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
 
     dp->reconfigure_seq = seq_create();
     dp->last_reconfigure_seq = seq_read(dp->reconfigure_seq);
+    dp->once_set_config = (struct ovsthread_once) OVSTHREAD_ONCE_INITIALIZER;
 
     /* Init meter resources. */
     cmap_init(&dp->meters);
@@ -1943,6 +1945,7 @@ dp_netdev_free(struct dp_netdev *dp)
 
 
     seq_destroy(dp->reconfigure_seq);
+    ovsthread_once_destroy(&dp->once_set_config);
 
     seq_destroy(dp->port_seq);
     hmap_destroy(&dp->ports);
@@ -4394,7 +4397,6 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     uint32_t rebalance_load, rebalance_improve;
     bool log_autolb = false;
     enum sched_assignment_type pmd_rxq_assign_type;
-    static bool first_set_config = true;
 
     tx_flush_interval = smap_get_int(other_config, "tx-flush-interval",
                                      DEFAULT_TX_FLUSH_INTERVAL);
@@ -4543,16 +4545,17 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     set_pmd_auto_lb(dp, autolb_state, log_autolb);
 
     bool sleep_changed = set_all_pmd_max_sleeps(dp, other_config);
-    if (first_set_config || sleep_changed) {
+
+    if (ovsthread_once_start(&dp->once_set_config)) {
+        log_all_pmd_sleeps(dp);
+        dpif_offload_datapath_register_flow_unreference_cb(
+            dpif, offload_flow_reference_unreference_cb);
+
+        ovsthread_once_done(&dp->once_set_config);
+    } else if (sleep_changed) {
         log_all_pmd_sleeps(dp);
     }
 
-    if (first_set_config) {
-        dpif_offload_datapath_register_flow_unreference_cb(
-            dpif, offload_flow_reference_unreference_cb);
-    }
-
-    first_set_config = false;
     return 0;
 }
 
