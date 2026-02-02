@@ -70,6 +70,11 @@ BuildRequires: /usr/bin/sphinx-build-3
 BuildRequires: procps-ng
 %if %{with libcapng}
 BuildRequires: libcap-ng libcap-ng-devel
+Provides: user(openvswitch)
+Provides: group(openvswitch)
+%if %{with dpdk}
+Provides: group(hugetlbfs)
+%endif
 %endif
 %if %{with dpdk}
 BuildRequires: libpcap-devel numactl-devel
