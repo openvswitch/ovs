@@ -248,10 +248,13 @@ install -m 0644 vswitchd/vswitch.ovsschema \
         $RPM_BUILD_ROOT/%{_datadir}/openvswitch/vswitch.ovsschema
 
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/network-scripts/
+
+%if ! (0%{?rhel} >= 9 || 0%{?fedora} >= 41)
 install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifdown-ovs \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
 install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifup-ovs \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
+%endif
 
 install -d -m 0755 $RPM_BUILD_ROOT%{python3_sitelib}
 cp -a $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/* \
@@ -467,7 +470,7 @@ fi
 %{_unitdir}/ovs-vswitchd.service
 %{_unitdir}/ovs-delete-transient-ports.service
 %{_datadir}/openvswitch/scripts/openvswitch.init
-%if ! ((0%{?rhel} > 7 && 0%{?rhel} < 9) || (0%{?fedora} > 28 && 0%{?fedora} < 41))
+%if ! (0%{?rhel} > 7 || 0%{?fedora} > 28)
 %{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 %{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
 %endif
