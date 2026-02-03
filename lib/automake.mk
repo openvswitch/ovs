@@ -26,7 +26,7 @@ if HAVE_LD_AVX512_GOOD
 # compiler to use the ISA features required for the ISA optimized code-paths.
 # Use LDFLAGS to compile only static library of this code, as it should be
 # statically linked into vswitchd even if vswitchd is a shared build.
-lib_LTLIBRARIES += lib/libopenvswitchavx512.la
+noinst_LTLIBRARIES += lib/libopenvswitchavx512.la
 lib_libopenvswitch_la_LIBADD += lib/libopenvswitchavx512.la
 lib_libopenvswitchavx512_la_CFLAGS = \
 	-mavx512f \
