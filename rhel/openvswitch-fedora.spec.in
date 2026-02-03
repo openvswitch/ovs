@@ -16,10 +16,6 @@
 # and should not be used otherwise (these tests require root privileges).
 # These tests can be executed, for example, via:
 #    rpmbuild -rb --with check_datapath_kernel openvswitch-fedora.src.rpm
-#
-# These tests will use the currently installed OVS kernel modules.
-
-#%define kernel 2.6.40.4-5.fc15.x86_64
 
 # If libcap-ng isn't available and there is no need for running OVS
 # as regular user, specify the '--without libcapng'
@@ -90,8 +86,6 @@ BuildRequires: libbpf-devel systemtap-sdt-devel
 BuildRequires: unbound unbound-devel
 
 Requires: openssl hostname iproute module-init-tools unbound
-#Upstream kernel commit 4f647e0a3c37b8d5086214128614a136064110c3
-#Requires: kernel >= 3.15.0-0
 
 Requires(pre): shadow-utils
 Requires(post): /bin/sed
