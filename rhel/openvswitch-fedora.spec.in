@@ -418,7 +418,6 @@ fi
 %{_includedir}/openvswitch/*
 %{_includedir}/openflow/*
 %exclude %{_libdir}/*.la
-%exclude %{_libdir}/*.a
 
 %if 0%{?rhel} > 7 || (0%{?fedora} > 28 && 0%{?fedora} < 41)
 %files -n network-scripts-%{name}
