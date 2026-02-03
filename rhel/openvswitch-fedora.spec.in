@@ -255,6 +255,8 @@ install -p -D -m 0755 \
 
 # remove unpackaged files
 rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace
+# Remove .la files, if present (automatic with %__brp_remove_la_files on f36+).
+rm -f $RPM_BUILD_ROOT%{_libdir}/*.la
 
 %check
 %if %{with check}
@@ -414,7 +416,6 @@ fi
 %{_libdir}/pkgconfig/*.pc
 %{_includedir}/openvswitch/*
 %{_includedir}/openflow/*
-%exclude %{_libdir}/*.la
 
 %if (0%{?rhel} > 7 && 0%{?rhel} < 9) || (0%{?fedora} > 28 && 0%{?fedora} < 41)
 %files -n network-scripts-%{name}
