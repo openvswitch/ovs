@@ -153,7 +153,7 @@ License: ASL 2.0
 This provides shared library, libopenswitch.so and the openvswitch header
 files needed to build an external application.
 
-%if 0%{?rhel} > 7 || (0%{?fedora} > 28 && 0%{?fedora} < 41)
+%if (0%{?rhel} > 7 && 0%{?rhel} < 9) || (0%{?fedora} > 28 && 0%{?fedora} < 41)
 %package -n network-scripts-%{name}
 Summary: Open vSwitch legacy network service support
 License: ASL 2.0
@@ -440,7 +440,7 @@ fi
 %{_includedir}/openflow/*
 %exclude %{_libdir}/*.la
 
-%if 0%{?rhel} > 7 || (0%{?fedora} > 28 && 0%{?fedora} < 41)
+%if (0%{?rhel} > 7 && 0%{?rhel} < 9) || (0%{?fedora} > 28 && 0%{?fedora} < 41)
 %files -n network-scripts-%{name}
 %{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 %{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
@@ -467,7 +467,7 @@ fi
 %{_unitdir}/ovs-vswitchd.service
 %{_unitdir}/ovs-delete-transient-ports.service
 %{_datadir}/openvswitch/scripts/openvswitch.init
-%if ! (0%{?rhel} > 7 || (0%{?fedora} > 28 && 0%{?fedora} < 41))
+%if ! ((0%{?rhel} > 7 && 0%{?rhel} < 9) || (0%{?fedora} > 28 && 0%{?fedora} < 41))
 %{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 %{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
 %endif
