@@ -1270,7 +1270,7 @@ stream_ssl_set_protocols(const char *arg)
         {"TLSv1.2", TLS1_2_VERSION,      false},
         {"TLSv1.3", TLS1_3_VERSION,      false},
     };
-    char *dash = strchr(arg, '-');
+    const char *dash = strchr(arg, '-');
     bool or_later = false;
     int len = strlen(arg);
 
