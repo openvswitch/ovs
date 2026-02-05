@@ -428,7 +428,7 @@ parse_relay_args(const char *arg, char **name, char **remote)
 
     *remote = strchr(arg + relay_prefix_len, ':');
 
-    if (!*remote || (*remote)[0] == '\0') {
+    if (!*remote || (*remote)[1] == '\0') {
         *remote = NULL;
         return false;
     }
