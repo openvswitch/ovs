@@ -970,7 +970,7 @@ enlarge_buffer(char **buf, size_t *sizep)
 void
 daemon_set_new_user(const char *user_spec)
 {
-    char *pos = strchr(user_spec, ':');
+    const char *pos = strchr(user_spec, ':');
     size_t init_bufsize, bufsize;
 
     init_bufsize = get_sysconf_buffer_size();
@@ -1025,7 +1025,7 @@ daemon_set_new_user(const char *user_spec)
     free(buf);
 
     if (pos) {
-        char *grpstr = pos + 1;
+        const char *grpstr = pos + 1;
         grpstr += strspn(grpstr, " \t\r\n");
 
         if (*grpstr) {
