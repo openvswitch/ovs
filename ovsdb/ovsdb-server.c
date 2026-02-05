@@ -417,6 +417,7 @@ parse_relay_args(const char *arg, char **name, char **remote)
 {
     const char *relay_prefix = "relay:";
     const int relay_prefix_len = strlen(relay_prefix);
+    const char *second_colon;
     bool is_relay;
 
     is_relay = !strncmp(arg, relay_prefix, relay_prefix_len);
@@ -424,15 +425,15 @@ parse_relay_args(const char *arg, char **name, char **remote)
         return false;
     }
 
-    *remote = strchr(arg + relay_prefix_len, ':');
+    second_colon = strchr(arg + relay_prefix_len, ':');
 
-    if (!*remote || (*remote)[1] == '\0') {
+    if (!second_colon || second_colon[1] == '\0') {
         *remote = NULL;
         return false;
     }
     arg += relay_prefix_len;
-    *name = xmemdup0(arg, *remote - arg);
-    *remote = xstrdup(*remote + 1);
+    *name = xmemdup0(arg, second_colon - arg);
+    *remote = xstrdup(second_colon + 1);
     return true;
 }
 
