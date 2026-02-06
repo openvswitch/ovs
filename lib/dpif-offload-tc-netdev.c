@@ -668,8 +668,9 @@ parse_flower_rewrite_to_netlink_action(struct ofpbuf *buf,
     }
 }
 
-static void parse_tc_flower_geneve_opts(struct tc_action *action,
-                                        struct ofpbuf *buf)
+static void
+parse_tc_flower_geneve_opts(struct tc_action *action,
+                            struct ofpbuf *buf)
 {
     int tun_opt_len = action->encap.data.present.len;
     size_t geneve_off;
