@@ -38,7 +38,6 @@ AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
         "dev": "br0"}],
     "prefix": 32,
     "prefsrc": "2.2.2.2",
-    "priority": 128,
     "table": 255,
     "user": false},
   {
@@ -50,7 +49,6 @@ AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
         "dev": "br0"}],
     "prefix": 32,
     "prefsrc": "2.2.2.2",
-    "priority": 160,
     "table": 254,
     "user": true},
   {
@@ -61,7 +59,6 @@ AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
         "dev": "br0"}],
     "prefix": 24,
     "prefsrc": "2.2.2.2",
-    "priority": 120,
     "table": 254,
     "user": false},
   {
@@ -73,7 +70,6 @@ AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
         "gateway": "2.2.2.10"}],
     "prefix": 24,
     "prefsrc": "2.2.2.2",
-    "priority": 152,
     "table": 254,
     "user": true},
   {
@@ -86,7 +82,6 @@ AT_CHECK([ovs-appctl --format=json --pretty ovs/route/show], [0], [dnl
         "gateway": "2.2.2.10"}],
     "prefix": 24,
     "prefsrc": "2.2.2.2",
-    "priority": 152,
     "table": 254,
     "user": true}]]
 ])

@@ -691,7 +691,6 @@ ovs_router_show_json(struct json *json_routes, const struct classifier *cls,
         json_object_put(json, "user", json_boolean_create(rt->user));
         json_object_put(json, "local",
                         json_boolean_create(table == CLS_LOCAL && !rt->user));
-        json_object_put(json, "priority", json_integer_create(rt->priority));
         json_object_put(json, "prefix", json_integer_create(plen));
         json_object_put_string(nh, "dev", rt->output_netdev);
 
