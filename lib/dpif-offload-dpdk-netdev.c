@@ -2788,8 +2788,9 @@ dpdk_netdev_flow_del(struct dpdk_offload *offload, struct netdev *netdev,
     return dpdk_flow_destroy(offload, rte_flow_data, false, false);
 }
 
-int dpdk_netdev_offload_init(struct netdev *netdev,
-                             unsigned int offload_thread_count)
+int
+dpdk_netdev_offload_init(struct netdev *netdev,
+                         unsigned int offload_thread_count)
 {
     int ret = EOPNOTSUPP;
 

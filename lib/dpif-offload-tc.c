@@ -35,7 +35,6 @@ VLOG_DEFINE_THIS_MODULE(dpif_offload_tc);
 /* dpif offload interface for the tc implementation. */
 struct tc_offload {
     struct dpif_offload offload;
-    struct dpif_offload_port_mgr *port_mgr;
 
     /* Configuration specific variables. */
     struct ovsthread_once once_enable; /* Track first-time enablement. */
@@ -75,7 +74,7 @@ tc_offload_cast(const struct dpif_offload *offload)
 
 static int
 tc_offload_enable(struct dpif_offload *dpif_offload,
-                  struct dpif_offload_port_mgr_port *port)
+                  struct dpif_offload_port *port)
 {
     int ret = tc_netdev_init(port->netdev);
 
@@ -91,7 +90,7 @@ tc_offload_enable(struct dpif_offload *dpif_offload,
 
 static int
 tc_offload_cleanup(struct dpif_offload *dpif_offload OVS_UNUSED,
-                   struct dpif_offload_port_mgr_port *port)
+                   struct dpif_offload_port *port)
 {
     dpif_offload_set_netdev_offload(port->netdev, NULL);
     return 0;
@@ -101,11 +100,9 @@ static int
 tc_port_add(struct dpif_offload *dpif_offload, struct netdev *netdev,
             odp_port_t port_no)
 {
-    struct dpif_offload_port_mgr_port *port = xmalloc(sizeof *port);
-    struct tc_offload *offload = tc_offload_cast(dpif_offload);
+    struct dpif_offload_port *port = xmalloc(sizeof *port);
 
-    if (dpif_offload_port_mgr_add(offload->port_mgr, port, netdev, port_no,
-                                  true)) {
+    if (dpif_offload_port_mgr_add(dpif_offload, port, netdev, port_no, true)) {
         if (dpif_offload_enabled()) {
             return tc_offload_enable(dpif_offload, port);
         }
@@ -117,7 +114,7 @@ tc_port_add(struct dpif_offload *dpif_offload, struct netdev *netdev,
 }
 
 static void
-tc_free_port(struct dpif_offload_port_mgr_port *port)
+tc_free_port(struct dpif_offload_port *port)
 {
     netdev_close(port->netdev);
     free(port);
@@ -126,11 +123,10 @@ tc_free_port(struct dpif_offload_port_mgr_port *port)
 static int
 tc_port_del(struct dpif_offload *dpif_offload, odp_port_t port_no)
 {
-    struct tc_offload *offload = tc_offload_cast(dpif_offload);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
     int ret = 0;
 
-    port = dpif_offload_port_mgr_remove(offload->port_mgr, port_no);
+    port = dpif_offload_port_mgr_remove(dpif_offload, port_no);
     if (port) {
         if (dpif_offload_enabled()) {
             ret = tc_offload_cleanup(dpif_offload, port);
@@ -140,39 +136,12 @@ tc_port_del(struct dpif_offload *dpif_offload, odp_port_t port_no)
     return ret;
 }
 
-static int
-tc_port_dump_start(const struct dpif_offload *offload_, void **statep)
-{
-    struct tc_offload *offload = tc_offload_cast(offload_);
-
-    return dpif_offload_port_mgr_port_dump_start(offload->port_mgr, statep);
-}
-
-static int
-tc_port_dump_next(const struct dpif_offload *offload_, void *state,
-                  struct dpif_offload_port *port)
-{
-    struct tc_offload *offload = tc_offload_cast(offload_);
-
-    return dpif_offload_port_mgr_port_dump_next(offload->port_mgr, state,
-                                                port);
-}
-
-static int
-tc_port_dump_done(const struct dpif_offload *offload_, void *state)
-{
-    struct tc_offload *offload = tc_offload_cast(offload_);
-
-    return dpif_offload_port_mgr_port_dump_done(offload->port_mgr, state);
-}
-
 static struct netdev *
-tc_get_netdev(struct dpif_offload *dpif_offload, odp_port_t port_no)
+tc_get_netdev(const struct dpif_offload *dpif_offload, odp_port_t port_no)
 {
-    struct tc_offload *offload = tc_offload_cast(dpif_offload);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
 
-    port = dpif_offload_port_mgr_find_by_odp_port(offload->port_mgr, port_no);
+    port = dpif_offload_port_mgr_find_by_odp_port(dpif_offload, port_no);
     if (!port) {
         return NULL;
     }
@@ -187,7 +156,6 @@ tc_offload_open(const struct dpif_offload_class *offload_class,
     struct tc_offload *offload = xmalloc(sizeof *offload);
 
     dpif_offload_init(&offload->offload, offload_class, dpif);
-    offload->port_mgr = dpif_offload_port_mgr_init();
     offload->once_enable = (struct ovsthread_once) OVSTHREAD_ONCE_INITIALIZER;
     offload->recirc_id_shared = !!(dpif_get_features(dpif)
                                    & OVS_DP_F_TC_RECIRC_SHARING);
@@ -205,14 +173,14 @@ static void
 tc_offload_close(struct dpif_offload *dpif_offload)
 {
     struct tc_offload *offload = tc_offload_cast(dpif_offload);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
 
-    DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+    DPIF_OFFLOAD_PORT_FOR_EACH (port, dpif_offload) {
         tc_port_del(dpif_offload, port->port_no);
     }
 
-    dpif_offload_port_mgr_uninit(offload->port_mgr);
     ovsthread_once_destroy(&offload->once_enable);
+    dpif_offload_destroy(dpif_offload);
     free(offload);
 }
 
@@ -224,12 +192,12 @@ tc_offload_set_config(struct dpif_offload *offload_,
 
     if (smap_get_bool(other_cfg, "hw-offload", false)) {
         if (ovsthread_once_start(&offload->once_enable)) {
-            struct dpif_offload_port_mgr_port *port;
+            struct dpif_offload_port *port;
 
             tc_set_policy(smap_get_def(other_cfg, "tc-policy",
                                        TC_POLICY_DEFAULT));
 
-            DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+            DPIF_OFFLOAD_PORT_FOR_EACH (port, offload_) {
                 tc_offload_enable(offload_, port);
             }
 
@@ -239,16 +207,14 @@ tc_offload_set_config(struct dpif_offload *offload_,
 }
 
 static void
-tc_offload_get_debug(const struct dpif_offload *offload_, struct ds *ds,
+tc_offload_get_debug(const struct dpif_offload *offload, struct ds *ds,
                      struct json *json)
 {
-    struct tc_offload *offload = tc_offload_cast(offload_);
-
     if (json) {
         struct json *json_ports = json_object_create();
-        struct dpif_offload_port_mgr_port *port;
+        struct dpif_offload_port *port;
 
-        DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+        DPIF_OFFLOAD_PORT_FOR_EACH (port, offload) {
             struct json *json_port = json_object_create();
 
             json_object_put(json_port, "port_no",
@@ -266,9 +232,9 @@ tc_offload_get_debug(const struct dpif_offload *offload_, struct ds *ds,
             json_destroy(json_ports);
         }
     } else if (ds) {
-        struct dpif_offload_port_mgr_port *port;
+        struct dpif_offload_port *port;
 
-        DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+        DPIF_OFFLOAD_PORT_FOR_EACH (port, offload) {
             ds_put_format(ds, "  - %s: port_no: %u, ifindex: %d\n",
                           netdev_get_name(port->netdev),
                           port->port_no, port->ifindex);
@@ -290,13 +256,12 @@ tc_can_offload(struct dpif_offload *dpif_offload OVS_UNUSED,
 }
 
 static int
-tc_flow_flush(const struct dpif_offload *offload_)
+tc_flow_flush(const struct dpif_offload *offload)
 {
-    struct tc_offload *offload = tc_offload_cast(offload_);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
     int error = 0;
 
-    DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+    DPIF_OFFLOAD_PORT_FOR_EACH (port, offload) {
         int rc = tc_netdev_flow_flush(port->netdev);
 
         if (rc && !error) {
@@ -320,22 +285,21 @@ tc_flow_dump_thread_cast(
 }
 
 static struct dpif_offload_flow_dump *
-tc_flow_dump_create(const struct dpif_offload *offload_, bool terse)
+tc_flow_dump_create(const struct dpif_offload *offload, bool terse)
 {
-    struct tc_offload *offload = tc_offload_cast(offload_);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
     size_t added_port_count = 0;
     struct tc_flow_dump *dump;
     size_t port_count;
 
-    port_count = dpif_offload_port_mgr_port_count(offload->port_mgr);
+    port_count = dpif_offload_port_mgr_port_count(offload);
 
     dump = xmalloc(sizeof *dump +
                    (port_count * sizeof(struct netdev_tc_flow_dump)));
 
-    dpif_offload_flow_dump_init(&dump->dump, offload_, terse);
+    dpif_offload_flow_dump_init(&dump->dump, offload, terse);
 
-    DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+    DPIF_OFFLOAD_PORT_FOR_EACH (port, offload) {
         if (added_port_count >= port_count) {
             break;
         }
@@ -526,7 +490,7 @@ tc_parse_flow_put(struct tc_offload *offload_tc, struct dpif *dpif,
                   struct dpif_flow_put *put)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
     const struct nlattr *nla;
     struct tc_offload_info info;
     struct match match;
@@ -548,7 +512,7 @@ tc_parse_flow_put(struct tc_offload *offload_tc, struct dpif *dpif,
     }
 
     in_port = match.flow.in_port.odp_port;
-    port = dpif_offload_port_mgr_find_by_odp_port(offload_tc->port_mgr,
+    port = dpif_offload_port_mgr_find_by_odp_port(&offload_tc->offload,
                                                   in_port);
     if (!port) {
         return EOPNOTSUPP;
@@ -557,12 +521,12 @@ tc_parse_flow_put(struct tc_offload *offload_tc, struct dpif *dpif,
     /* Check the output port for a tunnel. */
     NL_ATTR_FOR_EACH (nla, left, put->actions, put->actions_len) {
         if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
-            struct dpif_offload_port_mgr_port *mgr_port;
+            struct dpif_offload_port *mgr_port;
             odp_port_t out_port;
 
             out_port = nl_attr_get_odp_port(nla);
             mgr_port = dpif_offload_port_mgr_find_by_odp_port(
-                offload_tc->port_mgr, out_port);
+                                &offload_tc->offload, out_port);
 
             if (!mgr_port) {
                 err = EOPNOTSUPP;
@@ -650,8 +614,8 @@ out:
 static int
 tc_parse_flow_get(struct tc_offload *offload_tc, struct dpif_flow_get *get)
 {
-    struct dpif_offload_port_mgr_port *port;
     struct dpif_flow *dpif_flow = get->flow;
+    struct dpif_offload_port *port;
     struct odputil_keybuf maskbuf;
     struct odputil_keybuf keybuf;
     struct odputil_keybuf actbuf;
@@ -666,7 +630,7 @@ tc_parse_flow_get(struct tc_offload *offload_tc, struct dpif_flow_get *get)
 
     ofpbuf_use_stack(&buf, &act_buf, sizeof act_buf);
 
-    DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload_tc->port_mgr) {
+    DPIF_OFFLOAD_PORT_FOR_EACH (port, &offload_tc->offload) {
         if (!tc_netdev_flow_get(port->netdev, &match, &actions, get->ufid,
                                 &stats, &attrs, &buf)) {
             err = 0;
@@ -751,12 +715,11 @@ tc_operate(struct dpif *dpif, const struct dpif_offload *offload_,
 }
 
 odp_port_t
-tc_get_port_id_by_ifindex(const struct dpif_offload *offload_, int ifindex)
+tc_get_port_id_by_ifindex(const struct dpif_offload *offload, int ifindex)
 {
-    struct tc_offload *offload = tc_offload_cast(offload_);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
 
-    port = dpif_offload_port_mgr_find_by_ifindex(offload->port_mgr, ifindex);
+    port = dpif_offload_port_mgr_find_by_ifindex(offload, ifindex);
     if (port) {
         return port->port_no;
     }
@@ -774,9 +737,6 @@ struct dpif_offload_class dpif_offload_tc_class = {
     .can_offload = tc_can_offload,
     .port_add = tc_port_add,
     .port_del = tc_port_del,
-    .port_dump_start = tc_port_dump_start,
-    .port_dump_next = tc_port_dump_next,
-    .port_dump_done = tc_port_dump_done,
     .flow_flush = tc_flow_flush,
     .flow_dump_create = tc_flow_dump_create,
     .flow_dump_next = tc_flow_dump_next,

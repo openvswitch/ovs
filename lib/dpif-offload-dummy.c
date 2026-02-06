@@ -51,7 +51,6 @@ struct dummy_offloaded_flow {
 
 struct dummy_offload {
     struct dpif_offload offload;
-    struct dpif_offload_port_mgr *port_mgr;
     struct id_fpool *flow_mark_pool;
     dpif_offload_flow_unreference_cb *unreference_cb;
 
@@ -60,7 +59,7 @@ struct dummy_offload {
 };
 
 struct dummy_offload_port {
-    struct dpif_offload_port_mgr_port pm_port;
+    struct dpif_offload_port pm_port;
 
     struct ovs_mutex port_mutex; /* Protect all below members. */
     struct hmap offloaded_flows OVS_GUARDED;
@@ -97,7 +96,7 @@ dummy_free_flow_mark(struct dummy_offload *offload, uint32_t flow_mark)
 }
 
 static struct dummy_offload_port *
-dummy_offload_port_cast(struct dpif_offload_port_mgr_port *port)
+dummy_offload_port_cast(struct dpif_offload_port *port)
 {
     return CONTAINER_OF(port, struct dummy_offload_port, pm_port);
 }
@@ -271,7 +270,7 @@ dummy_find_offloaded_flow_and_update(struct dummy_offload_port *port,
 
 static void
 dummy_offload_enable(struct dpif_offload *dpif_offload,
-                     struct dpif_offload_port_mgr_port *port)
+                     struct dpif_offload_port *port)
 {
     atomic_store_relaxed(&port->netdev->hw_info.post_process_api_supported,
                          true);
@@ -279,7 +278,7 @@ dummy_offload_enable(struct dpif_offload *dpif_offload,
 }
 
 static void
-dummy_offload_cleanup(struct dpif_offload_port_mgr_port *port)
+dummy_offload_cleanup(struct dpif_offload_port *port)
 {
     dpif_offload_set_netdev_offload(port->netdev, NULL);
 }
@@ -338,8 +337,8 @@ dummy_offload_port_add(struct dpif_offload *dpif_offload,
     hmap_init(&port->offloaded_flows);
     ovs_mutex_unlock(&port->port_mutex);
 
-    if (dpif_offload_port_mgr_add(offload->port_mgr, &port->pm_port,
-                                  netdev, port_no, false)) {
+    if (dpif_offload_port_mgr_add(dpif_offload, &port->pm_port, netdev,
+                                  port_no, false)) {
 
         if (dpif_offload_enabled()) {
             dummy_offload_enable(dpif_offload, &port->pm_port);
@@ -355,9 +354,9 @@ static int
 dummy_offload_port_del(struct dpif_offload *dpif_offload, odp_port_t port_no)
 {
     struct dummy_offload *offload = dummy_offload_cast(dpif_offload);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
 
-    port = dpif_offload_port_mgr_remove(offload->port_mgr, port_no);
+    port = dpif_offload_port_mgr_remove(dpif_offload, port_no);
     if (port) {
         struct dummy_offload_port *dummy_port;
 
@@ -370,40 +369,13 @@ dummy_offload_port_del(struct dpif_offload *dpif_offload, odp_port_t port_no)
     return 0;
 }
 
-static int
-dummy_offload_port_dump_start(const struct dpif_offload *offload_,
-                              void **statep)
-{
-    struct dummy_offload *offload = dummy_offload_cast(offload_);
-
-    return dpif_offload_port_mgr_port_dump_start(offload->port_mgr, statep);
-}
-
-static int
-dummy_offload_port_dump_next(const struct dpif_offload *offload_, void *state,
-                             struct dpif_offload_port *port)
-{
-    struct dummy_offload *offload = dummy_offload_cast(offload_);
-
-    return dpif_offload_port_mgr_port_dump_next(offload->port_mgr, state,
-                                                port);
-}
-
-static int
-dummy_offload_port_dump_done(const struct dpif_offload *offload_, void *state)
-{
-    struct dummy_offload *offload = dummy_offload_cast(offload_);
-
-    return dpif_offload_port_mgr_port_dump_done(offload->port_mgr, state);
-}
-
 static struct netdev *
-dummy_offload_get_netdev(struct dpif_offload *dpif_offload, odp_port_t port_no)
+dummy_offload_get_netdev(const struct dpif_offload *dpif_offload,
+                         odp_port_t port_no)
 {
-    struct dummy_offload *offload = dummy_offload_cast(dpif_offload);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
 
-    port = dpif_offload_port_mgr_find_by_odp_port(offload->port_mgr, port_no);
+    port = dpif_offload_port_mgr_find_by_odp_port(dpif_offload, port_no);
     if (!port) {
         return NULL;
     }
@@ -420,7 +392,6 @@ dummy_offload_open(const struct dpif_offload_class *offload_class,
     offload = xmalloc(sizeof *offload);
 
     dpif_offload_init(&offload->offload, offload_class, dpif);
-    offload->port_mgr = dpif_offload_port_mgr_init();
     offload->once_enable = (struct ovsthread_once) OVSTHREAD_ONCE_INITIALIZER;
     offload->flow_mark_pool = NULL;
     offload->unreference_cb = NULL;
@@ -433,19 +404,19 @@ static void
 dummy_offload_close(struct dpif_offload *dpif_offload)
 {
     struct dummy_offload *offload = dummy_offload_cast(dpif_offload);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
 
     /* The ofproto layer may not call dpif_port_del() for all ports,
      * especially internal ones, so we need to clean up any remaining ports. */
-    DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+    DPIF_OFFLOAD_PORT_FOR_EACH (port, dpif_offload) {
         dummy_offload_port_del(dpif_offload, port->port_no);
     }
 
-    dpif_offload_port_mgr_uninit(offload->port_mgr);
     if (offload->flow_mark_pool) {
         id_fpool_destroy(offload->flow_mark_pool);
     }
     ovsthread_once_destroy(&offload->once_enable);
+    dpif_offload_destroy(dpif_offload);
     free(offload);
 }
 
@@ -457,9 +428,9 @@ dummy_offload_set_config(struct dpif_offload *dpif_offload,
 
     if (smap_get_bool(other_cfg, "hw-offload", false)) {
         if (ovsthread_once_start(&offload->once_enable)) {
-            struct dpif_offload_port_mgr_port *port;
+            struct dpif_offload_port *port;
 
-            DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+            DPIF_OFFLOAD_PORT_FOR_EACH (port, dpif_offload) {
                 dummy_offload_enable(dpif_offload, port);
             }
 
@@ -469,16 +440,14 @@ dummy_offload_set_config(struct dpif_offload *dpif_offload,
 }
 
 static void
-dummy_offload_get_debug(const struct dpif_offload *offload_, struct ds *ds,
+dummy_offload_get_debug(const struct dpif_offload *offload, struct ds *ds,
                         struct json *json)
 {
-    struct dummy_offload *offload = dummy_offload_cast(offload_);
-
     if (json) {
         struct json *json_ports = json_object_create();
-        struct dpif_offload_port_mgr_port *port;
+        struct dpif_offload_port *port;
 
-        DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+        DPIF_OFFLOAD_PORT_FOR_EACH (port, offload) {
             struct json *json_port = json_object_create();
 
             json_object_put(json_port, "port_no",
@@ -494,9 +463,9 @@ dummy_offload_get_debug(const struct dpif_offload *offload_, struct ds *ds,
             json_destroy(json_ports);
         }
     } else if (ds) {
-        struct dpif_offload_port_mgr_port *port;
+        struct dpif_offload_port *port;
 
-        DPIF_OFFLOAD_PORT_MGR_PORT_FOR_EACH (port, offload->port_mgr) {
+        DPIF_OFFLOAD_PORT_FOR_EACH (port, offload) {
             ds_put_format(ds, "  - %s: port_no: %u\n",
                           netdev_get_name(port->netdev), port->port_no);
         }
@@ -504,17 +473,14 @@ dummy_offload_get_debug(const struct dpif_offload *offload_, struct ds *ds,
 }
 
 static int
-dummy_offload_get_global_stats(const struct dpif_offload *offload_,
+dummy_offload_get_global_stats(const struct dpif_offload *offload,
                                struct netdev_custom_stats *stats)
 {
-    struct dummy_offload *offload = dummy_offload_cast(offload_);
-
     /* Add a single counter telling how many ports we are servicing. */
-    stats->label = xstrdup(dpif_offload_name(offload_));
+    stats->label = xstrdup(dpif_offload_name(offload));
     stats->size = 1;
     stats->counters = xmalloc(sizeof(struct netdev_custom_counter) * 1);
-    stats->counters[0].value = dpif_offload_port_mgr_port_count(
-        offload->port_mgr);
+    stats->counters[0].value = dpif_offload_port_mgr_port_count(offload);
     ovs_strzcpy(stats->counters[0].name, "Offloaded port count",
                 sizeof stats->counters[0].name);
 
@@ -537,13 +503,12 @@ dummy_offload_log_operation(const char *op, int error, const ovs_u128 *ufid)
 }
 
 static struct dummy_offload_port *
-dummy_offload_get_port_by_netdev(const struct dpif_offload *offload_,
+dummy_offload_get_port_by_netdev(const struct dpif_offload *offload,
                                  struct netdev *netdev)
 {
-    struct dummy_offload *offload = dummy_offload_cast(offload_);
-    struct dpif_offload_port_mgr_port *port;
+    struct dpif_offload_port *port;
 
-    port = dpif_offload_port_mgr_find_by_netdev(offload->port_mgr, netdev);
+    port = dpif_offload_port_mgr_find_by_netdev(offload, netdev);
     if (!port) {
         return NULL;
     }
@@ -832,9 +797,6 @@ dummy_netdev_simulate_offload(struct netdev *netdev, struct dp_packet *packet,
         .can_offload = dummy_can_offload,                                   \
         .port_add = dummy_offload_port_add,                                 \
         .port_del = dummy_offload_port_del,                                 \
-        .port_dump_start = dummy_offload_port_dump_start,                   \
-        .port_dump_next = dummy_offload_port_dump_next,                     \
-        .port_dump_done = dummy_offload_port_dump_done,                     \
         .get_netdev = dummy_offload_get_netdev,                             \
         .netdev_hw_post_process = dummy_offload_hw_post_process,            \
         .netdev_flow_put = dummy_flow_put,                                  \
