@@ -6470,6 +6470,45 @@ AT_CHECK([tail -1 stdout | grep -E "trunc\(200\),2,trunc\(300\),3,100|trunc\(300
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - mirroring on balance-tcp bonding with dp_hash])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 bond_mode=balance-tcp lacp=active \
+       other-config:lacp-time=fast other-config:bond-rebalance-interval=0 -- \
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
+   set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+       fail-mode=standalone -- \
+   add-bond br1 bond1 p3 p4 bond_mode=balance-tcp lacp=active \
+       other-config:lacp-time=fast other-config:bond-rebalance-interval=0 -- \
+   set interface p3 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=3 -- \
+   set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=4
+])
+
+# Waits for all ifaces enabled.
+OVS_WAIT_UNTIL([test $(ovs-appctl bond/show | grep -c "may_enable: true") -ge 4])
+
+add_of_ports br1 5 6
+AT_CHECK([ovs-vsctl \
+            set Bridge br1 mirrors=@m --\
+            --id=@bond1 get Port bond1 -- --id=@p6 get Port p6 --\
+            --id=@m create Mirror name=mymirror \
+                select_dst_port=@bond1 select_src_port=@bond1 output_port=@p6],
+          [0], [ignore])
+
+# Sends a packet to trigger recirculation.
+AT_CHECK([ovs-appctl netdev-dummy/receive p5 \
+    "in_port(5),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1)"])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows --names | grep 'in_port(p5)' | \
+          sed 's/.*actions://' | grep -c p6 | tr -d '\n'], [0], [1])
+
+OVS_VSWITCHD_STOP()
+AT_CLEANUP
+
+
 # This test verifies that the table ID is preserved across recirculation
 # when a resubmit action requires it (because the action is relative to
 # the current table rather than specifying a table).
