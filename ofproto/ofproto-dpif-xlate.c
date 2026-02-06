@@ -4385,6 +4385,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     struct eth_addr flow_dl_src = flow->dl_src;
     ovs_be32 flow_packet_type = flow->packet_type;
     ovs_be16 flow_dl_type = flow->dl_type;
+    bool skip_mirrors = false;
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
@@ -4503,6 +4504,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             /* Recirc action. */
             nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC,
                            xr->recirc_id);
+
+            /* Recirculation does not send the packet anywhere, so it
+             * should not trigger mirroring. */
+            skip_mirrors = true;
         } else if (is_native_tunnel) {
             /* Output to native tunnel port. */
             native_tunnel_output(ctx, xport, flow, odp_port, truncate,
@@ -4545,7 +4550,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         ctx->nf_output_iface = ofp_port;
     }
 
-    if (mbridge_has_mirrors(ctx->xbridge->mbridge) && xport->xbundle) {
+    if (!skip_mirrors && mbridge_has_mirrors(ctx->xbridge->mbridge)
+        && xport->xbundle) {
         mirror_packet(ctx, xport->xbundle,
                       xbundle_mirror_dst(xport->xbundle->xbridge,
                                          xport->xbundle));
