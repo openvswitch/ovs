@@ -543,7 +543,6 @@ ovs_router_show_json(struct json **routes)
 
         json_object_put(json, "user", json_boolean_create(user));
         json_object_put(json, "local", json_boolean_create(rt->local));
-        json_object_put(json, "priority", json_integer_create(rt->priority));
         json_object_put(json, "prefix", json_integer_create(plen));
         json_object_put_string(nh, "dev", rt->output_netdev);
 
