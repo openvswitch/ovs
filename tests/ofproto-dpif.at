@@ -10590,6 +10590,45 @@ recirc_id(0),in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - bond rebalance interval reconfiguration])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-appctl time/stop])
+AT_CHECK([ovs-vsctl add-bond br0 bond0 p1 p2 bond_mode=balance-slb \
+          other-config:bond-rebalance-interval=60000 -- \
+          set interface p1 type=dummy ofport_request=1 -- \
+          set interface p2 type=dummy ofport_request=2])
+
+# TEST_NEXT_REBALANCE([num])
+# Test the next rebalance value is equal to a number.
+m4_define([TEST_NEXT_REBALANCE_EQ], [
+  AT_CHECK([ovs-appctl bond/show bond0 | grep 'next rebalance:'], [0], [stdout])
+  AT_CHECK([cat stdout], [0], [next rebalance: $1 ms
+])])
+
+
+TEST_NEXT_REBALANCE_EQ([60000])
+AT_CHECK([ovs-appctl time/warp 50000], [0], [ignore])
+TEST_NEXT_REBALANCE_EQ([10000])
+
+# Decreasing the rebalance interval to something lower than the
+# already-consumed interval should make the next rebalance value negative,
+# i.e: balance will happen ASAP.
+AT_CHECK([ovs-vsctl set Port bond0 other-config:bond-rebalance-interval=10000])
+TEST_NEXT_REBALANCE_EQ([-40000])
+AT_CHECK([ovs-appctl time/warp 1], [0], [ignore])
+TEST_NEXT_REBALANCE_EQ([10000])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+TEST_NEXT_REBALANCE_EQ([5000])
+
+# Increasing the rebalance interval should offset the already consumed
+# interval.
+AT_CHECK([ovs-vsctl set Port bond0 other-config:bond-rebalance-interval=60000])
+TEST_NEXT_REBALANCE_EQ([55000])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif megaflow - resubmit port action])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
