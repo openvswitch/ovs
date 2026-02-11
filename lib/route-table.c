@@ -190,7 +190,7 @@ route_table_wait(void)
 }
 
 bool
-route_table_dump_one_table(uint32_t id,
+route_table_dump_one_table(uint32_t id, sa_family_t family,
                            route_table_handle_msg_callback *handle_msg_cb,
                            void *aux)
 {
@@ -205,7 +205,7 @@ route_table_dump_one_table(uint32_t id,
     nl_msg_put_nlmsghdr(&request, sizeof *rq_msg, RTM_GETROUTE, NLM_F_REQUEST);
 
     rq_msg = ofpbuf_put_zeros(&request, sizeof *rq_msg);
-    rq_msg->rtm_family = AF_UNSPEC;
+    rq_msg->rtm_family = family;
 
     if (id > UCHAR_MAX) {
         rq_msg->rtm_table = RT_TABLE_UNSPEC;
@@ -285,9 +285,10 @@ rule_handle_msg(const struct route_table_msg *change)
 {
     if (change->relevant) {
         const struct rule_data *rd = &change->rud;
+        sa_family_t family = rd->ipv4 ? AF_INET : AF_INET6;
 
-        route_table_dump_one_table(rd->lookup_table, route_table_handle_msg,
-                                   NULL);
+        route_table_dump_one_table(rd->lookup_table, family,
+                                   route_table_handle_msg, NULL);
         ovs_router_rule_add(rd->prio, rd->invert, false, rd->src_len,
                             &rd->from_addr, rd->lookup_table, rd->ipv4);
     }
