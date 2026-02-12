@@ -108,7 +108,7 @@ BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv6, ipv6_tclass) +
                   offsetof(struct ovs_key_ipv6, ipv6_hlimit));
 
 /* Array of callback functions, one for each masked operation. */
-odp_execute_action_cb impl_set_masked_funcs[__OVS_KEY_ATTR_MAX];
+static odp_execute_action_cb impl_set_masked_funcs[__OVS_KEY_ATTR_MAX];
 
 static inline void ALWAYS_INLINE
 avx512_dp_packet_resize_l2(struct dp_packet *b, int resize_by_bytes)

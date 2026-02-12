@@ -621,7 +621,7 @@ AC_DEFUN([_OVS_CHECK_CC_OPTION], [dnl
      dnl instead of testing for -Wno-<foo>, test for the positive version.
      CFLAGS="$CFLAGS $WERROR m4_bpatsubst([$1], [-Wno-], [-W])"
      AC_COMPILE_IFELSE(
-       [AC_LANG_SOURCE([int x;])],
+       [AC_LANG_SOURCE([extern int x; int x;])],
        [if test -s conftest.err && grep "unrecognized option" conftest.err
         then
           ovs_cv_name[]=no
