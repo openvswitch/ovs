@@ -190,7 +190,6 @@ exit 0
 /usr/bin/ovs-dpctl-top
 /usr/bin/ovs-docker
 /usr/bin/ovs-ofctl
-/usr/bin/ovs-parse-backtrace
 /usr/bin/ovs-pcap
 /usr/bin/ovs-pki
 /usr/bin/ovs-tcpdump
@@ -226,7 +225,6 @@ exit 0
 /usr/share/man/man8/ovs-flowviz.8.gz
 /usr/share/man/man8/ovs-kmod-ctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
-/usr/share/man/man8/ovs-parse-backtrace.8.gz
 /usr/share/man/man8/ovs-pki.8.gz
 /usr/share/man/man8/ovs-tcpdump.8.gz
 /usr/share/man/man8/ovs-vlan-test.8.gz

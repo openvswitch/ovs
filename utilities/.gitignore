@@ -19,7 +19,6 @@
 /ovs-lib
 /ovs-ofctl
 /ovs-ofctl.8
-/ovs-parse-backtrace
 /ovs-pcap
 /ovs-pcap.1
 /ovs-pki

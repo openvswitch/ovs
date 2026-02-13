@@ -272,8 +272,6 @@ install -p -D -m 0755 \
         rhel/usr_share_openvswitch_scripts_ovs-systemd-reload \
         $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovs-systemd-reload
 
-# remove unpackaged files
-rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace
 # Remove .la files, if present (automatic with %__brp_remove_la_files on f36+).
 rm -f $RPM_BUILD_ROOT%{_libdir}/*.la
 
@@ -519,7 +517,6 @@ fi
 %{_mandir}/man8/ovs-pki.8*
 %{_mandir}/man8/ovs-vsctl.8*
 %{_mandir}/man8/ovs-vswitchd.8*
-%{_mandir}/man8/ovs-parse-backtrace.8*
 %{_mandir}/man8/ovs-testcontroller.8*
 %if %{with dpdk}
 %{_prefix}/lib/udev/rules.d/91-vfio.rules

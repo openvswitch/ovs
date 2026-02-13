@@ -3,7 +3,6 @@ usr/bin/ovs-appctl
 usr/bin/ovs-docker
 usr/bin/ovs-flowviz
 usr/bin/ovs-ofctl
-usr/bin/ovs-parse-backtrace
 usr/bin/ovs-pki
 usr/bin/ovsdb-client
 usr/bin/ovsdb-tool
@@ -23,7 +22,6 @@ usr/share/man/man8/ovs-appctl.8
 usr/share/man/man8/ovs-bugtool.8
 usr/share/man/man8/ovs-flowviz.8
 usr/share/man/man8/ovs-ofctl.8
-usr/share/man/man8/ovs-parse-backtrace.8
 usr/share/man/man8/ovs-pki.8
 usr/share/openvswitch/bugtool-plugins
 usr/share/openvswitch/scripts/ovs-bugtool-*

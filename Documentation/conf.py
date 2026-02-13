@@ -134,8 +134,6 @@ _man_pages = [
      u'utility for visualizing OpenFlow and datapath flows'),
     ('ovs-l3ping.8',
      u'check network deployment for L3 tunneling problems'),
-    ('ovs-parse-backtrace.8',
-     u'parses ovs-appctl backtrace output'),
     ('ovs-pki.8',
      u'OpenFlow public key infrastructure management utility'),
     ('ovs-sim.1',

@@ -46,7 +46,6 @@ time:
    ovs-l3ping.8
    ovs-pki.8
    ovs-sim.1
-   ovs-parse-backtrace.8
    ovs-tcpdump.8
    ovs-tcpundump.1
    ovs-test.8
