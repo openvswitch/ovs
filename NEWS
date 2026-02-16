@@ -2,7 +2,7 @@ Post-v3.7.0
 --------------------
 
 
-v3.7.0 - xx xxx xxxx
+v3.7.0 - 16 Feb 2026
 --------------------
    - AF_XDP:
      * AF_XDP support now requires Linux kernel v5.4+ or a nominally older
