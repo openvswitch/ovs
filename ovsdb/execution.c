@@ -357,8 +357,10 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         if (!ovsdb_txn_may_create_row(table, &row_uuid)) {
             return ovsdb_syntax_error(uuid_json, "duplicate uuid",
                                       "This UUID would duplicate a UUID "
-                                      "already present within the table or "
-                                      "deleted within the same transaction.");
+                                      "already present within the \"%s\" "
+                                      "table or deleted from this table "
+                                      "within the same transaction.",
+                                      table->schema->name);
         }
     }
 

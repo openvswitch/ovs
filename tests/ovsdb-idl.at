@@ -2874,7 +2874,7 @@ OVSDB_CHECK_IDL_PERS_UUID_INSERT([simple idl, persistent uuid insert],
 010: table simple: i=5 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df2222
 011: done
 ]],
-  [['This UUID would duplicate a UUID already present within the table or deleted within the same transaction']])
+  [['This UUID would duplicate a UUID already present within the \\"simple\\" table or deleted from this table within the same transaction.']])
 
 OVSDB_CHECK_IDL_PERS_UUID_INSERT([simple idl, persistent uuid insert uref],
   [['insert_uuid_uref d7f2845f-2e8d-46a9-8330-f6d0b7d2ca36 689420a0-515b-4c0f-8eba-7ad59a344b54']],
