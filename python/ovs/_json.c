@@ -78,7 +78,7 @@ Parser_is_done(json_ParserObject * self)
 }
 
 static PyObject *
-json_to_python(struct json *json)
+json_to_python(const struct json *json)
 {
     switch (json->type) {
     case JSON_NULL:
