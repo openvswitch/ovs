@@ -343,18 +343,15 @@ on_exit 'ip link del p1-route'
 AT_CHECK([ip tuntap add name p1-route mode tap])
 AT_CHECK([ip link set p1-route up])
 
-dnl Check there are no non-standard rules cached in OVS.
-AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
-Cached: 0: from all lookup local
-Cached: 32766: from all lookup main
-Cached: 32767: from all lookup default
-])
-AT_CHECK([ovs-appctl ovs/route/rule/show -6], [0], [dnl
-Cached: 0: from all lookup local
-Cached: 32766: from all lookup main
-])
+dnl Capture initial cache state before adding any rules.
+AT_CHECK([ovs-appctl ovs/route/rule/show | sort], [0], [stdout])
+AT_CHECK([mv stdout initial_v4])
+AT_CHECK([ovs-appctl ovs/route/rule/show -6 | sort], [0], [stdout])
+AT_CHECK([mv stdout initial_v6])
 
-dnl Add unsupported rules to kernel.
+dnl Add various unsupported rules.  These rules use selectors that OVS doesn't
+dnl support (fwmark, dport, sport, tun_id, iif, ipproto), so they should not
+dnl be cached by OVS even though the kernel accepts them.
 on_exit 'ip rule del priority 100 fwmark 0x16 lookup 42'
 AT_CHECK([ip rule add priority 100 fwmark 0x16 lookup 42])
 on_exit 'ip rule del priority 101 from 10.0.0.1 dport 22 lookup 42'
@@ -372,16 +369,17 @@ AT_CHECK([ip rule add priority 106 from all tun_id 22 lookup 42])
 
 dnl Give the main thread a chance to act.
 AT_CHECK([ovs-appctl revalidator/wait])
-dnl Check OVS rules cache hasn't changed.
-AT_CHECK([ovs-appctl ovs/route/rule/show], [0], [dnl
-Cached: 0: from all lookup local
-Cached: 32766: from all lookup main
-Cached: 32767: from all lookup default
-])
-AT_CHECK([ovs-appctl ovs/route/rule/show -6], [0], [dnl
-Cached: 0: from all lookup local
-Cached: 32766: from all lookup main
-])
+
+dnl Capture final cache state and verify it has not changed.
+AT_CHECK([ovs-appctl ovs/route/rule/show | sort], [0], [stdout])
+AT_CHECK([mv stdout final_v4])
+AT_CHECK([ovs-appctl ovs/route/rule/show -6 | sort], [0], [stdout])
+AT_CHECK([mv stdout final_v6])
+
+dnl Compare initial and final states, they should be identical since
+dnl unsupported rules should not be cached.
+AT_CHECK([diff -u initial_v4 final_v4])
+AT_CHECK([diff -u initial_v6 final_v6])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
