@@ -962,6 +962,9 @@ netdev_linux_common_construct(struct netdev *netdev_)
                      name);
         return EINVAL;
     }
+    if (strlen(name) >= IFNAMSIZ) {
+        return ENAMETOOLONG;
+    }
 
     /* The device could be in the same network namespace or in another one. */
     netnsid_unset(&netdev->netnsid);

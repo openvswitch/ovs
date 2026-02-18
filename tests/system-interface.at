@@ -221,3 +221,13 @@ half
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([interface - name too long])
+
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-vsctl -- _ADD_BR([a234567890b23456])], [65], [ignore], [stderr])
+AT_CHECK([grep 'name too long' stderr], [0], [ignore])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["/could not open network device.*name too long/d"])
+AT_CLEANUP
