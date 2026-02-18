@@ -93,8 +93,6 @@ EXTRA_DIST = \
 	boot.sh \
 	$(MAN_FRAGMENTS) \
 	$(MAN_ROOTS) \
-	Vagrantfile \
-	Vagrantfile-FreeBSD \
 	.mailmap
 bin_PROGRAMS =
 sbin_PROGRAMS =

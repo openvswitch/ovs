@@ -16,7 +16,6 @@
 *.lib
 *.pdb
 *.pyc
-*.retry
 *.so
 *.suo
 **/*.sym
@@ -30,7 +29,6 @@
 .dirstamp
 .libs
 .tmp_versions
-.vagrant
 /Makefile
 /Makefile.in
 /aclocal.m4
@@ -71,7 +69,6 @@ _dpdk
 odp-netlink.h
 odp-netlink-macros.h
 OvsDpInterface.h
-/.vagrant/
 testsuite.tmp.orig
 /rpm/
 /openvswitch*.tar.gz
