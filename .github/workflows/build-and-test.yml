@@ -684,7 +684,7 @@ jobs:
         dnf install -y rpm-build dnf-plugins-core
         sed -e 's/@VERSION@/0.0.1/' rhel/openvswitch-fedora.spec.in \
             > /tmp/ovs.spec
-        dnf builddep -y /tmp/ovs.spec
+        dnf builddep --exclude='*.i686' -y /tmp/ovs.spec
         rm -f /tmp/ovs.spec
 
     - name: configure
