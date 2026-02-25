@@ -1339,11 +1339,13 @@ void
 ovs_router_rule_add(uint32_t prio, bool invert, bool user, uint8_t src_len,
                     const struct in6_addr *from, uint32_t lookup_table,
                     bool ipv4)
-    OVS_REQUIRES(mutex)
+    OVS_EXCLUDED(mutex)
 {
     if (use_system_routing_table) {
+        ovs_mutex_lock(&mutex);
         ovs_router_rule_add__(prio, invert, user, src_len, from,
                               lookup_table, ipv4);
+        ovs_mutex_unlock(&mutex);
     }
 }
 
