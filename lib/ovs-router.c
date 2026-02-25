@@ -91,6 +91,10 @@ struct ovs_router_entry {
 };
 
 static void rt_entry_delete__(const struct cls_rule *, struct classifier *);
+static void ovs_router_rule_add__(uint32_t prio, bool invert, bool user,
+                                  uint8_t src_len,
+                                  const struct in6_addr *from,
+                                  uint32_t lookup_table, bool ipv4);
 
 static struct classifier *
 cls_find(uint32_t table)
@@ -1035,7 +1039,7 @@ ovs_router_rule_add_cmd(struct unixctl_conn *conn, int argc OVS_UNUSED,
             prev_prio = rule->prio;
         }
     }
-    ovs_router_rule_add(prio, invert, true, src_len, &from, table, ipv4);
+    ovs_router_rule_add__(prio, invert, true, src_len, &from, table, ipv4);
     ovs_mutex_unlock(&mutex);
 
     unixctl_command_reply(conn, "OK");
@@ -1219,19 +1223,20 @@ ovs_router_flush(bool flush_all)
 
 static void
 init_standard_rules(void)
+    OVS_REQUIRES(mutex)
 {
     /* Add default rules using same priorities as Linux kernel does. */
-    ovs_router_rule_add(0, false, false, 0,
-                        &in6addr_v4mapped_any, CLS_LOCAL, true);
-    ovs_router_rule_add(0x7FFE, false, false, 0,
-                        &in6addr_v4mapped_any, CLS_MAIN, true);
-    ovs_router_rule_add(0x7FFF, false, false, 0,
-                        &in6addr_v4mapped_any, CLS_DEFAULT, true);
+    ovs_router_rule_add__(0, false, false, 0,
+                          &in6addr_v4mapped_any, CLS_LOCAL, true);
+    ovs_router_rule_add__(0x7FFE, false, false, 0,
+                          &in6addr_v4mapped_any, CLS_MAIN, true);
+    ovs_router_rule_add__(0x7FFF, false, false, 0,
+                          &in6addr_v4mapped_any, CLS_DEFAULT, true);
 
-    ovs_router_rule_add(0, false, false, 0,
-                        &in6addr_any, CLS_LOCAL, false);
-    ovs_router_rule_add(0x7FFE, false, false, 0,
-                        &in6addr_any, CLS_MAIN, false);
+    ovs_router_rule_add__(0, false, false, 0,
+                          &in6addr_any, CLS_LOCAL, false);
+    ovs_router_rule_add__(0x7FFE, false, false, 0,
+                          &in6addr_any, CLS_MAIN, false);
 }
 
 static void
@@ -1259,6 +1264,9 @@ ovs_router_rules_flush(bool flush_all)
 {
     ovs_mutex_lock(&mutex);
     ovs_router_rules_flush_protected(flush_all);
+    if (!flush_all) {
+        init_standard_rules();
+    }
     ovs_mutex_unlock(&mutex);
 }
 
@@ -1307,10 +1315,10 @@ rule_pvec_prio(uint32_t prio)
     }
 }
 
-void
-ovs_router_rule_add(uint32_t prio, bool invert, bool user, uint8_t src_len,
-                    const struct in6_addr *from, uint32_t lookup_table,
-                    bool ipv4)
+static void
+ovs_router_rule_add__(uint32_t prio, bool invert, bool user, uint8_t src_len,
+                      const struct in6_addr *from, uint32_t lookup_table,
+                      bool ipv4)
     OVS_REQUIRES(mutex)
 {
     struct router_rule *rule = xzalloc(sizeof *rule);
@@ -1325,6 +1333,18 @@ ovs_router_rule_add(uint32_t prio, bool invert, bool user, uint8_t src_len,
 
     pvector_insert(&rules, rule, rule_pvec_prio(prio));
     pvector_publish(&rules);
+}
+
+void
+ovs_router_rule_add(uint32_t prio, bool invert, bool user, uint8_t src_len,
+                    const struct in6_addr *from, uint32_t lookup_table,
+                    bool ipv4)
+    OVS_REQUIRES(mutex)
+{
+    if (use_system_routing_table) {
+        ovs_router_rule_add__(prio, invert, user, src_len, from,
+                              lookup_table, ipv4);
+    }
 }
 
 int
