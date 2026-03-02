@@ -95,7 +95,10 @@ static bool
 read_received_backtrace(int fd, void *dest, size_t len)
 {
     VLOG_DBG("%s fd %d", __func__, fd);
-    fcntl(fd, F_SETFL, O_NONBLOCK);
+    if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
+        VLOG_WARN("Failed to set fd %d non-blocking: %s",
+                  fd, ovs_strerror(errno));
+    }
     memset(dest, 0, len);
 
     int byte_read = read(fd, dest, len);
