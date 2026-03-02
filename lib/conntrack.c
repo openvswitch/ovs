@@ -2317,6 +2317,9 @@ static uint32_t
 conn_key_hash(const struct conn_key *key, uint32_t basis)
 {
     uint32_t hsrc, hdst, hash;
+    const uint32_t *start;
+    const uint32_t *end;
+
     hsrc = hdst = basis;
     hsrc = ct_endpoint_hash_add(hsrc, &key->src);
     hdst = ct_endpoint_hash_add(hdst, &key->dst);
@@ -2325,9 +2328,11 @@ conn_key_hash(const struct conn_key *key, uint32_t basis)
     hash = hsrc ^ hdst;
 
     /* Hash the rest of the key(L3 and L4 types and zone). */
-    return hash_words((uint32_t *) (&key->dst + 1),
-                      (uint32_t *) (key + 1) - (uint32_t *) (&key->dst + 1),
-                      hash);
+    start = ALIGNED_CAST(const uint32_t *,
+                         (const char *) key + offsetof(struct conn_key, dst)
+                                        + sizeof key->dst);
+    end = ALIGNED_CAST(const uint32_t *, key + 1);
+    return hash_words(start, end - start, hash);
 }
 
 static void
