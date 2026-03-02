@@ -1588,7 +1588,8 @@ packet_set_nd(struct dp_packet *packet, const struct in6_addr *target,
                              true);
     }
 
-    while (bytes_remain >= ND_LLA_OPT_LEN && opt->len != 0) {
+    while (bytes_remain >= ND_LLA_OPT_LEN && opt->len != 0
+           && bytes_remain >= (opt->len * ND_LLA_OPT_LEN)) {
         if (opt->type == ND_OPT_SOURCE_LINKADDR && opt->len == 1) {
             if (!eth_addr_equals(opt->mac, sll)) {
                 ovs_be16 *csum = &(ns->icmph.icmp6_cksum);
