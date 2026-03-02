@@ -149,7 +149,7 @@ log_received_backtrace(int fd)
     if (read_received_backtrace(fd, &bt, sizeof bt)) {
         struct ds ds = DS_EMPTY_INITIALIZER;
 
-        bt.n_frames = MIN(bt.n_frames, BACKTRACE_MAX_FRAMES);
+        bt.n_frames = MIN(MAX(bt.n_frames, 0), BACKTRACE_MAX_FRAMES);
 
         ds_put_cstr(&ds, BACKTRACE_DUMP_MSG);
         backtrace_format(&ds, &bt, "\n");
