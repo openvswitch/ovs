@@ -795,11 +795,11 @@ try_checkpatch_c_file \
     "/^Did you mean:/d"
 
 try_checkpatch_py_file \
-    "# This is a python file with an intentionaly misspelt word.
+    "# This is a python file with an intentionaly misspelled word.
     # The user wants to check if it's working." \
     "WARNING: Possible misspelled word: \"intentionaly\"
     test.py:1:
-    # This is a python file with an intentionaly misspelt word." \
+    # This is a python file with an intentionaly misspelled word." \
     "-S" \
     "/^Did you mean:/d"
 
