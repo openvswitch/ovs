@@ -304,7 +304,13 @@ rconn_get_max_backoff(const struct rconn *rc)
 {
     /* rc->max_backoff is 1000 times some 'int', so dividing by 1000 will yield
      * a value in the range of 'int', therefore this is safe. */
-    return rc->max_backoff / 1000;
+    int max_backoff;
+
+    ovs_mutex_lock(&rc->mutex);
+    max_backoff = rc->max_backoff / 1000;
+    ovs_mutex_unlock(&rc->mutex);
+
+    return max_backoff;
 }
 
 void
