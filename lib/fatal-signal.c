@@ -77,7 +77,8 @@ static HANDLE wevent;
 
 static struct ovs_mutex mutex;
 
-static void call_hooks(int sig_nr);
+static void call_hooks(int sig_nr)
+    OVS_REQUIRES(mutex);
 #ifdef _WIN32
 static BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType);
 #endif
@@ -404,11 +405,14 @@ fatal_ignore_sigpipe(void)
 void
 fatal_signal_atexit_handler(void)
 {
+    ovs_mutex_lock(&mutex);
     call_hooks(0);
+    ovs_mutex_unlock(&mutex);
 }
 
 static void
 call_hooks(int sig_nr)
+    OVS_REQUIRES(mutex)
 {
     static volatile sig_atomic_t recurse = 0;
     if (!recurse) {
