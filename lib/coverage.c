@@ -223,6 +223,7 @@ coverage_read(struct svec *lines)
 {
     struct coverage_counter **c = coverage_counters;
     unsigned long long int *totals;
+    unsigned int last_idx;
     size_t n_never_hit;
     uint32_t hash;
     size_t i;
@@ -238,6 +239,7 @@ coverage_read(struct svec *lines)
 
     totals = xmalloc(n_coverage_counters * sizeof *totals);
     ovs_mutex_lock(&coverage_mutex);
+    last_idx = (idx_count - 1) % MIN_AVG_LEN;
     for (i = 0; i < n_coverage_counters; i++) {
         totals[i] = c[i]->total;
     }
@@ -252,8 +254,7 @@ coverage_read(struct svec *lines)
                 xasprintf("%-24s %5.1f/sec %9.3f/sec "
                           "%13.4f/sec   total: %llu",
                           c[i]->name,
-                          (c[i]->min[(idx_count - 1) % MIN_AVG_LEN]
-                           * 1000.0 / COVERAGE_RUN_INTERVAL),
+                          c[i]->min[last_idx] * 1000.0 / COVERAGE_RUN_INTERVAL,
                           coverage_array_sum(c[i]->min, MIN_AVG_LEN) / 60.0,
                           coverage_array_sum(c[i]->hr,  HR_AVG_LEN) / 3600.0,
                           totals[i]));
