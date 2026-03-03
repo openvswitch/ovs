@@ -2615,6 +2615,7 @@ dpctl_ct_ipf_get_status(int argc, const char *argv[],
         } else {
             dpctl_error(dpctl_p, error,
                         "ipf status could not be retrieved");
+            dpif_close(dpif);
             return error;
         }
 
