@@ -181,8 +181,8 @@ Fabrizio D'Angelo                  fdangelo@redhat.com
 Faicker Mo                         faicker.mo@ucloud.cn
 fang                               fangjiannan@cmss.chinamobile.com
 Fangrui Song                       maskray@google.com
-Felix Huettner                     felix.huettner@mail.schwarz
-Felix Moebius                      felix.moebius@mail.schwarz
+Felix Huettner                     felix.huettner@digits.schwarz
+Felix Moebius                      felix.moebius@digits.schwarz
 Fengqi Li                          lifengqi@inspur.com
 Flavio Fernandes                   flavio@flaviof.com
 Flavio Leitner                     fbl@redhat.com
@@ -312,7 +312,7 @@ Lucas Alvares Gomes                lucasagomes@gmail.com
 Lucian Petrut                      lpetrut@cloudbasesolutions.com
 Luigi Rizzo                        rizzo@iet.unipi.it
 Luis E. P.                         l31g@hotmail.com
-Luca Czesla                        luca.czesla@mail.schwarz
+Luca Czesla                        luca.czesla@digits.schwarz
 Lukasz Pawlik                      lukaszx.pawlik@intel.com
 Lukasz Rzasik                      lukasz.rzasik@gmail.com
 MJ Ponsonby                        mj.ponsonby@canonical.com
@@ -341,7 +341,7 @@ Matteo Croce                       mcroce@redhat.com
 Matteo Perin                       matteo.perin@canonical.com
 Matthias May                       matthias.may@neratec.com
 Mauricio Vásquez                   mauricio.vasquezbernal@studenti.polito.it
-Max Lamprecht                      max.lamprecht@mail.schwarz
+Max Lamprecht                      max.lamprecht@digits.schwarz
 Maxime Coquelin                    maxime.coquelin@redhat.com
 Mehak Mahajan
 Michael Arnaldi                    arnaldimichael@gmail.com
