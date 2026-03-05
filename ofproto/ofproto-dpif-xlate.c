@@ -72,6 +72,7 @@
 COVERAGE_DEFINE(xlate_actions);
 COVERAGE_DEFINE(xlate_actions_oversize);
 COVERAGE_DEFINE(xlate_actions_too_many_output);
+COVERAGE_DEFINE(xlate_actions_neigh_sent);
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
 
@@ -3931,17 +3932,26 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
         s_ip = in6_addr_get_mapped_ipv4(&s_ip6);
     }
 
-    err = tnl_neigh_lookup(out_dev->xbridge->name, &d_ip6, &dmac);
+    err = tnl_neigh_lookup(out_dev->xbridge->name, &d_ip6, &dmac, true);
     if (err) {
         struct in6_addr nh_s_ip6 = in6addr_any;
 
         put_cloned_drop_action(ctx->xbridge->ofproto, ctx->odp_actions,
                                XLATE_TUNNEL_NEIGH_CACHE_MISS,
                                !is_last_action);
+        if (err == EINPROGRESS) {
+            xlate_report(ctx, OFT_DETAIL,
+                         "neighbor cache miss for %s on bridge %s, "
+                         "waiting on %s request",
+                         buf_dip6, out_dev->xbridge->name,
+                         d_ip ? "ARP" : "ND");
+            return err;
+        }
         xlate_report(ctx, OFT_DETAIL,
                      "neighbor cache miss for %s on bridge %s, "
                      "sending %s request",
                      buf_dip6, out_dev->xbridge->name, d_ip ? "ARP" : "ND");
+        COVERAGE_INC(xlate_actions_neigh_sent);
 
         err = ovs_router_get_netdev_source_address(
             &d_ip6, netdev_get_name(out_dev->netdev), &nh_s_ip6);

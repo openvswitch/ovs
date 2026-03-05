@@ -344,7 +344,20 @@ AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 dnl Check Neighbour discovery.
 AT_CHECK([ovs-vsctl -- set Interface p0 options:pcap=p0.pcap])
 
-AT_CHECK([ovs-appctl netdev-dummy/receive int-br 'in_port(2),eth(src=aa:55:aa:55:00:00,dst=f8:bc:12:ff:ff:ff),eth_type(0x0800),ipv4(src=1.1.3.92,dst=1.1.3.88,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'])
+dnl First trace should send only two ND lookups, for each destination IP.
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(int-br),]dnl
+  [eth(src=aa:55:aa:55:00:00,dst=f8:bc:12:ff:ff:ff),eth_type(0x0800),]dnl
+  [ipv4(src=1.1.3.92,dst=1.1.3.88,proto=1,tos=0,ttl=64,frag=no),]dnl
+  [icmp(type=0,code=0)"], [0], [stdout])
+AT_CHECK([grep -q "sending ND request" stdout], [0])
+
+dnl Second trace should not send any ND lookups.
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(int-br),]dnl
+  [eth(src=aa:55:aa:55:00:00,dst=f8:bc:12:ff:ff:ff),eth_type(0x0800),]dnl
+  [ipv4(src=1.1.3.92,dst=1.1.3.88,proto=1,tos=0,ttl=64,frag=no),]dnl
+  [icmp(type=0,code=0)"], [0], [stdout])
+AT_CHECK([grep -q "waiting on ND request" stdout], [0])
+AT_CHECK([grep -qv "sending ND request" stdout], [0])
 
 dnl Wait for the two Neighbor Solicitation packets to be sent.
 dnl Sometimes the system can be slow (e.g. under valgrind)
@@ -360,6 +373,8 @@ AT_CHECK([cat p0.pcap.txt | grep 93aa55aa55000086dd6000000000203aff2001cafe | un
 ])
 
 dnl Set the aging time to 5 seconds
+AT_CHECK([ovs-appctl tnl/neigh/retrans_time 5000], [0], [OK
+])
 AT_CHECK([ovs-appctl tnl/neigh/aging 5], [0], [OK
 ])
 
@@ -373,6 +388,7 @@ AT_CHECK([ovs-appctl tnl/neigh/set br0 2001:cafe::92 aa:bb:cc:00:00:01], [0], [O
 
 AT_CHECK([ovs-appctl tnl/neigh/show | grep br0 | sort], [0], [dnl
 2001:cafe::92                                 aa:bb:cc:00:00:01   br0
+2001:cafe::93                                                     br0 INCOMPLETE
 ])
 
 ovs-appctl time/warp 5000
@@ -438,7 +454,9 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(200),eth(src=f8:bc:12:44:3
 ovs-appctl time/warp 1000
 ovs-appctl time/warp 1000
 
-AT_CHECK([ovs-appctl tnl/neigh/show | grep br | sort], [0], [dnl
+dnl Previous receive causes a flood that results in a lookup of 1.1.2.93.
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br | grep -v INCOMPLETE | sort],
+    [0], [dnl
 2001:cafe::92                                 f8:bc:12:44:34:b6   br0
 ])
 
@@ -577,8 +595,11 @@ icmp,vlan_tci=0x0000,dl_src=be:b6:f4:e1:49:4a,dl_dst=fe:71:d8:83:72:4f,nw_src=30
 AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  5'], [0], [dnl
   port  5: rx pkts=1, bytes=98, drop=?, errs=?, frame=?, over=?, crc=?
 ])
-AT_CHECK([ovs-appctl dpif/dump-flows int-br | grep 'in_port(6081)'], [0], [dnl
-recirc_id(0),tunnel(tun_id=0x7b,ipv6_src=2001:cafe::92,ipv6_dst=2001:cafe::88,geneve({class=0xffff,type=0x80,len=4,0xa/0xf}{class=0xffff,type=0,len=4}),flags(+key)),in_port(6081),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=3,rule_cookie=0,controller_id=0,max_len=65535))
+AT_CHECK([ovs-appctl dpif/dump-flows int-br | grep 'in_port(6081)' dnl
+    | strip_recirc], [0], [dnl
+[recirc_id(<recirc>),tunnel(tun_id=0x7b,ipv6_src=2001:cafe::92,ipv6_dst=2001:cafe::88,geneve({class=0xffff,type=0x80,len=4,0xa/0xf}{class=0xffff,type=0,len=4}),flags(+key)),]dnl
+[in_port(6081),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, ]dnl
+[actions:userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=<recirc>,rule_cookie=0,controller_id=0,max_len=65535))]
 ])
 
 dnl Receive VXLAN with different MAC and verify that the neigh cache gets updated

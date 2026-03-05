@@ -1,5 +1,8 @@
 Post-v3.7.0
 --------------------
+   - Userspace datapath:
+     * ARP/ND lookups for native tunnel are now rate limited. The holdout
+       timer can be configured with 'tnl/neigh/retrans_time'.
 
 
 v3.7.0 - 16 Feb 2026

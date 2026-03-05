@@ -45,8 +45,9 @@
 #include "openvswitch/vlog.h"
 
 
-#define NEIGH_ENTRY_DEFAULT_IDLE_TIME_MS  (15 * 60 * 1000)
-#define NEIGH_ENTRY_MAX_AGING_TIME_S  3600
+#define NEIGH_ENTRY_DEFAULT_IDLE_TIME_MS (15 * 60 * 1000)
+#define NEIGH_ENTRY_MAX_AGING_TIME_S     3600
+#define NEIGH_ENTRY_LOOKUP_RETRANS_TIME  1000
 
 struct tnl_neigh_entry {
     struct cmap_node cmap_node;
@@ -54,11 +55,13 @@ struct tnl_neigh_entry {
     struct eth_addr mac;
     atomic_llong expires;       /* Expiration time in ms. */
     char br_name[IFNAMSIZ];
+    atomic_bool complete;
 };
 
 static struct cmap table = CMAP_INITIALIZER;
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 static atomic_uint32_t neigh_aging;
+static atomic_uint32_t neigh_retrans_time;
 
 static uint32_t
 tnl_neigh_hash(const struct in6_addr *ip)
@@ -85,6 +88,25 @@ tnl_neigh_get_aging(void)
     return aging;
 }
 
+static uint32_t
+tnl_neigh_get_retrans_time(void)
+{
+    unsigned int retrans_time;
+
+    atomic_read_explicit(&neigh_retrans_time, &retrans_time,
+                         memory_order_acquire);
+    return retrans_time;
+}
+
+static bool
+tnl_neigh_is_complete(struct tnl_neigh_entry *neigh)
+{
+    bool complete;
+
+    atomic_read_explicit(&neigh->complete, &complete, memory_order_acquire);
+    return complete;
+}
+
 static struct tnl_neigh_entry *
 tnl_neigh_lookup__(const char br_name[IFNAMSIZ], const struct in6_addr *dst)
 {
@@ -98,27 +120,62 @@ tnl_neigh_lookup__(const char br_name[IFNAMSIZ], const struct in6_addr *dst)
                 return NULL;
             }
 
-            atomic_store_explicit(&neigh->expires, time_msec() +
-                                  tnl_neigh_get_aging(),
-                                  memory_order_release);
+            if (tnl_neigh_is_complete(neigh)) {
+                atomic_store_explicit(&neigh->expires,
+                                      time_msec() + tnl_neigh_get_aging(),
+                                      memory_order_release);
+            }
+
             return neigh;
         }
     }
     return NULL;
 }
 
+static void
+tnl_neigh_set_partial(const char name[IFNAMSIZ], const struct in6_addr *dst)
+{
+    ovs_mutex_lock(&mutex);
+    struct tnl_neigh_entry *neigh = tnl_neigh_lookup__(name, dst);
+    if (neigh) {
+        /* Entry inserted before lock taken. */
+
+        ovs_mutex_unlock(&mutex);
+        return;
+    }
+    neigh = xmalloc(sizeof *neigh);
+
+    neigh->ip = *dst;
+    atomic_store_relaxed(&neigh->complete, false);
+    atomic_store_relaxed(&neigh->expires,
+                         time_msec() + tnl_neigh_get_retrans_time());
+    ovs_strlcpy(neigh->br_name, name, sizeof neigh->br_name);
+    cmap_insert(&table, &neigh->cmap_node, tnl_neigh_hash(&neigh->ip));
+
+    ovs_mutex_unlock(&mutex);
+    seq_change(tnl_conf_seq);
+}
+
 int
 tnl_neigh_lookup(const char br_name[IFNAMSIZ], const struct in6_addr *dst,
-                 struct eth_addr *mac)
+                 struct eth_addr *mac, bool insert_partial)
 {
     struct tnl_neigh_entry *neigh;
     int res = ENOENT;
 
     neigh = tnl_neigh_lookup__(br_name, dst);
     if (neigh) {
-        *mac = neigh->mac;
-        res = 0;
+        if (tnl_neigh_is_complete(neigh)) {
+            *mac = neigh->mac;
+            res = 0;
+        } else {
+            res = EINPROGRESS;
+        }
+    } else if (insert_partial && tnl_neigh_get_retrans_time()) {
+        /* Insert a partial entry only if there is a retransmit timer set. */
+        tnl_neigh_set_partial(br_name, dst);
     }
+
     return res;
 }
 
@@ -142,26 +199,40 @@ tnl_neigh_set(const char name[IFNAMSIZ], const struct in6_addr *dst,
 {
     ovs_mutex_lock(&mutex);
     struct tnl_neigh_entry *neigh = tnl_neigh_lookup__(name, dst);
+    bool insert = true;
+
     if (neigh) {
-        if (eth_addr_equals(neigh->mac, mac)) {
-            atomic_store_relaxed(&neigh->expires, time_msec() +
-                                 tnl_neigh_get_aging());
+        if (!tnl_neigh_is_complete(neigh)) {
+            insert = false;
+        } else if (eth_addr_equals(neigh->mac, mac)) {
+            atomic_store_relaxed(&neigh->expires,
+                                 time_msec() + tnl_neigh_get_aging());
             ovs_mutex_unlock(&mutex);
             return;
+        } else {
+            tnl_neigh_delete(neigh);
         }
-        tnl_neigh_delete(neigh);
     }
-    seq_change(tnl_conf_seq);
 
-    neigh = xmalloc(sizeof *neigh);
+    if (insert) {
+        neigh = xmalloc(sizeof *neigh);
 
-    neigh->ip = *dst;
+        neigh->ip = *dst;
+        ovs_strlcpy(neigh->br_name, name, sizeof neigh->br_name);
+    }
+
     neigh->mac = mac;
-    atomic_store_relaxed(&neigh->expires, time_msec() +
-                         tnl_neigh_get_aging());
-    ovs_strlcpy(neigh->br_name, name, sizeof neigh->br_name);
-    cmap_insert(&table, &neigh->cmap_node, tnl_neigh_hash(&neigh->ip));
+    atomic_store_explicit(&neigh->expires,
+                          time_msec() + tnl_neigh_get_aging(),
+                          memory_order_release);
+    atomic_store_explicit(&neigh->complete, true, memory_order_release);
+
+    if (insert) {
+        cmap_insert(&table, &neigh->cmap_node, tnl_neigh_hash(&neigh->ip));
+    }
+
     ovs_mutex_unlock(&mutex);
+    seq_change(tnl_conf_seq);
 }
 
 static void
@@ -314,10 +385,63 @@ tnl_neigh_cache_aging(struct unixctl_conn *conn, int argc,
     }
 
     aging *= 1000;
+
+    if (aging < tnl_neigh_get_retrans_time()) {
+        unixctl_command_reply_error(conn, "aging value cannot be less than "
+                                          "retrans_time");
+        return;
+    }
+
     atomic_store_explicit(&neigh_aging, aging, memory_order_release);
     new_exp = time_msec() + aging;
 
     CMAP_FOR_EACH (neigh, cmap_node, &table) {
+        atomic_read_explicit(&neigh->expires, &curr_exp,
+                             memory_order_acquire);
+        if (new_exp < curr_exp) {
+            atomic_store_explicit(&neigh->expires, new_exp,
+                                  memory_order_release);
+        }
+    }
+
+    unixctl_command_reply(conn, "OK");
+}
+
+static void
+tnl_neigh_cache_retrans_time(struct unixctl_conn *conn, int argc,
+                             const char *argv[], void *aux OVS_UNUSED)
+{
+    long long int new_exp, curr_exp;
+    struct tnl_neigh_entry *neigh;
+    uint32_t retrans_time;
+
+    if (argc == 1) {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+        ds_put_format(&ds, "%"PRIu32, tnl_neigh_get_retrans_time());
+        unixctl_command_reply(conn, ds_cstr(&ds));
+        ds_destroy(&ds);
+
+        return;
+    }
+
+    /* Zero retransmit value is acceptable. */
+    if (!ovs_scan(argv[1], "%"SCNu32, &retrans_time)) {
+        unixctl_command_reply_error(conn, "bad retrans_time value");
+        return;
+    } else if (retrans_time > tnl_neigh_get_aging()) {
+        unixctl_command_reply_error(conn, "retrans_time value cannot be "
+                                          "greater than aging");
+        return;
+    }
+
+    atomic_store_explicit(&neigh_retrans_time, retrans_time,
+                          memory_order_release);
+    new_exp = time_msec() + retrans_time;
+
+    CMAP_FOR_EACH (neigh, cmap_node, &table) {
+        if (tnl_neigh_is_complete(neigh)) {
+            continue;
+        }
         atomic_read_explicit(&neigh->expires, &curr_exp,
                              memory_order_acquire);
         if (new_exp < curr_exp) {
@@ -387,8 +511,13 @@ tnl_neigh_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         need_ws = INET6_ADDRSTRLEN - (ds.length - start_len);
         ds_put_char_multiple(&ds, ' ', need_ws);
 
-        ds_put_format(&ds, ETH_ADDR_FMT"   %s",
-                      ETH_ADDR_ARGS(neigh->mac), neigh->br_name);
+        if (tnl_neigh_is_complete(neigh)) {
+            ds_put_format(&ds, ETH_ADDR_FMT"   %s",
+                          ETH_ADDR_ARGS(neigh->mac), neigh->br_name);
+        } else {
+            ds_put_format(&ds, "                    %s INCOMPLETE",
+                          neigh->br_name);
+        }
         if (tnl_neigh_expired(neigh)) {
             ds_put_format(&ds, " STALE");
         }
@@ -404,6 +533,7 @@ void
 tnl_neigh_cache_init(void)
 {
     atomic_init(&neigh_aging, NEIGH_ENTRY_DEFAULT_IDLE_TIME_MS);
+    atomic_init(&neigh_retrans_time, NEIGH_ENTRY_LOOKUP_RETRANS_TIME);
     unixctl_command_register("tnl/arp/show", "", 0, 0,
                              tnl_neigh_cache_show, NULL);
     unixctl_command_register("tnl/arp/set", "BRIDGE IP MAC", 3, 3,
@@ -420,4 +550,6 @@ tnl_neigh_cache_init(void)
                              tnl_neigh_cache_flush, NULL);
     unixctl_command_register("tnl/neigh/aging", "[SECS]", 0, 1,
                              tnl_neigh_cache_aging, NULL);
+    unixctl_command_register("tnl/neigh/retrans_time", "[MSECS]", 0, 1,
+                             tnl_neigh_cache_retrans_time, NULL);
 }

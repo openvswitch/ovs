@@ -152,7 +152,7 @@ xlate_push_stats_entry(struct xc_entry *entry,
     case XC_TNL_NEIGH:
         /* Lookup neighbor to avoid timeout. */
         tnl_neigh_lookup(entry->tnl_neigh_cache.br_name,
-                         &entry->tnl_neigh_cache.d_ipv6, &dmac);
+                         &entry->tnl_neigh_cache.d_ipv6, &dmac, false);
         break;
     case XC_TUNNEL_HEADER:
         if (entry->tunnel_hdr.operation == ADD) {
