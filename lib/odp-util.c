@@ -8799,7 +8799,8 @@ commit_encap_decap_action(const struct flow *flow,
             odp_put_push_nsh_action(odp_actions, flow, encap_data);
             base_flow->packet_type = flow->packet_type;
             /* Update all packet headers in base_flow. */
-            memcpy(&base_flow->dl_dst, &flow->dl_dst,
+            memcpy((char *) base_flow + offsetof(struct flow, dl_dst),
+                   (const char *) flow + offsetof(struct flow, dl_dst),
                    sizeof(*flow) - offsetof(struct flow, dl_dst));
             break;
         case PT_MPLS:
