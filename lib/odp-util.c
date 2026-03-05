@@ -631,8 +631,14 @@ format_odp_hash_action(struct ds *ds, const struct ovs_action_hash *hash_act)
 }
 
 static const void *
-format_udp_tnl_push_header(struct ds *ds, const struct udp_header *udp)
+format_udp_tnl_push_header(struct ds *ds, const struct udp_header *udp,
+                           uint32_t bytes_left)
 {
+    if (bytes_left < sizeof *udp) {
+        ds_put_cstr(ds, "udp(truncated header))");
+        return NULL;
+    }
+
     ds_put_format(ds, "udp(src=%"PRIu16",dst=%"PRIu16",csum=0x%"PRIx16"),",
                   ntohs(udp->udp_src), ntohs(udp->udp_dst),
                   ntohs(udp->udp_csum));
@@ -644,13 +650,23 @@ static void
 format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
 {
     const struct eth_header *eth;
+    const struct udp_header *udp;
+    uint32_t bytes_left;
     const void *l3;
     const void *l4;
-    const struct udp_header *udp;
 
     eth = (const struct eth_header *)data->header;
 
+    if (data->header_len < sizeof *eth) {
+        ds_put_format(ds,
+                      "header(size=%"PRIu32",type=%"PRIu32
+                      ", eth(truncated header))",
+                      data->header_len, data->tnl_type);
+        return;
+    }
+
     l3 = eth + 1;
+    bytes_left = data->header_len - sizeof *eth;
 
     /* Ethernet */
     ds_put_format(ds, "header(size=%"PRIu32",type=%"PRIu32",eth(dst=",
@@ -663,6 +679,12 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
     if (eth->eth_type == htons(ETH_TYPE_IP)) {
         /* IPv4 */
         const struct ip_header *ip = l3;
+
+        if (bytes_left < sizeof *ip) {
+            ds_put_cstr(ds, "ipv4(truncated header))");
+            return;
+        }
+
         ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT",proto=%"PRIu8
                       ",tos=%#"PRIx8",ttl=%"PRIu8",frag=0x%"PRIx16"),",
                       IP_ARGS(get_16aligned_be32(&ip->ip_src)),
@@ -671,12 +693,18 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
                       ip->ip_ttl,
                       ntohs(ip->ip_frag_off));
         l4 = (ip + 1);
+        bytes_left -= sizeof *ip;
     } else {
         const struct ovs_16aligned_ip6_hdr *ip6 = l3;
         struct in6_addr src, dst;
         memcpy(&src, &ip6->ip6_src, sizeof src);
         memcpy(&dst, &ip6->ip6_dst, sizeof dst);
         uint32_t ipv6_flow = ntohl(get_16aligned_be32(&ip6->ip6_flow));
+
+        if (bytes_left < sizeof *ip6) {
+            ds_put_cstr(ds, "ipv6(truncated header))");
+            return;
+        }
 
         ds_put_format(ds, "ipv6(src=");
         ipv6_format_addr(&src, ds);
@@ -687,6 +715,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
                       ipv6_flow & IPV6_LABEL_MASK, ip6->ip6_nxt,
                       (ipv6_flow >> 20) & 0xff, ip6->ip6_hlim);
         l4 = (ip6 + 1);
+        bytes_left -= sizeof *ip6;
     }
 
     udp = (const struct udp_header *) l4;
@@ -694,7 +723,16 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
     if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
         const struct vxlanhdr *vxh;
 
-        vxh = format_udp_tnl_push_header(ds, udp);
+        vxh = format_udp_tnl_push_header(ds, udp, bytes_left);
+        if (!vxh) {
+            return;
+        }
+
+        bytes_left -= sizeof *udp;
+        if (bytes_left < sizeof *vxh) {
+            ds_put_cstr(ds, "vxlan(truncated header))");
+            return;
+        }
 
         ds_put_format(ds, "vxlan(flags=0x%"PRIx32",vni=0x%"PRIx32")",
                       ntohl(get_16aligned_be32(&vxh->vx_flags)),
@@ -702,14 +740,29 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
     } else if (data->tnl_type == OVS_VPORT_TYPE_GENEVE) {
         const struct genevehdr *gnh;
 
-        gnh = format_udp_tnl_push_header(ds, udp);
+        gnh = format_udp_tnl_push_header(ds, udp, bytes_left);
+        if (!gnh) {
+            return;
+        }
+
+        bytes_left -= sizeof *udp;
+        if (bytes_left < sizeof *gnh) {
+            ds_put_cstr(ds, "geneve(truncated header))");
+            return;
+        }
 
         ds_put_format(ds, "geneve(%s%svni=0x%"PRIx32,
                       gnh->oam ? "oam," : "",
                       gnh->critical ? "crit," : "",
                       ntohl(get_16aligned_be32(&gnh->vni)) >> 8);
 
+        bytes_left -= sizeof *gnh;
         if (gnh->opt_len) {
+            if (bytes_left < gnh->opt_len * sizeof(uint32_t)) {
+                ds_put_cstr(ds, ",options(invalid length)))");
+                return;
+            }
+
             ds_put_cstr(ds, ",options(");
             format_geneve_opts(gnh->options, NULL, gnh->opt_len * 4,
                                ds, false);
@@ -724,12 +777,23 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
         int i;
 
         srh = (const struct srv6_base_hdr *) l4;
+        if (bytes_left < sizeof *srh) {
+            ds_put_cstr(ds, "srv6(truncated header))");
+            return;
+        }
+
         segs = ALIGNED_CAST(struct in6_addr *, srh + 1);
         nr_segs = srh->last_entry + 1;
+        bytes_left -= sizeof *srh;
 
         ds_put_format(ds, "srv6(");
         ds_put_format(ds, "segments_left=%d", srh->rt_hdr.segments_left);
         ds_put_format(ds, ",segs(");
+        if (bytes_left < nr_segs * sizeof *segs) {
+            ds_put_cstr(ds, "truncated segs)))");
+            return;
+        }
+
         for (i = 0; i < nr_segs; i++) {
             ds_put_format(ds, i > 0 ? "," : "");
             ipv6_format_addr(&segs[nr_segs - i - 1], ds);
@@ -741,20 +805,45 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
         ovs_16aligned_be32 *options;
 
         greh = (const struct gre_base_hdr *) l4;
+        if (bytes_left < sizeof *greh) {
+            ds_put_cstr(ds, "gre(truncated header))");
+            return;
+        }
 
         ds_put_format(ds, "gre((flags=0x%"PRIx16",proto=0x%"PRIx16")",
                            ntohs(greh->flags), ntohs(greh->protocol));
+        bytes_left -= sizeof *greh;
         options = (ovs_16aligned_be32 *)(greh + 1);
         if (greh->flags & htons(GRE_CSUM)) {
-            ds_put_format(ds, ",csum=0x%"PRIx16, ntohs(*((ovs_be16 *)options)));
+            if (bytes_left < sizeof(uint16_t)) {
+                ds_put_cstr(ds, ",csum=<truncated>))");
+                return;
+            }
+
+            bytes_left -= sizeof(uint16_t);
+            ds_put_format(ds, ",csum=0x%"PRIx16,
+                          ntohs(*((ovs_be16 *) options)));
             options++;
         }
         if (greh->flags & htons(GRE_KEY)) {
-            ds_put_format(ds, ",key=0x%"PRIx32, ntohl(get_16aligned_be32(options)));
+            if (bytes_left < sizeof(uint32_t)) {
+                ds_put_cstr(ds, ",key=<truncated>))");
+                return;
+            }
+
+            bytes_left -= sizeof(uint32_t);
+            ds_put_format(ds, ",key=0x%"PRIx32,
+                          ntohl(get_16aligned_be32(options)));
             options++;
         }
         if (greh->flags & htons(GRE_SEQ)) {
-            ds_put_format(ds, ",seq=0x%"PRIx32, ntohl(get_16aligned_be32(options)));
+            if (bytes_left < sizeof(uint32_t)) {
+                ds_put_cstr(ds, ",seq=<truncated>))");
+                return;
+            }
+
+            ds_put_format(ds, ",seq=0x%"PRIx32,
+                          ntohl(get_16aligned_be32(options)));
             options++;
         }
         ds_put_format(ds, ")");
@@ -764,16 +853,32 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
         const struct erspan_base_hdr *ersh;
 
         greh = (const struct gre_base_hdr *) l4;
+        if (bytes_left < ERSPAN_GREHDR_LEN + sizeof *ersh) {
+            ds_put_cstr(ds, "erspan(truncated header))");
+            return;
+        }
+
         ersh = ERSPAN_HDR(greh);
+        bytes_left -= ERSPAN_GREHDR_LEN + sizeof *ersh;
 
         if (ersh->ver == 1) {
             ovs_16aligned_be32 *index = ALIGNED_CAST(ovs_16aligned_be32 *,
                                                      ersh + 1);
+
+            if (bytes_left < sizeof *index) {
+                ds_put_cstr(ds, "erspan(ver=1,truncated header))");
+                return;
+            }
             ds_put_format(ds, "erspan(ver=1,sid=0x%"PRIx16",idx=0x%"PRIx32")",
                           get_sid(ersh), ntohl(get_16aligned_be32(index)));
         } else if (ersh->ver == 2) {
             struct erspan_md2 *md2 = ALIGNED_CAST(struct erspan_md2 *,
                                                   ersh + 1);
+
+            if (bytes_left < sizeof *md2) {
+                ds_put_cstr(ds, "erspan(ver=2, truncated header))");
+                return;
+            }
             ds_put_format(ds, "erspan(ver=2,sid=0x%"PRIx16
                           ",dir=%"PRIu8",hwid=0x%"PRIx8")",
                           get_sid(ersh), md2->dir, get_hwid(md2));
@@ -783,7 +888,16 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
     } else if (data->tnl_type == OVS_VPORT_TYPE_GTPU) {
         const struct gtpuhdr *gtph;
 
-        gtph = format_udp_tnl_push_header(ds, udp);
+        gtph = format_udp_tnl_push_header(ds, udp, bytes_left);
+        if (!gtph) {
+            return;
+        }
+
+        bytes_left -= sizeof *udp;
+         if (bytes_left < sizeof gtph) {
+            ds_put_cstr(ds, "gtpu(truncated header))");
+            return;
+        }
 
         ds_put_format(ds, "gtpu(flags=0x%"PRIx8
                           ",msgtype=%"PRIu8",teid=0x%"PRIx32")",
