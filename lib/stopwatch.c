@@ -304,9 +304,18 @@ stopwatch_show_protected(int argc, const char *argv[], struct ds *s)
         stopwatch_print(sw, argv[1], s);
     } else {
         struct shash_node *node;
+        int no_samples = 0;
+
         SHASH_FOR_EACH (node, &stopwatches) {
             sw = node->data;
+            if (!sw->n_samples) {
+                no_samples++;
+                continue;
+            }
             stopwatch_print(sw, node->name, s);
+        }
+        if (no_samples) {
+            ds_put_format(s, "%d stopwatches with no samples\n", no_samples);
         }
     }
 
