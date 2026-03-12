@@ -36,6 +36,7 @@ TESTSUITE_AT = \
 	tests/completion.at \
 	tests/checkpatch.at \
 	tests/library.at \
+	tests/stopwatch.at \
 	tests/heap.at \
 	tests/bundle.at \
 	tests/classifier.at \

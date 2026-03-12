@@ -16,11 +16,19 @@
 
 #include <config.h>
 #undef NDEBUG
-#include "stopwatch.h"
 #include <assert.h>
+#include <getopt.h>
 #include <math.h>
 #include <stdio.h>
+#include "command-line.h"
+#include "daemon.h"
+#include "fatal-signal.h"
+#include "openvswitch/vlog.h"
+#include "openvswitch/poll-loop.h"
 #include "ovstest.h"
+#include "ovstest.h"
+#include "stopwatch.h"
+#include "unixctl.h"
 #include "util.h"
 
 #define MAX_SAMPLES 100
@@ -192,4 +200,147 @@ test_stopwatch_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     printf("\n");
 }
 
+static void
+stopwatch_unixctl_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                       const char *argv[] OVS_UNUSED, void *exiting_)
+{
+    bool *exiting = exiting_;
+    *exiting = true;
+    unixctl_command_reply(conn, NULL);
+}
+
+OVS_NO_RETURN static void
+usage(void)
+{
+    printf("%s: Open vSwitch stopwatch test program\n"
+           "usage: %s [OPTIONS]\n",
+           program_name, program_name);
+    daemon_usage();
+    vlog_usage();
+    printf("\nOther options:\n"
+           "  --unixctl=SOCKET        override default control socket name\n"
+           "  -h, --help              display this help message\n"
+           "  -V, --version           display version information\n");
+    exit(EXIT_SUCCESS);
+}
+
+static void
+parse_options(int *argcp, char **argvp[], char **unixctl_pathp)
+{
+    enum {
+        OPT_UNIXCTL = UCHAR_MAX + 1,
+        VLOG_OPTION_ENUMS,
+        DAEMON_OPTION_ENUMS
+    };
+    static const struct option long_options[] = {
+        {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
+        {"help",        no_argument, NULL, 'h'},
+        {"version",     no_argument, NULL, 'V'},
+        DAEMON_LONG_OPTIONS,
+        VLOG_LONG_OPTIONS,
+        {NULL, 0, NULL, 0},
+    };
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
+    int argc = *argcp;
+    char **argv = *argvp;
+
+    for (;;) {
+        int c;
+
+        c = getopt_long(argc, argv, short_options, long_options, NULL);
+        if (c == -1) {
+            break;
+        }
+
+        switch (c) {
+        case OPT_UNIXCTL:
+            *unixctl_pathp = optarg;
+            break;
+
+        case 'h':
+            usage();
+
+        case 'V':
+            ovs_print_version(0, 0);
+            exit(EXIT_SUCCESS);
+
+        VLOG_OPTION_HANDLERS
+        DAEMON_OPTION_HANDLERS
+
+        case '?':
+            exit(EXIT_FAILURE);
+
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+    free(short_options);
+
+    *argcp -= optind;
+    *argvp += optind;
+}
+
+static int
+test_stopwatch_unixctl_main(int argc, char *argv[])
+{
+    struct unixctl_server *unixctl;
+    char *unixctl_path = NULL;
+    bool exiting = false;
+
+    ovs_cmdl_proctitle_init(argc, argv);
+    set_program_name(argv[0]);
+    service_start(&argc, &argv);
+    fatal_ignore_sigpipe();
+    parse_options(&argc, &argv, &unixctl_path);
+
+    daemonize_start(false, false);
+    int retval = unixctl_server_create(unixctl_path, &unixctl);
+    if (retval) {
+        exit(EXIT_FAILURE);
+    }
+    unixctl_command_register("exit", "", 0, 0,
+                             stopwatch_unixctl_exit, &exiting);
+    daemonize_complete();
+
+    struct {
+        const char *name;
+        enum stopwatch_units units;
+        int value;
+    } stopwatches[] = {
+        { "1 msec",    SW_MS, 1 },
+        { "1 usec",    SW_US, 1 },
+        { "1 nsec",    SW_NS, 1 },
+        { "100 msec",  SW_MS, 100 },
+        { "100 usec",  SW_US, 100 },
+        { "100 nsec",  SW_NS, 100 },
+        { "1000 msec", SW_MS, 1000 },
+        { "1000 usec", SW_US, 1000 },
+        { "1000 nsec", SW_NS, 1000 },
+    };
+    for (size_t i = 0; i < ARRAY_SIZE(stopwatches); i++) {
+        stopwatch_create(stopwatches[i].name, stopwatches[i].units);
+        stopwatch_start(stopwatches[i].name, 0);
+        stopwatch_stop(stopwatches[i].name, stopwatches[i].value);
+    }
+    stopwatch_create("No samples msec", SW_MS);
+    stopwatch_create("No samples usec", SW_US);
+    stopwatch_create("No samples nsec", SW_NS);
+
+    stopwatch_sync();
+
+    while (!exiting) {
+        unixctl_server_run(unixctl);
+        unixctl_server_wait(unixctl);
+        if (exiting) {
+            poll_immediate_wake();
+        }
+        poll_block();
+    }
+    unixctl_server_destroy(unixctl);
+
+    service_stop();
+    return 0;
+}
+
 OVSTEST_REGISTER("test-stopwatch", test_stopwatch_main);
+OVSTEST_REGISTER("test-stopwatch-unixctl", test_stopwatch_unixctl_main);

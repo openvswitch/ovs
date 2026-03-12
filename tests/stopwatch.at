@@ -1,0 +1,118 @@
+AT_BANNER([stopwatch library])
+
+AT_SETUP([stopwatch module])
+AT_CHECK([ovstest test-stopwatch], [0], [......
+], [ignore])
+AT_CLEANUP
+
+AT_SETUP([stopwatch unixctl])
+
+AT_CHECK([ovstest test-stopwatch-unixctl -voff -vfile:info \
+            --no-chdir --detach --pidfile=stopwatch.pid \
+            --log-file=stopwatch.log --unixctl=stopwatch.ctl],
+         [0], [ignore], [ignore])
+on_exit 'test -e stopwatch.pid && kill $(cat stopwatch.pid)'
+OVS_WAIT_UNTIL([test -e stopwatch.ctl])
+
+m4_define([STOPWATCH_SHOW], [
+  AT_CHECK([ovs-appctl -t $(pwd)/stopwatch.ctl stopwatch/show $1 \
+               m4_if([$2], [], [| grep -v '^ ' | sort], [])], [0], [$3])
+])
+
+STOPWATCH_SHOW([], [], [dnl
+3 stopwatches with no samples
+Statistics for '1 msec'
+Statistics for '1 nsec'
+Statistics for '1 usec'
+Statistics for '100 msec'
+Statistics for '100 nsec'
+Statistics for '100 usec'
+Statistics for '1000 msec'
+Statistics for '1000 nsec'
+Statistics for '1000 usec'
+])
+
+STOPWATCH_SHOW(["100 usec"], [full], [dnl
+Statistics for '100 usec'
+  Total samples: 1
+  Maximum: 100 usec
+  Minimum: 100 usec
+  95th percentile: 0.000000 usec
+  Short term average: 100.000000 usec
+  Long term average: 100.000000 usec
+])
+
+STOPWATCH_SHOW(["1 nsec"], [full], [dnl
+Statistics for '1 nsec'
+  Total samples: 1
+  Maximum: 1 nsec
+  Minimum: 1 nsec
+  95th percentile: 0.000000 nsec
+  Short term average: 1.000000 nsec
+  Long term average: 1.000000 nsec
+])
+
+STOPWATCH_SHOW([--threshold 10], [], [dnl
+Statistics for '100 msec'
+Statistics for '100 nsec'
+Statistics for '100 usec'
+Statistics for '1000 msec'
+Statistics for '1000 nsec'
+Statistics for '1000 usec'
+])
+
+STOPWATCH_SHOW([-t 1 msec], [], [dnl
+Statistics for '1 msec'
+Statistics for '100 msec'
+Statistics for '1000 msec'
+Statistics for '1000 usec'
+])
+
+STOPWATCH_SHOW([-t 100 usec], [], [dnl
+Statistics for '1 msec'
+Statistics for '100 msec'
+Statistics for '100 usec'
+Statistics for '1000 msec'
+Statistics for '1000 usec'
+])
+
+STOPWATCH_SHOW([-t 100000 nsec], [], [dnl
+Statistics for '1 msec'
+Statistics for '100 msec'
+Statistics for '100 usec'
+Statistics for '1000 msec'
+Statistics for '1000 usec'
+])
+
+STOPWATCH_SHOW([-t 100 msec], [], [dnl
+Statistics for '100 msec'
+Statistics for '1000 msec'
+])
+
+STOPWATCH_SHOW([-t 101 msec], [], [dnl
+Statistics for '1000 msec'
+])
+
+STOPWATCH_SHOW([-t 101 usec], [], [dnl
+Statistics for '1 msec'
+Statistics for '100 msec'
+Statistics for '1000 msec'
+Statistics for '1000 usec'
+])
+
+STOPWATCH_SHOW([-t 999 usec], [], [dnl
+Statistics for '1 msec'
+Statistics for '100 msec'
+Statistics for '1000 msec'
+Statistics for '1000 usec'
+])
+
+AT_CHECK([ovs-appctl -t $(pwd)/stopwatch.ctl stopwatch/reset])
+
+STOPWATCH_SHOW([], [], [dnl
+12 stopwatches with no samples
+])
+
+AT_CHECK([ovs-appctl -t $(pwd)/stopwatch.ctl exit])
+
+AT_CLEANUP
