@@ -2733,7 +2733,12 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - Dump OF rules corresponding to UFID])
-OVS_TRAFFIC_VSWITCHD_START()
+OVS_TRAFFIC_VSWITCHD_START(
+   [_ADD_BR([br1]) -- \
+    add-port br0 patch1 -- set interface patch1 type=patch \
+        options:peer=patch0 ofport_request=3 -- \
+    add-port br1 patch0 -- set interface patch0 type=patch \
+        options:peer=patch1 ofport_request=4 --])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2749,25 +2754,38 @@ group_id=1,type=select,selection_method=dp_hash,bucket=bucket_id:0,weight:100,ac
 ])
 AT_DATA([flows.txt], [dnl
 table=0,arp,actions=NORMAL
+table=0,priority=100,cookie=0x1234abcd,in_port=patch1,ip,nw_dst=10.0.0.2,actions=resubmit(,4)
 table=0,priority=100,cookie=0x12345678,in_port=ovs-p1,ip,nw_dst=10.0.0.2,actions=resubmit(,1)
 table=0,priority=100,cookie=0xabcedf,in_port=ovs-p2,ip,nw_dst=10.0.0.1,actions=ct(table=3)
 table=1,priority=200,ip,actions=group:1
-table=2,ip,actions=ovs-p2
+table=2,ip,actions=ovs-p2,patch1
 table=3,ip,actions=ovs-p1
+table=4,ip,actions=drop
 ])
+AT_DATA([flows1.txt], [dnl
+table=0,arp,actions=drop
+table=0,actions=clone(resubmit(,1)),resubmit(,2)
+table=1,ip,actions=set_field:10.0.0.3->nw_dst,in_port
+table=2,ip,actions=in_port
+])
+
 AT_CHECK([ovs-ofctl add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl add-flows br1 flows1.txt])
 
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.1 -W 2 10.0.0.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 AT_CHECK([ovs-appctl revalidator/wait])
-# Add an unrelated OF change to populate the xcache during the next reval run.
-AT_CHECK([ovs-ofctl add-flow br0 table=4,ip,action=drop])
+dnl Add an unrelated OF change to populate the xcache during the next
+dnl revlaidation run.  Using OpenFlow 1.3 to avoid sending packet to ovs-ofctl
+dnl on a miss in case it is still attached during revalidation.
+AT_CHECK([ovs-ofctl -OOpenFlow13 add-flow br0 table=15,ip,action=drop])
 AT_CHECK([ovs-appctl revalidator/wait])
 
 AT_CHECK([ovs-appctl revalidator/pause])
+on_exit 'ovs-appctl revalidator/resume'
 
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [stdout])
 
@@ -2782,8 +2800,8 @@ AT_CHECK([ovs-appctl dpctl/dump-flows --names | grep "ipv4" | strip_used | strip
           strip_duration | strip_dp_hash | strip_recirc | sed 's/:never/:0.0s/' | \
           strip_ptype | strip_eth | sort], [0], [dnl
 recirc_id(<recirc>),in_port(ovs-p1),eth_type(0x0800),ipv4(dst=10.0.0.2,frag=no), packets:0, bytes:0, used:0.0s, actions:hash(l4(0)),recirc(<recirc>)
+recirc_id(<recirc>),in_port(ovs-p1),eth_type(0x0800),ipv4(dst=10.0.0.2,proto=1,frag=no), packets:0, bytes:0, used:0.0s, actions:ovs-p2
 recirc_id(<recirc>),in_port(ovs-p1),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:ct(commit),recirc(<recirc>)
-recirc_id(<recirc>),in_port(ovs-p1),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:ovs-p2
 recirc_id(<recirc>),in_port(ovs-p2),eth_type(0x0800),ipv4(dst=10.0.0.1,frag=no), packets:0, bytes:0, used:0.0s, actions:ct,recirc(<recirc>)
 recirc_id(<recirc>),in_port(ovs-p2),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:ovs-p1
 ])
@@ -2791,32 +2809,49 @@ recirc_id(<recirc>),in_port(ovs-p2),eth_type(0x0800),ipv4(frag=no), packets:0, b
 ufid=$(ovs-appctl dpctl/dump-flows -m filter='recirc_id(0),in_port(ovs-p1),ipv4' | parse_ufid)
 AT_CHECK([ovs-appctl ofproto/detrace $ufid $pmd_id | ofctl_strip | \
           sed -E 's/n_bytes=2(66|80),/n_bytes=294,/'], [0], [dnl
-cookie=0x12345678, n_packets=3, n_bytes=294, priority=100,ip,in_port=1,nw_dst=10.0.0.2,actions=resubmit(,1)
-table_id=1, n_packets=3, n_bytes=294, priority=200,ip,actions=group:1
+br0
+  cookie=0x12345678, n_packets=3, n_bytes=294, priority=100,ip,in_port=1,nw_dst=10.0.0.2,actions=resubmit(,1)
+  table_id=1, n_packets=3, n_bytes=294, priority=200,ip,actions=group:1
 ])
 
 ufid=$(ovs-appctl dpctl/dump-flows -m filter='in_port(ovs-p1),ipv4' | grep "ct(commit)" | parse_ufid)
 AT_CHECK([ovs-appctl ofproto/detrace $ufid $pmd_id | ofctl_strip | \
           sed -E 's/n_bytes=2(66|80),/n_bytes=294,/'], [0], [dnl
-group_id=1,type=select,selection_method=dp_hash,bucket=bucket_id:0,weight:100,actions=ct(commit,table=2)
+br0
+  group_id=1,type=select,selection_method=dp_hash,bucket=bucket_id:0,weight:100,actions=ct(commit,table=2)
 ])
 
 ufid=$(ovs-appctl dpctl/dump-flows -m filter='in_port(ovs-p1),ipv4' | grep "actions:ovs-p2" | parse_ufid)
 AT_CHECK([ovs-appctl ofproto/detrace $ufid $pmd_id | ofctl_strip | \
-          sed -E 's/n_bytes=2(66|80),/n_bytes=294,/'], [0], [dnl
-table_id=2, n_packets=3, n_bytes=294, ip,actions=output:2
+          sed -E 's/n_bytes=2(66|80),/n_bytes=294,/' | \
+          sed 's/table_id=254, n_packets=[[0-9]]*, n_bytes=[[0-9]]*,/table_id=254,/'], [0], [dnl
+br0
+  table_id=2, n_packets=3, n_bytes=294, ip,actions=output:2,output:3
+br1
+  n_packets=3, n_bytes=294, ,actions=clone(resubmit(,1)),resubmit(,2)
+  table_id=1, n_packets=3, n_bytes=294, ip,actions=mod_nw_dst:10.0.0.3,IN_PORT
+br0
+  table_id=0, no match
+  table_id=254, priority=0,reg0=0x2,actions=drop
+br1
+  table_id=2, n_packets=3, n_bytes=294, ip,actions=IN_PORT
+br0
+  cookie=0x1234abcd, n_packets=3, n_bytes=294, priority=100,ip,in_port=3,nw_dst=10.0.0.2,actions=resubmit(,4)
+  table_id=4, n_packets=3, n_bytes=294, ip,actions=drop
 ])
 
 ufid=$(ovs-appctl dpctl/dump-flows -m filter='recirc_id(0),in_port(ovs-p2),ipv4' | grep "ct," | parse_ufid)
 AT_CHECK([ovs-appctl ofproto/detrace $ufid $pmd_id | ofctl_strip | \
           sed -E 's/n_bytes=2(66|80),/n_bytes=294,/'], [0], [dnl
-cookie=0xabcedf, n_packets=3, n_bytes=294, priority=100,ip,in_port=2,nw_dst=10.0.0.1,actions=ct(table=3)
+br0
+  cookie=0xabcedf, n_packets=3, n_bytes=294, priority=100,ip,in_port=2,nw_dst=10.0.0.1,actions=ct(table=3)
 ])
 
 ufid=$(ovs-appctl dpctl/dump-flows -m filter='in_port(ovs-p2),ipv4' | grep "actions:ovs-p1" | parse_ufid)
 AT_CHECK([ovs-appctl ofproto/detrace $ufid $pmd_id | ofctl_strip | \
           sed -E 's/n_bytes=2(66|80),/n_bytes=294,/'], [0], [dnl
-table_id=3, n_packets=3, n_bytes=294, ip,actions=output:1
+br0
+  table_id=3, n_packets=3, n_bytes=294, ip,actions=output:1
 ])
 
 AT_CHECK([ovs-appctl revalidator/resume])

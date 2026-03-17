@@ -49,6 +49,7 @@ defragment
 deref
 dereference
 dest
+detrace
 dhcp
 dhcpv4
 dhcpv6
