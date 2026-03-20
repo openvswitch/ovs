@@ -431,6 +431,13 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       AC_MSG_ERROR([unable to find rte_config.h in $with_dpdk])
     ], [AC_INCLUDES_DEFAULT])
 
+    AC_COMPUTE_INT([dpdk_mbuf_headroom], [RTE_PKTMBUF_HEADROOM],
+                   [AC_INCLUDES_DEFAULT],
+                   [AC_MSG_ERROR([unable to determine RTE_PKTMBUF_HEADROOM])])
+    AC_DEFINE_UNQUOTED([DPDK_MBUF_HEADROOM], [$dpdk_mbuf_headroom],
+                       [Value of RTE_PKTMBUF_HEADROOM from DPDK])
+    AC_SUBST([DPDK_MBUF_HEADROOM], [$dpdk_mbuf_headroom])
+
     AC_CHECK_DECLS([RTE_LIBRTE_VHOST_NUMA, RTE_EAL_NUMA_AWARE_HUGEPAGES], [
       OVS_FIND_DEPENDENCY([get_mempolicy], [numa], [libnuma])
     ], [], [[#include <rte_config.h>]])

@@ -255,8 +255,27 @@ dp_packet_resize(struct dp_packet *b, size_t new_headroom, size_t new_tailroom)
     new_allocated = new_headroom + dp_packet_size(b) + new_tailroom;
 
     switch (b->source) {
-    case DPBUF_DPDK:
+    case DPBUF_DPDK: {
+#ifdef DPDK_NETDEV
+        uint32_t extbuf_len;
+
+        extbuf_len = netdev_dpdk_extbuf_size(new_allocated);
+        ovs_assert(extbuf_len <= UINT16_MAX);
+        new_base = netdev_dpdk_extbuf_allocate(extbuf_len);
+        if (!new_base) {
+            out_of_memory();
+        }
+        dp_packet_copy__(b, new_base, new_headroom, new_tailroom);
+        netdev_dpdk_extbuf_replace(b, new_base, extbuf_len);
+        /* Because of alignment, we may have gained a bit more tailroom than
+         * expected.  Update from the currently allocated length which got
+         * adjusted by rte_pktmbuf_attach_extbuf(). */
+        new_allocated = dp_packet_get_allocated(b);
+        break;
+#else
         OVS_NOT_REACHED();
+#endif
+    }
 
     case DPBUF_MALLOC:
         if (new_headroom == dp_packet_headroom(b)) {

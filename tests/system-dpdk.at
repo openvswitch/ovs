@@ -976,3 +976,103 @@ AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
 OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
+
+dnl --------------------------------------------------------------------------
+dnl Test headroom expansion.
+dnl
+dnl Interesting packets in this test are the ones going from p2 (netns at_ns1)
+dnl to vxlan2 (netns at_ns0).
+dnl Those packets from the kernel stack (netns at_ns1) are received on a
+dnl OVS dpdk port p2.
+dnl Then OVS userspace datapath encapsulates them twice and sends them
+dnl to the kernel stack (netns at_ns0) via a OVS dpdk port p0.
+dnl
+dnl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+dnl at_ns0                 .  init_net             .  at_ns1
+dnl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+dnl                        .                       .
+dnl                        .  +--------------------.--+
+dnl                        .  |                    .  |
+dnl vxlan2 fc00:2::1/64    .  br2 fc00:2::100/64   .  p2 fc00:2:200/64
+dnl (remote: fc00:1::100)  .  |                    .
+dnl                        .  ovs-vxlan2           .
+dnl                        .  (remote: fc00:1::1)  .
+dnl                        .                       .
+dnl                        .                       .
+dnl vxlan1 fc00:1::1/64    .  br1 fc00:1::100/64   .
+dnl (remote: fc00:0::100)  .  |                    .
+dnl                        .  ovs-vxlan1           .
+dnl                        .  (remote: fc00:0::1)  .
+dnl                        .                       .
+dnl                        .                       .
+dnl p0 fc00:0::1/64        .  br0 fc00:0::100/64   .
+dnl |                      .  |                    .
+dnl +----------------------.--+                    .
+
+AT_SETUP([OVS-DPDK - headroom expansion])
+AT_KEYWORDS([dpdk])
+OVS_CHECK_FIREWALL()
+OVS_DPDK_PRE_CHECK()
+dnl This test uses 2 IPv6 VxLAN encapsulations (140 bytes of tunnel headers)
+dnl to ensure that the headroom can't fit those headers.
+AT_SKIP_IF([test $DPDK_MBUF_HEADROOM -ge 140])
+OVS_DPDK_START([--no-pci])
+
+ADD_BR([br0])
+ADD_BR([br1])
+ADD_BR([br2])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br1 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br2 "actions=normal"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+AT_CHECK([ip link set dev br0 up])
+AT_CHECK([ip link set dev br1 up])
+
+AT_CHECK([ip addr add dev br0 "fc00::100/64" nodad])
+AT_CHECK([ovs-vsctl add-port br0 p0 -- \
+          set interface p0 type=dpdk -- \
+          set interface p0 options:n_rxq=$(lscpu | awk '/NUMA node\(s\)/ { print $NF + 1 }') -- \
+          set interface p0 options:dpdk-devargs=net_tap0,iface=p0])
+AT_CHECK([ip link set p0 netns at_ns0])
+NS_CHECK_EXEC([at_ns0], [ip link set p0 up])
+OVS_WAIT_UNTIL([ip -n at_ns0 link show dev p0 | grep -qw LOWER_UP])
+NS_CHECK_EXEC([at_ns0], [ip -6 addr add "fc00::1/64" nodad dev p0])
+
+ADD_OVS_TUNNEL6([vxlan], [br1], [ovs-vxlan1], [fc00::1],
+                ["fc00:1::100/64" nodad], [options:key=0])
+ADD_NATIVE_TUNNEL6([vxlan], [vxlan1], [at_ns0], [fc00::100],
+                   ["fc00:1::1/64" nodad], [id 0 dstport 4789])
+
+ADD_OVS_TUNNEL6([vxlan], [br2], [ovs-vxlan2], [fc00:1::1],
+                ["fc00:2::100/64" nodad], [options:key=1])
+ADD_NATIVE_TUNNEL6([vxlan], [vxlan2], [at_ns0], [fc00:1::100],
+                   ["fc00:2::1/64" nodad], [id 1 dstport 4789])
+
+AT_CHECK([ovs-vsctl add-port br2 p2 -- \
+          set interface p2 type=dpdk -- \
+          set interface p2 options:n_rxq=$(lscpu | awk '/NUMA node\(s\)/ { print $NF + 1 }') -- \
+          set interface p2 options:dpdk-devargs=net_tap2,iface=p2])
+AT_CHECK([ip link set p2 netns at_ns1])
+NS_CHECK_EXEC([at_ns1], [ip link set p2 up])
+OVS_WAIT_UNTIL([ip -n at_ns1 link show dev p2 | grep -qw LOWER_UP])
+NS_CHECK_EXEC([at_ns1], [ip -6 addr add "fc00:2::200/64" nodad dev p2])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::100])
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00:1::100])
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00:2::100])
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00:2::200 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Clean up
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/Failed to send start req to secondary 95/d
+/eth_dev_tap_create(): .*: failed to create multiq qdisc./d
+/eth_dev_tap_create():  Disabling rte flow support: No such file or directory/d
+/qdisc_create_multiq(): Could not add multiq qdisc (2): No such file or directory/d
+/tap_nl_dump_ext_ack(): Specified qdisc kind is unknown/d"])
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
