@@ -1067,12 +1067,6 @@ NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00:2::200 | FORMAT_PING], [
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-dnl Clean up
-OVS_DPDK_STOP_VSWITCHD(["dnl
-/Failed to send start req to secondary 95/d
-/eth_dev_tap_create(): .*: failed to create multiq qdisc./d
-/eth_dev_tap_create():  Disabling rte flow support: No such file or directory/d
-/qdisc_create_multiq(): Could not add multiq qdisc (2): No such file or directory/d
-/tap_nl_dump_ext_ack(): Specified qdisc kind is unknown/d"])
+OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
