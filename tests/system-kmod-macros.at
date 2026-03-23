@@ -97,6 +97,15 @@ m4_define([CHECK_CONNTRACK_FRAG_OVERLAP],
     AT_SKIP_IF([:])
 ])
 
+# CHECK_CONNTRACK_SNAT_ICMP_ID()
+#
+# Skip ICMP id conflict tests on kernel datapath. The fix for unique ICMP
+# id allocation on SNAT is in the userspace conntrack only.
+m4_define([CHECK_CONNTRACK_SNAT_ICMP_ID],
+[
+    AT_SKIP_IF([:])
+])
+
 # CHECK_CONNTRACK_NAT()
 #
 # Perform requirements checks for running conntrack NAT tests. The kernel

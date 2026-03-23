@@ -776,22 +776,6 @@ write_ct_md(struct dp_packet *pkt, uint16_t zone, const struct conn *conn,
     }
 }
 
-static uint8_t
-get_ip_proto(const struct dp_packet *pkt)
-{
-    uint8_t ip_proto;
-    struct eth_header *l2 = dp_packet_eth(pkt);
-    if (l2->eth_type == htons(ETH_TYPE_IPV6)) {
-        struct ovs_16aligned_ip6_hdr *nh6 = dp_packet_l3(pkt);
-        ip_proto = nh6->ip6_ctlun.ip6_un1.ip6_un1_nxt;
-    } else {
-        struct ip_header *l3_hdr = dp_packet_l3(pkt);
-        ip_proto = l3_hdr->ip_proto;
-    }
-
-    return ip_proto;
-}
-
 static bool
 is_ftp_ctl(const enum ct_alg_ctl_type ct_alg_ctl)
 {
@@ -806,7 +790,7 @@ get_alg_ctl_type(const struct dp_packet *pkt, const char *helper)
      * the external dependency. */
     enum { CT_IPPORT_FTP = 21 };
     enum { CT_IPPORT_TFTP = 69 };
-    uint8_t ip_proto = get_ip_proto(pkt);
+    uint8_t ip_proto = packet_get_ip_proto(pkt);
     struct udp_header *uh = dp_packet_l4(pkt);
     struct tcp_header *th = dp_packet_l4(pkt);
     ovs_be16 ftp_port = htons(CT_IPPORT_FTP);
@@ -864,6 +848,9 @@ pat_packet(struct dp_packet *pkt, const struct conn_key *key)
         packet_set_udp_port(pkt, key->dst.port, key->src.port);
     } else if (key->nw_proto == IPPROTO_SCTP) {
         packet_set_sctp_port(pkt, key->dst.port, key->src.port);
+    } else if (key->nw_proto == IPPROTO_ICMP
+               && packet_is_icmpv4_info_message(pkt)) {
+        packet_set_icmp_id(pkt, key->src.icmp_id);
     }
 }
 
@@ -2537,8 +2524,8 @@ store_addr_to_key(union ct_addr *addr, struct conn_key *key,
 
 static bool
 nat_get_unique_l4(struct conntrack *ct, struct conn_key *rev_key,
-                  ovs_be16 *port, uint16_t curr, uint16_t min,
-                  uint16_t max)
+                  ovs_be16 *port, ovs_be16 *peer_port,
+                  uint16_t curr, uint16_t min, uint16_t max)
 {
     static const unsigned int max_attempts = 128;
     uint16_t range = max - min + 1;
@@ -2559,6 +2546,10 @@ another_round:
         }
 
         *port = htons(curr);
+        if (peer_port) {
+            *peer_port = htons(curr);
+        }
+
         if (!conn_lookup(ct, rev_key, time_msec(), NULL, NULL)) {
             return true;
         }
@@ -2571,6 +2562,9 @@ another_round:
     }
 
     *port = htons(orig);
+    if (peer_port) {
+        *peer_port = htons(orig);
+    }
 
     return false;
 }
@@ -2604,7 +2598,8 @@ nat_get_unique_tuple(struct conntrack *ct, struct conn *conn,
     struct conn_key *rev_key = &conn->key_node[CT_DIR_REV].key;
     bool pat_proto = fwd_key->nw_proto == IPPROTO_TCP ||
                      fwd_key->nw_proto == IPPROTO_UDP ||
-                     fwd_key->nw_proto == IPPROTO_SCTP;
+                     fwd_key->nw_proto == IPPROTO_SCTP ||
+                     fwd_key->nw_proto == IPPROTO_ICMP;
     uint16_t min_dport, max_dport, curr_dport;
     uint16_t min_sport, max_sport, curr_sport;
     union ct_addr min_addr, max_addr, addr;
@@ -2650,11 +2645,13 @@ nat_get_unique_tuple(struct conntrack *ct, struct conn *conn,
     bool found = false;
     if (nat_info->nat_action & NAT_ACTION_DST_PORT) {
         found = nat_get_unique_l4(ct, rev_key, &rev_key->src.port,
-                                  curr_dport, min_dport, max_dport);
+                                  NULL, curr_dport, min_dport, max_dport);
     }
 
     if (!found) {
         found = nat_get_unique_l4(ct, rev_key, &rev_key->dst.port,
+                                  rev_key->nw_proto == IPPROTO_ICMP
+                                  ? &rev_key->src.port : NULL,
                                   curr_sport, min_sport, max_sport);
     }
 

@@ -1651,6 +1651,10 @@ void packet_set_tcp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_sctp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_icmp(struct dp_packet *, uint8_t type, uint8_t code);
+void packet_set_icmp_id(struct dp_packet *, ovs_be16 icmp_id);
+uint8_t packet_get_icmp_type(const struct dp_packet *packet);
+uint8_t packet_get_ip_proto(const struct dp_packet *packet);
+bool packet_is_icmpv4_info_message(const struct dp_packet *packet);
 void packet_set_nd(struct dp_packet *, const struct in6_addr *target,
                    const struct eth_addr sll, const struct eth_addr tll);
 void packet_set_nd_ext(struct dp_packet *packet,

@@ -1511,6 +1511,80 @@ packet_set_icmp(struct dp_packet *packet, uint8_t type, uint8_t code)
     pkt_metadata_init_conn(&packet->md);
 }
 
+/* Sets the ICMP id of the ICMP header contained in 'packet'.
+ * 'packet' must be a valid ICMP packet with its l4 offset properly
+ * populated. */
+void
+packet_set_icmp_id(struct dp_packet *packet, ovs_be16 icmp_id)
+{
+    struct icmp_header *ih = dp_packet_l4(packet);
+
+    if (!ih || dp_packet_l4_size(packet) < ICMP_HEADER_LEN) {
+        return;
+    }
+
+    ovs_be16 orig_ic = ih->icmp_fields.echo.id;
+
+    if (icmp_id != orig_ic) {
+        ih->icmp_fields.echo.id = icmp_id;
+        ih->icmp_csum = recalc_csum16(ih->icmp_csum, orig_ic, icmp_id);
+    }
+
+    pkt_metadata_init_conn(&packet->md);
+}
+
+uint8_t
+packet_get_icmp_type(const struct dp_packet *packet)
+{
+    struct icmp_header *ih = dp_packet_l4(packet);
+
+    if (!ih || dp_packet_l4_size(packet) < ICMP_HEADER_LEN) {
+        return 0;
+    }
+
+    return ih->icmp_type;
+}
+
+uint8_t
+packet_get_ip_proto(const struct dp_packet *packet)
+{
+    struct eth_header *l2 = dp_packet_eth(packet);
+    uint8_t ip_proto;
+
+    if (l2->eth_type == htons(ETH_TYPE_IPV6)) {
+        struct ovs_16aligned_ip6_hdr *nh6 = dp_packet_l3(packet);
+        ip_proto = nh6->ip6_ctlun.ip6_un1.ip6_un1_nxt;
+    } else {
+        struct ip_header *l3_hdr = dp_packet_l3(packet);
+        ip_proto = l3_hdr->ip_proto;
+    }
+
+    return ip_proto;
+}
+
+bool
+packet_is_icmpv4_info_message(const struct dp_packet *packet)
+{
+    uint8_t ip_proto, icmp_type;
+
+    ip_proto = packet_get_ip_proto(packet);
+    if (ip_proto != IPPROTO_ICMP) {
+        return false;
+    }
+
+    icmp_type = packet_get_icmp_type(packet);
+    if (icmp_type == ICMP4_ECHO_REQUEST ||
+        icmp_type == ICMP4_ECHO_REPLY ||
+        icmp_type == ICMP4_TIMESTAMP ||
+        icmp_type == ICMP4_TIMESTAMPREPLY ||
+        icmp_type == ICMP4_INFOREQUEST ||
+        icmp_type == ICMP4_INFOREPLY) {
+        return true;
+    }
+
+    return false;
+}
+
 /* Sets the IGMP type to IGMP_HOST_MEMBERSHIP_QUERY and populates the
  * v3 query header fields in 'packet'. 'packet' must be a valid IGMPv3
  * query packet with its l4 offset properly populated.
