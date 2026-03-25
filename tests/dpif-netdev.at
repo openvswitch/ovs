@@ -668,6 +668,31 @@ AT_CHECK([ovs-appctl revalidator/resume])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([dpif-netdev - mega flow ufid uniqueness for different wildcards])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock \
+   -- set bridge br0 datapath-type=dummy])
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/disable-rate-limit dpif_netdev])
+
+AT_CHECK([ovs-appctl revalidator/pause])
+# Two flows with different wildcard masks but identical masked flow.
+# Flow A: tos=0x20 with mask 0 (wildcarded) -> masked tos = 0
+# Flow B: tos=0x00 with exact match         -> masked tos = 0
+AT_CHECK([ovs-appctl dpctl/add-flow "in_port(1),eth(),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=6,tos=0x20/0,ttl=64,frag=no),tcp(src=80,dst=8080)" "3"])
+AT_CHECK([ovs-appctl dpctl/add-flow "in_port(1),eth(),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=80,dst=8080)" "3"])
+
+AT_CHECK([ovs-appctl revalidator/resume])
+
+# Verify both flows have different mega_ufids by checking flow_add log.
+AT_CHECK([grep 'flow_add.*tcp(src=80,dst=8080)' ovs-vswitchd.log | sed -n 's/.*mega_ufid:\([[0-9a-f-]]*\).*/\1/p' | sort -u | wc -l | tr -d ' '], [0], [dnl
+2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([dpif-netdev - check tx packet checksum offloading])
 OVS_VSWITCHD_START(
   [add-port br0 p1 \

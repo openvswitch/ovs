@@ -3288,14 +3288,20 @@ out:
 static void
 dp_netdev_get_mega_ufid(const struct match *match, ovs_u128 *mega_ufid)
 {
-    struct flow masked_flow;
+    struct {
+        struct flow masked_flow;
+        struct flow wc;
+    } key;
     size_t i;
 
+    memset(&key, 0, sizeof key);
     for (i = 0; i < sizeof(struct flow); i++) {
-        ((uint8_t *)&masked_flow)[i] = ((uint8_t *)&match->flow)[i] &
-                                       ((uint8_t *)&match->wc)[i];
+        ((uint8_t *)&key.masked_flow)[i] = ((uint8_t *)&match->flow)[i] &
+                                           ((uint8_t *)&match->wc)[i];
+        ((uint8_t *)&key.wc)[i] = ((uint8_t *)&match->wc)[i];
     }
-    odp_flow_key_hash(&masked_flow, sizeof masked_flow, mega_ufid);
+
+    odp_flow_key_hash(&key, sizeof key, mega_ufid);
 }
 
 uint64_t
