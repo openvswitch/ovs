@@ -1,7 +1,11 @@
-v3.4.6 - xx xxx xxxx
+v3.4.6 - 31 Mar 2026
 --------------------
+   - Bug fixes
    - DPDK:
      * OVS validated with DPDK 23.11.6.
+   - Security:
+     * Fixed buffer overflow during conntrack processing of alg=ftp in
+       userspace datapath (CVE-2026-34956).
 
 v3.4.5 - 11 Feb 2026
 --------------------
