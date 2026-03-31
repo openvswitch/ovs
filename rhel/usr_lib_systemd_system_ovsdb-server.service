@@ -2,6 +2,7 @@
 Description=Open vSwitch Database Unit
 After=syslog.target network-pre.target
 Before=network.target network.service
+Requires=ovsdb-server.socket
 Wants=ovs-delete-transient-ports.service
 PartOf=openvswitch.service
 

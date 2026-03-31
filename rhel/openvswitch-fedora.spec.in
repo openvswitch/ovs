@@ -229,6 +229,9 @@ for service in openvswitch ovsdb-server ovs-vswitchd ovs-delete-transient-ports 
                         rhel/usr_lib_systemd_system_${service}.service \
                         $RPM_BUILD_ROOT%{_unitdir}/${service}.service
 done
+install -p -D -m 0644 \
+        rhel/usr_lib_systemd_system_ovsdb-server.socket \
+        $RPM_BUILD_ROOT%{_unitdir}/ovsdb-server.socket
 install -m 0755 rhel/etc_init.d_openvswitch \
         $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/openvswitch.init
 
@@ -460,6 +463,7 @@ fi
 %config(noreplace) %{_sysconfdir}/logrotate.d/openvswitch
 %{_unitdir}/openvswitch.service
 %{_unitdir}/ovsdb-server.service
+%{_unitdir}/ovsdb-server.socket
 %{_unitdir}/ovs-vswitchd.service
 %{_unitdir}/ovs-delete-transient-ports.service
 %{_datadir}/openvswitch/scripts/openvswitch.init
