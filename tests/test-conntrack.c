@@ -54,6 +54,100 @@ build_packet(uint16_t udp_src, uint16_t udp_dst, ovs_be16 *dl_type)
     return pkt;
 }
 
+/* Build an Ethernet + IPv4 packet.  If 'pkt' is NULL a new buffer is
+ * allocated with 64 bytes of extra headroom so the FTP MTU guard passes.
+ * The buffer is populated up through the IP header; l4 is set to point
+ * directly after the IP header.  The caller is responsible for filling
+ * the L4 header and payload that follow. */
+static struct dp_packet *
+build_eth_ip_packet(struct dp_packet *pkt, struct eth_addr eth_src,
+                    struct eth_addr eth_dst, ovs_be32 ip_src, ovs_be32 ip_dst,
+                    uint8_t proto, uint16_t payload_alloc)
+{
+    struct ip_header *iph;
+    uint16_t proto_len;
+
+    switch (proto) {
+    case IPPROTO_TCP:  proto_len = TCP_HEADER_LEN;  break;
+    case IPPROTO_UDP:  proto_len = UDP_HEADER_LEN;  break;
+    case IPPROTO_ICMP: proto_len = ICMP_HEADER_LEN; break;
+    default:           proto_len = 0;               break;
+    }
+
+    if (pkt == NULL) {
+        /* 64-byte extra headroom keeps dp_packet_get_allocated() large enough
+         * that the FTP V4 MTU guard (orig_used_size + 8 <= allocated) passes
+         * even when the packet is near its maximum size. */
+        pkt = dp_packet_new_with_headroom(ETH_HEADER_LEN + IP_HEADER_LEN
+                                          + proto_len + payload_alloc, 64);
+    }
+
+    eth_compose(pkt, eth_src, eth_dst, ETH_TYPE_IP,
+                IP_HEADER_LEN + proto_len + payload_alloc);
+    iph = dp_packet_l3(pkt);
+    iph->ip_ihl_ver = IP_IHL_VER(5, 4);
+    iph->ip_tot_len = htons(IP_HEADER_LEN + proto_len + payload_alloc);
+    iph->ip_ttl = 64;
+    iph->ip_proto = proto;
+    packet_set_ipv4_addr(pkt, &iph->ip_src, ip_src);
+    packet_set_ipv4_addr(pkt, &iph->ip_dst, ip_dst);
+    iph->ip_csum = csum(iph, IP_HEADER_LEN);
+    dp_packet_set_l4(pkt, (char *) iph + IP_HEADER_LEN);
+    return pkt;
+}
+
+/* Fill the TCP header and optional payload for a packet previously built with
+ * build_eth_ip_packet().  The 'payload' buffer of 'payload_len' bytes is
+ * appended after the TCP header if non-NULL.  IP total-length, IP checksum,
+ * and TCP checksum are all updated to reflect the final packet contents. */
+static struct dp_packet *
+build_tcp_packet(struct dp_packet *pkt, uint16_t tcp_src, uint16_t tcp_dst,
+                 uint16_t tcp_flags, const char *tcp_payload,
+                 size_t payload_len)
+{
+    struct tcp_header *tcph;
+    struct ip_header *iph;
+    uint16_t ip_tot_len;
+    uint32_t tcp_csum;
+    struct flow flow;
+
+    ovs_assert(pkt);
+    tcph = dp_packet_l4(pkt);
+    ovs_assert(tcph);
+
+    tcph->tcp_src = htons(tcp_src);
+    tcph->tcp_dst = htons(tcp_dst);
+    put_16aligned_be32(&tcph->tcp_seq, 0);
+    put_16aligned_be32(&tcph->tcp_ack, 0);
+    tcph->tcp_ctl = TCP_CTL(tcp_flags, TCP_HEADER_LEN / 4);
+    tcph->tcp_winsz = htons(65535);
+    tcph->tcp_csum = 0;
+    tcph->tcp_urg = 0;
+
+    if (tcp_payload && payload_len > 0) {
+        /* The caller must have pre-allocated space via build_eth_ip_packet's
+         * payload_alloc argument.  Write directly to avoid a realloc that
+         * would lose the extra headroom required by the FTP MTU guard. */
+        memcpy((char *) tcph + TCP_HEADER_LEN, tcp_payload, payload_len);
+    }
+
+    /* Update IP total length and recompute IP checksum. */
+    iph = dp_packet_l3(pkt);
+    ip_tot_len = IP_HEADER_LEN + TCP_HEADER_LEN + payload_len;
+    iph->ip_tot_len = htons(ip_tot_len);
+    iph->ip_csum = 0;
+    iph->ip_csum = csum(iph, IP_HEADER_LEN);
+
+    /* Compute TCP checksum over pseudo-header + TCP segment. */
+    tcp_csum = packet_csum_pseudoheader(iph);
+    tcph->tcp_csum = csum_finish(
+        csum_continue(tcp_csum, tcph, TCP_HEADER_LEN + payload_len));
+
+    /* Set l3/l4 offsets so conntrack can extract a flow key. */
+    flow_extract(pkt, &flow);
+    return pkt;
+}
+
 static struct dp_packet_batch *
 prepare_packets(size_t n, bool change, unsigned tid, ovs_be16 *dl_type)
 {
@@ -398,6 +492,87 @@ test_pcap(struct ovs_cmdl_context *ctx)
     ovs_pcap_close(pcap);
 }
 
+/* ALG related testing. */
+
+/* FTP IPv4 PORT payload for testing. */
+#define FTP_PORT_CMD_STR  "PORT 192,168,123,2,113,42\r\n"
+#define FTP_CMD_PAD       234
+#define FTP_PAYLOAD_LEN   (sizeof FTP_PORT_CMD_STR - 1 + FTP_CMD_PAD)
+
+/* Test modify_packet wrapping.
+ *
+ * The test builds a minimal FTP control-channel exchange:
+ *   1. A TCP SYN that creates a conntrack entry with helper=ftp and SNAT.
+ *   2. A PSH|ACK carrying "PORT 192,168,123,2,113,42\r\n" padded to exactly
+ *      261 bytes of TCP payload, which makes total_size == 256.
+ *
+ * After the PORT packet is processed the address field in the payload must
+ * read "192,168,1,1" (the SNAT address with dots replaced by commas). */
+static void
+test_ftp_alg_large_payload(struct ovs_cmdl_context *ctx OVS_UNUSED)
+{
+    /* Packet endpoints. */
+    struct eth_addr eth_src = ETH_ADDR_C(00, 01, 02, 03, 04, 05);
+    struct eth_addr eth_dst = ETH_ADDR_C(00, 06, 07, 08, 09, 0a);
+    ovs_be32 ip_src = inet_addr("192.168.123.2"); /* FTP client. */
+    ovs_be32 ip_dst = inet_addr("192.168.1.1");   /* FTP server / SNAT addr. */
+    uint16_t sport = 12345;
+    uint16_t dport = 21;                          /* FTP control port. */
+
+    /* SNAT: rewrite client address to 192.168.1.1 in PORT commands. */
+    struct nat_action_info_t nat_info;
+    memset(&nat_info, 0, sizeof nat_info);
+    nat_info.nat_action = NAT_ACTION_SRC;
+    nat_info.min_addr.ipv4 = ip_dst;
+    nat_info.max_addr.ipv4 = ip_dst;
+
+    ct = conntrack_init();
+    conntrack_set_tcp_seq_chk(ct, false);
+
+    long long now = time_msec();
+
+    struct dp_packet *syn = build_eth_ip_packet(NULL, eth_src, eth_dst,
+                                                ip_src, ip_dst,
+                                                IPPROTO_TCP, 0);
+    build_tcp_packet(syn, sport, dport, TCP_SYN, NULL, 0);
+
+    struct dp_packet_batch syn_batch;
+    dp_packet_batch_init_packet(&syn_batch, syn);
+    conntrack_execute(ct, &syn_batch, htons(ETH_TYPE_IP), false, true, 0,
+                      NULL, NULL, "ftp", &nat_info, now, 0);
+    dp_packet_delete_batch(&syn_batch, true);
+
+    /* We get to skip some of the processing because the conntrack execute
+     * above will create the required conntrack entries. */
+
+    /* Build the large payload: PORT command followed by padding spaces
+     * and a final "\r\n" to reach exactly FTP_PAYLOAD_LEN bytes.  The
+     * FTP parser only looks at the first LARGEST_FTP_MSG_OF_INTEREST (128)
+     * bytes, so the trailing spaces do not interfere with parsing. */
+    char ftp_payload[FTP_PAYLOAD_LEN];
+    memcpy(ftp_payload, FTP_PORT_CMD_STR, sizeof FTP_PORT_CMD_STR - 1);
+    memset(ftp_payload + sizeof FTP_PORT_CMD_STR - 1, ' ', FTP_CMD_PAD);
+
+    struct dp_packet *port_pkt =
+        build_eth_ip_packet(NULL, eth_src, eth_dst, ip_src, ip_dst,
+                            IPPROTO_TCP, FTP_PAYLOAD_LEN);
+    build_tcp_packet(port_pkt, sport, dport, TCP_PSH | TCP_ACK,
+                     ftp_payload, FTP_PAYLOAD_LEN);
+
+    struct dp_packet_batch port_batch;
+    dp_packet_batch_init_packet(&port_batch, port_pkt);
+    conntrack_execute(ct, &port_batch, htons(ETH_TYPE_IP), false, true, 0,
+                      NULL, NULL, "ftp", &nat_info, now, 0);
+
+    struct tcp_header *th = dp_packet_l4(port_pkt);
+    size_t tcp_hdr_len = TCP_OFFSET(th->tcp_ctl) * 4;
+    const char *ftp_start = (const char *) th + tcp_hdr_len;
+    ovs_assert(!strncmp(ftp_start, "PORT 192,168,1,1,", 17));
+    dp_packet_delete_batch(&port_batch, true);
+    conntrack_destroy(ct);
+}
+
+
 static const struct ovs_cmdl_command commands[] = {
     /* Connection tracker tests. */
     /* Starts 'n_threads' threads. Each thread will send 'n_pkts' packets to
@@ -415,6 +590,13 @@ static const struct ovs_cmdl_command commands[] = {
      * and an empty zone. */
     {"benchmark-zones", "n_conns n_zones iterations", 3, 3,
         test_benchmark_zones, OVS_RO},
+    /* Verifies that the FTP ALG replace_substring function correctly handles
+     * a packet whose payload puts total_size at exactly 256 bytes.  The
+     * original uint8_t parameter type truncated 256 to 0, leading to a
+     * near-SIZE_MAX memmove (heap overflow).  The test confirms the address
+     * is rewritten to the SNAT target rather than causing a crash. */
+    {"ftp-alg-large-payload", "", 0, 0,
+        test_ftp_alg_large_payload, OVS_RO},
 
     {NULL, NULL, 0, 0, NULL, OVS_RO},
 };

@@ -303,3 +303,7 @@ AT_CHECK([ovstest test-cooperative-multitasking-nested-yield], [0], [], [dnl
 cooperative_multitasking|ERR|Nested yield avoided, this is a bug! Enable debug logging for more details.
 ])
 AT_CLEANUP
+
+AT_SETUP([Conntrack Library - FTP ALG parsing])
+AT_CHECK([ovstest test-conntrack ftp-alg-large-payload])
+AT_CLEANUP

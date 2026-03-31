@@ -3242,9 +3242,9 @@ expectation_create(struct conntrack *ct, ovs_be16 dst_port,
 }
 
 static void
-replace_substring(char *substr, uint8_t substr_size,
-                  uint8_t total_size, char *rep_str,
-                  uint8_t rep_str_size)
+replace_substring(char *substr, size_t substr_size,
+                  size_t total_size, char *rep_str,
+                  size_t rep_str_size)
 {
     memmove(substr + rep_str_size, substr + substr_size,
             total_size - substr_size);
@@ -3266,6 +3266,9 @@ repl_bytes(char *str, char c1, char c2, int max)
     }
 }
 
+/* Replaces a substring in the packet and rewrites the packet
+ * size to match.  This function assumes the caller has verified
+ * the lengths to prevent under/over flow. */
 static void
 modify_packet(struct dp_packet *pkt, char *pkt_str, size_t size,
               char *repl_str, size_t repl_size,
