@@ -1,0 +1,248 @@
+AT_BANNER([pfd stream - pre-opened file descriptor])
+
+AT_SETUP([pfd stream - basic listen and accept])
+AT_KEYWORDS([pfd])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+on_exit 'kill `cat *.pid`'
+
+# Use Python to create a listening socket and exec ovsdb-server with
+# that fd as --remote=pfd:<fd>.
+AT_DATA([serve.py], [[
+import os, socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.bind(sys.argv[1])
+s.listen(64)
+fd = s.fileno()
+os.set_inheritable(fd, True)
+argv = sys.argv[2:]
+argv[argv.index('PFD')] = '--remote=pfd:' + str(fd)
+os.execvp(argv[0], argv)
+]])
+AT_CHECK([$PYTHON3 serve.py db.sock \
+          ovsdb-server --detach --no-chdir --log-file --pidfile db PFD],
+         [0], [ignore], [ignore])
+
+OVS_WAIT_UNTIL([test -e ovsdb-server.pid])
+
+# Connect via the socket and run a simple transaction.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes], [0], [stdout])
+AT_CHECK([grep -c pfd stdout], [0], [1
+])
+
+AT_CHECK([ovsdb-client list-dbs unix:db.sock], [0], [stdout])
+AT_CHECK([grep ordinals stdout], [0], [ignore])
+
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+AT_SETUP([pfd stream - JSON-RPC over pfd])
+AT_KEYWORDS([pfd])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+on_exit 'kill `cat *.pid`'
+
+# Use Python to create a listening socket and exec test-jsonrpc.
+AT_DATA([serve.py], [[
+import os, socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.bind(sys.argv[1])
+s.listen(64)
+fd = s.fileno()
+os.set_inheritable(fd, True)
+argv = sys.argv[2:]
+argv[argv.index('PFD')] = 'pfd:' + str(fd)
+os.execvp(argv[0], argv)
+]])
+AT_CHECK([$PYTHON3 serve.py socket \
+          ovstest test-jsonrpc --detach --no-chdir --pidfile listen PFD],
+         [0], [ignore], [ignore])
+
+OVS_WAIT_UNTIL([test -e test-jsonrpc.pid])
+
+AT_CHECK(
+  [[ovstest test-jsonrpc request unix:socket echo '[{"a": "b", "x": null}]']], [0],
+  [[{"error":null,"id":0,"result":[{"a":"b","x":null}]}
+]])
+AT_CLEANUP
+
+AT_SETUP([pfd stream - invalid fd])
+AT_KEYWORDS([pfd])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+on_exit 'kill `cat *.pid`'
+
+# Start ovsdb-server with an invalid pfd: remote (fd 99 should not be open).
+# ovsdb-server will start but fail to open the remote.
+AT_DATA([serve.py], [[
+import os, socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.bind(sys.argv[1])
+s.listen(64)
+fd = s.fileno()
+os.set_inheritable(fd, True)
+# Pass a different fd number that is not a valid socket.
+os.execvp(sys.argv[2], sys.argv[2:])
+]])
+AT_CHECK([$PYTHON3 serve.py db.sock ovsdb-server --detach --no-chdir \
+          --log-file --pidfile --remote=pfd:99 --remote=punix:db.sock db],
+         [0], [ignore], [ignore])
+
+OVS_WAIT_UNTIL([test -e ovsdb-server.pid])
+OVS_WAIT_UNTIL([grep "pfd:99: not a socket" ovsdb-server.log])
+
+OVSDB_SERVER_SHUTDOWN(["/pfd:99/d"])
+AT_CLEANUP
+
+AT_SETUP([pfd stream - fd is not a socket])
+AT_KEYWORDS([pfd])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+on_exit 'kill `cat *.pid`'
+
+# Use Python to open a regular file and exec ovsdb-server with that fd.
+AT_DATA([notasock.py], [[
+import os, socket, sys
+# Create a listening socket for punix: so we can still connect.
+ls = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+ls.bind('db.sock')
+ls.listen(64)
+ls_fd = ls.fileno()
+os.set_inheritable(ls_fd, True)
+# Open a regular file.
+f = open('regular-file', 'w')
+fd = f.fileno()
+os.set_inheritable(fd, True)
+os.execvp(sys.argv[1], sys.argv[1:] + [
+    '--remote=pfd:' + str(fd),
+    '--remote=pfd:' + str(ls_fd),
+])
+]])
+touch regular-file
+AT_CHECK([$PYTHON3 notasock.py ovsdb-server --detach --no-chdir \
+          --log-file --pidfile db],
+         [0], [ignore], [ignore])
+
+OVS_WAIT_UNTIL([test -e ovsdb-server.pid])
+OVS_WAIT_UNTIL([grep "not a socket" ovsdb-server.log])
+
+OVSDB_SERVER_SHUTDOWN(["/not a socket/d;/listen failed/d"])
+AT_CLEANUP
+
+AT_SETUP([pfd stream - fd is not listening])
+AT_KEYWORDS([pfd])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+on_exit 'kill `cat *.pid`'
+
+# Use Python to create a bound (not listening) socket.
+AT_DATA([notlistening.py], [[
+import os, socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.bind('connected.sock')
+fd = s.fileno()
+os.set_inheritable(fd, True)
+os.execvp(sys.argv[1], sys.argv[1:] + ['--remote=pfd:' + str(fd)])
+]])
+AT_CHECK([$PYTHON3 notlistening.py ovsdb-server --detach --no-chdir \
+          --log-file --pidfile --remote=punix:db.sock db],
+         [0], [ignore], [ignore])
+
+OVS_WAIT_UNTIL([test -e ovsdb-server.pid])
+OVS_WAIT_UNTIL([grep "not a listening socket" ovsdb-server.log])
+
+OVSDB_SERVER_SHUTDOWN(["/not a listening socket/d;/listen failed/d"])
+AT_CLEANUP
+
+AT_SETUP([pfd stream - rejected via add-remote])
+AT_KEYWORDS([pfd])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+on_exit 'kill `cat *.pid`'
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile \
+          --remote=punix:db.sock db], [0], [ignore], [ignore])
+
+# Try to add pfd: remote via ovs-appctl; should be rejected.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-remote pfd:3], [2],
+  [], [pfd: remotes can only be specified on the command line
+ovs-appctl: ovsdb-server: server returned an error
+])
+
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+AT_SETUP([pfd stream - rejected via database])
+AT_KEYWORDS([pfd])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+on_exit 'kill `cat *.pid`'
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile \
+          --remote=punix:db.sock \
+          --remote=db:ordinals,ordinals,name db], [0], [ignore], [ignore])
+
+# Insert a row with pfd:3 as the remote name.
+AT_CHECK(
+  [[ovsdb-client transact unix:db.sock \
+    '["ordinals", {"op": "insert", "table": "ordinals",
+      "row": {"name": "pfd:3", "number": 0}}]']],
+  [0], [ignore])
+
+# Give ovsdb-server time to process the change.
+OVS_WAIT_UNTIL([grep "pfd: remotes can only be specified on the command line" ovsdb-server.log])
+
+# Verify the pfd:3 remote was NOT added.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes], [0], [stdout])
+AT_CHECK([grep pfd stdout], [1])
+
+OVSDB_SERVER_SHUTDOWN(["/pfd: remotes can only be specified/d"])
+AT_CLEANUP
+
+AT_SETUP([pfd stream - rejected via Manager table])
+AT_KEYWORDS([pfd])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+AT_DATA([schema],
+  [[{"name": "mydb",
+     "tables": {
+       "Root": {
+         "columns": {
+           "manager_options": {
+             "type": {
+               "key": {"type": "uuid", "refTable": "Manager"},
+               "min": 0,
+               "max": "unlimited"}}}},
+       "Manager": {
+         "columns": {
+           "target": {
+             "type": "string"}}}}}
+]])
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+AT_CHECK(
+  [[ovsdb-tool transact db \
+     '["mydb",
+       {"op": "insert",
+        "table": "Root",
+        "row": {
+          "manager_options": ["set", [["named-uuid", "x"]]]}},
+       {"op": "insert",
+        "table": "Manager",
+        "uuid-name": "x",
+        "row": {"target": "pfd:3"}}]']], [0], [ignore], [ignore])
+on_exit 'kill `cat *.pid`'
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile \
+          --remote=punix:db.sock \
+          --remote=db:mydb,Root,manager_options db], [0], [ignore], [ignore])
+
+OVS_WAIT_UNTIL([grep "pfd: remotes can only be specified on the command line" ovsdb-server.log])
+
+# Verify the pfd:3 remote was NOT added.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes], [0], [stdout])
+AT_CHECK([grep pfd stdout], [1])
+
+OVSDB_SERVER_SHUTDOWN(["/pfd: remotes can only be specified/d
+/No status column present in the Manager table/d"])
+AT_CLEANUP

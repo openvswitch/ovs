@@ -66,6 +66,7 @@ TESTSUITE_AT = \
 	tests/json.at \
 	tests/jsonrpc.at \
 	tests/jsonrpc-py.at \
+	tests/pfd-stream.at \
 	tests/pmd.at \
 	tests/alb.at \
 	tests/tunnel.at \
