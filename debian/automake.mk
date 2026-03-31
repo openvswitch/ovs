@@ -40,6 +40,7 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.ovs-record-hostname.service \
 	debian/openvswitch-switch.ovs-vswitchd.service \
 	debian/openvswitch-switch.ovsdb-server.service \
+	debian/openvswitch-switch.ovsdb-server.socket \
 	debian/openvswitch-switch.postinst \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.preinst \

@@ -2,6 +2,7 @@
 Description=Open vSwitch Database Unit
 After=systemd-journald.socket network-pre.target dpdk.service local-fs.target
 Before=network.target networking.service
+Requires=ovsdb-server.socket
 PartOf=openvswitch-switch.service
 DefaultDependencies=no
 

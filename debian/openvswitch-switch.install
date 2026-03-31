@@ -1,4 +1,5 @@
 #!/usr/bin/dh-exec
+debian/openvswitch-switch.ovsdb-server.socket => /lib/systemd/system/ovsdb-server.socket
 debian/ifupdown.sh usr/share/openvswitch/scripts
 debian/openvswitch-switch.default => /usr/share/openvswitch/switch/default.template
 debian/ovs-systemd-reload /usr/share/openvswitch/scripts

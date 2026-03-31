@@ -1,0 +1,11 @@
+[Unit]
+Description=Open vSwitch Database Socket
+Before=ovsdb-server.service
+
+[Socket]
+ListenStream=/run/openvswitch/db.sock
+Service=ovsdb-server.service
+SocketMode=0770
+
+[Install]
+WantedBy=sockets.target
