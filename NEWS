@@ -1,5 +1,9 @@
-v3.7.1 - xx xxx xxxx
+v3.7.1 - 31 Mar 2026
 --------------------
+   - Bug fixes
+   - Security:
+     * Fixed buffer overflow during conntrack processing of alg=ftp in
+       userspace datapath (CVE-2026-34956).
 
 v3.7.0 - 16 Feb 2026
 --------------------
