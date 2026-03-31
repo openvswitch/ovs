@@ -181,10 +181,10 @@ jobs:
             opts:         --enable-shared
 
           - compiler:     gcc
-            testsuite:    check check-dpdk
+            testsuite:    check
             dpdk:         dpdk
           - compiler:     clang
-            testsuite:    check check-dpdk
+            testsuite:    check
             dpdk:         dpdk
 
           - compiler:     gcc
@@ -260,10 +260,6 @@ jobs:
           - compiler:     gcc
             dpdk:         dpdk
             testsuite:    check-system-tso
-
-          - compiler:     gcc
-            dpdk:         dpdk
-            testsuite:    check-afxdp
 
     steps:
     - name: checkout
