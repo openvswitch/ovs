@@ -736,6 +736,7 @@ Scott Hendricks
 Sean Brady                      sbrady@gtfservices.com
 Sebastian Andrzej Siewior       sebastian@breakpoint.cc
 Sébastien RICCIO                sr@swisscenter.com
+Seiji Sakurai                   Seiji.Sakurai@outlook.com
 Shweta Seth                     shwseth@cisco.com
 Simon Jouet                     simon.jouet@gmail.com
 Spiro Kourtessis                spiro@vmware.com
