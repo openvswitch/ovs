@@ -136,3 +136,54 @@ const struct pstream_class punix_pstream_class = {
     NULL,
 };
 
+/* Pre-opened file descriptor passive stream.
+ *
+ * Used for systemd socket activation: systemd opens and binds the socket,
+ * then passes it to the service as a pre-opened file descriptor. */
+
+static int
+pfd_open(const char *name, char *suffix,
+         struct pstream **pstreamp, uint8_t dscp OVS_UNUSED)
+{
+    long fd;
+
+    if (!str_to_long(suffix, 10, &fd) || fd < 0) {
+        VLOG_ERR("%s: bad file descriptor", name);
+        return EINVAL;
+    }
+
+    /* Verify it is a listening stream socket. */
+    int sock_type;
+    socklen_t len = sizeof sock_type;
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &sock_type, &len)) {
+        VLOG_ERR("%s: not a socket (%s)", name, ovs_strerror(errno));
+        return errno;
+    }
+    if (sock_type != SOCK_STREAM) {
+        VLOG_ERR("%s: not a stream socket (type %d)", name, sock_type);
+        return EINVAL;
+    }
+    int listening;
+    len = sizeof listening;
+    if (getsockopt(fd, SOL_SOCKET, SO_ACCEPTCONN, &listening, &len)
+        || !listening) {
+        VLOG_ERR("%s: not a listening socket", name);
+        return EINVAL;
+    }
+
+    int error = set_nonblocking(fd);
+    if (error) {
+        return error;
+    }
+
+    return new_fd_pstream(xstrdup(name), fd, punix_accept, NULL, pstreamp);
+}
+
+const struct pstream_class pfd_pstream_class = {
+    "pfd",
+    false,
+    pfd_open,
+    NULL,
+    NULL,
+    NULL,
+};

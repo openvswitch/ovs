@@ -709,6 +709,18 @@ punix:<file>
     <file> to mimic the behavior of a Unix domain socket. The ACLs of the named
     pipe include LocalSystem, Administrators, and Creator Owner.
 
+pfd:<fd>
+    Listen on a pre-opened file descriptor <fd>.  The file descriptor must
+    refer to a bound, listening Unix domain stream socket.  This is intended
+    for use with systemd socket activation, where systemd opens the socket
+    and passes it to the service.
+
+    For security, ``pfd:`` may only be specified on the command line
+    (``--remote=pfd:<fd>``).  It is rejected if added at runtime via
+    ``ovsdb-server/add-remote`` or through the database.
+
+    This connection method is not supported on Windows.
+
 All IP-based connection methods accept IPv4 and IPv6 addresses.  To specify an
 IPv6 address, wrap it in square brackets, e.g.  ``ssl:[::1]:6640``.  Passive
 IP-based connection methods by default listen for IPv4 connections only; use

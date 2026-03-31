@@ -69,6 +69,7 @@ static const struct pstream_class *pstream_classes[] = {
     &ptcp_pstream_class,
 #ifndef _WIN32
     &punix_pstream_class,
+    &pfd_pstream_class,
 #else
     &pwindows_pstream_class,
 #endif
@@ -147,6 +148,10 @@ stream_usage(const char *name, bool active, bool passive,
 #endif
         printf("  punix:FILE              "
                "listen on Unix domain socket FILE\n");
+#ifndef _WIN32
+        printf("  pfd:FD                  "
+               "listen on pre-opened file descriptor FD\n");
+#endif
     }
 
 #ifdef HAVE_OPENSSL
