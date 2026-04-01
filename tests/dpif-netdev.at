@@ -32,6 +32,20 @@ strip_xout_keep_actions () {
 ' | sort
 }
 
+strip_hw_offload () {
+    sed '
+    /^flow-dump from/d
+    s/ufid:[-0-9a-f]*,//
+    s/used:[0-9\.][0-9\.]*/used:0.0/
+    s/[^,]*(0\/0),//g
+    s/eth([^)]*)/eth()/
+    s/ipv4([^)]*)/ipv4()/
+    s/udp([^)]*)/udp()/
+    s/, dp-extra-info.*//
+    s/^[[:space:]]*//
+' | sort
+}
+
 filter_flow_install () {
     grep 'flow_add' | sed 's/.*flow_add: //' | sort | uniq
 }
@@ -636,6 +650,116 @@ arp,in_port=ANY,dl_vlan=11,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:
 
 DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy])
 DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy-pmd])
+
+AT_SETUP([dpif-netdev - full hw offload - dummy-pmd])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- \
+   add-port br0 p2 -- \
+   set interface p1 type=dummy-pmd ofport_request=1 options:ifindex=1100 -- \
+   set interface p2 type=dummy-pmd ofport_request=2 options:ifindex=1200 \
+     options:tx_pcap=p2.pcap -- \
+   set bridge br0 datapath-type=dummy other-config:datapath-id=1234 \
+     fail-mode=secure], [], [], [--dummy-numa="0,0,0,0,1,1,1,1"])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg \
+          dpif_offload_dummy:file:dbg])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
+OVS_WAIT_UNTIL([grep "Flow HW offload is enabled" ovs-vswitchd.log])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=1,actions=p2])
+
+packet="\
+  eth_src=00:06:07:08:09:0a,eth_dst=00:01:02:03:04:05,\
+  udp,ip_src=127.0.0.1,ip_dst=127.0.0.1,nw_ttl=64,\
+  udp_src=54392,udp_dst=5201"
+packet_hex=$(ovs-ofctl compose-packet --bare "${packet}")
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet_hex], [0])
+
+OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
+AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=17,tos=0,ttl=64,frag=no),udp(src=54392,dst=5201)
+])
+
+# Check that flow successfully offloaded.
+OVS_WAIT_UNTIL([grep "succeed to add netdev flow" ovs-vswitchd.log])
+AT_CHECK([filter_hw_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: flow put[[create]]: flow match: recirc_id=0,eth,ip,in_port=1,vlan_tci=0x0000/0x1fff,nw_frag=no, mark: 1
+])
+
+# Check that datapath flow installed successfully.
+AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions: <del>
+])
+
+# Inject the same packet again.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet_hex], [0])
+
+# Check for succesfull packet matching with installed offloaded flow.
+AT_CHECK([filter_hw_packet_netdev_dummy < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: packet: udp,vlan_tci=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=54392,tp_dst=5201 matches with flow: recirc_id=0,eth,ip,vlan_tci=0x0000/0x1fff,nw_frag=no with mark: 1
+])
+
+# Dump the datapath flow to see that actions was executed for a packet.
+AT_CHECK([ovs-appctl dpctl/dump-flows -m | strip_hw_offload], [0], [dnl
+recirc_id(0),in_port(p1),packet_type(ns=0,id=0),eth(),eth_type(0x0800),ipv4(),udp(), packets:1, bytes:106, used:0.0s, offloaded:yes, dp:dummy, actions:p2
+])
+
+# Wait for datapath flow expiration.
+ovs-appctl time/stop
+ovs-appctl time/warp 15000
+ovs-appctl revalidator/wait
+
+# Check that flow successfully deleted from HW.
+OVS_WAIT_UNTIL([grep "succeed to delete netdev flow" ovs-vswitchd.log])
+AT_CHECK([filter_hw_flow_del < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: flow del: mark: 1
+])
+
+# Check if we do not hit partial hw offload.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show \
+          | grep -q "PHWOL hits:                  0 "])
+
+# Verify two packets where received.
+AT_CHECK([[[ $(ovs-pcap p2.pcap | grep -c "$packet_hex") -eq 2 ]]])
+
+# Verify that we observe one miss, one packet processed by hardware,
+# and no offload pipeline aborts.
+AT_CHECK(
+  [ovs-appctl --format json dpif/offload/show \
+     | sed 's/.*"p1":{\([[^}]]*\)}.*/\1/; s/,/\n/g; s/"//g' \
+     | sed -n '/^rx_offload_/p' | sort], [0], [dnl
+rx_offload_full:1
+rx_offload_miss:1
+rx_offload_partial:0
+rx_offload_pipe_abort:0
+])
+
+# In this test, we remove an output port while the revalidator is disabled.
+# The hardware flow remains, but the port can no longer be found, causing
+# the offload simulation to fail egressing.  This simulates an offload
+# pipeline abort, so the packet should fall back to normal processing.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet_hex], [0])
+AT_CHECK([ovs-appctl revalidator/pause])
+AT_CHECK([ovs-vsctl del-port br0 p2])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet_hex], [0])
+AT_CHECK([ovs-appctl dpctl/dump-flows -m | strip_hw_offload], [0], [dnl
+recirc_id(0),in_port(p1),packet_type(ns=0,id=0),eth(),eth_type(0x0800),ipv4(),udp(), packets:1, bytes:106, used:0.0s, offloaded:yes, dp:dummy, actions:2
+])
+AT_CHECK([ovs-appctl revalidator/resume])
+AT_CHECK(
+  [ovs-appctl --format json dpif/offload/show \
+     | sed 's/.*"p1":{\([[^}]]*\)}.*/\1/; s/,/\n/g; s/"//g' \
+     | sed -n '/^rx_offload_/p' | sort], [0], [dnl
+rx_offload_full:2
+rx_offload_miss:2
+rx_offload_partial:0
+rx_offload_pipe_abort:1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_SETUP([dpif-netdev - check dpctl/add-flow in_port exact match])
 OVS_VSWITCHD_START(

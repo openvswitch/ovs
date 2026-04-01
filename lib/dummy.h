@@ -41,10 +41,14 @@ void dummy_enable(const char *arg);
 /* Implementation details. */
 void dpif_dummy_register(enum dummy_level);
 void netdev_dummy_register(enum dummy_level);
+void netdev_dummy_queue_simulate_offload_packet(const struct netdev *,
+                                                struct dp_packet *,
+                                                int queue_id);
 void timeval_dummy_register(void);
 void ofpact_dummy_enable(void);
 bool is_dummy_netdev_class(const struct netdev_class *);
-void dummy_netdev_simulate_offload(struct netdev *, struct dp_packet *,
-                                   struct flow *);
+bool dummy_netdev_simulate_offload(struct netdev *, struct dp_packet *,
+                                   int queue_id, struct flow *);
+void dummy_netdev_hw_offload_run(struct netdev *);
 
 #endif /* dummy.h */

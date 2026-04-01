@@ -695,6 +695,7 @@ netdev_dummy_run(const struct netdev_class *netdev_class)
         ovs_mutex_lock(&dev->mutex);
         dummy_packet_conn_run(dev);
         ovs_mutex_unlock(&dev->mutex);
+        dummy_netdev_hw_offload_run(&dev->up);
     }
     ovs_mutex_unlock(&dummy_list_mutex);
 }
@@ -1875,7 +1876,7 @@ eth_from_flow_str(const char *s, size_t packet_size,
 }
 
 static void
-netdev_dummy_queue_packet__(struct netdev_rxq_dummy *rx, struct dp_packet *packet)
+netdev_dummy_rxq_enqueue(struct netdev_rxq_dummy *rx, struct dp_packet *packet)
 {
     struct pkt_list_node *pkt_node = xmalloc(sizeof *pkt_node);
 
@@ -1886,33 +1887,62 @@ netdev_dummy_queue_packet__(struct netdev_rxq_dummy *rx, struct dp_packet *packe
 }
 
 static void
-netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct dp_packet *packet,
-                          struct flow *flow, int queue_id)
+netdev_dummy_queue_packet__(struct netdev_dummy *dummy,
+                            struct dp_packet *packet, int queue_id)
     OVS_REQUIRES(dummy->mutex)
 {
-    struct netdev_rxq_dummy *rx, *prev;
+    struct netdev_rxq_dummy *rx, *prev = NULL;
 
-    if (dummy->rxq_pcap) {
-        ovs_pcap_write(dummy->rxq_pcap, packet);
-    }
-
-    dummy_netdev_simulate_offload(&dummy->up, packet, flow);
-
-    prev = NULL;
     LIST_FOR_EACH (rx, node, &dummy->rxes) {
         if (rx->up.queue_id == queue_id &&
             rx->recv_queue_len < NETDEV_DUMMY_MAX_QUEUE) {
             if (prev) {
-                netdev_dummy_queue_packet__(prev, dp_packet_clone(packet));
+                netdev_dummy_rxq_enqueue(prev, dp_packet_clone(packet));
             }
             prev = rx;
         }
     }
     if (prev) {
-        netdev_dummy_queue_packet__(prev, packet);
+        netdev_dummy_rxq_enqueue(prev, packet);
     } else {
         dp_packet_delete(packet);
     }
+}
+
+static void
+netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct dp_packet *packet,
+                          struct flow *flow, int queue_id)
+    OVS_REQUIRES(dummy->mutex)
+{
+    if (dummy->rxq_pcap) {
+        ovs_pcap_write(dummy->rxq_pcap, packet);
+    }
+
+    if (dummy_netdev_simulate_offload(&dummy->up, packet,
+                                                   queue_id, flow)) {
+        /* Packet was stolen for full HW offload simulation. */
+        return;
+    }
+
+    netdev_dummy_queue_packet__(dummy, packet, queue_id);
+}
+
+void netdev_dummy_queue_simulate_offload_packet(const struct netdev *netdev,
+                                                struct dp_packet *packet,
+                                                int queue_id)
+{
+    struct netdev_dummy *dummy;
+
+    if (!netdev || !is_dummy_netdev_class(netdev->netdev_class)) {
+        dp_packet_delete(packet);
+        return;
+    }
+
+    dummy = netdev_dummy_cast(netdev);
+
+    ovs_mutex_lock(&dummy->mutex);
+    netdev_dummy_queue_packet__(dummy, packet, queue_id);
+    ovs_mutex_unlock(&dummy->mutex);
 }
 
 static void

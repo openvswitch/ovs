@@ -10215,6 +10215,18 @@ Globally enabled: false
 Datapaths:
 dummy@ovs-dummy:
   dummy
+    rx_offload_partial   : 0
+    rx_offload_full      : 0
+    rx_offload_miss      : 0
+    rx_offload_pipe_abort: 0
+    rx_offload_partial   : 0
+    rx_offload_full      : 0
+    rx_offload_miss      : 0
+    rx_offload_pipe_abort: 0
+    rx_offload_partial   : 0
+    rx_offload_full      : 0
+    rx_offload_miss      : 0
+    rx_offload_pipe_abort: 0
   dummy_x
   - br0: port_no: 100
   - br1: port_no: 101
@@ -10231,11 +10243,23 @@ AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
       "dummy": {
         "ports": {
           "br0": {
-            "port_no": 100},
+            "port_no": 100,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0},
           "br1": {
-            "port_no": 101},
+            "port_no": 101,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0},
           "ovs-dummy": {
-            "port_no": 0}}},
+            "port_no": 0,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0}}},
       "dummy_x": {
         }}},
   "enabled": false}
@@ -10267,6 +10291,18 @@ Globally enabled: false
 Datapaths:
 dummy@ovs-dummy:
   dummy_x
+    rx_offload_partial   : 0
+    rx_offload_full      : 0
+    rx_offload_miss      : 0
+    rx_offload_pipe_abort: 0
+    rx_offload_partial   : 0
+    rx_offload_full      : 0
+    rx_offload_miss      : 0
+    rx_offload_pipe_abort: 0
+    rx_offload_partial   : 0
+    rx_offload_full      : 0
+    rx_offload_miss      : 0
+    rx_offload_pipe_abort: 0
   dummy
   - br0: port_no: 100
   - br1: port_no: 101
@@ -10285,11 +10321,23 @@ AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
       "dummy_x": {
         "ports": {
           "br0": {
-            "port_no": 100},
+            "port_no": 100,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0},
           "br1": {
-            "port_no": 101},
+            "port_no": 101,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0},
           "ovs-dummy": {
-            "port_no": 0}}}}},
+            "port_no": 0,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0}}}}},
   "enabled": false}
 ])
 
@@ -10321,17 +10369,37 @@ AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show], [0], [dnl
       "dummy": {
         "ports": {
           "br0": {
-            "port_no": 100},
+            "port_no": 100,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0},
           "ovs-dummy": {
-            "port_no": 0},
+            "port_no": 0,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0},
           "p4": {
-            "port_no": 4}}},
+            "port_no": 4,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0}}},
       "dummy_x": {
         "ports": {
           "p1": {
-            "port_no": 1},
+            "port_no": 1,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0},
           "p3": {
-            "port_no": 3}}}}},
+            "port_no": 3,
+            "rx_offload_full": 0,
+            "rx_offload_miss": 0,
+            "rx_offload_partial": 0,
+            "rx_offload_pipe_abort": 0}}}}},
   "enabled": false}
 ])
 

@@ -42,8 +42,11 @@ struct pmd_id_data {
 struct dummy_offloaded_flow {
     struct hmap_node node;
     struct match match;
+    const struct nlattr *actions;
+    size_t actions_len;
     ovs_u128 ufid;
     uint32_t mark;
+    struct dpif_flow_stats stats;
 
     /* The pmd_id_map below is also protected by the port_mutex. */
     struct hmap pmd_id_map;
@@ -63,6 +66,19 @@ struct dummy_offload_port {
 
     struct ovs_mutex port_mutex; /* Protect all below members. */
     struct hmap offloaded_flows OVS_GUARDED;
+    struct ovs_list hw_recv_queue OVS_GUARDED;
+
+    /* Some simulated offload statistics. */
+    uint64_t rx_offload_partial OVS_GUARDED; /* Match found, CPU continues. */
+    uint64_t rx_offload_full OVS_GUARDED; /* Fully offloaded, CPU bypassed. */
+    uint64_t rx_offload_miss OVS_GUARDED; /* No HW offload rule matched. */
+    uint64_t rx_offload_pipe_abort OVS_GUARDED; /* Pipeline abort. */
+};
+
+struct hw_pkt_node {
+    struct dp_packet *pkt;
+    int queue_id;
+    struct ovs_list list_node;
 };
 
 static void dummy_flow_unreference(struct dummy_offload *, unsigned pmd_id,
@@ -228,6 +244,7 @@ dummy_free_flow(struct dummy_offload_port *port,
     ovs_assert(!hmap_count(&off_flow->pmd_id_map));
 
     hmap_destroy(&off_flow->pmd_id_map);
+    free(CONST_CAST(struct nlattr *, off_flow->actions));
     free(off_flow);
 }
 
@@ -288,6 +305,7 @@ dummy_free_port__(struct dummy_offload *offload,
                   struct dummy_offload_port *port, bool close_netdev)
 {
     struct dummy_offloaded_flow *off_flow;
+    struct hw_pkt_node *pkt;
 
     ovs_mutex_lock(&port->port_mutex);
     HMAP_FOR_EACH_POP (off_flow, node, &port->offloaded_flows) {
@@ -295,6 +313,12 @@ dummy_free_port__(struct dummy_offload *offload,
         dummy_free_flow(port, off_flow, false);
     }
     hmap_destroy(&port->offloaded_flows);
+
+    LIST_FOR_EACH_POP (pkt, list_node, &port->hw_recv_queue) {
+        dp_packet_delete(pkt->pkt);
+        free(pkt);
+    }
+
     ovs_mutex_unlock(&port->port_mutex);
     ovs_mutex_destroy(&port->port_mutex);
     if (close_netdev) {
@@ -330,11 +354,12 @@ dummy_offload_port_add(struct dpif_offload *dpif_offload,
                        struct netdev *netdev, odp_port_t port_no)
 {
     struct dummy_offload *offload = dummy_offload_cast(dpif_offload);
-    struct dummy_offload_port *port = xmalloc(sizeof *port);
+    struct dummy_offload_port *port = xzalloc(sizeof *port);
 
     ovs_mutex_init(&port->port_mutex);
     ovs_mutex_lock(&port->port_mutex);
     hmap_init(&port->offloaded_flows);
+    ovs_list_init(&port->hw_recv_queue);
     ovs_mutex_unlock(&port->port_mutex);
 
     if (dpif_offload_port_mgr_add(dpif_offload, &port->pm_port, netdev,
@@ -445,15 +470,27 @@ dummy_offload_get_debug(const struct dpif_offload *offload, struct ds *ds,
 {
     if (json) {
         struct json *json_ports = json_object_create();
-        struct dpif_offload_port *port;
+        struct dpif_offload_port *port_;
 
-        DPIF_OFFLOAD_PORT_FOR_EACH (port, offload) {
+        DPIF_OFFLOAD_PORT_FOR_EACH (port_, offload) {
+            struct dummy_offload_port *port = dummy_offload_port_cast(port_);
             struct json *json_port = json_object_create();
 
             json_object_put(json_port, "port_no",
-                            json_integer_create(odp_to_u32(port->port_no)));
+                            json_integer_create(odp_to_u32(port_->port_no)));
 
-            json_object_put(json_ports, netdev_get_name(port->netdev),
+            ovs_mutex_lock(&port->port_mutex);
+            json_object_put(json_port, "rx_offload_partial",
+                            json_integer_create(port->rx_offload_partial));
+            json_object_put(json_port, "rx_offload_full",
+                            json_integer_create(port->rx_offload_full));
+            json_object_put(json_port, "rx_offload_miss",
+                            json_integer_create(port->rx_offload_miss));
+            json_object_put(json_port, "rx_offload_pipe_abort",
+                            json_integer_create(port->rx_offload_pipe_abort));
+            ovs_mutex_unlock(&port->port_mutex);
+
+            json_object_put(json_ports, netdev_get_name(port_->netdev),
                             json_port);
         }
 
@@ -463,11 +500,22 @@ dummy_offload_get_debug(const struct dpif_offload *offload, struct ds *ds,
             json_destroy(json_ports);
         }
     } else if (ds) {
-        struct dpif_offload_port *port;
+        struct dpif_offload_port *port_;
 
-        DPIF_OFFLOAD_PORT_FOR_EACH (port, offload) {
-            ds_put_format(ds, "  - %s: port_no: %u\n",
-                          netdev_get_name(port->netdev), port->port_no);
+        DPIF_OFFLOAD_PORT_FOR_EACH (port_, offload) {
+            struct dummy_offload_port *port = dummy_offload_port_cast(port_);
+
+            ovs_mutex_lock(&port->port_mutex);
+            ds_put_format(ds,
+                          "  - %s: port_no: %u\n"
+                          "    rx_offload_partial   : %" PRIu64 "\n"
+                          "    rx_offload_full      : %" PRIu64 "\n"
+                          "    rx_offload_miss      : %" PRIu64 "\n"
+                          "    rx_offload_pipe_abort: %" PRIu64 "\n",
+                          netdev_get_name(port_->netdev), port_->port_no,
+                          port->rx_offload_partial, port->rx_offload_full,
+                          port->rx_offload_miss, port->rx_offload_pipe_abort);
+            ovs_mutex_unlock(&port->port_mutex);
         }
     }
 }
@@ -515,6 +563,19 @@ dummy_offload_get_port_by_netdev(const struct dpif_offload *offload,
     return dummy_offload_port_cast(port);
 }
 
+static struct dummy_offload_port *
+dummy_offload_get_port_by_odp_port(const struct dpif_offload *offload_,
+                                   odp_port_t port_no)
+{
+    struct dpif_offload_port *port;
+
+    port = dpif_offload_port_mgr_find_by_odp_port(offload_, port_no);
+    if (!port) {
+        return NULL;
+    }
+    return dummy_offload_port_cast(port);
+}
+
 static int
 dummy_offload_hw_post_process(const struct dpif_offload *offload_,
                               struct netdev *netdev, unsigned pmd_id,
@@ -549,6 +610,86 @@ dummy_offload_hw_post_process(const struct dpif_offload *offload_,
     return 0;
 }
 
+static bool
+dummy_offload_are_all_actions_supported(const struct dpif_offload *offload_,
+                                        odp_port_t in_odp,
+                                        const struct nlattr *actions,
+                                        size_t actions_len)
+{
+    const struct nlattr *nla;
+    size_t left;
+
+    /* Can we fully offload this flow? For now, only output actions are
+     * supported, and only to dummy-pmd netdevs where the egress port differs
+     * from the ingress port.  The latter restriction ensures that the partial
+     * offload test cases pass.
+     *
+     * The reason for supporting only dummy-pmd netdevs as output targets is
+     * that they provide full protection when calling netdev_send() from any
+     * thread, via a netdev-level mutex. */
+    NL_ATTR_FOR_EACH (nla, left, actions, actions_len) {
+        if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
+            odp_port_t out_odp = nl_attr_get_odp_port(nla);
+            struct dummy_offload_port *out_port;
+
+            out_port = dummy_offload_get_port_by_odp_port(offload_, out_odp);
+            if (out_odp == in_odp || !out_port
+                || strcmp("dummy-pmd",
+                          netdev_get_type(out_port->pm_port.netdev))) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool
+dummy_offload_hw_process_pkt(const struct dpif_offload *offload_,
+                             struct dummy_offloaded_flow *flow,
+                             struct dp_packet *pkt)
+{
+    uint32_t hash = dp_packet_get_rss_hash(pkt);
+    uint32_t pkt_size = dp_packet_size(pkt);
+    const struct nlattr *nla;
+    size_t left;
+
+    if (!flow->actions) {
+        return false;
+    }
+
+    NL_ATTR_FOR_EACH (nla, left, flow->actions, flow->actions_len) {
+        bool last_action = (left <= NLA_ALIGN(nla->nla_len));
+
+        if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
+            odp_port_t odp_port = nl_attr_get_odp_port(nla);
+            struct dummy_offload_port *port;
+            struct dp_packet_batch batch;
+            int n_txq;
+
+            port = dummy_offload_get_port_by_odp_port(offload_, odp_port);
+            if (!port) {
+                return false;
+            }
+
+            n_txq = netdev_n_txq(port->pm_port.netdev);
+            dp_packet_batch_init_packet(&batch, last_action
+                                                ? pkt
+                                                : dp_packet_clone(pkt));
+            /* As the tx-steering option is not exposed to hardware offload,
+             * for now we assume hash steering based on the number of queues
+             * configured for the dummy-netdev. */
+            netdev_send(port->pm_port.netdev, hash % n_txq, &batch, false);
+        }
+    }
+
+    flow->stats.n_bytes += pkt_size;
+    flow->stats.n_packets++;
+    flow->stats.used = time_msec();
+    return true;
+}
+
 static int
 dummy_flow_put(const struct dpif_offload *offload_, struct netdev *netdev,
                struct dpif_offload_flow_put *put,
@@ -558,6 +699,7 @@ dummy_flow_put(const struct dpif_offload *offload_, struct netdev *netdev,
     struct dummy_offloaded_flow *off_flow;
     struct dummy_offload_port *port;
     bool modify = true;
+    bool full_offload;
     int error = 0;
 
     port = dummy_offload_get_port_by_netdev(offload_, netdev);
@@ -565,6 +707,10 @@ dummy_flow_put(const struct dpif_offload *offload_, struct netdev *netdev,
         error = ENODEV;
         goto exit;
     }
+
+    full_offload = dummy_offload_are_all_actions_supported(
+                        offload_, put->match->flow.in_port.odp_port,
+                        put->actions, put->actions_len);
 
     ovs_mutex_lock(&port->port_mutex);
 
@@ -587,6 +733,14 @@ dummy_flow_put(const struct dpif_offload *offload_, struct netdev *netdev,
         *previous_flow_reference = NULL;
     }
     memcpy(&off_flow->match, put->match, sizeof *put->match);
+    free(CONST_CAST(struct nlattr *, off_flow->actions));
+    if (full_offload) {
+        off_flow->actions = xmemdup(put->actions, put->actions_len);
+        off_flow->actions_len = put->actions_len;
+    } else {
+        off_flow->actions = NULL;
+        off_flow->actions_len = 0;
+    }
 
     /* As we have per-netdev 'offloaded_flows', we don't need to match
      * the 'in_port' for received packets.  This will also allow offloading
@@ -609,13 +763,13 @@ dummy_flow_put(const struct dpif_offload *offload_, struct netdev *netdev,
     }
 
 exit_unlock:
+    if (put->stats) {
+        *put->stats = off_flow->stats;
+    }
+
     ovs_mutex_unlock(&port->port_mutex);
 
 exit:
-    if (put->stats) {
-        memset(put->stats, 0, sizeof *put->stats);
-    }
-
     dummy_offload_log_operation(modify ? "modify" : "add", error, put->ufid);
     return error;
 }
@@ -650,6 +804,10 @@ dummy_flow_del(const struct dpif_offload *offload_, struct netdev *netdev,
         goto exit_unlock;
     }
 
+    if (del->stats) {
+        memcpy(del->stats, &off_flow->stats, sizeof *del->stats);
+    }
+
     mark = off_flow->mark;
     if (!hmap_count(&off_flow->pmd_id_map)) {
         dummy_free_flow_mark(offload, mark);
@@ -678,10 +836,6 @@ exit:
         ds_destroy(&ds);
     }
 
-    if (del->stats) {
-        memset(del->stats, 0, sizeof *del->stats);
-    }
-
     dummy_offload_log_operation("delete", error ? -1 : 0, del->ufid);
     return error ? ENOENT : 0;
 }
@@ -701,14 +855,19 @@ dummy_flow_stats(const struct dpif_offload *offload_, struct netdev *netdev,
 
     ovs_mutex_lock(&port->port_mutex);
     off_flow = dummy_find_offloaded_flow(port, ufid);
+    if (off_flow) {
+        memcpy(stats, &off_flow->stats, sizeof *stats);
+        attrs->dp_layer = off_flow->actions ? "dummy" : "ovs";
+        attrs->dp_extra_info = NULL;
+        attrs->offloaded = true;
+    }
     ovs_mutex_unlock(&port->port_mutex);
 
-    memset(stats, 0, sizeof *stats);
-    attrs->offloaded = off_flow ? true : false;
-    attrs->dp_layer = "ovs"; /* 'ovs', since this is a partial offload. */
-    attrs->dp_extra_info = NULL;
+    if (!off_flow) {
+        return false;
+    }
 
-    return off_flow ? true : false;
+    return true;
 }
 
 static void
@@ -729,23 +888,26 @@ dummy_flow_unreference(struct dummy_offload *offload, unsigned pmd_id,
     }
 }
 
-void
+bool
 dummy_netdev_simulate_offload(struct netdev *netdev, struct dp_packet *packet,
-                              struct flow *flow)
+                              int queue_id, struct flow *flow)
 {
     const struct dpif_offload *offload = ovsrcu_get(
         const struct dpif_offload *, &netdev->dpif_offload);
     struct dummy_offloaded_flow *data;
     struct dummy_offload_port *port;
+    bool packet_stolen = false;
     struct flow packet_flow;
+    bool offloaded = false;
 
-    if (!offload || strcmp(dpif_offload_type(offload), "dummy")) {
-        return;
+    if (!dpif_offload_enabled() || !offload
+        || strcmp(dpif_offload_type(offload), "dummy")) {
+        return false;
     }
 
     port = dummy_offload_get_port_by_netdev(offload, netdev);
     if (!port) {
-        return;
+        return false;
     }
 
     if (!flow) {
@@ -778,10 +940,84 @@ dummy_netdev_simulate_offload(struct netdev *netdev, struct dp_packet *packet,
                 VLOG_DBG("%s", ds_cstr(&ds));
                 ds_destroy(&ds);
             }
+
+            if (data->actions) {
+                /* Perform hardware offload simulation.  The packet is stolen
+                 * here and handed off to the PMD thread callback for
+                 * processing. */
+                struct hw_pkt_node *pkt_node = xmalloc(sizeof *pkt_node);
+
+                pkt_node->pkt = packet;
+                pkt_node->queue_id = queue_id;
+                ovs_list_push_back(&port->hw_recv_queue, &pkt_node->list_node);
+                packet_stolen = true;
+                port->rx_offload_full++;
+            } else {
+                port->rx_offload_partial++;
+            }
+
+            offloaded = true;
             break;
         }
     }
+
+    if (!offloaded) {
+        port->rx_offload_miss++;
+    }
+
     ovs_mutex_unlock(&port->port_mutex);
+    return packet_stolen;
+}
+
+void
+dummy_netdev_hw_offload_run(struct netdev *netdev)
+{
+    const struct dpif_offload *offload = ovsrcu_get(
+        const struct dpif_offload *, &netdev->dpif_offload);
+    struct dpif_offload_port *port_;
+
+    if (!dpif_offload_enabled() || !offload
+        || strcmp(dpif_offload_type(offload), "dummy")) {
+        return;
+    }
+
+    DPIF_OFFLOAD_PORT_FOR_EACH (port_, offload) {
+        struct dummy_offload_port *port;
+        struct hw_pkt_node *pkt_node;
+
+        port = dummy_offload_port_cast(port_);
+
+        if (ovs_mutex_trylock(&port->port_mutex)) {
+            continue;
+        }
+
+        LIST_FOR_EACH_POP (pkt_node, list_node, &port->hw_recv_queue) {
+            struct dummy_offloaded_flow *offloaded_flow;
+            struct dp_packet *pkt = pkt_node->pkt;
+            bool processed = false;
+            struct flow flow;
+
+            flow_extract(pkt, &flow);
+            HMAP_FOR_EACH (offloaded_flow, node, &port->offloaded_flows) {
+                if (flow_equal_except(&flow, &offloaded_flow->match.flow,
+                                      &offloaded_flow->match.wc)) {
+
+                    processed = dummy_offload_hw_process_pkt(
+                                    offload, offloaded_flow, pkt);
+                    break;
+                }
+            }
+
+            if (!processed) {
+                VLOG_DBG("Failed HW pipeline, sent to sw!");
+                port->rx_offload_pipe_abort++;
+                netdev_dummy_queue_simulate_offload_packet(
+                    port->pm_port.netdev, pkt, pkt_node->queue_id);
+            }
+            free(pkt_node);
+        }
+        ovs_mutex_unlock(&port->port_mutex);
+    }
 }
 
 #define DEFINE_DPIF_DUMMY_CLASS(NAME, TYPE_STR)                             \
