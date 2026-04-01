@@ -158,7 +158,7 @@ __regex_has_xxx_mark = re.compile(r'.*xxx.*', re.IGNORECASE)
 __regex_added_doc_rst = re.compile(
                     r'\ndiff .*Documentation/.*rst\nnew file mode')
 __regex_empty_return = re.compile(r'\s*return;')
-__regex_if_macros = re.compile(r'^ +(%s) \([\S]([\s\S]+[\S])*\) { +\\' %
+__regex_if_macros = re.compile(r'^ +(%s) \([\S](?:[\s\S]*?[\S])?\) { +\\' %
                                __parenthesized_constructs)
 __regex_nonascii_characters = re.compile("[^\u0000-\u007f]")
 __regex_efgrep = re.compile(r'.*[ef]grep.*$')
