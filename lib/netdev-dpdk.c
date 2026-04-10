@@ -2251,7 +2251,7 @@ dpdk_process_queue_size(struct netdev *netdev, const struct smap *args,
 
 static void
 dpdk_set_rx_steer_config(struct netdev *netdev, struct netdev_dpdk *dev,
-                         const struct smap *args, char **errp)
+                         const struct smap *args)
 {
     const char *arg = smap_get_def(args, "rx-steering", "rss");
     uint64_t flags = 0;
@@ -2259,22 +2259,20 @@ dpdk_set_rx_steer_config(struct netdev *netdev, struct netdev_dpdk *dev,
     if (!strcmp(arg, "rss+lacp")) {
         flags = DPDK_RX_STEER_LACP;
     } else if (strcmp(arg, "rss")) {
-        VLOG_WARN_BUF(errp, "%s: options:rx-steering "
-                      "unsupported parameter value '%s'",
-                      netdev_get_name(netdev), arg);
+        VLOG_WARN("%s: options:rx-steering unsupported parameter value '%s'",
+                  netdev_get_name(netdev), arg);
     }
 
     if (flags && dev->type != DPDK_DEV_ETH) {
-        VLOG_WARN_BUF(errp, "%s: options:rx-steering "
-                      "is only supported on ethernet ports",
-                      netdev_get_name(netdev));
+        VLOG_WARN("%s: options:rx-steering "
+                  "is only supported on ethernet ports",
+                  netdev_get_name(netdev));
         flags = 0;
     }
 
     if (flags && dpif_offload_enabled()) {
-        VLOG_WARN_BUF(errp, "%s: options:rx-steering "
-                      "is incompatible with hw-offload",
-                      netdev_get_name(netdev));
+        VLOG_WARN("%s: options:rx-steering is incompatible with hw-offload",
+                  netdev_get_name(netdev));
         flags = 0;
     }
 
@@ -2304,7 +2302,7 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
 
-    dpdk_set_rx_steer_config(netdev, dev, args, errp);
+    dpdk_set_rx_steer_config(netdev, dev, args);
 
     dpdk_set_rxq_config(dev, args);
 
