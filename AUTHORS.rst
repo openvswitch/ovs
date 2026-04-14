@@ -357,6 +357,7 @@ Mijo Safradin                      mijo@linux.vnet.ibm.com
 Mika Vaisanen                      mika.vaisanen@gmail.com
 Mike Ovsiannikov                   mike.ovsiannikov@nutanix.com
 Mike Pattrick                      mkp@redhat.com
+Mikhail Dmitrichenko               m.dmitrichenko222@gmail.com
 Minoru TAKAHASHI                   takahashi.minoru7@gmail.com
 Miro Tomaska                       mtomaska@redhat.com
 Mohammad Heib                      mheib@redhat.com
