@@ -54,10 +54,8 @@ m4_define([CHECK_NO_DPDK_OFFLOAD],
 #
 m4_define([OVS_DPDK_OFFLOAD_PRE_CHECK], [
   OVS_DPDK_PRE_CHECK()
-  AT_SKIP_IF(
-    [test "$(printf '%s' "$OVS_DPDK_VF_PCI_ADDRS" | wc -w)" -ne 6])
-
-  AT_SKIP_IF([! ovs_dpdk_verify_vf_cfg "$OVS_DPDK_VF_PCI_ADDRS"])
+  AT_SKIP_IF([test -z "$OVS_PF_PCI"])
+  AT_SKIP_IF([! ovs_verify_pf_cfg "$OVS_PF_PCI"])
 ])
 
 # OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [dbinit-aux-args])
@@ -114,39 +112,38 @@ $1";/mlx5_net: Failed to update link status: /d"])
 m4_define([ADD_VF],
     [ USER_PORT=$1
       case "$USER_PORT" in
-        client) PORT_NO=0 ;;
-        server) PORT_NO=1 ;;
-        *) PORT_NO=${USER_PORT##*[!0-9]} ;;
+        client) VF_IDX=0 ;;
+        server) VF_IDX=1 ;;
+        *) VF_IDX=${USER_PORT##*[!0-9]} ;;
       esac
 
-      AT_CHECK([[[ "$PORT_NO" -ge 0 ]] && [[ "$PORT_NO" -le 6 ]] || return 66])
-      PORT_CFG=$(echo $OVS_DPDK_VF_PCI_ADDRS | cut -d' ' -f$((PORT_NO+1)))
-      PF_PCI=$(ovs_dpdk_get_pci_id "$PORT_CFG")
-      VF_IDX=$(ovs_dpdk_get_vf_idx "$PORT_CFG")
-      REP=$(ovs_dpdk_get_representor_netdev $PF_PCI $VF_IDX)
-      AT_CHECK([test $? -eq 0])
+      AT_CHECK([[[ "$VF_IDX" -ge 0 ]] && [[ "$VF_IDX" -le 5 ]] || return 66])
 
-      AT_CHECK([ip link set $REP name $1])
+      VF=$(ovs_get_vf_port $OVS_PF_PCI $VF_IDX)
+      AT_CHECK([test -n "$VF"])
+
+      AT_CHECK([ip link set $VF down])
+      AT_CHECK([ip link set $VF name $1])
       AT_CHECK([ip link set $1 netns $2])
       AT_CHECK([ovs-vsctl add-port $3 ovs-$1 -- \
                 set interface ovs-$1 external-ids:iface-id="$1" -- \
                 set interface ovs-$1 type=dpdk -- \
                 set interface ovs-$1 \
-                  options:dpdk-devargs=$PF_PCI,representor=vf$VF_IDX])
+                  options:dpdk-devargs=$OVS_PF_PCI,representor=vf$VF_IDX])
       NS_CHECK_EXEC([$2], [ip addr add $4 dev $1 $7])
       NS_CHECK_EXEC([$2], [ip link set dev $1 up])
       if test -n "$5"; then
         NS_CHECK_EXEC([$2], [ip link set dev $1 address $5])
       else
         NS_CHECK_EXEC([$2],
-                      [ip link set dev $1 address 02:00:00:00:EC:0$PORT_NO])
+                      [ip link set dev $1 address 02:00:00:00:EC:0$VF_IDX])
       fi
       if test -n "$6"; then
         NS_CHECK_EXEC([$2], [ip route add default via $6])
       fi
       on_exit "ip netns exec $2 ip link set $1 netns 1; \
-               ip link property del dev $1 altname $REP; \
-               ip link set $1 name $REP"
+               ip link property del dev $1 altname $VF; \
+               ip link set $1 name $VF"
     ]
 )
 m4_define([ADD_VETH], [ADD_VF($@)])
@@ -159,78 +156,3 @@ m4_define([DUMP_DP_IP_CLEAN_SORTED], [dnl
   grep 'eth_type(0x0800)' \
     | sed -e 's/eth(src=[[a-z0-9:]]*,dst=[[a-z0-9:]]*)/eth(macs)/;s/recirc_id(0),//' \
     | strip_used | strip_ptype | sort])
-
-OVS_START_SHELL_HELPERS
-
-# ovs_dpdk_is_valid_pci_vf_addr()
-#
-# Check if the given PF PCI address and the VF number are valid.
-#
-ovs_dpdk_is_valid_pci_vf_addr() {
-    PCI_ID='[[0-9a-fA-F]]{4}:[[0-9a-fA-F]]{2}:[[0-9a-fA-F]]{2}\.[[0-7]]'
-    echo "$1" | grep -E -q "^$PCI_ID,[[0-9]]+$" && return 0 || return 1
-}
-
-# ovs_dpdk_get_pci_id()
-#
-ovs_dpdk_get_pci_id() {
-    printf '%s\n' "${1%%,*}"
-}
-
-# ovs_dpdk_get_vf_idx()
-#
-ovs_dpdk_get_vf_idx() {
-    printf '%s\n' "${1##*,}"
-}
-
-# ovs_dpdk_get_representor_netdev(<PF_PCI>, <VF_INDEX>)
-#
-# This function tries to find the representor netdev for the given PF's VF.
-#
-ovs_dpdk_get_representor_netdev() {
-    PF_PCI=$1
-    VF_IDX=$2
-
-    VF_NET_DIR="/sys/bus/pci/devices/$PF_PCI/virtfn$VF_IDX/net"
-
-    if [[ ! -d "$VF_NET_DIR" ]]; then
-        echo "ERROR: VF $VF_IDX for PF $PF_PCI does not exist" >&2
-        return 1
-    fi
-
-    for iface in "$VF_NET_DIR"/*; do
-        if [[ -e "$iface" ]]; then
-            basename "$iface"
-            return 0
-        fi
-    done
-
-    echo "ERROR: No representor netdev found for VF $VF_IDX on PF $PF_PCI" >&2
-    return 1
-}
-
-# ovs_dpdk_verify_vf_cfg()
-#
-# Verify that the given PF PCI addresses and corresponding VF IDs in
-# OVS_DPDK_VF_PCI_ADDRS are valid, exist, and have corresponding
-# representor ports.
-#
-ovs_dpdk_verify_vf_cfg() {
-    i=0
-
-    for addr in $1; do
-        ovs_dpdk_is_valid_pci_vf_addr "$addr" || return 1
-
-        PCI_ID=$(ovs_dpdk_get_pci_id "$addr")
-        VF_IDX=$(ovs_dpdk_get_vf_idx "$addr")
-
-        REP=$(ovs_dpdk_get_representor_netdev $PCI_ID $VF_IDX) || return 1
-
-        echo "ovs-p$i: PF PCI $PCI_ID with VF $VF_IDX has representor $REP"
-        i=$((i + 1))
-    done
-
-    return 0
-}
-
-OVS_END_SHELL_HELPERS

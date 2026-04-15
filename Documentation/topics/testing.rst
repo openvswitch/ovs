@@ -306,19 +306,25 @@ Userspace datapath with DPDK offload
 
 To invoke the userspace datapath tests with DPDK and its rte_flow offload,
 the same prerequisites apply as above. In addition, six Virtual Function (VF)
-interfaces must be preconfigured and capable of hardware offloading traffic
-between each other.
+interfaces must be preconfigured on a single Physical Function (PF) that
+supports rte_flow hardware offload.
 
-These six VFs need to be passed as a list of PF PCI addresses with their
-corresponding VF indexes in the OVS_DPDK_VF_PCI_ADDRS variable.
-For example::
+This is an example on how to set this up for an NVIDIA blade on port
+``ens2f0np0``::
 
-    OVS_DPDK_VF_PCI_ADDRS="0000:17:00.0,0 0000:17:00.0,1 0000:17:00.0,2 0000:17:00.0,3 0000:17:00.0,4 0000:17:00.0,5"
+    OVS_PF_PCI=$(basename $(readlink /sys/class/net/ens2f0np0/device))
+    echo 0 > /sys/bus/pci/devices/$OVS_PF_PCI/sriov_numvfs
+    devlink dev eswitch set pci/$OVS_PF_PCI mode switchdev
+    echo 6 > /sys/bus/pci/devices/$OVS_PF_PCI/sriov_numvfs
 
-To invoke the dpdk offloads testsuite with the userspace datapath, run::
+This PF's PCI ID needs to be passed with the OVS_PF_PCI variable.
+To invoke the DPDK offloads testsuite with the userspace datapath, run::
 
-    make check-dpdk-offloads \
-        OVS_DPDK_VF_PCI_ADDRS="0000:17:00.0,0 0000:17:00.0,1 0000:17:00.0,2 0000:17:00.0,3 0000:17:00.0,4 0000:17:00.0,5"
+    make check-dpdk-offloads OVS_PF_PCI=0000:17:00.0
+
+.. note::
+   This has only been tested on NVIDIA blades due to the limited availability
+   of other blades that support rte_flow.
 
 Userspace datapath: Testing and Validation of CPU-specific Optimizations
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

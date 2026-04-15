@@ -409,3 +409,93 @@ m4_define([OVS_CHECK_PSAMPLE],
 # OVS_CHECK_XT()
 m4_define([OVS_CHECK_XT],
     [AT_SKIP_IF([test $HAVE_IPTABLES = no && test $HAVE_NFT = no])])
+
+OVS_START_SHELL_HELPERS
+
+# ovs_get_vf_port(<PF_PORT_PCI>, <VF_INDEX>)
+#
+# This function tries to find the VF's netdev for the given PF's VF index.
+#
+ovs_get_vf_port() {
+    local PF_PCI=$1
+    local VF_IDX=$2
+
+    local vf_net_dir="/sys/bus/pci/devices/$PF_PCI/virtfn$VF_IDX/net"
+    if test ! -d "$vf_net_dir"; then
+        return 1
+    fi
+
+    local vf_name=$(ls "$vf_net_dir" 2>/dev/null | head -1)
+    if test -z "$vf_name"; then
+        return 2
+    fi
+
+    echo "$vf_name"
+    return 0
+}
+
+# ovs_get_representor_port(<PF_PORT_PCI>, <VF_INDEX>)
+#
+# This function tries to find the representor's netdev for the given PF's VF
+# index.
+#
+ovs_get_representor_port() {
+    local PF_PCI=$1
+    local VF_IDX=$2
+
+    local representor=$(grep -l "vf$VF_IDX$" \
+                        /sys/bus/pci/devices/$PF_PCI/net/*/phys_port_name \
+                        2>/dev/null | head -1)
+    if test -z "$representor"; then
+        return 2
+    fi
+
+    basename $(dirname "$representor")
+    return 0
+}
+
+# ovs_verify_pf_cfg(<PF_PORT_PCI>)
+#
+# Verify that the given PF port exists and that the required VFs are properly
+# configured, i.e. have representor ports.
+#
+ovs_verify_pf_cfg() {
+    local PF_PCI=$1
+    local VF_NAMES=()
+    local REPRESENTOR_NAMES=()
+    local PCI_REGEX=[[0-9a-fA-F]]{4}:[[0-9a-fA-F]]{2}:[[0-9a-fA-F]]{2}\.[[0-7]]
+    local vf_net_dir vf_name representor i
+
+    echo "$PF_PCI" | grep -E -q "^$PCI_REGEX$" || return 1
+
+    for i in {0..5}; do
+        # Get VF netdev using PCI path
+        vf_net_dir="/sys/bus/pci/devices/$PF_PCI/virtfn$i/net"
+        if test ! -d "$vf_net_dir"; then
+            return 2
+        fi
+
+        vf_name=$(ls "$vf_net_dir" 2>/dev/null | head -1)
+        if test -z "$vf_name"; then
+            return 3
+        fi
+        VF_NAMES+=($vf_name)
+
+        # Find representor port for this VF
+        representor=$(grep -l "vf$i$" \
+                      /sys/bus/pci/devices/$PF_PCI/net/*/phys_port_name \
+                      2>/dev/null | head -1)
+        if test -z "$representor"; then
+            return 4
+        fi
+        REPRESENTOR_NAMES+=($(basename $(dirname "$representor")))
+    done
+
+    if test "${#VF_NAMES[*]}" -lt 6 -o "${#REPRESENTOR_NAMES[*]}" -lt 6; then
+        return 5
+    fi
+
+    return 0
+}
+
+OVS_END_SHELL_HELPERS
