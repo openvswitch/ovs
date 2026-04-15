@@ -164,6 +164,7 @@ Eelco Chaudron                     echaudro@redhat.com
 Eiichi Tsukata                     eiichi.tsukata@nutanix.com
 Eli Britstein                      elibr@nvidia.com
 Eli Oliver                         eoliver@redhat.com
+Emeel Hakim                        ehakim@nvidia.com
 Emma Finn                          emma.finn@intel.com
 Eric Lapointe                      elapointe@corsa.com
 Esteban Rodriguez Betancourt       estebarb@hpe.com
@@ -307,6 +308,7 @@ Liu Chang                          txfh2007@aliyun.com
 Liu Yulong                         liuyulong.xa@gmail.com
 Lorand Jakab                       lojakab@cisco.com
 Lorenzo Bianconi                   lorenzo.bianconi@redhat.com
+Lubomir Rintel                     lkundrak@v3.sk
 Luca Giraudo
 Lucas Alvares Gomes                lucasagomes@gmail.com
 Lucian Petrut                      lpetrut@cloudbasesolutions.com
@@ -449,6 +451,7 @@ Sha Zhang                          zhangsha.zhang@huawei.com
 Shad Ansari                        shad.ansari@hpe.com
 Shahar Klein                       sklein@nvidia.com
 Shan Wei                           davidshan@tencent.com
+Shaohua Wu                         wushaohua@chinatelecom.cn
 Sharon Krendel                     thekafkaf@gmail.com
 Shashank Ram                       rams@vmware.com
 Shashwat Srivastava                shashwat.srivastava@tcs.com
