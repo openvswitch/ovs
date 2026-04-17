@@ -321,7 +321,7 @@ Port Specifications
 
 Many Open vSwitch actions refer to OpenFlow ports.  In such cases, the port may
 be specified as a numeric port number in the range 0 to 65,535, although
-Open vSwitch only assigns port numbers in the range 1 through 62,279 to ports.
+Open vSwitch only assigns port numbers in the range 1 through 65,279 to ports.
 OpenFlow 1.1 and later use 32-bit port numbers, but Open vSwitch never assigns
 a port number that requires more than 16 bits.
 
