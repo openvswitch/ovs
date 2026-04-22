@@ -430,6 +430,37 @@ dpdk_init__(const struct smap *ovs_other_config)
         svec_add_nocopy(&args, xasprintf("0@%d", cpu));
     }
 
+    if (!args_contains(&args, "-a") && !args_contains(&args, "--allow")
+        && !args_contains(&args, "-b") && !args_contains(&args, "--block")
+        && !smap_get_bool(ovs_other_config, "dpdk-probe-at-init", false)) {
+#ifdef RTE_BUS_AUXILIARY
+        svec_add(&args, "-a");
+        svec_add(&args, "auxiliary:");
+#endif
+#ifdef RTE_BUS_CDX
+        svec_add(&args, "-a");
+        svec_add(&args, "cdx:cdx-");
+#endif
+#ifdef RTE_BUS_FSLMC
+        svec_add(&args, "-a");
+        svec_add(&args, "fslmc:dpni.65535");
+#endif
+#ifdef RTE_BUS_PCI
+        if (!args_contains(&args, "--no-pci")) {
+            svec_add(&args, "-a");
+            svec_add(&args, "pci:0000:00:00.0");
+        }
+#endif
+#ifdef RTE_BUS_UACCE
+        svec_add(&args, "-a");
+        svec_add(&args, "uacce:");
+#endif
+#ifdef RTE_BUS_VMBUS
+        svec_add(&args, "-a");
+        svec_add(&args, "vmbus:00000000-0000-0000-0000-000000000000");
+#endif
+    }
+
     svec_terminate(&args);
 
     optind = 1;

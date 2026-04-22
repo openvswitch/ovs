@@ -453,6 +453,37 @@
         </p>
       </column>
 
+      <column name="other_config" key="dpdk-probe-at-init"
+              type='{"type": "boolean"}'>
+        <p>
+          Specifies whether DPDK should probe all devices available at the
+          time DPDK is initialized. When set to <code>false</code> (the
+          default), OVS will instruct DPDK to skip probing devices at
+          initialization, unless <ref column="other_config" key="dpdk-extra"/>
+          already contains allowed or blocked devices. This is required when
+          declaring DPDK ports using the
+          <code>class=eth,mac=XX:XX:XX:XX:XX:XX</code> syntax.
+        </p>
+        <p>
+          Enabling this option implies higher resource consumption, as OVS may
+          not use all probed devices. It may also cause undesired side effects
+          such as additional interrupt handling and link status checks for
+          unused devices. For example, mlx5 devices maintain link status and
+          liveness by taking kernel locks frequently, even when OVS only uses
+          a subset of the available ports.
+        </p>
+        <p>
+          Note that this option has no effect when
+          <ref column="other_config" key="dpdk-extra"/> contains allowed
+          (<code>-a</code> or <code>--allow</code>) or blocked
+          (<code>-b</code> or <code>--block</code>) devices, as DPDK will
+          honor those specifications regardless of this setting.
+        </p>
+        <p>
+          Defaults to <code>false</code>.
+        </p>
+      </column>
+
       <column name="other_config" key="dpdk-extra"
               type='{"type": "string"}'>
         <p>

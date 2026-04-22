@@ -3,6 +3,11 @@ Post-v3.7.0
    - Userspace datapath:
      * ARP/ND lookups for native tunnel are now rate limited. The holdout
        timer can be configured with 'tnl/neigh/retrans_time'.
+   - DPDK:
+     * Probing of devices at DPDK initialization has been disabled to avoid
+       wasting resources on unused devices. This breaks DPDK netdev ports
+       using the "class=eth,mac=" syntax (though it can be restored via the
+       'dpdk-probe-at-init' config option, see ovs-vswitchd.conf.db(5)).
 
 
 v3.7.0 - 16 Feb 2026

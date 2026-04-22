@@ -297,6 +297,12 @@ listed below. Defaults will be provided for all values not explicitly set.
   sockets. If not specified, this option will not be set by default. DPDK
   default will be used instead.
 
+``dpdk-probe-at-init``
+  Specifies whether DPDK should probe all devices available at initialization.
+  This option is needed when using the ``class=eth,mac=XX:XX:XX:XX:XX:XX``
+  syntax for DPDK ports. Defaults to false. See ``ovs-vswitchd.conf.db(5)``
+  for more details.
+
 ``dpdk-hugepage-dir``
   Directory where hugetlbfs is mounted
 

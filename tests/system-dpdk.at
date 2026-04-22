@@ -43,7 +43,7 @@ dnl Check if EAL init is successful
 AT_SETUP([OVS-DPDK - EAL init])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 AT_CHECK([grep "DPDK Enabled - initializing..." ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "EAL" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "DPDK Enabled - initialized" ovs-vswitchd.log], [], [stdout])
@@ -59,7 +59,7 @@ AT_SETUP([OVS-DPDK - dpdk-lcore-mask conversion - single])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START_OVSDB()
-OVS_DPDK_START_VSWITCHD([--no-pci])
+OVS_DPDK_START_VSWITCHD()
 CHECK_CPU_DISCOVERED()
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-lcore-mask=0x1])
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
@@ -77,7 +77,7 @@ AT_SETUP([OVS-DPDK - dpdk-lcore-mask conversion - multi])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START_OVSDB()
-OVS_DPDK_START_VSWITCHD([--no-pci])
+OVS_DPDK_START_VSWITCHD()
 CHECK_CPU_DISCOVERED(4)
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-lcore-mask=0xf])
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
@@ -95,7 +95,7 @@ AT_SETUP([OVS-DPDK - dpdk-lcore-mask conversion - non-contig])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START_OVSDB()
-OVS_DPDK_START_VSWITCHD([--no-pci])
+OVS_DPDK_START_VSWITCHD()
 CHECK_CPU_DISCOVERED(8)
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-lcore-mask=0xca])
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
@@ -113,7 +113,7 @@ AT_SETUP([OVS-DPDK - dpdk-lcore-mask conversion - zeromask])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START_OVSDB()
-OVS_DPDK_START_VSWITCHD([--no-pci])
+OVS_DPDK_START_VSWITCHD()
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-lcore-mask=0x0])
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
 OVS_WAIT_UNTIL([grep "Ignoring database defined option 'dpdk-lcore-mask' due to invalid value '0x0'" ovs-vswitchd.log])
@@ -152,7 +152,7 @@ dnl Add vhost-user-client port
 AT_SETUP([OVS-DPDK - add vhost-user-client port])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -181,7 +181,7 @@ AT_SETUP([OVS-DPDK - ping vhost-user ports])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_CHECK_TESTPMD()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -237,7 +237,7 @@ AT_SETUP([OVS-DPDK - ping vhost-user-client ports])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_CHECK_TESTPMD()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -350,7 +350,7 @@ AT_SETUP([OVS-DPDK - Ingress policing create delete vport port])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and add ingress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -387,7 +387,7 @@ AT_SETUP([OVS-DPDK - Ingress policing no policing rate])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and add ingress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -421,7 +421,7 @@ AT_SETUP([OVS-DPDK - Ingress policing no policing burst])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and add ingress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -487,7 +487,7 @@ AT_SETUP([OVS-DPDK - QoS create delete vport port])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and add egress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -522,7 +522,7 @@ AT_SETUP([OVS-DPDK - QoS no cir])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and add egress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -551,7 +551,7 @@ AT_SETUP([OVS-DPDK - QoS no cbs])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and add egress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -657,7 +657,7 @@ AT_KEYWORDS([dpdk])
 
 OVS_DPDK_CHECK_TESTPMD()
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS with default MTU value
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -698,7 +698,7 @@ AT_KEYWORDS([dpdk])
 
 OVS_DPDK_CHECK_TESTPMD()
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and modify MTU value
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -816,7 +816,7 @@ AT_KEYWORDS([dpdk])
 
 OVS_DPDK_CHECK_TESTPMD()
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and set MTU value to max upper bound
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -858,7 +858,7 @@ AT_KEYWORDS([dpdk])
 
 OVS_DPDK_CHECK_TESTPMD()
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and set MTU value to min lower bound
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -897,7 +897,7 @@ AT_SETUP([OVS-DPDK - user configured mempool])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START_OVSDB()
-OVS_DPDK_START_VSWITCHD([--no-pci])
+OVS_DPDK_START_VSWITCHD()
 
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:shared-mempool-config=8000,6000,1500])
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
@@ -946,7 +946,7 @@ dnl --------------------------------------------------------------------------
 AT_SETUP([OVS-DPDK - ovs-appctl dpif/offload/show])
 AT_KEYWORDS([dpdk dpif-offload])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
 AT_CHECK([ovs-vsctl add-port br0 p1 \
   -- set Interface p1 type=dpdk options:dpdk-devargs=net_null0,no-rx=1],

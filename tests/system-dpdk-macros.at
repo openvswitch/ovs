@@ -139,7 +139,7 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
    OVS_DPDK_PRE_CHECK()
    OVS_WAIT_WHILE([ip link show ovs-netdev])
    dnl For functional tests, no need for DPDK PCI probing.
-   OVS_DPDK_START([--no-pci], [--disable-system], [$3])
+   OVS_DPDK_START([], [--disable-system], [$3])
    dnl Add bridges, ports, etc.
    OVS_WAIT_WHILE([ip link show br0])
    AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
