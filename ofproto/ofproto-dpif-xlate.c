@@ -6126,7 +6126,6 @@ reversible_actions(const struct ofpact *ofpacts, size_t ofpacts_len)
         case OFPACT_CLONE:
         case OFPACT_CONJUNCTION:
         case OFPACT_CONTROLLER:
-        case OFPACT_CT_CLEAR:
         case OFPACT_DEBUG_RECIRC:
         case OFPACT_DEBUG_SLOW:
         case OFPACT_DEC_MPLS_TTL:
@@ -6176,6 +6175,7 @@ reversible_actions(const struct ofpact *ofpacts, size_t ofpacts_len)
             break;
 
         case OFPACT_CT:
+        case OFPACT_CT_CLEAR:
         case OFPACT_METER:
         case OFPACT_NAT:
         case OFPACT_OUTPUT_TRUNC:
