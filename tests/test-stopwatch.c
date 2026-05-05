@@ -289,7 +289,6 @@ test_stopwatch_unixctl_main(int argc, char *argv[])
 
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    service_start(&argc, &argv);
     fatal_ignore_sigpipe();
     parse_options(&argc, &argv, &unixctl_path);
 
@@ -338,7 +337,6 @@ test_stopwatch_unixctl_main(int argc, char *argv[])
     }
     unixctl_server_destroy(unixctl);
 
-    service_stop();
     return 0;
 }
 

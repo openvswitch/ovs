@@ -867,8 +867,6 @@ int netdev_unregister_provider(const char *type);
 
 #if defined(__FreeBSD__) || defined(__NetBSD__)
 extern const struct netdev_class netdev_bsd_class;
-#elif defined(_WIN32)
-extern const struct netdev_class netdev_windows_class;
 #else
 extern const struct netdev_class netdev_linux_class;
 #endif

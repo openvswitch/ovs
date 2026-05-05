@@ -694,7 +694,6 @@ test_sflow_main(int argc, char *argv[])
 
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    service_start(&argc, &argv);
     parse_options(argc, argv);
 
     if (argc - optind != 1) {

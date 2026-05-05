@@ -246,7 +246,6 @@ main(int argc, char *argv[])
     const struct ovsdb_client_command *command;
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    service_start(&argc, &argv);
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
@@ -1959,20 +1958,6 @@ print_and_free_log_record(struct json *record)
 }
 
 static void
-set_binary_mode(FILE *stream OVS_UNUSED)
-{
-#ifdef _WIN32
-    fflush(stream);
-    /* On Windows set binary mode on the file descriptor to avoid
-     * translation (i.e. CRLF line endings). */
-    if (_setmode(_fileno(stream), O_BINARY) == -1) {
-        ovs_fatal(errno, "could not set binary mode on fd %d",
-                  _fileno(stream));
-    }
-#endif
-}
-
-static void
 do_backup(struct jsonrpc *rpc, const char *database,
           int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
@@ -1980,7 +1965,6 @@ do_backup(struct jsonrpc *rpc, const char *database,
         ovs_fatal(0, "not writing backup to a terminal; "
                   "please redirect stdout to a file");
     }
-    set_binary_mode(stdout);
 
     /* Get schema. */
     struct ovsdb_schema *schema = fetch_schema(rpc, database);
@@ -2118,7 +2102,6 @@ do_restore(struct jsonrpc *rpc, const char *database,
         ovs_fatal(0, "not reading backup from a terminal; "
                   "please redirect stdin from a file");
     }
-    set_binary_mode(stdin);
 
     struct ovsdb *backup = ovsdb_file_read("/dev/stdin", false);
     ovsdb_storage_close(backup->storage);

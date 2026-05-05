@@ -7771,8 +7771,7 @@ AT_CLEANUP
 # CHECK_SFLOW_SAMPLING_PACKET(LOOPBACK_ADDR)
 #
 # Test that sFlow samples packets correctly using IPv4/IPv6 sFlow collector
-m4_define([CHECK_SFLOW_SAMPLING_PACKET],
-  [AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
+m4_define([CHECK_SFLOW_SAMPLING_PACKET], [
   OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
   on_exit 'kill `cat test-sflow.pid`'
@@ -8458,7 +8457,6 @@ AT_CLEANUP
 
 dnl Test sFlow LAG structures
 AT_SETUP([ofproto-dpif - sFlow packet sampling - LACP structures])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([dnl
                     add-bond br0 bond p1 p2 --                          \
                     set Port bond lacp=active bond-mode=active-backup   \
@@ -8515,7 +8513,6 @@ LACPCOUNTERS
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - sFlow packet sampling - tunnel set])
-AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
 dnl set up sFlow logging
@@ -8584,7 +8581,6 @@ OVS_VSWITCHD_STOP(["/failed to get flags for network device 127.0.0.1/d"])
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - sFlow packet sampling - tunnel push])
-AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 options:ifindex=1010])
 
@@ -8694,7 +8690,6 @@ OVS_VSWITCHD_STOP(["/failed to get flags for network device 127.0.0.1/d"])
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - sFlow packet sampling - MPLS])
-AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 add_of_ports br0 1 2

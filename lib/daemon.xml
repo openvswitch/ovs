@@ -113,10 +113,5 @@
       capability change will apply even if the new user is root.
     </p>
 
-    <p>
-      On Windows, this option is not currently supported.  For security
-      reasons, specifying this option will cause the daemon process not to
-      start.
-    </p>
   </dd>
 </dl>

@@ -52,11 +52,8 @@ bfd_ref = {}
 
 def call_prog(prog, args_list):
     cmd = [prog] + verbose_args + ["-vconsole:off"] + args_list
-    creationFlags = 0
-    if sys.platform == 'win32':
-        creationFlags = 0x08000000  # CREATE_NO_WINDOW
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                              creationflags=creationFlags).communicate()
+                              creationflags=0).communicate()
     if len(output) == 0 or output[0] is None:
         output = ""
     else:

@@ -5,12 +5,8 @@
 \.sln$
 ^include/linux/
 ^include/sparse/rte_
-^include/windows/
 ^lib/sflow
-^lib/getopt_long\.c$
-^lib/strsep\.c$
 ^third-party/
-^windows/
 ^debian/README.Debian$
 ^debian/copyright.in$
 ^debian/openvswitch-switch.init$

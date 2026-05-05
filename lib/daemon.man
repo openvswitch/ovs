@@ -79,6 +79,3 @@ before dropping root privileges. Daemons that interact with a datapath,
 such as \fBovs\-vswitchd\fR, will be granted three additional capabilities,
 namely CAP_NET_ADMIN, CAP_NET_BROADCAST and CAP_NET_RAW.  The capability
 change will apply even if the new user is root.
-.IP
-On Windows, this option is not currently supported. For security reasons,
-specifying this option will cause the daemon process not to start.

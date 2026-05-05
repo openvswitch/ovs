@@ -20,9 +20,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-#ifdef _WIN32
-#include <Wincrypt.h>
-#endif
 #include "util.h"
 #include "socket-util.h"
 #include "openvswitch/vlog.h"
@@ -36,7 +33,6 @@ static const char urandom[] = "/dev/urandom";
 int
 get_entropy(void *buffer, size_t n)
 {
-#ifndef _WIN32
     size_t bytes_read;
     int error;
     int fd;
@@ -53,19 +49,6 @@ get_entropy(void *buffer, size_t n)
     if (error) {
         VLOG_ERR("%s: read error (%s)", urandom, ovs_retval_to_string(error));
     }
-#else
-    int error = 0;
-    HCRYPTPROV   crypt_prov = 0;
-
-    CryptAcquireContext(&crypt_prov, NULL, NULL,
-                        PROV_RSA_FULL, CRYPT_VERIFYCONTEXT);
-    if (!CryptGenRandom(crypt_prov, n, buffer)) {
-        VLOG_ERR("CryptGenRandom: read error (%s)", ovs_lasterror_to_string());
-        error = EINVAL;
-    }
-
-    CryptReleaseContext(crypt_prov, 0);
-#endif
     return error;
 }
 

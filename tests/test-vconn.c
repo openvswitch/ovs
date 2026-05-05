@@ -157,11 +157,7 @@ test_refuse_connection(struct ovs_cmdl_context *ctx)
     error = vconn_connect_block(vconn, (TIMEOUT - 2) * 1000);
     if (!strcmp(type, "tcp")) {
         if (error != ECONNRESET && error != EPIPE && error != ETIMEDOUT
-            && error != ECONNREFUSED
-#ifdef _WIN32
-            && error != WSAECONNRESET
-#endif
-            ) {
+            && error != ECONNREFUSED) {
             ovs_fatal(0, "unexpected vconn_connect() return value %d (%s)",
                       error, ovs_strerror(error));
         }
@@ -199,11 +195,7 @@ test_accept_then_close(struct ovs_cmdl_context *ctx)
 
     error = vconn_connect_block(vconn, -1);
     if (!strcmp(type, "tcp") || !strcmp(type, "unix")) {
-        if (error != ECONNRESET && error != EPIPE
-#ifdef _WIN32
-            && error != WSAECONNRESET
-#endif
-            ) {
+        if (error != ECONNRESET && error != EPIPE) {
             ovs_fatal(0, "unexpected vconn_connect() return value %d (%s)",
                       error, ovs_strerror(error));
         }

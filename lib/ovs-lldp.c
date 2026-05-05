@@ -798,9 +798,7 @@ lldp_create(const struct netdev *netdev,
     hw = lldpd_alloc_hardware(lldp->lldpd, netdev_get_name(netdev), 0);
 
     ovs_refcount_init(&lldp->ref_cnt);
-#ifndef _WIN32
     hw->h_flags |= IFF_RUNNING;
-#endif
     hw->h_mtu = mtu;
     hw->h_lport.p_id_subtype = LLDP_PORTID_SUBTYPE_IFNAME;
     hw->h_lport.p_id = xstrdup(netdev_get_name(netdev));
@@ -882,9 +880,7 @@ lldp_create_dummy(void)
     hw = lldpd_alloc_hardware(lldp->lldpd, "dummy-hw", 0);
 
     ovs_refcount_init(&lldp->ref_cnt);
-#ifndef _WIN32
     hw->h_flags |= IFF_RUNNING;
-#endif
     hw->h_mtu = 1500;
     hw->h_lport.p_id_subtype = LLDP_PORTID_SUBTYPE_IFNAME;
     hw->h_lport.p_id = "dummy-port";

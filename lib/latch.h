@@ -26,12 +26,7 @@
 #include "util.h"
 
 struct latch {
-#ifndef _WIN32
     int fds[2];
-#else
-    HANDLE wevent;
-    bool is_set;
-#endif
 };
 
 void latch_init(struct latch *);

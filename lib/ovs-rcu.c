@@ -415,12 +415,7 @@ ovsrcu_thread_exit_cb(void *perthread)
     ovsrcu_unregister__(perthread);
 }
 
-/* Cancels the callback to ovsrcu_thread_exit_cb().
- *
- * Cancelling the call to the destructor during the main thread exit
- * is needed while using pthreads-win32 library in Windows. It has been
- * observed that in pthreads-win32, a call to the destructor during
- * main thread exit causes undefined behavior. */
+/* Cancels the callback to ovsrcu_thread_exit_cb(). */
 static void
 ovsrcu_cancel_thread_exit_cb(void *aux OVS_UNUSED)
 {

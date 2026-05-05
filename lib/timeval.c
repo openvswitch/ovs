@@ -56,11 +56,6 @@ static int clock_gettime(clock_t id, struct timespec *ts);
 #endif
 #endif /* !defined(HAVE_CLOCK_GETTIME) */
 
-#ifdef _WIN32
-/* Number of 100 ns intervals from January 1, 1601 till January 1, 1970. */
-const static unsigned long long unix_epoch = 116444736000000000;
-#endif /* _WIN32 */
-
 /* Structure set by unixctl time/warp command. */
 struct large_warp {
     struct unixctl_conn *conn; /* Connection waiting for warp response. */
@@ -287,7 +282,7 @@ time_alarm(unsigned int secs)
  *
  * Stores the number of milliseconds elapsed during poll in '*elapsed'. */
 int
-time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
+time_poll(struct pollfd *pollfds, int n_pollfds,
           long long int timeout_when, int *elapsed)
 {
     long long int *last_wakeup = last_wakeup_get();
@@ -326,37 +321,17 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
             }
         }
 
-#ifndef _WIN32
         retval = poll(pollfds, n_pollfds, time_left);
         if (retval < 0) {
             retval = -errno;
         }
-#else
-        if (n_pollfds > MAXIMUM_WAIT_OBJECTS) {
-            VLOG_ERR("Cannot handle more than maximum wait objects\n");
-        } else if (n_pollfds != 0) {
-            retval = WaitForMultipleObjects(n_pollfds, handles, FALSE,
-                                            time_left);
-        }
-        if (retval < 0) {
-            /* XXX This will be replace by a win error to errno
-               conversion function */
-            retval = -WSAGetLastError();
-            retval = -EINVAL;
-        }
-#endif
 
         if (!quiescent && time_left) {
             ovsrcu_quiesce_end();
         }
 
         if (deadline <= time_msec()) {
-#ifndef _WIN32
             fatal_signal_handler(SIGALRM);
-#else
-            VLOG_ERR("wake up from WaitForMultipleObjects after deadline");
-            fatal_signal_handler(SIGTERM);
-#endif
             if (retval < 0) {
                 retval = 0;
             }
@@ -406,57 +381,6 @@ time_boot_msec(void)
     return boot_time;
 }
 
-#ifdef _WIN32
-static ULARGE_INTEGER
-xgetfiletime(void)
-{
-    ULARGE_INTEGER current_time;
-    FILETIME current_time_ft;
-
-    /* Returns current time in UTC as a 64-bit value representing the number
-     * of 100-nanosecond intervals since January 1, 1601 . */
-    GetSystemTimePreciseAsFileTime(&current_time_ft);
-    current_time.LowPart = current_time_ft.dwLowDateTime;
-    current_time.HighPart = current_time_ft.dwHighDateTime;
-
-    return current_time;
-}
-
-static int
-clock_gettime(clock_t id, struct timespec *ts)
-{
-    if (id == CLOCK_MONOTONIC) {
-        static LARGE_INTEGER freq;
-        LARGE_INTEGER count;
-        long long int ns;
-
-        if (!freq.QuadPart) {
-            /* Number of counts per second. */
-            QueryPerformanceFrequency(&freq);
-        }
-        /* Total number of counts from a starting point. */
-        QueryPerformanceCounter(&count);
-
-        /* Total nano seconds from a starting point. */
-        ns = (double) count.QuadPart / freq.QuadPart * 1000000000;
-
-        ts->tv_sec = count.QuadPart / freq.QuadPart;
-        ts->tv_nsec = ns % 1000000000;
-    } else if (id == CLOCK_REALTIME) {
-        ULARGE_INTEGER current_time = xgetfiletime();
-
-        /* Time from Epoch to now. */
-        ts->tv_sec = (current_time.QuadPart - unix_epoch) / 10000000;
-        ts->tv_nsec = ((current_time.QuadPart - unix_epoch) %
-                       10000000) * 100;
-    } else {
-        return -1;
-    }
-
-    return 0;
-}
-#endif /* _WIN32 */
-
 #if defined(__MACH__) && !defined(HAVE_CLOCK_GETTIME)
 #include <mach/clock.h>
 #include <mach/mach.h>
@@ -488,17 +412,9 @@ clock_gettime(clock_t id, struct timespec *ts)
 void
 xgettimeofday(struct timeval *tv)
 {
-#ifndef _WIN32
     if (gettimeofday(tv, NULL) == -1) {
         VLOG_FATAL("gettimeofday failed (%s)", ovs_strerror(errno));
     }
-#else
-    ULARGE_INTEGER current_time = xgetfiletime();
-
-    tv->tv_sec = (current_time.QuadPart - unix_epoch) / 10000000;
-    tv->tv_usec = ((current_time.QuadPart - unix_epoch) %
-                   10000000) / 10;
-#endif
 }
 
 void
@@ -572,11 +488,7 @@ timewarp_work(void)
     seq_change(timewarp_seq);
 
     /* give threads (eg. monitor) some chances to run */
-#ifndef _WIN32
     poll(NULL, 0, 10);
-#else
-    Sleep(10);
-#endif
 }
 
 /* Perform work needed for "timewarp_seq"'s producer and consumers. */

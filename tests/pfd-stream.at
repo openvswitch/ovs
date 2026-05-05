@@ -2,7 +2,6 @@ AT_BANNER([pfd stream - pre-opened file descriptor])
 
 AT_SETUP([pfd stream - basic listen and accept])
 AT_KEYWORDS([pfd])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
@@ -39,7 +38,6 @@ AT_CLEANUP
 
 AT_SETUP([pfd stream - JSON-RPC over pfd])
 AT_KEYWORDS([pfd])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 on_exit 'kill `cat *.pid`'
 
 # Use Python to create a listening socket and exec test-jsonrpc.
@@ -68,7 +66,6 @@ AT_CLEANUP
 
 AT_SETUP([pfd stream - invalid fd])
 AT_KEYWORDS([pfd])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
@@ -97,7 +94,6 @@ AT_CLEANUP
 
 AT_SETUP([pfd stream - fd is not a socket])
 AT_KEYWORDS([pfd])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
@@ -133,7 +129,6 @@ AT_CLEANUP
 
 AT_SETUP([pfd stream - fd is not listening])
 AT_KEYWORDS([pfd])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
@@ -159,7 +154,6 @@ AT_CLEANUP
 
 AT_SETUP([pfd stream - rejected via add-remote])
 AT_KEYWORDS([pfd])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
@@ -177,7 +171,6 @@ AT_CLEANUP
 
 AT_SETUP([pfd stream - rejected via database])
 AT_KEYWORDS([pfd])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
@@ -204,7 +197,6 @@ AT_CLEANUP
 
 AT_SETUP([pfd stream - rejected via Manager table])
 AT_KEYWORDS([pfd])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 AT_DATA([schema],
   [[{"name": "mydb",
      "tables": {

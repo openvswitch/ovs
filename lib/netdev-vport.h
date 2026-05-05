@@ -42,11 +42,8 @@ void netdev_vport_inc_tx(const struct netdev *,
 bool netdev_vport_is_vport_class(const struct netdev_class *);
 const char *netdev_vport_class_get_dpif_port(const struct netdev_class *);
 
-#ifndef _WIN32
 enum { NETDEV_VPORT_NAME_BUFSIZE = 16 };
-#else
-enum { NETDEV_VPORT_NAME_BUFSIZE = 256 };
-#endif
+
 const char *netdev_vport_get_dpif_port(const struct netdev *,
                                        char namebuf[], size_t bufsize)
     OVS_WARN_UNUSED_RESULT;

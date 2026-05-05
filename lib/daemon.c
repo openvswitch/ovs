@@ -53,9 +53,9 @@ daemonize(void)
 }
 
 /* Sets up a following call to daemonize() to create a pidfile named 'name'.
- * If 'name' begins with '/' (or contains ':' in windows), then it is treated
- * as an absolute path. Otherwise, it is taken relative to RUNDIR,
- * which is $(prefix)/var/run by default.
+ * If 'name' begins with '/', then it is treated as an absolute path.
+ * Otherwise, it is taken relative to RUNDIR, which is $(prefix)/var/run
+ * by default.
  *
  * If 'name' is null, then program_name followed by ".pid" is used. */
 void
@@ -104,11 +104,7 @@ static int
 get_null_fd(void)
 {
     static int null_fd;
-#ifndef _WIN32
     char *device = "/dev/null";
-#else
-    char *device = "nul";
-#endif
 
     if (!null_fd) {
         null_fd = open(device, O_RDWR);

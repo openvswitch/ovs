@@ -11,14 +11,6 @@
     <code>@RUNDIR@/<var>program</var>.</code><var>pid</var><code>.ctl</code>,
     where <var>pid</var> is <code><var>program</var></code>'s process ID.
   <p>
-    On Windows a local named pipe is used to listen for runtime management
-    commands.  A file is created in the absolute path as pointed by
-    <var>socket</var> or if <code>--unixctl</code> is not used at all,
-    a file is created as <code><var>program</var></code> in the configured
-    <var>OVS_RUNDIR</var> directory.  The file exists just to mimic the
-    behavior of a Unix domain socket.
-  </p>
-  <p>
     Specifying <code>none</code> for <var>socket</var> disables the control
     socket feature.
   </p>

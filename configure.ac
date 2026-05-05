@@ -87,8 +87,6 @@ AC_SEARCH_LIBS([pthread_spin_lock], [pthread])
 AC_CHECK_FUNCS([pthread_spin_lock])
 AC_FUNC_STRERROR_R
 
-OVS_CHECK_WIN64
-OVS_CHECK_WIN32
 OVS_CHECK_COVERAGE
 OVS_CHECK_NDEBUG
 OVS_CHECK_USDT
@@ -144,9 +142,8 @@ AX_FUNC_POSIX_MEMALIGN
 OVS_CHECK_UNBOUND
 OVS_CHECK_UNWIND
 
-OVS_CHECK_INCLUDE_NEXT([stdio.h string.h])
+OVS_CHECK_INCLUDE_NEXT([string.h])
 AC_CONFIG_FILES([
-    lib/stdio.h
     lib/string.h
     ovsdb/libovsdb.sym
     ofproto/libofproto.sym

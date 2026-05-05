@@ -92,7 +92,6 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
 {
     enum {
         OPT_MAGIC = CHAR_MAX + 1,
-        OPT_NO_RENAME_OPEN_FILES
     };
     static const struct option long_options[] = {
         {"timeout", required_argument, NULL, 't'},
@@ -101,7 +100,6 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
         {"write-changed-only", optional_argument, NULL, 'w'},
         {"assert-read-only", optional_argument, NULL, 'r'},
         {"magic", required_argument, NULL, OPT_MAGIC},
-        {"no-rename-open-files", no_argument, NULL, OPT_NO_RENAME_OPEN_FILES},
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0},
     };
@@ -149,10 +147,6 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
             magic = optarg;
             break;
 
-        case OPT_NO_RENAME_OPEN_FILES:
-            ovsdb_log_disable_renaming_open_files();
-            break;
-
         case '?':
             exit(EXIT_FAILURE);
 
@@ -170,7 +164,7 @@ usage(void)
 {
     printf("%s: Open vSwitch database test utility\n"
            "usage: %s [OPTIONS] COMMAND [ARG...]\n\n"
-           "  [--magic=MAGIC] [--no-rename-open-files] "
+           "  [--magic=MAGIC] "
            " log-io FILE FLAGS COMMAND...\n"
            "    open FILE with FLAGS (and MAGIC), run COMMANDs\n"
            "  default-atoms\n"

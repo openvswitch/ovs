@@ -97,7 +97,4 @@ struct ovsdb_error *ovsdb_log_replace_commit(struct ovsdb_log *old,
     OVS_WARN_UNUSED_RESULT;
 void ovsdb_log_replace_abort(struct ovsdb_log *new);
 
-/* For testing. */
-void ovsdb_log_disable_renaming_open_files(void);
-
 #endif /* ovsdb/log.h */

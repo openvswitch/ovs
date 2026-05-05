@@ -32,13 +32,11 @@
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#ifndef _WIN32
 #include <grp.h>
 #include <libgen.h>
 #include <pwd.h>
 #include <sys/select.h>
 #include <sys/utsname.h>
-#endif
 #include "compiler.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/list.h"
@@ -575,11 +573,9 @@ lldpd_send(struct lldpd_hardware *hw, struct dp_packet *p)
     if (cfg->g_config.c_receiveonly || cfg->g_config.c_paused) {
         return 0;
     }
-#ifndef _WIN32
     if ((hw->h_flags & IFF_RUNNING) == 0) {
         return 0;
     }
-#endif
 
     for (i = 0; cfg->g_protocols[i].mode != 0; i++) {
         if (!cfg->g_protocols[i].enabled) {

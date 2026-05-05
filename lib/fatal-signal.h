@@ -17,9 +17,7 @@
 #ifndef FATAL_SIGNAL_H
 #define FATAL_SIGNAL_H 1
 
-#ifndef _WIN32
 #include <signal.h>
-#endif
 #include <stdbool.h>
 
 /* Basic interface. */
@@ -45,8 +43,6 @@ int fatal_signal_unlink_file_now(const char *);
  * it through. */
 void fatal_signal_handler(int sig_nr);
 
-#ifndef _WIN32
 void fatal_signal_block(sigset_t *prev_mask);
-#endif
 
 #endif /* fatal-signal.h */

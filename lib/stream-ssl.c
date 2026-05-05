@@ -49,21 +49,6 @@
 #include "timeval.h"
 #include "openvswitch/vlog.h"
 
-#ifdef _WIN32
-/* Ref: https://www.openssl.org/support/faq.html#PROG2
- * Your application must link against the same version of the Win32 C-Runtime
- * against which your openssl libraries were linked.  The default version for
- * OpenSSL is /MD - "Multithreaded DLL". If we compile Open vSwitch with
- * something other than /MD, instead of re-compiling OpenSSL
- * toolkit, openssl/applink.c can be #included. Also, it is important
- * to add CRYPTO_malloc_init prior first call to OpenSSL.
- *
- * XXX: The behavior of the following #include when Open vSwitch is
- * compiled with /MD is not tested. */
-#include <openssl/applink.c>
-#define SHUT_RDWR SD_BOTH
-#endif
-
 VLOG_DEFINE_THIS_MODULE(stream_ssl);
 
 /* Active SSL/TLS. */
@@ -272,12 +257,8 @@ new_ssl_stream(char *name, char *server_name, int fd, enum session_type type,
         goto error;
     }
 
-    /* Disable Nagle.
-     * On windows platforms, this can only be called upon TCP connected.
-     */
-    if (state == STATE_SSL_CONNECTING) {
-        setsockopt_tcp_nodelay(fd);
-    }
+    /* Disable Nagle. */
+    setsockopt_tcp_nodelay(fd);
 
     /* Create and configure OpenSSL stream. */
     ssl = SSL_new(ctx);
@@ -948,11 +929,6 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
     new_fd = accept(pssl->fd, (struct sockaddr *) &ss, &ss_len);
     if (new_fd < 0) {
         error = sock_errno();
-#ifdef _WIN32
-        if (error == WSAEWOULDBLOCK) {
-            error = EAGAIN;
-        }
-#endif
         if (error != EAGAIN) {
             VLOG_DBG_RL(&rl, "accept: %s", sock_strerror(error));
         }

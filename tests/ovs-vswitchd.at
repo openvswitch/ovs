@@ -159,7 +159,6 @@ AT_CLEANUP
 
 dnl ----------------------------------------------------------------------
 AT_SETUP([ovs-vswitchd -- set service controller])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START
 
 AT_CHECK([ovs-vsctl set-controller br0 punix:$(pwd)/br0.void])
@@ -199,20 +198,10 @@ dnl ----------------------------------------------------------------------
 AT_SETUP([ovs-vswitchd - do not create sockets with unsafe names])
 OVS_VSWITCHD_START
 
-# On Unix systems, test for sockets with "test -S".
-#
-# On Windows systems, we simulate a socket with a regular file that contains
-# a TCP port number, so use "test -f" there instead.
-if test $IS_WIN32 = yes; then
-   S=f
-else
-   S=S
-fi
-
 # Create a bridge with an ordinary name and make sure that the management
 # socket gets creatd.
 AT_CHECK([ovs-vsctl add-br a -- set bridge a datapath-type=dummy])
-AT_CHECK([test -$S a.mgmt])
+AT_CHECK([test -S a.mgmt])
 
 # Create a bridge with an unsafe name and make sure that the management
 # socket does not get created.
@@ -222,11 +211,7 @@ cat >experr <<EOF
 ovs-vsctl: Error detected while setting up 'b/c'.  See ovs-vswitchd log for details.
 ovs-vsctl: The default log directory is "$OVS_RUNDIR".
 EOF
-if test "$IS_WIN32" = "yes"; then
-AT_CHECK([ovs-vsctl add-br b/c -- set bridge b/c datapath-type=dummy], [160], [], [experr])
-else
 AT_CHECK([ovs-vsctl add-br b/c -- set bridge b/c datapath-type=dummy], [65], [], [experr])
-fi
 AT_CHECK([test ! -e b/c.mgmt])
 
 OVS_VSWITCHD_STOP(['/ignoring bridge with invalid name/d'])

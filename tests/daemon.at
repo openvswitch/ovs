@@ -46,16 +46,6 @@ check_ancestors() {
 OVS_END_SHELL_HELPERS
 
 AT_SETUP([daemon])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
-
-dnl OVS_SKIP_NON_ADMIN_WIN()
-dnl
-dnl Checks if we have enough rights to create a service
-m4_define([OVS_SKIP_NON_ADMIN_WIN],
-  [
-   AT_SKIP_IF([net session; test $? -ne 0])
-   ])
-
 # Start the daemon and wait for the pidfile to get created
 # and that its contents are the correct pid.
 on_exit 'kill $(cat *.pid)'
@@ -76,7 +66,6 @@ AT_CHECK([test ! -e ovsdb-server.pid])
 AT_CLEANUP
 
 AT_SETUP([daemon --monitor])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 # This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
@@ -130,14 +119,7 @@ child=$(cat ovsdb-server.pid)
 AT_CHECK([kill -0 $child])
 
 # Kill the daemon and make sure that the pidfile gets deleted.
-if test "$IS_WIN32" = "yes"; then
-  # When a 'kill pid' is done on windows (through 'taskkill //F'),
-  # pidfiles are not deleted (because it is force kill), so use
-  # 'ovs-appctl exit' instead
-  OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-else
-  kill $child
-fi
+kill $child
 OVS_WAIT_WHILE([kill -0 $child])
 AT_CHECK([test ! -e ovsdb-server.pid])
 
@@ -145,7 +127,6 @@ AT_CLEANUP
 
 
 AT_SETUP([daemon --detach --monitor])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 # This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
@@ -193,7 +174,6 @@ AT_CLEANUP
 
 
 AT_SETUP([daemon --detach --monitor startup errors])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --monitor --unixctl=nonexistent/unixctl --no-db], [1], [], [stderr])
 AT_CHECK([grep 'could not initialize control socket' stderr],
   [0], [ignore])
@@ -201,37 +181,8 @@ AT_CHECK([test ! -e ovsdb-server.pid])
 AT_CLEANUP
 
 
-AT_SETUP([daemon --service])
-AT_KEYWORDS([windows-service])
-AT_SKIP_IF([test "$IS_WIN32" != "yes"])
-OVS_SKIP_NON_ADMIN_WIN
-AT_SKIP_IF([sc qc ovsdb-server])
-
-AT_CAPTURE_FILE([pid])
-# To create a Windows service, we need the absolute path for the executable.
-abs_path="$(cd $(dirname `which ovsdb-server`); pwd -W; cd $OLDPWD)"
-
-AT_CHECK([sc create ovsdb-server binpath="$abs_path/ovsdb-server --no-db --log-file=`pwd`/ovsdb-server.log --pidfile=`pwd`/ovsdb-server.pid --unixctl=`pwd`/ovsdb-server.ctl --remote=punix:`pwd`/socket --service"],
-[0], [[[SC]] CreateService SUCCESS
-])
-
-AT_CHECK([sc start ovsdb-server], [0], [ignore], [ignore], [sc delete ovsdb-server])
-OVS_WAIT_UNTIL([test -s ovsdb-server.pid])
-OVS_WAIT_UNTIL([sc query ovsdb-server | grep STATE | grep RUNNING > /dev/null 2>&1])
-AT_CHECK([kill -0 `cat ovsdb-server.pid`], [0], [ignore])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs], [0],
-[_Server
-])
-AT_CHECK([sc stop ovsdb-server], [0], [ignore])
-OVS_WAIT_UNTIL([test ! -s ovsdb-server.pid])
-OVS_WAIT_UNTIL([sc query ovsdb-server | grep STATE | grep STOPPED > /dev/null 2>&1])
-AT_CHECK([sc delete ovsdb-server], [0], [[[SC]] DeleteService SUCCESS
-])
-AT_CLEANUP
-
 AT_SETUP([backtrace without monitor])
 AT_SKIP_IF([test "$HAVE_BACKTRACE" = "no" && test "$HAVE_UNWIND" = "no"])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 # This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
@@ -252,7 +203,6 @@ AT_CLEANUP
 
 AT_SETUP([backtrace with monitor])
 AT_SKIP_IF([test "$HAVE_BACKTRACE" = "no" && test "$HAVE_UNWIND" = "no"])
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 # This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS

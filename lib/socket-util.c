@@ -70,7 +70,6 @@ static bool parse_sockaddr_components(struct sockaddr_storage *ss,
 int
 set_nonblocking(int fd)
 {
-#ifndef _WIN32
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags != -1) {
         if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1) {
@@ -83,15 +82,6 @@ set_nonblocking(int fd)
         VLOG_ERR("fcntl(F_GETFL) failed: %s", ovs_strerror(errno));
         return errno;
     }
-#else
-    unsigned long arg = 1;
-    if (ioctlsocket(fd, FIONBIO, &arg)) {
-        int error = sock_errno();
-        VLOG_ERR("set_nonblocking failed: %s", sock_strerror(error));
-        return error;
-    }
-    return 0;
-#endif
 }
 
 void
@@ -123,11 +113,6 @@ set_dscp(int fd, int family, uint8_t dscp)
 {
     int retval;
     int val;
-
-#ifdef _WIN32
-    /* XXX: Consider using QoS2 APIs for Windows to set dscp. */
-    return 0;
-#endif
 
     if (dscp > 63) {
         return EINVAL;
@@ -262,29 +247,10 @@ check_connection_completion(int fd)
     pfd.fd = fd;
     pfd.events = POLLOUT;
 
-#ifndef _WIN32
     do {
         retval = poll(&pfd, 1, 0);
     } while (retval < 0 && errno == EINTR);
-#else
-    fd_set wrset, exset;
-    FD_ZERO(&wrset);
-    FD_ZERO(&exset);
-    FD_SET(fd, &exset);
-    FD_SET(fd, &wrset);
-    pfd.revents = 0;
-    struct timeval tv = { 0, 0 };
-    /* WSAPoll is broken on Windows, instead do a select */
-    retval = select(0, NULL, &wrset, &exset, &tv);
-    if (retval == 1) {
-        if (FD_ISSET(fd, &wrset)) {
-            pfd.revents |= pfd.events;
-        }
-        if (FD_ISSET(fd, &exset)) {
-            pfd.revents |= POLLERR;
-        }
-    }
-#endif
+
     if (retval == 1) {
         if (pfd.revents & (POLLERR | POLLHUP)) {
             ssize_t n = send(fd, "", 1, 0);
@@ -624,11 +590,7 @@ inet_open_active(int style, const char *target, int default_port,
     error = connect(fd, (struct sockaddr *) &ss, ss_length(&ss)) == 0
                     ? 0
                     : sock_errno();
-    if (error == EINPROGRESS
-#ifdef _WIN32
-        || error == WSAEALREADY || error == WSAEWOULDBLOCK
-#endif
-        ) {
+    if (error == EINPROGRESS) {
         error = EAGAIN;
     }
 
@@ -869,7 +831,6 @@ int
 fsync_parent_dir(const char *file_name)
 {
     int error = 0;
-#ifndef _WIN32
     char *dir;
     int fd;
 
@@ -891,7 +852,6 @@ fsync_parent_dir(const char *file_name)
         VLOG_ERR("%s: open failed (%s)", dir, ovs_strerror(error));
     }
     free(dir);
-#endif
 
     return error;
 }
@@ -958,7 +918,6 @@ describe_sockaddr(struct ds *string, int fd,
         if (ss.ss_family == AF_INET || ss.ss_family == AF_INET6) {
             ss_format_address(&ss, string);
             ds_put_format(string, ":%"PRIu16, ss_get_port(&ss));
-#ifndef _WIN32
         } else if (ss.ss_family == AF_UNIX) {
             struct sockaddr_un sun;
             const char *null;
@@ -969,7 +928,6 @@ describe_sockaddr(struct ds *string, int fd,
             null = memchr(sun.sun_path, '\0', maxlen);
             ds_put_buffer(string, sun.sun_path,
                           null ? null - sun.sun_path : maxlen);
-#endif
         }
 #ifdef HAVE_NETLINK
         else if (ss.ss_family == AF_NETLINK) {
@@ -1060,7 +1018,6 @@ describe_fd(int fd)
     struct stat s;
 
     ds_init(&string);
-#ifndef _WIN32
     if (fstat(fd, &s)) {
         ds_put_format(&string, "fstat failed (%s)", ovs_strerror(errno));
     } else if (S_ISSOCK(s.st_mode)) {
@@ -1080,9 +1037,6 @@ describe_fd(int fd)
         put_fd_filename(&string, fd);
 #endif
     }
-#else
-    ds_put_format(&string,"file descriptor");
-#endif /* _WIN32 */
     return ds_steal_cstr(&string);
 }
 
@@ -1254,20 +1208,10 @@ ss_length(const struct sockaddr_storage *ss)
     return sa_length(sa_cast(ss));
 }
 
-/* For Windows socket calls, 'errno' is not set.  One has to call
- * WSAGetLastError() to get the error number and then pass it to
- * this function to get the correct error string.
- *
- * ovs_strerror() calls strerror_r() and would not get the correct error
- * string for Windows sockets, but is good for POSIX. */
 const char *
 sock_strerror(int error)
 {
-#ifdef _WIN32
-    return ovs_format_message(error);
-#else
     return ovs_strerror(error);
-#endif
 }
 
 #ifdef __linux__

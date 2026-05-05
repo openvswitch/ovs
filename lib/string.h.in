@@ -31,14 +31,6 @@
 #undef strtok_r
 #endif
 
-#ifdef _WIN32
-#define strtok_r strtok_s
-#define strcasecmp _stricmp
-#define strncasecmp _strnicmp
-#define strerror_r(errnum, buf, buflen) strerror_s(buf, buflen, errnum)
-char *strcasestr(const char *, const char *);
-#endif
-
 #ifndef HAVE_STRNLEN
 #undef strnlen
 #define strnlen rpl_strnlen

@@ -44,7 +44,6 @@ struct lockfile {
     dev_t device;
     ino_t inode;
     int fd;
-    HANDLE lock_handle;
 };
 
 /* Lock table.
@@ -82,13 +81,6 @@ lockfile_name(const char *filename_)
      * symlink, not one for each. */
     filename = follow_symlinks(filename_);
     slash = strrchr(filename, '/');
-
-#ifdef _WIN32
-    char *backslash = strrchr(filename, '\\');
-    if (backslash && (!slash || backslash > slash)) {
-        slash = backslash;
-    }
-#endif
 
     lockname = (slash
                 ? xasprintf("%.*s/.%s.~lock~",
@@ -233,71 +225,6 @@ lockfile_register(const char *name, dev_t device, ino_t inode, int fd)
     return lockfile;
 }
 
-#ifdef _WIN32
-static void
-lockfile_do_unlock(struct lockfile *lockfile)
-    OVS_REQUIRES(lock_table_mutex)
-{
-    if (lockfile->fd >= 0) {
-        OVERLAPPED overl;
-        overl.hEvent = 0;
-        overl.Offset = 0;
-        overl.OffsetHigh = 0;
-        UnlockFileEx(lockfile->lock_handle, 0, 1, 0, &overl);
-
-        close(lockfile->fd);
-        lockfile->fd = -1;
-    }
-}
-
-static int
-lockfile_try_lock(const char *name, pid_t *pidp, struct lockfile **lockfilep)
-    OVS_REQUIRES(lock_table_mutex)
-{
-    HANDLE lock_handle;
-    BOOL retval;
-    OVERLAPPED overl;
-    struct lockfile *lockfile;
-    int fd;
-
-    *pidp = 0;
-
-    fd = open(name, O_RDWR | O_CREAT, 0600);
-    if (fd < 0) {
-        VLOG_WARN("%s: failed to open lock file: %s",
-                   name, ovs_strerror(errno));
-        return errno;
-    }
-
-    lock_handle = (HANDLE)_get_osfhandle(fd);
-    if (lock_handle < 0) {
-        VLOG_WARN("%s: failed to get the file handle: %s",
-                   name, ovs_strerror(errno));
-        return errno;
-    }
-
-    /* Lock the file 'name' for the region that includes just the first
-     * byte. */
-    overl.hEvent = 0;
-    overl.Offset = 0;
-    overl.OffsetHigh = 0;
-    retval = LockFileEx(lock_handle, LOCKFILE_EXCLUSIVE_LOCK
-                        | LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &overl);
-    if (!retval) {
-        VLOG_DBG("Failed to lock file : %s", ovs_lasterror_to_string());
-        *pidp = getpid();
-        return EDEADLK;
-    }
-
-    lockfile = xmalloc(sizeof *lockfile);
-    lockfile->name = xstrdup(name);
-    lockfile->fd = fd;
-    lockfile->lock_handle = lock_handle;
-
-    *lockfilep = lockfile;
-    return 0;
-}
-#else /* !_WIN32 */
 static void
 lockfile_do_unlock(struct lockfile *lockfile)
 {
@@ -363,4 +290,3 @@ lockfile_try_lock(const char *name, pid_t *pidp, struct lockfile **lockfilep)
     }
     return error;
 }
-#endif

@@ -109,9 +109,6 @@ s/.*|//' "$@"
 m4_divert_pop([PREPARE_TESTS])
 
 AT_SETUP([vlog - vlog/reopen - C])
-# This test won't work as-is on Windows because Windows doesn't allow
-# files that are open to be renamed.
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 on_exit 'kill `cat test-unixctl.pid`'
 
 AT_CAPTURE_FILE([log])
@@ -143,9 +140,6 @@ message3
 AT_CLEANUP
 
 AT_SETUP([vlog - vlog/reopen - Python3])
-# This test won't work as-is on Windows because Windows doesn't allow
-# files that are open to be renamed.
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 on_exit 'kill `cat test-unixctl.py.pid`'
 
 AT_CAPTURE_FILE([log])

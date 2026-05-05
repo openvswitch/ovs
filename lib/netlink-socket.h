@@ -151,14 +151,6 @@
  *
  *       nl_sock_recv() reads notifications sent this way.
  *
- *       Specifically on Windows platform, the datapath needs to allocate a
- *       queue for packets, and it does so only when userspace "subscribe"'s to
- *       packets on that netlink socket.  Before closing the netlink socket,
- *       userspace needs to "unsubscribe" packets on that netlink socket.
- *
- *       nl_sock_subscribe_packets() and nl_sock_unsubscribe_packets() are
- *       Windows specific.
- *
  *       Messages received this way can overflow, just like multicast
  *       subscription messages, and they are reported the same way.  Because
  *       packet notification messages do not report the state of a table, there
@@ -200,9 +192,7 @@
 struct nl_sock;
 
 #ifndef HAVE_NETLINK
-#ifndef _WIN32
 #error "netlink-socket.h is only for hosts that support Netlink sockets"
-#endif
 #endif
 
 /* Netlink sockets. */
@@ -215,11 +205,6 @@ int nl_sock_leave_mcgroup(struct nl_sock *, unsigned int multicast_group);
 
 int nl_sock_listen_all_nsid(struct nl_sock *, bool enable);
 
-#ifdef _WIN32
-int nl_sock_subscribe_packets(struct nl_sock *sock);
-int nl_sock_unsubscribe_packets(struct nl_sock *sock);
-#endif
-
 int nl_sock_send(struct nl_sock *, const struct ofpbuf *, bool wait);
 int nl_sock_send_seq(struct nl_sock *, const struct ofpbuf *,
                      uint32_t nlmsg_seq, bool wait);
@@ -228,9 +213,7 @@ int nl_sock_recv(struct nl_sock *, struct ofpbuf *, int *nsid, bool wait);
 int nl_sock_drain(struct nl_sock *);
 
 void nl_sock_wait(const struct nl_sock *, short int events);
-#ifndef _WIN32
 int nl_sock_fd(const struct nl_sock *);
-#endif
 
 uint32_t nl_sock_pid(const struct nl_sock *);
 

@@ -132,7 +132,6 @@ m4_define([OVSDB_CHECK_IDL_TCP_C],
 # same as OVSDB_CHECK_IDL but uses tcp6.
 m4_define([OVSDB_CHECK_IDL_TCP6_C],
   [AT_SETUP([ovsdb-idl - $1 - C - tcp6])
-   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive tcp6 socket $5])
    OVSDB_START_IDLTEST(["ptcp:0:[[::1]]"])
@@ -221,7 +220,6 @@ m4_define([OVSDB_CHECK_IDL_TCP_MULTIPLE_REMOTES_PY],
 # same as OVSDB_CHECK_IDL but uses the Python IDL implementation with tcp6
 m4_define([OVSDB_CHECK_IDL_TCP6_PY],
   [AT_SETUP([ovsdb-idl $1 - Python3 - tcp6])
-   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
    OVSDB_START_IDLTEST(["ptcp:0:[[::1]]"])
@@ -239,7 +237,6 @@ m4_define([OVSDB_CHECK_IDL_TCP6_PY],
 
 m4_define([OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PY],
   [AT_SETUP([ovsdb-idl - $1 - Python3 - tcp6])
-   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
    OVSDB_START_IDLTEST(["ptcp:0:[[::1]]"])
@@ -2457,9 +2454,7 @@ OVSDB_CHECK_IDL_COMPOUND_INDEX_WITH_REF([set, simple3 idl-compound-index-with-re
 
 m4_define([CHECK_STREAM_OPEN_BLOCK],
   [AT_SETUP([ovsdb-idl - Check stream open block - $1 - $3])
-   AT_SKIP_IF([test "$3" = "tcp6" && test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test "$3" = "tcp6" && test "$HAVE_IPV6" = "no"])
-   AT_SKIP_IF([test "$3" = "ssl6" && test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test "$3" = "ssl6" && test "$HAVE_IPV6" = "no"])
    AT_SKIP_IF([test "$3" = "ssl" && test "$HAVE_OPENSSL" = "no"])
    $PYTHON3 -c "import ssl"

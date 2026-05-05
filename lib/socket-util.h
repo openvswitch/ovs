@@ -96,7 +96,6 @@ size_t ss_length(const struct sockaddr_storage *);
 
 const char *sock_strerror(int error);
 
-#ifndef _WIN32
 void xpipe(int fds[2]);
 void xpipe_nonblocking(int fds[2]);
 
@@ -144,43 +143,10 @@ int af_inet_ifreq_ioctl(const char *name, struct ifreq *,
                         unsigned long int cmd, const char *cmd_name);
 
 #define closesocket close
-#endif
 
-#ifdef _WIN32
-static inline int make_unix_socket(int style, bool nonblock,
-                                   const char *bind_path,
-                                   const char *connect_path)
-{
-    return -EINVAL;
-}
-
-/* Windows defines the 'optval' argument as char * instead of void *. */
-#define setsockopt(sock, level, optname, optval, optlen) \
-    rpl_setsockopt(sock, level, optname, optval, optlen)
-static inline int rpl_setsockopt(int sock, int level, int optname,
-                                 const void *optval, socklen_t optlen)
-{
-    return (setsockopt)(sock, level, optname, (const char *)optval, optlen);
-}
-
-#define getsockopt(sock, level, optname, optval, optlen) \
-    rpl_getsockopt(sock, level, optname, optval, optlen)
-static inline int rpl_getsockopt(int sock, int level, int optname,
-                                 void *optval, socklen_t *optlen)
-{
-    return (getsockopt)(sock, level, optname, (char *)optval, optlen);
-}
-#endif
-
-/* In Windows platform, errno is not set for socket calls.
- * The last error has to be gotten from WSAGetLastError(). */
 static inline int sock_errno(void)
 {
-#ifdef _WIN32
-    return WSAGetLastError();
-#else
     return errno;
-#endif
 }
 
 #endif /* socket-util.h */

@@ -33,13 +33,7 @@
 #ifndef POLL_LOOP_H
 #define POLL_LOOP_H 1
 
-#ifndef _WIN32
 #include <poll.h>
-#endif
-
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 #ifdef  __cplusplus
 extern "C" {
@@ -57,11 +51,6 @@ extern "C" {
  * example. */
 void poll_fd_wait_at(int fd, short int events, const char *where);
 #define poll_fd_wait(fd, events) poll_fd_wait_at(fd, events, OVS_SOURCE_LOCATOR)
-
-#ifdef _WIN32
-void poll_wevent_wait_at(HANDLE wevent, const char *where);
-#define poll_wevent_wait(wevent) poll_wevent_wait_at(wevent, OVS_SOURCE_LOCATOR)
-#endif /* _WIN32 */
 
 void poll_timer_wait_at(long long int msec, const char *where);
 #define poll_timer_wait(msec) poll_timer_wait_at(msec, OVS_SOURCE_LOCATOR)

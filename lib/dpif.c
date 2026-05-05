@@ -75,7 +75,7 @@ COVERAGE_DEFINE(dpif_port_del);
 COVERAGE_DEFINE(dpif_purge);
 
 static const struct dpif_class *base_dpif_classes[] = {
-#if defined(__linux__) || defined(_WIN32)
+#ifdef __linux__
     &dpif_netlink_class,
 #endif
     &dpif_netdev_class,

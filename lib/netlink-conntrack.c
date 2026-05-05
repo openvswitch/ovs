@@ -284,14 +284,6 @@ nl_ct_flush_zone_with_cta_zone(uint16_t flush_zone)
     return err;
 }
 
-#ifdef _WIN32
-int
-nl_ct_flush_zone(uint16_t flush_zone)
-{
-    return nl_ct_flush_zone_with_cta_zone(flush_zone);
-}
-#else
-
 static bool
 netlink_flush_supports_zone(void)
 {
@@ -387,7 +379,6 @@ nl_ct_flush_zone(uint16_t flush_zone)
      * have a parent connection anymore */
     return 0;
 }
-#endif
 
 /* Conntrack netlink parsing. */
 
@@ -659,10 +650,6 @@ nl_ct_put_ct_tuple(struct ofpbuf *buf, const struct ct_dpif_tuple *tuple,
 static uint8_t
 nl_ct_tcp_state_to_dpif(uint8_t state)
 {
-#ifdef _WIN32
-    /* Windows currently sends up CT_DPIF_TCP state */
-    return state;
-#else
     switch (state) {
     case TCP_CONNTRACK_NONE:
         return CT_DPIF_TCPS_CLOSED;
@@ -687,23 +674,17 @@ nl_ct_tcp_state_to_dpif(uint8_t state)
     default:
         return CT_DPIF_TCPS_CLOSED;
     }
-#endif
 }
 
 static uint8_t
 ip_ct_tcp_flags_to_dpif(uint8_t flags)
 {
-#ifdef _WIN32
-    /* Windows currently sends up CT_DPIF_TCP flags */
-    return flags;
-#else
     uint8_t ret = 0;
 #define CT_DPIF_TCP_FLAG(FLAG) \
         ret |= (flags & IP_CT_TCP_FLAG_##FLAG) ? CT_DPIF_TCPF_##FLAG : 0;
     CT_DPIF_TCP_FLAGS
 #undef CT_DPIF_TCP_FLAG
     return ret;
-#endif
 }
 
 static bool
@@ -771,10 +752,6 @@ nl_ct_parse_protoinfo_tcp(struct nlattr *nla,
 static uint8_t
 nl_ct_sctp_state_to_dpif(uint8_t state)
 {
-#ifdef _WIN32
-    /* For now, return the CT_DPIF_SCTP state. Not sure what windows does. */
-    return state;
-#else
     switch (state) {
     case SCTP_CONNTRACK_COOKIE_WAIT:
         return CT_DPIF_SCTP_STATE_COOKIE_WAIT;
@@ -799,7 +776,6 @@ nl_ct_sctp_state_to_dpif(uint8_t state)
     default:
         return CT_DPIF_SCTP_STATE_CLOSED;
     }
-#endif
 }
 
 static bool
@@ -1378,8 +1354,4 @@ nl_msg_put_nfgenmsg(struct ofpbuf *msg, size_t expected_payload,
     nfm->nfgen_family = family;
     nfm->version = NFNETLINK_V0;
     nfm->res_id = 0;
-#ifdef _WIN32
-    /* nfgenmsg contains ovsHdr padding in windows */
-    nfm->ovsHdr.dp_ifindex = 0;
-#endif
 }

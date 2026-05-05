@@ -88,44 +88,6 @@ seq () {
     done
 }
 
-if test "$IS_WIN32" = "yes"; then
-    pwd () {
-        command pwd -W "$@"
-    }
-
-    diff () {
-        command diff --strip-trailing-cr "$@"
-    }
-
-    # tskill is more effective than taskkill but it isn't always installed.
-    if (tskill //?) >/dev/null 2>&1; then :; else
-        tskill () { taskkill //F //PID $1 >/dev/null; }
-    fi
-
-    kill () {
-        signal=
-        retval=0
-        for arg; do
-            arg=$(echo $arg | tr -d '\n\r')
-            case $arg in
-            -*) signal=$arg ;;
-            [1-9][0-9]*)
-                # tasklist always returns 0.
-                # If pid does exist, there will be a line with the pid.
-                if tasklist //fi "PID eq $arg" | grep $arg >/dev/null; then
-                    if test "X$signal" != "X-0"; then
-                        tskill $arg
-                    fi
-                else
-                    retval=1
-                fi
-                ;;
-            esac
-        done
-        return $retval
-    }
-fi
-
 # parent_pid PID
 #
 # Prints the PID of the parent of process PID.

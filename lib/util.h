@@ -74,11 +74,7 @@ struct Bad_arg_to_ARRAY_SIZE {
 #endif
 BUILD_ASSERT_DECL(IS_POW2(CACHE_LINE_SIZE));
 
-/* Cacheline marking is typically done using zero-sized array.
- * However MSVC doesn't like zero-sized array in struct/union.
- * C4200: https://msdn.microsoft.com/en-us/library/79wf64bc.aspx
- */
-typedef uint8_t OVS_CACHE_LINE_MARKER[1];
+typedef uint8_t OVS_CACHE_LINE_MARKER[0];
 
 static inline void
 ovs_prefetch_range(const void *start, size_t size)
@@ -118,25 +114,12 @@ ovs_prefetch_range(const void *start, size_t size)
 #define OVS_JOIN(X, Y) OVS_JOIN2(X, Y)
 
 /* Use "%"PRIuSIZE to format size_t with printf(). */
-#ifdef _WIN32
-#define PRIdSIZE "Id"
-#define PRIiSIZE "Ii"
-#define PRIoSIZE "Io"
-#define PRIuSIZE "Iu"
-#define PRIxSIZE "Ix"
-#define PRIXSIZE "IX"
-#else
 #define PRIdSIZE "zd"
 #define PRIiSIZE "zi"
 #define PRIoSIZE "zo"
 #define PRIuSIZE "zu"
 #define PRIxSIZE "zx"
 #define PRIXSIZE "zX"
-#endif
-
-#ifndef _WIN32
-typedef uint32_t HANDLE;
-#endif
 
 #ifdef  __cplusplus
 extern "C" {
@@ -262,10 +245,8 @@ int parse_int_string(const char *s, uint8_t *valuep, int field_width,
 const char *english_list_delimiter(size_t index, size_t total);
 
 char *get_cwd(void);
-#ifndef _WIN32
 char *dir_name(const char *file_name);
 char *base_name(const char *file_name);
-#endif
 char *abs_file_name(const char *dir, const char *file_name);
 bool is_file_name_absolute(const char *);
 
@@ -290,42 +271,6 @@ static inline int
 raw_clz64(uint64_t n)
 {
     return __builtin_clzll(n);
-}
-#elif _MSC_VER
-static inline int
-raw_ctz(uint64_t n)
-{
-#ifdef _WIN64
-    unsigned long r = 0;
-    _BitScanForward64(&r, n);
-    return r;
-#else
-    unsigned long low = n, high, r = 0;
-    if (_BitScanForward(&r, low)) {
-        return r;
-    }
-    high = n >> 32;
-    _BitScanForward(&r, high);
-    return r + 32;
-#endif
-}
-
-static inline int
-raw_clz64(uint64_t n)
-{
-#ifdef _WIN64
-    unsigned long r = 0;
-    _BitScanReverse64(&r, n);
-    return 63 - r;
-#else
-    unsigned long low, high = n >> 32, r = 0;
-    if (_BitScanReverse(&r, high)) {
-        return 31 - r;
-    }
-    low = n;
-    _BitScanReverse(&r, low);
-    return 63 - r;
-#endif
 }
 #else
 /* Defined in util.c. */
@@ -596,13 +541,6 @@ void xnanosleep_no_quiesce(uint64_t nanoseconds);
 void set_timer_resolution(unsigned long nanoseconds);
 
 bool is_stdout_a_tty(void);
-
-#ifdef _WIN32
-
-char *ovs_format_message(int error);
-char *ovs_lasterror_to_string(void);
-int ftruncate(int fd, off_t length);
-#endif
 
 #ifdef  __cplusplus
 }

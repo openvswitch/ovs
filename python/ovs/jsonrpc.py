@@ -15,7 +15,6 @@ import codecs
 import errno
 import os
 import random
-import sys
 
 import ovs.json
 import ovs.poller
@@ -274,11 +273,6 @@ class Connection(object):
                     except UnicodeError:
                         error = errno.EILSEQ
                 if error:
-                    if (sys.platform == "win32" and
-                            error == errno.WSAEWOULDBLOCK):
-                        # WSAEWOULDBLOCK would be the equivalent on Windows
-                        # for EAGAIN on Unix.
-                        error = errno.EAGAIN
                     if error == errno.EAGAIN:
                         return error, None
                     else:

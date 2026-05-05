@@ -479,7 +479,6 @@ vlog_reopen_log_file(void)
     }
 }
 
-#ifndef _WIN32
 /* In case a log file exists, change its owner to new 'user' and 'group'.
  *
  * This is useful for handling cases where the --log-file option is
@@ -506,7 +505,6 @@ vlog_change_owner_unix(uid_t user, gid_t group)
         VLOG_FATAL("%s", ds_steal_cstr(&err));
     }
 }
-#endif
 
 /* Set debugging levels.  Returns null if successful, otherwise an error
  * message that the caller must free(). */

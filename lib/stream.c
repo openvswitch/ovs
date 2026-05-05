@@ -55,11 +55,7 @@ enum stream_state {
 
 static const struct stream_class *stream_classes[] = {
     &tcp_stream_class,
-#ifndef _WIN32
     &unix_stream_class,
-#else
-    &windows_stream_class,
-#endif
 #ifdef HAVE_OPENSSL
     &ssl_stream_class,
 #endif
@@ -67,12 +63,8 @@ static const struct stream_class *stream_classes[] = {
 
 static const struct pstream_class *pstream_classes[] = {
     &ptcp_pstream_class,
-#ifndef _WIN32
     &punix_pstream_class,
     &pfd_pstream_class,
-#else
-    &pwindows_pstream_class,
-#endif
 #ifdef HAVE_OPENSSL
     &pssl_pstream_class,
 #endif
@@ -148,10 +140,8 @@ stream_usage(const char *name, bool active, bool passive,
 #endif
         printf("  punix:FILE              "
                "listen on Unix domain socket FILE\n");
-#ifndef _WIN32
         printf("  pfd:FD                  "
                "listen on pre-opened file descriptor FD\n");
-#endif
     }
 
 #ifdef HAVE_OPENSSL

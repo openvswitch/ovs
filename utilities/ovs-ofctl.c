@@ -173,7 +173,6 @@ main(int argc, char *argv[])
 {
     struct ovs_cmdl_context ctx = { .argc = 0, };
     set_program_name(argv[0]);
-    service_start(&argc, &argv);
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
     ctx.argc = argc - optind;

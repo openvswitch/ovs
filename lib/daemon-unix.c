@@ -710,25 +710,6 @@ check_already_running(void)
 }
 
 
-/* stub functions for non-windows platform. */
-
-void
-service_start(int *argc OVS_UNUSED, char **argv[] OVS_UNUSED)
-{
-}
-
-void
-service_stop(void)
-{
-}
-
-bool
-should_service_stop(void)
-{
-    return false;
-}
-
-
 static bool
 gid_matches(gid_t expected, gid_t value)
 {

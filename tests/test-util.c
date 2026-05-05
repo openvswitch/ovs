@@ -1183,7 +1183,6 @@ test_sat_math(struct ovs_cmdl_context *ctx OVS_UNUSED)
     }
 }
 
-#ifndef _WIN32
 static void
 test_file_name(struct ovs_cmdl_context *ctx)
 {
@@ -1201,7 +1200,6 @@ test_file_name(struct ovs_cmdl_context *ctx)
         free(base);
     }
 }
-#endif /* _WIN32 */
 
 static const struct ovs_cmdl_command commands[] = {
     {"ctz", NULL, 0, 0, test_ctz, OVS_RO},
@@ -1220,9 +1218,7 @@ static const struct ovs_cmdl_command commands[] = {
     {"ovs_scan", NULL, 0, 0, test_ovs_scan, OVS_RO},
     {"snprintf", NULL, 0, 0, test_snprintf, OVS_RO},
     {"sat_math", NULL, 0, 0, test_sat_math, OVS_RO},
-#ifndef _WIN32
     {"file_name", NULL, 1, INT_MAX, test_file_name, OVS_RO},
-#endif
     {NULL, NULL, 0, 0, NULL, OVS_RO},
 };
 
@@ -1263,10 +1259,9 @@ test_util_main(int argc, char *argv[])
     struct ovs_cmdl_context ctx = { .argc = 0, };
     set_program_name(argv[0]);
     parse_options(argc, argv);
-    /* On Windows, stderr is fully buffered if connected to a pipe.
-     * Make it _IONBF so that an abort does not miss log contents.
-     * POSIX doesn't define the circumstances in which stderr is
-     * fully buffered either. */
+    /* POSIX doesn't define the circumstances in which stderr is
+     * fully buffered.  Make it _IONBF so that an abort does not
+     * miss log contents.*/
     setvbuf(stderr, NULL, _IONBF, 0);
     ctx.argc = argc - optind;
     ctx.argv = argv + optind;

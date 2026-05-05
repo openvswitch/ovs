@@ -23,8 +23,7 @@ EXTRA_DIST += \
 	$(srcdir)/package.m4 \
 	$(srcdir)/tests/test-dpparse.py \
 	$(srcdir)/tests/test-ofparse.py \
-	$(srcdir)/tests/testsuite \
-	$(srcdir)/tests/testsuite.patch
+	$(srcdir)/tests/testsuite
 
 COMMON_MACROS_AT = \
 	tests/ovsdb-macros.at \
@@ -206,7 +205,6 @@ SYSTEM_DPDK_TESTSUITE_AT = \
 check_SCRIPTS += tests/atlocal
 
 TESTSUITE = $(srcdir)/tests/testsuite
-TESTSUITE_PATCH = $(srcdir)/tests/testsuite.patch
 TESTSUITE_DIR = $(abs_top_builddir)/tests/testsuite.dir
 SYSTEM_KMOD_TESTSUITE = $(srcdir)/tests/system-kmod-testsuite
 SYSTEM_USERSPACE_TESTSUITE = $(srcdir)/tests/system-userspace-testsuite
@@ -218,7 +216,7 @@ SYSTEM_DPDK_TESTSUITE = $(srcdir)/tests/system-dpdk-testsuite
 OVSDB_CLUSTER_TESTSUITE = $(srcdir)/tests/ovsdb-cluster-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
-AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:ipsec:$(PTHREAD_WIN32_DIR_DLL):$(SSL_DIR)
+AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:ipsec:$(SSL_DIR)
 
 check-local:
 	set $(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH); \
@@ -393,16 +391,9 @@ check-ovsdb-cluster: all
 
 AUTOTEST = $(AUTOM4TE) --language=autotest
 
-if WIN32
-$(TESTSUITE): package.m4 $(TESTSUITE_AT) $(COMMON_MACROS_AT) $(TESTSUITE_PATCH)
-	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o testsuite.tmp $@.at
-	patch -p0 testsuite.tmp $(TESTSUITE_PATCH)
-	$(AM_V_at)mv testsuite.tmp $@
-else
 $(TESTSUITE): package.m4 $(TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
 	$(AM_V_at)mv $@.tmp $@
-endif
 
 $(SYSTEM_KMOD_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_KMOD_TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
@@ -509,6 +500,7 @@ tests_ovstest_SOURCES = \
 	tests/test-skiplist.c \
 	tests/test-stp.c \
 	tests/test-unixctl.c \
+	tests/test-unix-socket.c \
 	tests/test-util.c \
 	tests/test-uuid.c \
 	tests/test-uuidset.c \
@@ -516,11 +508,6 @@ tests_ovstest_SOURCES = \
 	tests/test-vconn.c \
 	tests/test-aa.c \
 	tests/test-stopwatch.c
-
-if !WIN32
-tests_ovstest_SOURCES += \
-	tests/test-unix-socket.c
-endif
 
 if LINUX
 tests_ovstest_SOURCES += \

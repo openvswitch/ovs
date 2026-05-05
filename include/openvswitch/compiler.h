@@ -30,12 +30,10 @@
   #define __has_attribute(x) 0
 #endif
 
-/* To make OVS_NO_RETURN portable across gcc/clang and MSVC, it should be
+/* To make OVS_NO_RETURN portable across gcc/clang, it should be
  * added at the beginning of the function declaration. */
 #if __GNUC__ && !__CHECKER__
 #define OVS_NO_RETURN __attribute__((__noreturn__))
-#elif _MSC_VER
-#define OVS_NO_RETURN __declspec(noreturn)
 #else
 #define OVS_NO_RETURN
 #endif
@@ -212,11 +210,7 @@
 #define OVS_PACKED_ENUM
 #endif
 
-#ifndef _MSC_VER
 #define OVS_PACKED(DECL) DECL __attribute__((__packed__))
-#else
-#define OVS_PACKED(DECL) __pragma(pack(push, 1)) DECL __pragma(pack(pop))
-#endif
 
 /* OVS_ALIGNED_STRUCT may be used to define a structure whose instances should
  * aligned on an N-byte boundary.  This:
@@ -229,13 +223,8 @@
  *     OVS_ALIGNED_VAR(64) int x;
  * defines a "int" variable that is aligned on a 64-byte boundary.
  */
-#ifndef _MSC_VER
 #define OVS_ALIGNED_STRUCT(N, TAG) struct __attribute__((aligned(N))) TAG
 #define OVS_ALIGNED_VAR(N) __attribute__((aligned(N)))
-#else
-#define OVS_ALIGNED_STRUCT(N, TAG) __declspec(align(N)) struct TAG
-#define OVS_ALIGNED_VAR(N) __declspec(align(N))
-#endif
 
 /* Supplies code to be run at startup time before invoking main().
  * Use as:
@@ -244,18 +233,9 @@
  *         ...some code...
  *     }
  */
-#ifdef _MSC_VER
-#define CCALL __cdecl
-#pragma section(".CRT$XCU",read)
-#define OVS_CONSTRUCTOR(f) \
-    static void __cdecl f(void); \
-    __declspec(allocate(".CRT$XCU")) static void (__cdecl*f##_)(void) = f; \
-    static void __cdecl f(void)
-#else
 #define OVS_CONSTRUCTOR(f) \
     static void f(void) __attribute__((constructor)); \
     static void f(void)
-#endif
 
 /* OVS_PREFETCH() can be used to instruct the CPU to fetch the cache
  * line containing the given address to a CPU cache.
@@ -269,22 +249,6 @@
 #else
 #define OVS_PREFETCH(addr)
 #define OVS_PREFETCH_WRITE(addr)
-#endif
-
-/* Since Visual Studio 2015 there has been an effort to make offsetof a
- * builtin_offsetof, unfortunately both implementation (the regular define and
- * the built in one) are buggy and cause issues when using them via
- * the C compiler.
- * e.g.: https://bit.ly/2UvWwti
- */
-#if _MSC_VER >= 1900
-#undef offsetof
-#define offsetof(type, member) \
-    ((size_t)((char *)&(((type *)0)->member) - (char *)0))
-#endif
-
-#if _MSC_VER
-#pragma message ("warning: Windows support is deprecated.")
 #endif
 
 /* Build assertions.

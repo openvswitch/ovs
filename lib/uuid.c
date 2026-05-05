@@ -361,11 +361,9 @@ do_init(void)
     sha1_update(&sha1_ctx, random_seed, sizeof random_seed);
     sha1_update(&sha1_ctx, &now, sizeof now);
     sha1_update_int(&sha1_ctx, getpid());
-#ifndef _WIN32
     sha1_update_int(&sha1_ctx, getppid());
     sha1_update_int(&sha1_ctx, getuid());
     sha1_update_int(&sha1_ctx, getgid());
-#endif
     sha1_final(&sha1_ctx, sha1);
 
     /* Generate key. */

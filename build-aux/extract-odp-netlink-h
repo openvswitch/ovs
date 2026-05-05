@@ -14,13 +14,7 @@
 # Avoid using reserved names in header guards.
 s/_LINUX_OPENVSWITCH_H/ODP_NETLINK_H/
 
-# Include platform extensions header file on Win32.
 $i\
-#ifdef _WIN32\
-#include "OvsDpInterfaceExt.h"\
-#include "OvsDpInterfaceCtExt.h"\
-#endif\
-\
 /* IPCT_* enums may not be defined in all platforms, so do not use them. */\
 #define OVS_CT_EVENT_NEW	(1 << 0)   /* 1 << IPCT_NEW */\
 #define OVS_CT_EVENT_RELATED	(1 << 1)   /* 1 << IPCT_RELATED */\

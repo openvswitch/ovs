@@ -10,11 +10,6 @@ lib_LTLIBRARIES += lib/libopenvswitch.la
 lib_libopenvswitch_la_LIBADD = $(SSL_LIBS)
 lib_libopenvswitch_la_LIBADD += $(CAPNG_LDADD)
 
-
-if WIN32
-lib_libopenvswitch_la_LIBADD += ${PTHREAD_LIBS}
-endif
-
 lib_libopenvswitch_la_LDFLAGS = \
         $(OVS_LTINFO) \
         -Wl,--version-script=$(top_builddir)/lib/libopenvswitch.sym \
@@ -265,7 +260,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovs-atomic-i586.h \
 	lib/ovs-atomic-locked.c \
 	lib/ovs-atomic-locked.h \
-	lib/ovs-atomic-msvc.h \
 	lib/ovs-atomic-pthreads.h \
 	lib/ovs-atomic-x86_64.h \
 	lib/ovs-atomic.h \
@@ -356,7 +350,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/stream-tcp.c \
 	lib/stream.c \
 	lib/stream.h \
-	lib/stdio.c \
 	lib/string.c \
 	lib/svec.c \
 	lib/svec.h \
@@ -413,17 +406,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/lldp/lldpd-structs.c \
 	lib/lldp/lldpd-structs.h
 
-if WIN32
-lib_libopenvswitch_la_SOURCES += \
-	lib/daemon-windows.c \
-	lib/getopt_long.c \
-	lib/getrusage-windows.c \
-	lib/latch-windows.c \
-	lib/route-table-stub.c \
-	lib/if-notifier-stub.c \
-	lib/stream-windows.c \
-	lib/strsep.c
-else
 lib_libopenvswitch_la_SOURCES += \
 	lib/daemon-unix.c \
 	lib/latch-unix.c \
@@ -431,10 +413,8 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/signals.h \
 	lib/socket-util-unix.c \
 	lib/stream-unix.c
-endif
 
 EXTRA_DIST += \
-	lib/stdio.h.in \
 	lib/string.h.in
 
 nodist_lib_libopenvswitch_la_SOURCES = \
@@ -514,23 +494,6 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/dpdk-stub.c
 endif
 
-if WIN32
-lib_libopenvswitch_la_SOURCES += \
-	lib/dpif-netlink.c \
-	lib/dpif-netlink.h \
-	lib/dpif-netlink-rtnl.h \
-	lib/netdev-windows.c \
-	lib/netlink-conntrack.c \
-	lib/netlink-conntrack.h \
-	lib/netlink-notifier.c \
-	lib/netlink-notifier.h \
-	lib/netlink-protocol.h \
-	lib/netlink-socket.c \
-	lib/netlink-socket.h \
-	lib/wmi.c \
-	lib/wmi.h
-endif
-
 if HAVE_POSIX_AIO
 lib_libopenvswitch_la_SOURCES += lib/async-append-aio.c
 else
@@ -606,8 +569,6 @@ MAN_FRAGMENTS += \
 	lib/ovs.tmac \
 	lib/ovs-replay.man \
 	lib/ovs-replay-syn.man \
-	lib/service.man \
-	lib/service-syn.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl-bootstrap-syn.man \
 	lib/ssl-peer-ca-cert.man \

@@ -169,7 +169,7 @@ class DNSResolver:
     def _set_resolv_conf(self):
         filename = os.getenv("OVS_RESOLV_CONF")
         # The C lib checks that the file exists and also sets filename to
-        # /etc/resolv.conf on non-Windows, but resolvconf already does this.
+        # /etc/resolv.conf, but resolvconf already does this.
         retval = self._ctx.resolvconf(filename)
         if retval != 0:
             location = filename or "system default nameserver"

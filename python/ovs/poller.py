@@ -17,13 +17,9 @@ import os
 
 import select
 import socket
-import sys
 
 import ovs.timeval
 import ovs.vlog
-
-if sys.platform == "win32":
-    import ovs.winutils as winutils
 
 try:
     import ssl
@@ -76,9 +72,7 @@ class _SelectSelect(object):
         if ssl and isinstance(fd, ssl.SSLSocket):
             fd = fd.fileno()
 
-        if sys.platform != 'win32':
-            # Skip this on Windows, it also register events
-            assert isinstance(fd, int)
+        assert isinstance(fd, int)
         if events & POLLIN:
             self.rlist.append(fd)
             events &= ~POLLIN
@@ -93,61 +87,26 @@ class _SelectSelect(object):
         # see https://github.com/eventlet/eventlet/pull/25
         if timeout == 0 and _using_eventlet_green_select():
             timeout = 0.1
-        if sys.platform == 'win32':
-            events = self.rlist + self.wlist + self.xlist
-            if not events:
-                return []
-            if len(events) > winutils.win32event.MAXIMUM_WAIT_OBJECTS:
-                raise WindowsError("Cannot handle more than maximum wait"
-                                   "objects\n")
 
-            # win32event.INFINITE timeout is -1
-            # timeout must be an int number, expressed in ms
-            if timeout == 0.1:
-                timeout = 100
-            else:
-                timeout = int(timeout)
-
-            # Wait until any of the events is set to signaled
-            try:
-                retval = winutils.win32event.WaitForMultipleObjects(
-                    events,
-                    False,  # Wait all
-                    timeout)
-            except winutils.pywintypes.error:
-                return [(0, POLLERR)]
-
-            if retval == winutils.winerror.WAIT_TIMEOUT:
-                return []
-
-            if events[retval] in self.rlist:
-                revent = POLLIN
-            elif events[retval] in self.wlist:
-                revent = POLLOUT
-            else:
-                revent = POLLERR
-
-            return [(events[retval], revent)]
+        if timeout == -1:
+            # epoll uses -1 for infinite timeout, select uses None.
+            timeout = None
         else:
-            if timeout == -1:
-                # epoll uses -1 for infinite timeout, select uses None.
-                timeout = None
-            else:
-                timeout = float(timeout) / 1000
-            rlist, wlist, xlist = select.select(self.rlist,
-                                                self.wlist,
-                                                self.xlist,
-                                                timeout)
-            events_dict = {}
-            for fd in rlist:
-                events_dict[fd] = events_dict.get(fd, 0) | POLLIN
-            for fd in wlist:
-                events_dict[fd] = events_dict.get(fd, 0) | POLLOUT
-            for fd in xlist:
-                events_dict[fd] = events_dict.get(fd, 0) | (POLLERR |
-                                                            POLLHUP |
-                                                            POLLNVAL)
-            return list(events_dict.items())
+            timeout = float(timeout) / 1000
+        rlist, wlist, xlist = select.select(self.rlist,
+                                            self.wlist,
+                                            self.xlist,
+                                            timeout)
+        events_dict = {}
+        for fd in rlist:
+            events_dict[fd] = events_dict.get(fd, 0) | POLLIN
+        for fd in wlist:
+            events_dict[fd] = events_dict.get(fd, 0) | POLLOUT
+        for fd in xlist:
+            events_dict[fd] = events_dict.get(fd, 0) | (POLLERR |
+                                                        POLLHUP |
+                                                        POLLNVAL)
+        return list(events_dict.items())
 
 
 SelectPoll = _SelectSelect
@@ -231,8 +190,6 @@ class Poller(object):
                 events = self.poll.poll(self.timeout)
                 self.__log_wakeup(events)
             except OSError as e:
-                """ On Windows, the select function from poll raises OSError
-                exception if the polled array is empty."""
                 if e.errno != errno.EINTR:
                     vlog.err("poll: %s" % os.strerror(e.errno))
             except select.error as e:

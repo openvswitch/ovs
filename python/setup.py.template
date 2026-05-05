@@ -39,8 +39,6 @@ with open(README_PATH) as fh:
     long_description = fh.read()
 
 ext_errors = (CCompilerError, ExecError, PlatformError)
-if sys.platform == 'win32':
-    ext_errors += (IOError, ValueError)
 
 
 class BuildFailed(Exception):
@@ -108,8 +106,7 @@ setup_args = dict(
                                       extra_link_args=extra_libs)],
     cmdclass={'build_ext': try_build_ext},
     install_requires=['sortedcontainers'],
-    extras_require={':sys_platform == "win32"': ['pywin32 >= 1.0'],
-                    'dns': ['unbound'],
+    extras_require={'dns': ['unbound'],
                     'flow': flow_extras_require,
                     'flowviz':
                         [*flow_extras_require, 'click', 'rich', 'graphviz'],

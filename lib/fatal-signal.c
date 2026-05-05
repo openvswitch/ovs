@@ -50,12 +50,8 @@
 VLOG_DEFINE_THIS_MODULE(fatal_signal);
 
 /* Signals to catch. */
-#ifndef _WIN32
 static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM,
                                      SIGSEGV };
-#else
-static const int fatal_signals[] = { SIGTERM };
-#endif
 
 /* Hooks to call upon catching a signal */
 struct hook {
@@ -71,17 +67,10 @@ static size_t n_hooks;
 static int signal_fds[2];
 static volatile sig_atomic_t stored_sig_nr = SIG_ATOMIC_MAX;
 
-#ifdef _WIN32
-static HANDLE wevent;
-#endif
-
 static struct ovs_mutex mutex;
 
 static void call_hooks(int sig_nr)
     OVS_REQUIRES(mutex);
-#ifdef _WIN32
-static BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType);
-#endif
 
 /* Sets up a pipe or event handle that will be used to wake up the current
  * process after signal is received, so it can be processed outside of the
@@ -89,30 +78,16 @@ static BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType);
 static void
 fatal_signal_create_wakeup_events(void)
 {
-#ifndef _WIN32
     xpipe_nonblocking(signal_fds);
-#else
-    wevent = CreateEvent(NULL, TRUE, FALSE, NULL);
-    if (!wevent) {
-        char *msg_buf = ovs_lasterror_to_string();
-        VLOG_FATAL("Failed to create a event (%s).", msg_buf);
-    }
-#endif
 }
 
 static void
 fatal_signal_destroy_wakeup_events(void)
 {
-#ifndef _WIN32
     close(signal_fds[0]);
     signal_fds[0] = -1;
     close(signal_fds[1]);
     signal_fds[1] = -1;
-#else
-    ResetEvent(wevent);
-    CloseHandle(wevent);
-    wevent = NULL;
-#endif
 }
 
 
@@ -141,14 +116,8 @@ fatal_signal_init(void)
 
         fatal_signal_create_wakeup_events();
 
-#ifdef _WIN32
-        /* Register a function to handle Ctrl+C. */
-        SetConsoleCtrlHandler(ConsoleHandlerRoutine, true);
-#endif
-
         for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {
             int sig_nr = fatal_signals[i];
-#ifndef _WIN32
             struct sigaction old_sa;
 
             xsigaction(sig_nr, NULL, &old_sa);
@@ -156,11 +125,6 @@ fatal_signal_init(void)
                 && signal(sig_nr, fatal_signal_handler) == SIG_ERR) {
                 VLOG_FATAL("signal failed (%s)", ovs_strerror(errno));
             }
-#else
-            if (signal(sig_nr, fatal_signal_handler) == SIG_ERR) {
-                VLOG_FATAL("signal failed (%s)", ovs_strerror(errno));
-            }
-#endif
         }
         atexit(fatal_signal_atexit_handler);
     }
@@ -327,16 +291,12 @@ send_backtrace_to_monitor(void) {
 void
 fatal_signal_handler(int sig_nr)
 {
-#ifndef _WIN32
     if (sig_nr == SIGSEGV) {
         signal(sig_nr, SIG_DFL); /* Set it back immediately. */
         send_backtrace_to_monitor();
         raise(sig_nr);
     }
     ovs_ignore(write(signal_fds[1], "", 1));
-#else
-    SetEvent(wevent);
-#endif
     stored_sig_nr = sig_nr;
 }
 
@@ -364,12 +324,8 @@ fatal_signal_run(void)
 
         ovs_mutex_lock(&mutex);
 
-#ifndef _WIN32
         VLOG_WARN("terminating with signal %d (%s)",
                   (int)sig_nr, signal_name(sig_nr, namebuf, sizeof namebuf));
-#else
-        VLOG_WARN("terminating with signal %d", (int)sig_nr);
-#endif
         call_hooks(sig_nr);
         fflush(stderr);
 
@@ -387,19 +343,13 @@ void
 fatal_signal_wait(void)
 {
     fatal_signal_init();
-#ifdef _WIN32
-    poll_wevent_wait(wevent);
-#else
     poll_fd_wait(signal_fds[0], POLLIN);
-#endif
 }
 
 void
 fatal_ignore_sigpipe(void)
 {
-#ifndef _WIN32
     signal(SIGPIPE, SIG_IGN);
-#endif
 }
 
 void
@@ -429,14 +379,6 @@ call_hooks(int sig_nr)
     }
 }
 
-#ifdef _WIN32
-BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType)
-{
-    stored_sig_nr = SIGINT;
-    SetEvent(wevent);
-    return true;
-}
-#endif
 
 /* Files to delete on exit. */
 static struct sset files = SSET_INITIALIZER(&files);
@@ -560,7 +502,6 @@ fatal_signal_fork(void)
     }
 }
 
-#ifndef _WIN32
 /* Blocks all fatal signals and returns previous signal mask into
  * 'prev_mask'. */
 void
@@ -576,4 +517,3 @@ fatal_signal_block(sigset_t *prev_mask)
     }
     xpthread_sigmask(SIG_BLOCK, &block_mask, prev_mask);
 }
-#endif

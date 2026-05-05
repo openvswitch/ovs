@@ -18,9 +18,7 @@
 #include "ovs-thread.h"
 #include <errno.h>
 #include <poll.h>
-#ifndef _WIN32
 #include <signal.h>
-#endif
 #include <stdlib.h>
 #include <unistd.h>
 #include "compiler.h"
@@ -194,9 +192,7 @@ XPTHREAD_FUNC2(pthread_key_create, pthread_key_t *, destructor_func *);
 XPTHREAD_FUNC1(pthread_key_delete, pthread_key_t);
 XPTHREAD_FUNC2(pthread_setspecific, pthread_key_t, const void *);
 
-#ifndef _WIN32
 XPTHREAD_FUNC3(pthread_sigmask, int, const sigset_t *, sigset_t *);
-#endif
 
 static void
 ovs_mutex_init__(struct ovs_mutex *l, int type)
@@ -254,9 +250,6 @@ ovs_rwlock_init(struct ovs_rwlock *l)
     error = pthread_rwlock_init(&l->lock, &attr);
     xpthread_rwlockattr_destroy(&attr);
 #else
-    /* It is important to avoid passing a rwlockattr in this case because
-     * Windows pthreads 2.9.1 (and earlier) fail and abort if passed one, even
-     * one without any special attributes. */
     error = pthread_rwlock_init(&l->lock, NULL);
 #endif
 
@@ -542,7 +535,6 @@ assert_single_threaded_at(const char *where)
     }
 }
 
-#ifndef _WIN32
 /* Forks the current process (checking that this is allowed).  Aborts with
  * VLOG_FATAL if fork() returns an error, and otherwise returns the value
  * returned by fork().
@@ -566,7 +558,6 @@ xfork_at(const char *where)
     }
     return pid;
 }
-#endif
 
 /* Notes that the process must not call fork() from now on, for the specified
  * 'reason'.  (The process may still fork() if it execs itself immediately
@@ -638,13 +629,7 @@ count_cpu_cores__(void)
 {
     long int n_cores;
 
-#ifndef _WIN32
     n_cores = sysconf(_SC_NPROCESSORS_ONLN);
-#else
-    SYSTEM_INFO sysinfo;
-    GetSystemInfo(&sysinfo);
-    n_cores = sysinfo.dwNumberOfProcessors;
-#endif
 #ifdef __linux__
     if (n_cores > 0) {
         cpu_set_t *set = CPU_ALLOC(n_cores);
@@ -694,13 +679,7 @@ count_total_cores(void)
 {
     long int n_cores;
 
-#ifndef _WIN32
     n_cores = sysconf(_SC_NPROCESSORS_CONF);
-#else
-    n_cores = 0;
-    errno = ENOTSUP;
-#endif
-
     return n_cores > 0 ? n_cores : 0;
 }
 
@@ -799,12 +778,7 @@ ovsthread_key_destruct__(void *slots_)
     free(slots);
 }
 
-/* Cancels the callback to ovsthread_key_destruct__().
- *
- * Cancelling the call to the destructor during the main thread exit
- * is needed while using pthreads-win32 library in Windows. It has been
- * observed that in pthreads-win32, a call to the destructor during
- * main thread exit causes undefined behavior. */
+/* Cancels the callback to ovsthread_key_destruct__(). */
 static void
 ovsthread_cancel_ovsthread_key_destruct__(void *aux OVS_UNUSED)
 {

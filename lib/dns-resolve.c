@@ -98,11 +98,7 @@ dns_resolve_init(bool is_daemon)
 
     const char *filename = getenv("OVS_RESOLV_CONF");
     if (!filename) {
-#ifdef _WIN32
-        /* On Windows, NULL means to use the system default nameserver. */
-#else
         filename = "/etc/resolv.conf";
-#endif
     }
     struct stat s;
     if (!filename || !stat(filename, &s) || errno != ENOENT) {
@@ -123,7 +119,7 @@ dns_resolve_init(bool is_daemon)
         return;
     }
 
-    /* Handles '/etc/hosts' on Linux and 'WINDIR/etc/hosts' on Windows. */
+    /* Handles '/etc/hosts' on Linux. */
     int retval = ub_ctx_hosts(ub_ctx__, NULL);
     if (retval != 0) {
         VLOG_WARN_RL(&rl, "Failed to read etc/hosts: %s",

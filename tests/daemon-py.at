@@ -1,8 +1,6 @@
 AT_BANNER([daemon unit tests - Python3])
 
 AT_SETUP([daemon - Python3])
-# Skip this test for Windows, echo $! gives shell pid instead of parent process
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 AT_KEYWORDS([python daemon])
 
 on_exit 'kill $(cat *.pid)'
@@ -24,8 +22,6 @@ AT_CHECK([test ! -e $pidfile])
 AT_CLEANUP
 
 AT_SETUP([daemon --monitor - Python3])
-# Skip this test for Windows, echo $! gives shell pid instead of parent process
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 on_exit 'kill $(cat *.pid)'
 pidfile=test-daemon.py.pid
@@ -58,8 +54,6 @@ OVS_WAIT_WHILE([kill -0 $monitor || kill -0 $child2 || test -e $pidfile])
 AT_CLEANUP
 
 AT_SETUP([daemon --monitor restart exit code - Python3])
-# Skip this test for Windows, echo $! gives shell pid instead of parent process
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 on_exit 'kill $(cat *.pid)'
 pidfile=test-daemon.py.pid
@@ -93,9 +87,6 @@ AT_CLEANUP
 
 AT_SETUP([daemon --detach - Python3])
 
-# Skip this test for Windows, the pid file not removed if the daemon is killed
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
-
 on_exit 'kill $(cat *.pid)'
 pidfile=test-daemon.py.pid
 
@@ -114,9 +105,6 @@ AT_CHECK([test ! -e $pidfile])
 AT_CLEANUP
 
 AT_SETUP([daemon --detach --monitor - Python3])
-
-# Skip this test for Windows, uses Linux specific kill signal
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 on_exit 'kill $(cat *.pid)'
 pidfile=test-daemon.py.pid
@@ -168,8 +156,6 @@ AT_CHECK([test ! -s test-daemon.py.pid])
 AT_CLEANUP
 
 AT_SETUP([daemon --detach closes standard fds - Python3])
-# Skip this test for Windows, uses Linux specific kill signal
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 AT_CHECK([(yes 2>stderr; echo $? > status) | $PYTHON3 $srcdir/test-daemon.py --pidfile --detach --no-chdir])
 AT_CHECK([kill $(cat test-daemon.py.pid)])
@@ -187,8 +173,6 @@ fi
 AT_CLEANUP
 
 AT_SETUP([daemon --detach --monitor closes standard fds - Python3])
-# Skip this test for Windows, uses Linux specific kill signal
-AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 AT_CHECK([(yes 2>stderr; echo $? > status) | $PYTHON3 $srcdir/test-daemon.py --pidfile --detach --no-chdir], [0], [], [])
 AT_CHECK([kill $(cat test-daemon.py.pid)])
 AT_CHECK([test -s status])

@@ -402,9 +402,6 @@ main_loop(struct server_config *config,
             poll_timer_wait_until(status_timer);
         }
         poll_block();
-        if (should_service_stop()) {
-            *exiting = true;
-        }
     }
 
     free(remotes_error);
@@ -745,7 +742,6 @@ main(int argc, char *argv[])
 
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    service_start(&argc, &argv);
     fatal_ignore_sigpipe();
     process_init();
     dns_resolve_init(true);
@@ -920,7 +916,6 @@ main(int argc, char *argv[])
     dns_resolve_destroy();
     perf_counters_destroy();
     cooperative_multitasking_destroy();
-    service_stop();
     return 0;
 }
 
@@ -932,7 +927,6 @@ static bool
 is_already_open(struct server_config *server_config OVS_UNUSED,
                 const char *filename OVS_UNUSED)
 {
-#ifndef _WIN32
     struct stat s;
 
     if (!stat(filename, &s)) {
@@ -950,7 +944,6 @@ is_already_open(struct server_config *server_config OVS_UNUSED,
             }
         }
     }
-#endif  /* !_WIN32 */
 
     return false;
 }
@@ -2650,9 +2643,7 @@ parse_options(int argc, char *argv[],
     static const struct option long_options[] = {
         {"remote",      required_argument, NULL, OPT_REMOTE},
         {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
-#ifndef _WIN32
         {"run",         required_argument, NULL, OPT_RUN},
-#endif
         {"help",        no_argument, NULL, 'h'},
         {"version",     no_argument, NULL, 'V'},
         DAEMON_LONG_OPTIONS,

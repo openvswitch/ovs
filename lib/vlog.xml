@@ -25,12 +25,6 @@
           the daemon closes its standard file descriptors, so logging to the
           console will have no effect.)
         </p>
-
-        <p>
-          On Windows platform, <code>syslog</code> is accepted as a word and is
-          only useful along with the <code>--syslog-target</code> option (the
-          word has no effect otherwise).
-        </p>
       </li>
 
       <li>

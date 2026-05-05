@@ -43,7 +43,6 @@ test_jsonrpc_main(int argc, char *argv[])
     struct ovs_cmdl_context ctx = { .argc = 0, };
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    service_start(&argc, &argv);
     parse_options(argc, argv);
     ctx.argc = argc - optind;
     ctx.argv = argv + optind;

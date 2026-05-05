@@ -16,14 +16,8 @@ ovsdb_check_monitor () {
     AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db > ovsdb-server.stdout 2> ovsdb-server.stderr],
              [0], [], [])
     on_exit 'kill `cat ovsdb-server.pid`'
-    if test "$IS_WIN32" = "yes"; then
-      AT_CHECK([ovsdb-client -vjsonrpc --pidfile --log-file -d json monitor --format=csv unix:socket $db $table $columns > output 2> ovsdb-client.stderr &],
-               [0], [ignore], [ignore])
-      sleep 1
-    else
-      AT_CHECK([ovsdb-client -vjsonrpc --detach --no-chdir --pidfile --log-file -d json monitor --format=csv unix:socket $db $table $columns > output 2> ovsdb-client.stderr],
-             [0], [ignore], [ignore])
-    fi
+    AT_CHECK([ovsdb-client -vjsonrpc --detach --no-chdir --pidfile --log-file -d json monitor --format=csv unix:socket $db $table $columns > output 2> ovsdb-client.stderr],
+           [0], [ignore], [ignore])
     on_exit 'kill `cat ovsdb-client.pid`'
     for txn in ${1+"$@"} '[["'$db'"]]'; do
       AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])

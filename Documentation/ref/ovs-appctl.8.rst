@@ -54,14 +54,6 @@ In normal use only a single option is accepted:
   from the pidfile, and uses that file as if it had been specified
   directly as the target.
 
-  On Windows, *target* can be an absolute path to a file that contains a
-  localhost TCP port on which an Open vSwitch daemon is listening for
-  control channel connections. By default, each daemon writes the TCP
-  port on which it is listening for control connection into the file
-  ``<program>.ctl`` located inside the rundir. If *target* is not an
-  absolute path, ``ovs-appctl`` looks in the rundir for a file named
-  *target*\ ``.ctl``.  The default *target* is ``ovs-vswitchd``.
-
 * ``-T`` *secs* or ``--timeout=``\ *secs*
 
   By default, or with a *secs* of ``0``, ``ovs-appctl`` waits forever to
@@ -172,10 +164,6 @@ and adjusting log levels:
   * ``syslog``, ``console``, or ``file``, to limit the log level
     change to only to the system log, to the console, or to a file,
     respectively.
-
-    On Windows platform, ``syslog`` is only useful if *target* was
-    started with the ``--syslog-target`` option (it has no effect
-    otherwise).
 
   * ``off``, ``emer``, ``err``, ``warn``, ``info``, or ``dbg``, to
     control the log level.  Messages of the given severity or higher

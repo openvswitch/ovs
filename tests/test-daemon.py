@@ -26,10 +26,7 @@ def handler(signum, _):
 
 
 def main():
-
-    if sys.platform != 'win32':
-        # signal.SIGHUP does not exist on Windows
-        signal.signal(signal.SIGHUP, handler)
+    signal.signal(signal.SIGHUP, handler)
 
     parser = argparse.ArgumentParser(
             description="Open vSwitch daemonization test program for Python.")

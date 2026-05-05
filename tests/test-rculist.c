@@ -36,11 +36,7 @@ struct element {
 static void
 do_usleep(unsigned int usecs)
 {
-#ifdef _WIN32
-    Sleep(MAX(usecs / 1000, 1));
-#else
     usleep(usecs);
-#endif
 }
 
 /* Continuously check the integrity of the list until it's empty. */

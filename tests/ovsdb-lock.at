@@ -8,7 +8,6 @@ AT_BANNER([OVSDB -- lock])
 
 m4_define([OVSDB_CHECK_LOCK_SETUP],
    [AT_SETUP([ovsdb lock -- $1])
-    AT_SKIP_IF([test "$IS_WIN32" = "yes"])
     AT_KEYWORDS([ovsdb lock $2])
     ordinal_schema > schema
     AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])

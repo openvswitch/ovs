@@ -14,15 +14,6 @@ AM_CPPFLAGS = $(SSL_CFLAGS)
 AM_LDFLAGS = $(SSL_LDFLAGS)
 AM_LDFLAGS += $(OVS_LDFLAGS)
 
-if WIN32
-AM_CPPFLAGS += -I $(top_srcdir)/include/windows
-AM_CPPFLAGS += $(PTHREAD_INCLUDES)
-AM_CPPFLAGS += $(MSVC_CFLAGS)
-AM_LDFLAGS += $(PTHREAD_LDFLAGS)
-AM_LDFLAGS += $(MSVC64_LDFLAGS)
-PLATFORM = $(MSVC_PLATFORM)
-endif
-
 AM_CPPFLAGS += -I $(top_srcdir)/include
 AM_CPPFLAGS += -I $(top_builddir)/include
 AM_CPPFLAGS += -I $(top_srcdir)/lib
@@ -48,18 +39,13 @@ endif
 
 AM_CTAGSFLAGS = -I "$(OVS_CTAGS_IDENTIFIERS_LIST)"
 
-if WIN32
-psep=";"
-else
-psep=":"
-endif
 # PYTHONDONTWRITEBYTECODE=yes keeps Python from creating .pyc and .pyo
 # files.  Creating .py[co] works OK for any given version of Open
 # vSwitch, but it causes trouble if you switch from a version with
 # foo/__init__.py into an (older) version with plain foo.py, since
 # foo/__init__.pyc will cause Python to ignore foo.py.
 run_python = \
-	PYTHONPATH=$(top_srcdir)/python$(psep)$$PYTHONPATH \
+	PYTHONPATH=$(top_srcdir)/python:$$PYTHONPATH \
 	PYTHONDONTWRITEBYTECODE=yes $(PYTHON3)
 
 ALL_LOCAL =
@@ -146,7 +132,7 @@ ro_shell = printf '\043 Generated automatically -- do not modify!    -*- buffer-
 
 SUFFIXES += .in
 .in:
-	$(AM_V_GEN)PYTHONPATH=$$PYTHONPATH$(psep)$(srcdir)/python $(PYTHON3) $(srcdir)/build-aux/soexpand.py -I$(srcdir) < $< | \
+	$(AM_V_GEN)PYTHONPATH=$$PYTHONPATH:$(srcdir)/python $(PYTHON3) $(srcdir)/build-aux/soexpand.py -I$(srcdir) < $< | \
 	  $(PYTHON3) $(srcdir)/build-aux/dpdkstrip.py $(DPDKSTRIP_FLAGS) | \
 	  sed \
 	    -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
@@ -246,7 +232,7 @@ config-h-check:
 	fi
 .PHONY: config-h-check
 
-# Check for printf() type modifiers that MSVC doesn't support.
+# Check for printf() type modifiers.
 ALL_LOCAL += printf-check
 printf-check:
 	@cd $(srcdir); \
@@ -410,7 +396,7 @@ CLEANFILES += flake8-check
 
 -include manpages.mk
 manpages.mk: $(MAN_ROOTS) build-aux/sodepends.py python/ovs_build_helpers/soutil.py
-	@PYTHONPATH=$$PYTHONPATH$(psep)$(srcdir)/python $(PYTHON3) $(srcdir)/build-aux/sodepends.py -I. -I$(srcdir) $(MAN_ROOTS) >$(@F).tmp
+	@PYTHONPATH=$$PYTHONPATH:$(srcdir)/python $(PYTHON3) $(srcdir)/build-aux/sodepends.py -I. -I$(srcdir) $(MAN_ROOTS) >$(@F).tmp
 	@if cmp -s $(@F).tmp $@; then \
 	  touch $@; \
 	  rm -f $(@F).tmp; \

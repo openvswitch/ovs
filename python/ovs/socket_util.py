@@ -18,7 +18,6 @@ import os
 import os.path
 import random
 import socket
-import sys
 
 from ovs import dns_resolve
 import ovs.fatal_signal
@@ -29,10 +28,6 @@ try:
     import ssl
 except ImportError:
     ssl = None
-
-if sys.platform == 'win32':
-    import ovs.winutils as winutils
-    import win32file
 
 vlog = ovs.vlog.Vlog("socket_util")
 
@@ -166,19 +161,8 @@ def make_unix_socket(style, nonblock, bind_path, connect_path, short=False):
 
 
 def check_connection_completion(sock):
-    if sys.platform == "win32":
-        p = ovs.poller.SelectPoll()
-        event = winutils.get_new_event(None, False, True, None)
-        # Receive notification of readiness for writing, of completed
-        # connection or multipoint join operation, and of socket closure.
-        win32file.WSAEventSelect(sock, event,
-                                 win32file.FD_WRITE |
-                                 win32file.FD_CONNECT |
-                                 win32file.FD_CLOSE)
-        p.register(event, ovs.poller.POLLOUT)
-    else:
-        p = ovs.poller.get_system_poll()
-        p.register(sock, ovs.poller.POLLOUT)
+    p = ovs.poller.get_system_poll()
+    p.register(sock, ovs.poller.POLLOUT)
     pfds = p.poll(0)
     if len(pfds) == 1:
         revents = pfds[0][1]
@@ -310,8 +294,6 @@ def get_null_fd():
     global null_fd
     if null_fd < 0:
         try:
-            # os.devnull ensures compatibility with Windows, returns
-            # '/dev/null' for Unix and 'nul' for Windows
             null_fd = os.open(os.devnull, os.O_RDWR)
         except OSError as e:
             vlog.err("could not open %s: %s" % (os.devnull,

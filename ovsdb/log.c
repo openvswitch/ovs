@@ -86,16 +86,6 @@ struct ovsdb_log {
     struct afsync *afsync;
 };
 
-/* Whether the OS supports renaming open files.
- *
- * (Making this a variable makes it easier to test both strategies on Unix-like
- * systems.) */
-#ifdef _WIN32
-static bool rename_open_files = false;
-#else
-static bool rename_open_files = true;
-#endif
-
 static bool parse_header(char *header, const char **magicp,
                          unsigned long int *length,
                          uint8_t sha1[SHA1_DIGEST_SIZE]);
@@ -181,7 +171,6 @@ ovsdb_log_open(const char *name, const char *magic,
         break;
 
     case OVSDB_LOG_CREATE_EXCL:
-#ifndef _WIN32
         if (stat(name, &s) == -1 && errno == ENOENT
             && lstat(name, &s) == 0 && S_ISLNK(s.st_mode)) {
             /* 'name' is a dangling symlink.  We want to create the file that
@@ -192,9 +181,6 @@ ovsdb_log_open(const char *name, const char *magic,
         } else {
             flags = O_RDWR | O_CREAT | O_EXCL;
         }
-#else
-        flags = O_RDWR | O_CREAT | O_EXCL;
-#endif
         break;
 
     case OVSDB_LOG_CREATE:
@@ -204,9 +190,6 @@ ovsdb_log_open(const char *name, const char *magic,
     default:
         OVS_NOT_REACHED();
     }
-#ifdef _WIN32
-    flags = flags | O_BINARY;
-#endif
     /* Special case for /dev/stdin to make it work even if the operating system
      * doesn't support it under that name. */
     if (!strcmp(name, "/dev/stdin") && open_mode == OVSDB_LOG_READ_ONLY) {
@@ -770,14 +753,7 @@ ovsdb_log_replace_start(struct ovsdb_log *old,
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_rename(const char *old, const char *new)
 {
-#ifdef _WIN32
-    /* Avoid rename() because it fails if the destination exists. */
-    int error = (MoveFileEx(old, new, MOVEFILE_REPLACE_EXISTING
-                            | MOVEFILE_WRITE_THROUGH | MOVEFILE_COPY_ALLOWED)
-                 ? 0 : EACCES);
-#else
     int error = rename(old, new) ? errno : 0;
-#endif
 
     return (error
             ? ovsdb_io_error(error, "failed to rename \"%s\" to \"%s\"",
@@ -796,33 +772,12 @@ ovsdb_log_replace_commit(struct ovsdb_log *old, struct ovsdb_log *new)
 
     /* Replace original file by the temporary file.
      *
-     * We support two strategies:
+     * Rename the temporary file over the original one in-place, then close
+     * the original one.  This works on Unix-like systems.  At any point, we
+     * can drop back to something that already works.
      *
-     *     - The preferred strategy is to rename the temporary file over the
-     *       original one in-place, then close the original one.  This works on
-     *       Unix-like systems.  It does not work on Windows, which does not
-     *       allow open files to be renamed.  The approach has the advantage
-     *       that, at any point, we can drop back to something that already
-     *       works.
-     *
-     *     - Alternatively, we can close both files, rename, then open the new
-     *       file (which now has the original name).  This works on all
-     *       systems, but if reopening the file fails then 'old' is broken.
-     *
-     * We make the strategy a variable instead of an #ifdef to make it easier
-     * to test both strategies on Unix-like systems, and to make the code
-     * easier to read. */
-    if (!rename_open_files) {
-        fclose(old->stream);
-        old->stream = NULL;
-
-        fclose(new->stream);
-        new->stream = NULL;
-    }
-
-    /* Rename 'old' to 'new'.  We dereference the old name because, if it is a
-     * symlink, we want to replace the referent of the symlink instead of the
-     * symlink itself. */
+     * We dereference the old name because, if it is a symlink, we want to
+     * replace the referent of the symlink instead of the symlink itself. */
     char *deref_name = follow_symlinks(old->name);
     error = ovsdb_rename(new->name, deref_name);
     free(deref_name);
@@ -831,26 +786,11 @@ ovsdb_log_replace_commit(struct ovsdb_log *old, struct ovsdb_log *new)
         ovsdb_log_replace_abort(new);
         return error;
     }
-    if (rename_open_files) {
-        fsync_parent_dir(old->name);
-        fclose(old->stream);
-        old->stream = new->stream;
-        new->stream = NULL;
-    } else {
-        old->stream = fopen(old->name, "r+b");
-        if (!old->stream) {
-            old->error = ovsdb_io_error(errno, "%s: could not reopen log",
-                                        old->name);
-            old->state = OVSDB_LOG_BROKEN;
-            return ovsdb_error_clone(old->error);
-        }
 
-        if (fseek(old->stream, new->offset, SEEK_SET)) {
-            old->error = ovsdb_io_error(errno, "%s: seek failed", old->name);
-            old->state = OVSDB_LOG_BROKEN;
-            return ovsdb_error_clone(old->error);
-        }
-    }
+    fsync_parent_dir(old->name);
+    fclose(old->stream);
+    old->stream = new->stream;
+    new->stream = NULL;
 
     /* Replace 'old' by 'new' in memory.
      *
@@ -882,20 +822,12 @@ void
 ovsdb_log_replace_abort(struct ovsdb_log *new)
 {
     if (new) {
-        /* Unlink the new file, but only after we close it (because Windows
-         * does not allow removing an open file). */
-        char *name = xstrdup(new->name);
+        /* Unlink and close the new file. */
+        unlink(new->name);
         ovsdb_log_close(new);
-        unlink(name);
-        free(name);
     }
 }
 
-void
-ovsdb_log_disable_renaming_open_files(void)
-{
-    rename_open_files = false;
-}
 
 struct afsync {
     pthread_t thread;

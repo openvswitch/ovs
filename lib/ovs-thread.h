@@ -117,9 +117,7 @@ void xpthread_key_create(pthread_key_t *, void (*destructor)(void *));
 void xpthread_key_delete(pthread_key_t);
 void xpthread_setspecific(pthread_key_t, const void *);
 
-#ifndef _WIN32
 void xpthread_sigmask(int, const sigset_t *, sigset_t *);
-#endif
 
 pthread_t ovs_thread_create(const char *name, void *(*)(void *), void *);
 void xpthread_join(pthread_t, void **);
@@ -511,10 +509,8 @@ bool single_threaded(void);
 void assert_single_threaded_at(const char *where);
 #define assert_single_threaded() assert_single_threaded_at(OVS_SOURCE_LOCATOR)
 
-#ifndef _WIN32
 pid_t xfork_at(const char *where);
 #define xfork() xfork_at(OVS_SOURCE_LOCATOR)
-#endif
 
 void forbid_forking(const char *reason);
 bool may_fork(void);

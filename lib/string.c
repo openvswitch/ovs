@@ -28,19 +28,3 @@ strnlen(const char *s, size_t maxlen)
     return end ? end - s : maxlen;
 }
 #endif
-
-#ifdef _WIN32
-char *strcasestr(const char *str, const char *substr)
-{
-    do {
-        for (size_t i = 0; ; i++) {
-            if (!substr[i]) {
-                return CONST_CAST(char *, str);
-            } else if (tolower(substr[i]) != tolower(str[i])) {
-                break;
-            }
-        }
-    } while (*str++);
-    return NULL;
-}
-#endif

@@ -107,11 +107,6 @@ fd_recv(struct stream *stream, void *buffer, size_t n)
     retval = recv(s->fd, buffer, n, 0);
     if (retval < 0) {
         error = sock_errno();
-#ifdef _WIN32
-        if (error == WSAEWOULDBLOCK) {
-           error = EAGAIN;
-        }
-#endif
         if (error != EAGAIN) {
             VLOG_DBG_RL(&rl, "recv: %s", sock_strerror(error));
         }
@@ -130,11 +125,6 @@ fd_send(struct stream *stream, const void *buffer, size_t n)
     retval = send(s->fd, buffer, n, 0);
     if (retval < 0) {
         error = sock_errno();
-#ifdef _WIN32
-        if (error == WSAEWOULDBLOCK) {
-           error = EAGAIN;
-        }
-#endif
         if (error != EAGAIN) {
             VLOG_DBG_RL(&rl, "send: %s", sock_strerror(error));
         }
@@ -247,11 +237,6 @@ pfd_accept(struct pstream *pstream, struct stream **new_streamp)
     new_fd = accept(ps->fd, (struct sockaddr *) &ss, &ss_len);
     if (new_fd < 0) {
         retval = sock_errno();
-#ifdef _WIN32
-        if (retval == WSAEWOULDBLOCK) {
-            retval = EAGAIN;
-        }
-#endif
         if (retval != EAGAIN) {
             VLOG_DBG_RL(&rl, "accept: %s", sock_strerror(retval));
         }

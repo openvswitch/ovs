@@ -316,15 +316,8 @@ unixctl_command_reply_error(struct unixctl_conn *conn, const char *error)
  *      - An absolute path (starting with '/') that gives the exact name of
  *        the Unix domain socket to listen on.
  *
- * For Windows, a local named pipe is used. A file is created in 'path'
- * which may be:
- *
- *      - NULL, in which case <rundir>/<program>.ctl is used.
- *
- *      - An absolute path that gives the name of the file.
- *
- * For both POSIX and Windows, if the path is "none", the function will
- * return successfully but no socket will actually be created.
+ * If the path is "none", the function will return successfully but no socket
+ * will actually be created.
  *
  * A program that (optionally) daemonizes itself should call this function
  * *after* daemonization, so that the socket name contains the pid of the
@@ -342,16 +335,9 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
         return 0;
     }
 
-#ifdef _WIN32
-    enum { WINDOWS = 1 };
-#else
-    enum { WINDOWS = 0 };
-#endif
-
     long int pid = getpid();
     char *abs_path
         = (path ? abs_file_name(ovs_rundir(), path)
-           : WINDOWS ? xasprintf("%s/%s.ctl", ovs_rundir(), program_name)
            : xasprintf("%s/%s.%ld.ctl", ovs_rundir(), program_name, pid));
 
     struct pstream *listener;
@@ -566,10 +552,6 @@ unixctl_server_get_path(const struct unixctl_server *server)
 /* On POSIX based systems, connects to a unixctl server socket.  'path' should
  * be the name of a unixctl server socket.  If it does not start with '/', it
  * will be prefixed with the rundir (e.g. /usr/local/var/run/openvswitch).
- *
- * On Windows, connects to a local named pipe. A file which resides in
- * 'path' is used to mimic the behavior of a Unix domain socket.
- * 'path' should be an absolute path of the file.
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
  * sets '*client' to the new jsonrpc, otherwise to NULL. */

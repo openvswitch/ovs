@@ -89,7 +89,6 @@ main(int argc, char *argv[])
 
     dns_resolve_init(true);
     ovs_cmdl_proctitle_init(argc, argv);
-    service_start(&argc, &argv);
     remote = parse_options(argc, argv, &unixctl_path);
     fatal_ignore_sigpipe();
 
@@ -147,9 +146,6 @@ main(int argc, char *argv[])
         }
         OVS_USDT_PROBE(main, poll_block);
         poll_block();
-        if (should_service_stop()) {
-            exit_args.exiting = true;
-        }
     }
     bridge_exit(exit_args.cleanup);
 
@@ -159,7 +155,6 @@ main(int argc, char *argv[])
     free(exit_args.conns);
 
     unixctl_server_destroy(unixctl);
-    service_stop();
     vlog_disable_async();
     ovsrcu_exit();
     dns_resolve_destroy();
