@@ -347,6 +347,7 @@ monitor_daemon(pid_t daemon_pid)
     time_t last_restart;
     char *status_msg;
     int crashes;
+    int status;
     bool child_ready = true;
 
     set_subprogram_name("monitor");
@@ -355,7 +356,6 @@ monitor_daemon(pid_t daemon_pid)
     crashes = 0;
     for (;;) {
         int retval;
-        int status;
 
         ovs_cmdl_proctitle_set("monitoring pid %lu (%s)",
                                (unsigned long int) daemon_pid, status_msg);
