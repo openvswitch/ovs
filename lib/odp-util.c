@@ -2217,7 +2217,10 @@ parse_conntrack_action(const char *s_, struct ofpbuf *actions)
             ovs_u128 value;
             ovs_u128 mask;
         } ct_label;
-        struct ct_nat_params nat_params;
+        struct ct_nat_params nat_params = {
+            .snat = false,
+            .dnat = false,
+        };
         bool have_nat = false;
         const char *end;
         size_t start;
