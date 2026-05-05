@@ -497,7 +497,9 @@ get_process_info(pid_t pid, struct process_info *pinfo)
     if (child.ppid) {
         struct raw_process_info parent;
 
-        get_raw_process_info(child.ppid, &parent);
+        if (!get_raw_process_info(child.ppid, &parent)) {
+            return false;
+        }
         if (!strcmp(child.name, parent.name)) {
             pinfo->booted = parent.uptime;
             pinfo->crashes = count_crashes(child.ppid);
