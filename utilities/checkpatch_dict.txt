@@ -7,7 +7,6 @@ amd64
 api
 apis
 appctl
-appveyor
 arg
 arp
 asan

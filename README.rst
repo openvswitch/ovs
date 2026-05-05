@@ -8,8 +8,6 @@ Open vSwitch
 
 .. image:: https://github.com/openvswitch/ovs/workflows/Build%20and%20Test/badge.svg
     :target: https://github.com/openvswitch/ovs/actions
-.. image:: https://ci.appveyor.com/api/projects/status/github/openvswitch/ovs?branch=main&svg=true&retina=true
-    :target: https://ci.appveyor.com/project/blp/ovs/history
 .. image:: https://api.cirrus-ci.com/github/openvswitch/ovs.svg
     :target: https://cirrus-ci.com/github/openvswitch/ovs
 .. image:: https://readthedocs.org/projects/openvswitch/badge/?version=latest
