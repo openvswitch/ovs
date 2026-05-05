@@ -2691,8 +2691,8 @@
             The names of interfaces implemented as Linux and BSD network
             devices, including interfaces with type <code>internal</code>,
             <code>tap</code>, or <code>system</code> plus the different types
-            of tunnel ports, are limited to 15 bytes. Windows limits these
-            names to 255 bytes.
+            of tunnel ports, are limited to 15 bytes.  In general, different
+            datapath implementations may have different limitations.
           </li>
 
           <li>
@@ -6234,13 +6234,12 @@ ovs-vsctl add-port br0 p1 -- \
     <p>
       A datapath is responsible for providing the packet handling in Open
       vSwitch.  There are two primary datapath implementations used by
-      Open vSwitch: kernel and userspace.  Kernel datapath
-      implementations are available for Linux and Hyper-V, and selected
-      as <code>system</code> in the <ref column="datapath_type"/> column
-      of the <ref table="Bridge"/> table.  The userspace datapath is used
-      by DPDK and AF-XDP, and is selected as <code>netdev</code> in the
-      <ref column="datapath_type"/> column of the <ref table="Bridge"/>
-      table.
+      Open vSwitch: kernel and userspace.  Kernel datapath implementation is
+      available for Linux and selected as <code>system</code> in the
+      <ref column="datapath_type"/> column of the <ref table="Bridge"/> table.
+      The userspace datapath is used by DPDK and AF-XDP, and is selected as
+      <code>netdev</code> in the <ref column="datapath_type"/> column of the
+      <ref table="Bridge"/> table.
     </p>
     <p>
       A datapath of a particular type is shared by all the bridges that use
@@ -6274,15 +6273,15 @@ ovs-vsctl add-port br0 p1 -- \
       <p>
         A version discrepancy between <code>ovs-vswitchd</code> and the
         datapath in use is not normally cause for alarm.  The Open vSwitch
-        kernel datapaths for Linux and Hyper-V, in particular, are designed
-        for maximum inter-version compatibility: any userspace version works
-        with with any kernel version.  Some reasons do exist to insist on
-        particular user/kernel pairings.  First, newer kernel versions add
-        new features, that can only be used by new-enough userspace, e.g.
-        VXLAN tunneling requires certain minimal userspace and kernel
-        versions.  Second, as an extension to the first reason, some newer
-        kernel versions add new features for enhancing performance that only
-        new-enough userspace versions can take advantage of.
+        kernel datapaths for Linux, in particular, is designed for maximum
+        inter-version compatibility: any userspace version works with any
+        kernel version.  Some reasons do exist to insist on particular
+        user/kernel pairings.  First, newer kernel versions add new features,
+        that can only be used by new-enough userspace, e.g. VXLAN tunneling
+        requires certain minimal userspace and kernel versions.  Second, as
+        an extension to the first reason, some newer kernel versions add new
+        features for enhancing performance that only new-enough userspace
+        versions can take advantage of.
       </p>
     </column>
 
@@ -6299,10 +6298,9 @@ ovs-vsctl add-port br0 p1 -- \
         features.  For the <code>netdev</code> datapath, the
         capabilities are fixed for a given version of Open vSwitch
         because this datapath is built into the
-        <code>ovs-vswitchd</code> binary.  The Linux kernel and
-        Windows and other datapaths, which are external to OVS
-        userspace, can vary in version and capabilities independently
-        from <code>ovs-vswitchd</code>.
+        <code>ovs-vswitchd</code> binary.  The Linux kernel and other
+        datapaths, which are external to OVS userspace, can vary in version
+        and capabilities independently from <code>ovs-vswitchd</code>.
       </p>
 
       <p>

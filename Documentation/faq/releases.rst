@@ -47,6 +47,12 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
     source code was completely removed from the Open vSwitch source tree in
     3.0 release.
 
+Q: Does Open vSwitch support running on Windows (Hyper-V)?
+
+   A: Support for the Windows datapath, a.k.a. Hyper-V, was deprecated starting
+   with Open vSwitch 3.7, and the source code was completely removed from the
+   Open vSwitch source tree in the next release.
+
 Q: Are all features available with all datapaths?
 
     A: Open vSwitch supports different datapaths on different platforms.  Each
@@ -66,9 +72,6 @@ Q: Are all features available with all datapaths?
       DPDK and AF_XDP devices when support for those is built.  This
       is the only datapath that works on NetBSD, FreeBSD and Mac OSX.
 
-    Hyper-V
-      Also known as the Windows datapath.
-
     The following table lists the datapath supported features from an
     Open vSwitch user's perspective.  The "Linux kernel" column lists the
     upstream Linux kernel version that introduced a given feature into its
@@ -76,44 +79,41 @@ Q: Are all features available with all datapaths?
     versions that introduced a given feature into the built-in userspace
     datapath.
 
-    ========================== ============ ========= =======
-    Feature                    Linux kernel Userspace Hyper-V
-    ========================== ============ ========= =======
-    Connection tracking            4.3         2.6      YES
-    Connection tracking-IPv6       YES         YES      3.0
-    Conntrack Fragment Reass.      4.3         2.12     YES
-    Conntrack IPv6 Fragment        4.3         2.12     3.1
-    Conntrack Timeout Policies     5.2         2.14     NO
-    Conntrack Zone Limit           4.18        2.13     YES
-    Conntrack NAT                  4.6         2.8      YES
-    Conntrack NAT6                 4.6         2.8      3.0
-    Conntrack Helper Persist.      YES         3.3      NO
-    Tunnel - GRE                   3.11        2.4      YES
-    Tunnel - VXLAN                 3.12        2.4      YES
-    Tunnel - Geneve                3.18        2.4      YES
-    Tunnel - GRE-IPv6              4.18        2.6      NO
-    Tunnel - VXLAN-IPv6            4.3         2.6      NO
-    Tunnel - Geneve-IPv6           4.4         2.6      3.0
-    Tunnel - ERSPAN                4.18        2.10     NO
-    Tunnel - ERSPAN-IPv6           4.18        2.10     NO
-    Tunnel - GTP-U                 NO          2.14     NO
-    Tunnel - SRv6                  NO          3.2      NO
-    Tunnel - Bareudp               5.7         NO       NO
-    QoS - Policing                 YES         2.6      NO
-    QoS - Shaping                  YES         NO       NO
-    sFlow                          YES         1.0      NO
-    IPFIX                          3.10        1.11     YES
-    Set action                     YES         1.0    PARTIAL
-    NIC Bonding                    YES         1.0      YES
-    Multiple VTEPs                 YES         1.10     YES
-    Meter action                   4.15        2.7      NO
-    check_pkt_len action           5.2         2.12     NO
-    ========================== ============ ========= =======
+    ========================== ============ =========
+    Feature                    Linux kernel Userspace
+    ========================== ============ =========
+    Connection tracking            4.3         2.6
+    Connection tracking-IPv6       YES         YES
+    Conntrack Fragment Reass.      4.3         2.12
+    Conntrack IPv6 Fragment        4.3         2.12
+    Conntrack Timeout Policies     5.2         2.14
+    Conntrack Zone Limit           4.18        2.13
+    Conntrack NAT                  4.6         2.8
+    Conntrack NAT6                 4.6         2.8
+    Conntrack Helper Persist.      YES         3.3
+    Tunnel - GRE                   3.11        2.4
+    Tunnel - VXLAN                 3.12        2.4
+    Tunnel - Geneve                3.18        2.4
+    Tunnel - GRE-IPv6              4.18        2.6
+    Tunnel - VXLAN-IPv6            4.3         2.6
+    Tunnel - Geneve-IPv6           4.4         2.6
+    Tunnel - ERSPAN                4.18        2.10
+    Tunnel - ERSPAN-IPv6           4.18        2.10
+    Tunnel - GTP-U                 NO          2.14
+    Tunnel - SRv6                  NO          3.2
+    Tunnel - Bareudp               5.7         NO
+    QoS - Policing                 YES         2.6
+    QoS - Shaping                  YES         NO
+    sFlow                          YES         1.0
+    IPFIX                          3.10        1.11
+    Set action                     YES         1.0
+    NIC Bonding                    YES         1.0
+    Multiple VTEPs                 YES         1.10
+    Meter action                   4.15        2.7
+    check_pkt_len action           5.2         2.12
+    ========================== ============ =========
 
     Do note, however:
-
-    * Only a limited set of flow fields is modifiable via the set action by the
-      Hyper-V datapath.
 
     * Userspace datapath support, in some cases, is dependent on the associated
       interface types.  For example, DPDK interfaces support ingress and egress
@@ -123,19 +123,19 @@ Q: Are all features available with all datapaths?
     vSwitch user, e.g. because their absence can be hidden by the ofproto layer
     (usually this comes with a performance penalty).
 
-    ===================== ============ ========= =======
-    Feature               Linux kernel Userspace Hyper-V
-    ===================== ============ ========= =======
-    SCTP flows            3.12         YES       YES
-    MPLS                  3.19         YES       YES
-    UFID                  4.0          YES       NO
-    Megaflows             3.12         YES       NO
-    Masked set action     4.0          YES       NO
-    Recirculation         3.19         YES       YES
-    TCP flags matching    3.13         YES       NO
-    Validate flow actions YES          N/A       NO
-    Multiple datapaths    YES          YES       NO
-    ===================== ============ ========= =======
+    ===================== ============ =========
+    Feature               Linux kernel Userspace
+    ===================== ============ =========
+    SCTP flows            3.12         YES
+    MPLS                  3.19         YES
+    UFID                  4.0          YES
+    Megaflows             3.12         YES
+    Masked set action     4.0          YES
+    Recirculation         3.19         YES
+    TCP flags matching    3.13         YES
+    Validate flow actions YES          N/A
+    Multiple datapaths    YES          YES
+    ===================== ============ =========
 
 Q: What DPDK version does each Open vSwitch release work with?
 

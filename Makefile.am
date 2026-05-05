@@ -16,7 +16,6 @@ AM_LDFLAGS += $(OVS_LDFLAGS)
 
 if WIN32
 AM_CPPFLAGS += -I $(top_srcdir)/include/windows
-AM_CPPFLAGS += -I $(top_srcdir)/datapath-windows/include
 AM_CPPFLAGS += $(PTHREAD_INCLUDES)
 AM_CPPFLAGS += $(MSVC_CFLAGS)
 AM_LDFLAGS += $(PTHREAD_LDFLAGS)
@@ -232,7 +231,7 @@ config-h-check:
 	@cd $(srcdir); \
 	if test -e .git && (git --version) >/dev/null 2>&1 && \
 	  git --no-pager grep -L '#include <config\.h>' `git ls-files | grep '\.c$$' | \
-	    grep -vE '^datapath-windows|^lib/sflow|^python|^third-party'`; \
+	    grep -vE '^lib/sflow|^python|^third-party'`; \
 	then \
 	  echo "See above for list of violations of the rule that"; \
 	  echo "every C source file must #include <config.h>."; \
@@ -253,7 +252,7 @@ printf-check:
 	@cd $(srcdir); \
 	if test -e .git && (git --version) >/dev/null 2>&1 && \
 	  git --no-pager grep -n -E -e '%[-+ #0-9.*]*([ztj]|hh)' --and --not -e 'ovs_scan' `git ls-files | grep '\.[ch]$$' | \
-	    grep -vE '^datapath-windows|^lib/sflow|^third-party'`; \
+	    grep -vE '^lib/sflow|^third-party'`; \
 	then \
 	  echo "See above for list of violations of the rule that"; \
 	  echo "'z', 't', 'j', 'hh' printf() type modifiers are"; \
@@ -338,7 +337,7 @@ thread-safety-check:
 	if test -e .git && (git --version) >/dev/null 2>&1 && \
 	  grep -n -f build-aux/thread-safety-forbidden \
 	    `git ls-files | grep '\.[ch]$$' \
-	      | $(EGREP) -v '^datapath-windows|^lib/sflow|^third-party'` /dev/null \
+	      | $(EGREP) -v '^lib/sflow|^third-party'` /dev/null \
 	      | $(EGREP) -v ':[ 	]*/?\*' \
 	      | $(EGREP) -v '^tests/test-lib-route-table.c'; \
 	then \
@@ -421,35 +420,6 @@ manpages.mk: $(MAN_ROOTS) build-aux/sodepends.py python/ovs_build_helpers/soutil
 CLEANFILES += manpages.mk
 CLEANFILES += manpage-dep-check
 
-if VSTUDIO_DDK
-ALL_LOCAL += ovsext
-ARCH = x64
-ovsext: datapath-windows/ovsext.sln $(srcdir)/datapath-windows/include/OvsDpInterface.h
-if VSTUDIO_WIN8
-	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8$(VSTUDIO_CONFIG)" /property:Version="$(PACKAGE_VERSION)" //p:Platform=$(ARCH)
-endif
-if VSTUDIO_WIN8_1
-	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8.1$(VSTUDIO_CONFIG)" /property:Version="$(PACKAGE_VERSION)" //p:Platform=$(ARCH)
-endif
-if VSTUDIO_WIN10
-	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win10$(VSTUDIO_CONFIG)" /property:Version="$(PACKAGE_VERSION)" //p:Platform=$(ARCH)
-endif
-
-
-CLEAN_LOCAL += ovsext_clean
-ovsext_clean: datapath-windows/ovsext.sln
-if VSTUDIO_WIN8
-	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8$(VSTUDIO_CONFIG)" /property:Version="$(PACKAGE_VERSION)" //p:Platform=$(ARCH)
-endif
-if VSTUDIO_WIN8_1
-	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8.1$(VSTUDIO_CONFIG)" /property:Version="$(PACKAGE_VERSION)" //p:Platform=$(ARCH)
-endif
-if VSTUDIO_WIN10
-	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win10$(VSTUDIO_CONFIG)" /property:Version="$(PACKAGE_VERSION)" //p:Platform=$(ARCH)
-endif
-endif
-.PHONY: ovsext
-
 clang-analyze: clean
 	@which clang scan-build >/dev/null 2>&1 || \
 	  (echo "Unable to find clang/scan-build, Install clang,clang-analyzer packages"; exit 1)
@@ -484,7 +454,5 @@ include rhel/automake.mk
 include python/automake.mk
 include tutorial/automake.mk
 include vtep/automake.mk
-include datapath-windows/automake.mk
-include datapath-windows/include/automake.mk
 include selinux/automake.mk
 include build-aux/automake.mk
