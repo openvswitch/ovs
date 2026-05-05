@@ -20,7 +20,6 @@ DOC_SOURCE = \
 	Documentation/intro/install/netbsd.rst \
 	Documentation/intro/install/rhel.rst \
 	Documentation/intro/install/userspace.rst \
-	Documentation/intro/install/windows.rst \
 	Documentation/tutorials/index.rst \
 	Documentation/tutorials/faucet.rst \
 	Documentation/tutorials/ovs-advanced.rst \
@@ -61,7 +60,6 @@ DOC_SOURCE = \
 	Documentation/topics/userspace-checksum-offloading.rst \
 	Documentation/topics/userspace-tso.rst \
 	Documentation/topics/userspace-tx-steering.rst \
-	Documentation/topics/windows.rst \
 	Documentation/howto/index.rst \
 	Documentation/howto/dpdk.rst \
 	Documentation/howto/ipsec.rst \
@@ -111,7 +109,6 @@ DOC_SOURCE = \
 	Documentation/internals/contributing/backporting-patches.rst \
 	Documentation/internals/contributing/inclusive-language.rst \
 	Documentation/internals/contributing/coding-style.rst \
-	Documentation/internals/contributing/coding-style-windows.rst \
 	Documentation/internals/contributing/documentation-style.rst \
 	Documentation/internals/contributing/libopenvswitch-abi.rst \
 	Documentation/internals/contributing/submitting-patches.rst \

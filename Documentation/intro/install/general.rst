@@ -73,9 +73,6 @@ need the following software:
 
   - Clang 3.4 or later.
 
-  - MSVC 2013. Refer to :doc:`windows` for additional Windows build
-    instructions.
-
   While OVS may be compatible with other compilers, optimal support for atomic
   operations may be missing, making OVS very slow (see ``lib/ovs-atomic.h``).
 

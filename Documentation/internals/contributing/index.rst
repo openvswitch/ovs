@@ -33,7 +33,6 @@ The below guides provide information on contributing to Open vSwitch itself.
    submitting-patches
    backporting-patches
    coding-style
-   coding-style-windows
    documentation-style
    inclusive-language
    libopenvswitch-abi

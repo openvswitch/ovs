@@ -45,7 +45,6 @@ Contributing
     - :doc:`internals/contributing/backporting-patches`
     - :doc:`internals/contributing/inclusive-language`
     - :doc:`internals/contributing/coding-style`
-    - :doc:`internals/contributing/coding-style-windows`
 
 Maintaining
 -----------

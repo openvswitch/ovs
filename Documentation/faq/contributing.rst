@@ -65,9 +65,6 @@ Q: How do I add support for a new field or header?
     without it.  If you implement kernel module support for Linux, then the
     Linux kernel "netdev" mailing list is the place to submit that support
     first; please read up on the Linux kernel development process separately.
-    The Windows datapath kernel module support, on the other hand, is
-    maintained within the OVS tree, so patches for that can go directly to
-    ovs-dev.
 
 Q: How do I add support for a new OpenFlow action?
 

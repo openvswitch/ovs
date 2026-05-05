@@ -47,7 +47,6 @@ OVS
    ovsdb-relay
    ovsdb-replication
    dpdk/index
-   windows
    language-bindings
    record-replay
    testing

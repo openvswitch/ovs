@@ -41,7 +41,6 @@ Installation from Source
 
    general
    netbsd
-   windows
    userspace
    dpdk
    afxdp
