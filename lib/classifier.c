@@ -1833,6 +1833,10 @@ raw_get_prefix(const ovs_be32 pr[], unsigned int ofs, unsigned int plen)
     ofs %= 32;      /* How many bits to skip at 'pr'. */
 
     prefix = ntohl(*pr) << ofs; /* Get the first 32 - ofs bits. */
+    if (!ofs) {
+        /* Avoid bit shifting entire uint32. */
+        return prefix;
+    }
     if (plen > 32 - ofs) {      /* Need more than we have already? */
         prefix |= ntohl(*++pr) >> (32 - ofs);
     }
