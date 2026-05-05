@@ -1261,7 +1261,7 @@ json_from_stream(FILE *stream)
     struct json *json;
 
     p = json_parser_create(JSPF_TRAILER);
-    for (;;) {
+    while (!(feof(stream) || ferror(stream))) {
         char buffer[BUFSIZ];
         size_t n;
 
