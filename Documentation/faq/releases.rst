@@ -55,9 +55,9 @@ Q: Are all features available with all datapaths?
 
     Supported datapaths:
 
-    Linux upstream
-      The datapath implemented by the kernel module shipped with Linux
-      upstream.  Since features have been gradually introduced into the kernel,
+    Linux kernel
+      The datapath implemented by the module shipped with upstream Linux
+      kernel.  Since features have been gradually introduced into the kernel,
       the table mentions the first Linux release whose OVS module supports the
       feature.
 
@@ -70,46 +70,45 @@ Q: Are all features available with all datapaths?
       Also known as the Windows datapath.
 
     The following table lists the datapath supported features from an
-    Open vSwitch user's perspective.  The "Linux upstream" column
-    lists the Linux kernel version that introduced a given feature
-    into its kernel module.  The "Linux OVS tree" and "Userspace"
-    columns list the Open vSwitch release versions that introduced a
-    given feature into the included kernel module or the userspace
-    datapath, respectively.
+    Open vSwitch user's perspective.  The "Linux kernel" column lists the
+    upstream Linux kernel version that introduced a given feature into its
+    kernel module.  The "Userspace" column lists the Open vSwitch release
+    versions that introduced a given feature into the built-in userspace
+    datapath.
 
-    ========================== ============== ========= =======
-    Feature                    Linux upstream Userspace Hyper-V
-    ========================== ============== ========= =======
-    Connection tracking             4.3          2.6      YES
-    Connection tracking-IPv6        YES          YES      3.0
-    Conntrack Fragment Reass.       4.3          2.12     YES
-    Conntrack IPv6 Fragment         4.3          2.12     3.1
-    Conntrack Timeout Policies      5.2          2.14     NO
-    Conntrack Zone Limit            4.18         2.13     YES
-    Conntrack NAT                   4.6          2.8      YES
-    Conntrack NAT6                  4.6          2.8      3.0
-    Conntrack Helper Persist.       YES          3.3      NO
-    Tunnel - GRE                    3.11         2.4      YES
-    Tunnel - VXLAN                  3.12         2.4      YES
-    Tunnel - Geneve                 3.18         2.4      YES
-    Tunnel - GRE-IPv6               4.18         2.6      NO
-    Tunnel - VXLAN-IPv6             4.3          2.6      NO
-    Tunnel - Geneve-IPv6            4.4          2.6      3.0
-    Tunnel - ERSPAN                 4.18         2.10     NO
-    Tunnel - ERSPAN-IPv6            4.18         2.10     NO
-    Tunnel - GTP-U                  NO           2.14     NO
-    Tunnel - SRv6                   NO           3.2      NO
-    Tunnel - Bareudp                5.7          NO       NO
-    QoS - Policing                  YES          2.6      NO
-    QoS - Shaping                   YES          NO       NO
-    sFlow                           YES          1.0      NO
-    IPFIX                           3.10         1.11     YES
-    Set action                      YES          1.0    PARTIAL
-    NIC Bonding                     YES          1.0      YES
-    Multiple VTEPs                  YES          1.10     YES
-    Meter action                    4.15         2.7      NO
-    check_pkt_len action            5.2          2.12     NO
-    ========================== ============== ========= =======
+    ========================== ============ ========= =======
+    Feature                    Linux kernel Userspace Hyper-V
+    ========================== ============ ========= =======
+    Connection tracking            4.3         2.6      YES
+    Connection tracking-IPv6       YES         YES      3.0
+    Conntrack Fragment Reass.      4.3         2.12     YES
+    Conntrack IPv6 Fragment        4.3         2.12     3.1
+    Conntrack Timeout Policies     5.2         2.14     NO
+    Conntrack Zone Limit           4.18        2.13     YES
+    Conntrack NAT                  4.6         2.8      YES
+    Conntrack NAT6                 4.6         2.8      3.0
+    Conntrack Helper Persist.      YES         3.3      NO
+    Tunnel - GRE                   3.11        2.4      YES
+    Tunnel - VXLAN                 3.12        2.4      YES
+    Tunnel - Geneve                3.18        2.4      YES
+    Tunnel - GRE-IPv6              4.18        2.6      NO
+    Tunnel - VXLAN-IPv6            4.3         2.6      NO
+    Tunnel - Geneve-IPv6           4.4         2.6      3.0
+    Tunnel - ERSPAN                4.18        2.10     NO
+    Tunnel - ERSPAN-IPv6           4.18        2.10     NO
+    Tunnel - GTP-U                 NO          2.14     NO
+    Tunnel - SRv6                  NO          3.2      NO
+    Tunnel - Bareudp               5.7         NO       NO
+    QoS - Policing                 YES         2.6      NO
+    QoS - Shaping                  YES         NO       NO
+    sFlow                          YES         1.0      NO
+    IPFIX                          3.10        1.11     YES
+    Set action                     YES         1.0    PARTIAL
+    NIC Bonding                    YES         1.0      YES
+    Multiple VTEPs                 YES         1.10     YES
+    Meter action                   4.15        2.7      NO
+    check_pkt_len action           5.2         2.12     NO
+    ========================== ============ ========= =======
 
     Do note, however:
 
@@ -124,19 +123,19 @@ Q: Are all features available with all datapaths?
     vSwitch user, e.g. because their absence can be hidden by the ofproto layer
     (usually this comes with a performance penalty).
 
-    ===================== ============== ============== ========= =======
-    Feature               Linux upstream Linux OVS tree Userspace Hyper-V
-    ===================== ============== ============== ========= =======
-    SCTP flows            3.12           YES            YES       YES
-    MPLS                  3.19           YES            YES       YES
-    UFID                  4.0            YES            YES       NO
-    Megaflows             3.12           YES            YES       NO
-    Masked set action     4.0            YES            YES       NO
-    Recirculation         3.19           YES            YES       YES
-    TCP flags matching    3.13           YES            YES       NO
-    Validate flow actions YES            YES            N/A       NO
-    Multiple datapaths    YES            YES            YES       NO
-    ===================== ============== ============== ========= =======
+    ===================== ============ ========= =======
+    Feature               Linux kernel Userspace Hyper-V
+    ===================== ============ ========= =======
+    SCTP flows            3.12         YES       YES
+    MPLS                  3.19         YES       YES
+    UFID                  4.0          YES       NO
+    Megaflows             3.12         YES       NO
+    Masked set action     4.0          YES       NO
+    Recirculation         3.19         YES       YES
+    TCP flags matching    3.13         YES       NO
+    Validate flow actions YES          N/A       NO
+    Multiple datapaths    YES          YES       NO
+    ===================== ============ ========= =======
 
 Q: What DPDK version does each Open vSwitch release work with?
 
@@ -196,8 +195,7 @@ ships as part of the upstream Linux kernel?
     feature is not supported, consider upgrading to a newer upstream Linux
     release.
 
-Q: Why do tunnels not work when using a kernel module other than the one
-packaged with Open vSwitch?
+Q: Why do tunnels not work when using a Linux kernel module?
 
     A: Support for tunnels was added to the upstream Linux kernel module after
     the rest of Open vSwitch. As a result, some kernels may contain support for
@@ -227,11 +225,10 @@ Q: What features are not available when using the userspace datapath?
 
 Q: Should userspace or kernel be upgraded first to minimize downtime?
 
-    A. In general, the Open vSwitch userspace should be used with the kernel
-    version included in the same release or with the version from upstream
-    Linux.  However, when upgrading between two releases of Open vSwitch it is
-    best to migrate userspace first to reduce the possibility of
-    incompatibilities.
+    A. In general, the Open vSwitch userspace should work with any kernel
+    version from upstream Linux.  However, when upgrading between two releases
+    of Open vSwitch it is best to migrate userspace first to reduce the
+    possibility of incompatibilities.
 
 Q: What happened to the bridge compatibility feature?
 
