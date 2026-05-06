@@ -3229,14 +3229,11 @@
           </p>
 
           <p>
-            When using the upstream Linux kernel module, computation of
-            checksums for <code>geneve</code> and <code>vxlan</code> requires
-            Linux kernel version 4.0 or higher. <code>gre</code> and
+            When using the Linux kernel datapath, computation of checksums
+            for <code>geneve</code> and <code>vxlan</code> requires Linux
+            kernel version 4.0 or higher.  <code>gre</code> and
             <code>ip6gre</code> support checksums for all versions of
             Open vSwitch that support GRE.
-            The out of tree kernel module distributed as part of OVS
-            can compute all tunnel checksums on any kernel version that it
-            is compatible with.
           </p>
 
         </column>
@@ -6263,17 +6260,6 @@ ovs-vsctl add-port br0 p1 -- \
 
       <ul>
         <li>
-          When the kernel module included in the Open vSwitch source tree is
-          used, this column reports the Open vSwitch version from which the
-          module was taken.
-        </li>
-
-        <li>
-          When the kernel module that is part of the upstream Linux kernel is
-          used, this column reports <code>&lt;unknown&gt;</code>.
-        </li>
-
-        <li>
           When the datapath is built into the <code>ovs-vswitchd</code>
           binary, this column reports <code>&lt;built-in&gt;</code>.  A
           built-in datapath is by definition the same version as the rest of
@@ -6281,8 +6267,7 @@ ovs-vsctl add-port br0 p1 -- \
         </li>
 
         <li>
-          Other datapaths (such as the Hyper-V kernel datapath) currently
-          report <code>&lt;unknown&gt;</code>.
+          Other datapaths currently report <code>&lt;unknown&gt;</code>.
         </li>
       </ul>
 
