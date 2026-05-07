@@ -367,6 +367,7 @@ Moshe Levi                         moshele@mellanox.com
 Murphy McCauley                    murphy.mccauley@gmail.com
 Mykola Yurchenko                   myurchenko@nvidia.com
 Natasha Gude
+Naveen Yerramneni                  naveen.yerramneni@nutanix.com
 Neal Shrader                       neal@digitalocean.com
 Neil McKee                         neil.mckee@inmon.com
 Neil Zhu                           zhuj@centecnetworks.com
