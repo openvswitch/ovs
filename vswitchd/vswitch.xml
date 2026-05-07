@@ -960,17 +960,11 @@
 
         <column name="statistics" key="cpu"
                 type='{"type": "integer", "minInteger": 1}'>
-          <p>
-            Number of CPU processors, threads, or cores currently online and
-            available to the operating system on which Open vSwitch is running,
-            as an integer.  This may be less than the number installed, if some
-            are not online or if they are not available to the operating
-            system.
-          </p>
-          <p>
-            Open vSwitch userspace processes are not multithreaded, but the
-            Linux kernel-based datapath is.
-          </p>
+          Number of CPU processors, threads, or cores currently online and
+          available to the operating system on which Open vSwitch is running,
+          as an integer.  This may be less than the number installed, if some
+          are not online or if they are not available to the operating
+          system.
         </column>
 
         <column name="statistics" key="load_average">
