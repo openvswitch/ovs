@@ -4538,31 +4538,6 @@ rule_dpif_credit_stats(struct rule_dpif *rule,
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
-/* Sets 'rule''s recirculation id. */
-static void
-rule_dpif_set_recirc_id(struct rule_dpif *rule, uint32_t id)
-    OVS_REQUIRES(rule->up.mutex)
-{
-    ovs_assert(!rule->recirc_id || rule->recirc_id == id);
-    if (rule->recirc_id == id) {
-        /* Release the new reference to the same id. */
-        recirc_free_id(id);
-    } else {
-        rule->recirc_id = id;
-    }
-}
-
-/* Sets 'rule''s recirculation id. */
-void
-rule_set_recirc_id(struct rule *rule_, uint32_t id)
-{
-    struct rule_dpif *rule = rule_dpif_cast(rule_);
-
-    ovs_mutex_lock(&rule->up.mutex);
-    rule_dpif_set_recirc_id(rule, id);
-    ovs_mutex_unlock(&rule->up.mutex);
-}
-
 ovs_version_t
 ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto)
 {
@@ -4948,7 +4923,6 @@ rule_construct(struct rule *rule_)
     rule->stats.n_packets = 0;
     rule->stats.n_bytes = 0;
     rule->stats.used = rule->up.modified;
-    rule->recirc_id = 0;
     rule->new_rule = NULL;
     rule->forward_counts = false;
 
@@ -4999,9 +4973,6 @@ rule_destruct(struct rule *rule_)
     /* Release reference to the new rule, if any. */
     if (rule->new_rule) {
         ofproto_rule_unref(&rule->new_rule->up);
-    }
-    if (rule->recirc_id) {
-        recirc_free_id(rule->recirc_id);
     }
 }
 

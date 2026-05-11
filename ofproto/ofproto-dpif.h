@@ -88,12 +88,6 @@ struct rule_dpif {
     struct rule_dpif *new_rule OVS_GUARDED;
     bool forward_counts OVS_GUARDED;   /* Forward counts? 'used' time will be
                                         * forwarded in all cases. */
-
-    /* If non-zero then the recirculation id that has
-     * been allocated for use with this rule.
-     * The recirculation id and associated internal flow should
-     * be freed when the rule is freed */
-    uint32_t recirc_id;
 };
 
 struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
@@ -109,8 +103,6 @@ struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
 
 void rule_dpif_credit_stats(struct rule_dpif *,
                             const struct dpif_flow_stats *, bool);
-
-void rule_set_recirc_id(struct rule *, uint32_t id);
 
 /* Returns true if 'rule' is an internal rule, false otherwise. */
 static inline bool
