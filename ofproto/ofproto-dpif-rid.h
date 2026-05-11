@@ -192,7 +192,8 @@ uint32_t recirc_alloc_id(struct ofproto_dpif *);
 uint32_t recirc_alloc_id_ctx(const struct frozen_state *);
 uint32_t recirc_find_id(const struct frozen_state *);
 void recirc_free_id(uint32_t recirc_id);
-void recirc_free_ofproto(struct ofproto_dpif *, const char *ofproto_name);
+void recirc_leak_check_ofproto(struct ofproto_dpif *,
+                               const char *ofproto_name);
 
 const struct recirc_id_node *recirc_id_node_find(uint32_t recirc_id);
 bool recirc_id_node_find_and_ref(uint32_t id);
