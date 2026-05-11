@@ -1958,8 +1958,6 @@ destruct(struct ofproto *ofproto_, bool del)
     }
     guarded_list_destroy(&ofproto->ams);
 
-    recirc_free_ofproto(ofproto, ofproto->up.name);
-
     mbridge_unref(ofproto->mbridge);
 
     netflow_unref(ofproto->netflow);
@@ -1983,6 +1981,7 @@ destruct(struct ofproto *ofproto_, bool del)
     /* Wait for all the meter destroy work to finish. */
     ovsrcu_barrier();
     close_dpif_backer(ofproto->backer, del);
+    recirc_free_ofproto(ofproto, ofproto->up.name);
 }
 
 static int
