@@ -347,12 +347,14 @@ recirc_free_id(uint32_t id)
     }
 }
 
-/* Called when 'ofproto' is destructed.  Checks for and clears any
- * recirc_id leak.
+/* Called when 'ofproto' is destructed.  Checks for any recirc_id leaks
+ * and logs an error if found.
+ *
  * No other thread may have access to the 'ofproto' being destructed.
  * All related datapath flows must be deleted before calling this. */
 void
-recirc_free_ofproto(struct ofproto_dpif *ofproto, const char *ofproto_name)
+recirc_leak_check_ofproto(struct ofproto_dpif *ofproto,
+                          const char *ofproto_name)
 {
     struct recirc_id_node *n;
 
