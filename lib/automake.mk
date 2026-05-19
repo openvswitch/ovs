@@ -15,34 +15,6 @@ lib_libopenvswitch_la_LDFLAGS = \
         -Wl,--version-script=$(top_builddir)/lib/libopenvswitch.sym \
         $(AM_LDFLAGS)
 
-if HAVE_AVX512F
-if HAVE_LD_AVX512_GOOD
-# Build library of avx512 code with CPU ISA CFLAGS enabled. This allows the
-# compiler to use the ISA features required for the ISA optimized code-paths.
-# Use LDFLAGS to compile only static library of this code, as it should be
-# statically linked into vswitchd even if vswitchd is a shared build.
-noinst_LTLIBRARIES += lib/libopenvswitchavx512.la
-lib_libopenvswitch_la_LIBADD += lib/libopenvswitchavx512.la
-lib_libopenvswitchavx512_la_CFLAGS = \
-	-mavx512f \
-	-mbmi \
-	-mbmi2 \
-	-fPIC \
-	$(AM_CFLAGS)
-if HAVE_AVX512BW
-if HAVE_AVX512VL
-lib_libopenvswitchavx512_la_CFLAGS += \
-	-mavx512bw \
-	-mavx512vl
-lib_libopenvswitchavx512_la_SOURCES = \
-	lib/dpif-netdev-lookup-avx512-gather.c
-endif # HAVE_AVX512VL
-endif # HAVE_AVX512BW
-lib_libopenvswitchavx512_la_LDFLAGS = \
-	-static
-endif # HAVE_LD_AVX512_GOOD
-endif # HAVE_AVX512F
-
 # Build core vswitch libraries as before
 lib_libopenvswitch_la_SOURCES = \
 	lib/aes128.c \
@@ -112,19 +84,16 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dp-packet-gso.c \
 	lib/dp-packet-gso.h \
 	lib/dpdk.h \
-	lib/dpif-netdev-lookup.h \
-	lib/dpif-netdev-lookup.c \
-	lib/dpif-netdev-lookup-autovalidator.c \
-	lib/dpif-netdev-lookup-generic.c \
-	lib/dpif-netdev.c \
-	lib/dpif-netdev.h \
+	lib/dpif-netdev-perf.c \
+	lib/dpif-netdev-perf.h \
 	lib/dpif-netdev-private-dfc.c \
 	lib/dpif-netdev-private-dfc.h \
+	lib/dpif-netdev-private-dpcls.c \
 	lib/dpif-netdev-private-dpcls.h \
 	lib/dpif-netdev-private-flow.h \
 	lib/dpif-netdev-private-thread.h \
-	lib/dpif-netdev-perf.c \
-	lib/dpif-netdev-perf.h \
+	lib/dpif-netdev.c \
+	lib/dpif-netdev.h \
 	lib/dpif-offload.c \
 	lib/dpif-offload.h \
 	lib/dpif-offload-dummy.c \

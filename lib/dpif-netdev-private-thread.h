@@ -18,10 +18,6 @@
 #ifndef DPIF_NETDEV_PRIVATE_THREAD_H
 #define DPIF_NETDEV_PRIVATE_THREAD_H 1
 
-#include "dpif.h"
-#include "dpif-netdev-perf.h"
-#include "dpif-netdev-private-dfc.h"
-
 #include <stdbool.h>
 #include <stdint.h>
 

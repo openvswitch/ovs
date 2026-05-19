@@ -14,39 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dnl Set OVS DPCLS Autovalidator as default subtable search at compile time?
-dnl This enables automatically running all unit tests with all DPCLS
-dnl implementations.
-AC_DEFUN([OVS_CHECK_DPCLS_AUTOVALIDATOR], [
-  AC_ARG_ENABLE([autovalidator],
-                [AS_HELP_STRING([--enable-autovalidator],
-                                [Enable DPCLS autovalidator as default subtable
-                                 search implementation.])],
-                [autovalidator=yes],[autovalidator=no])
-  AC_MSG_CHECKING([whether DPCLS Autovalidator is default implementation])
-  if test "$autovalidator" != yes; then
-    AC_MSG_RESULT([no])
-  else
-    AC_DEFINE([DPCLS_AUTOVALIDATOR_DEFAULT], [1],
-              [Autovalidator for the userspace datapath classifier is a
-               default implementation.])
-    AC_MSG_RESULT([yes])
-    AC_MSG_WARN(
-      [Explicit AVX512 feature support will be deprecated in the next release.])
-  fi
-])
-
-dnl OVS_CHECK_AVX512
-dnl
-dnl Checks if compiler and binutils supports various AVX512 ISA.
-AC_DEFUN([OVS_CHECK_AVX512], [
-  OVS_CHECK_BINUTILS_AVX512
-  OVS_CONDITIONAL_CC_OPTION_DEFINE([-mavx512f], [HAVE_AVX512F])
-  OVS_CONDITIONAL_CC_OPTION_DEFINE([-mavx512bw], [HAVE_AVX512BW])
-  OVS_CONDITIONAL_CC_OPTION_DEFINE([-mavx512vl], [HAVE_AVX512VL])
-  OVS_CHECK_AVX512VPOPCNTDQ
-])
-
 dnl OVS_ENABLE_WERROR
 AC_DEFUN([OVS_ENABLE_WERROR],
   [AC_ARG_ENABLE(
@@ -435,11 +402,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     # forces in pkg-config since this could override user-specified options.
     # It's enough to have -mssse3 to build with DPDK headers.
     DPDK_INCLUDE=$(echo "$DPDK_INCLUDE" | sed 's/-march=[[^ ]]*//g')
-    # Also stripping out '-mno-avx512f'.  Support for AVX512 will be disabled
-    # if OVS will detect that it's broken.  OVS could be built with a
-    # completely different toolchain that correctly supports AVX512, flags
-    # forced by DPDK only breaks our feature detection mechanism and leads to
-    # build failures: https://github.com/openvswitch/ovs-issues/issues/201
+    # Also stripping out '-mno-avx512f' for the same reasons.
     DPDK_INCLUDE=$(echo "$DPDK_INCLUDE" | sed 's/-mno-avx512f//g')
     OVS_CFLAGS="$OVS_CFLAGS $DPDK_INCLUDE"
     OVS_ENABLE_OPTION([-mssse3])
@@ -612,19 +575,6 @@ AC_DEFUN([OVS_CONDITIONAL_CC_OPTION],
     [$1], [ovs_have_cc_option=yes], [ovs_have_cc_option=no])
    AM_CONDITIONAL([$2], [test $ovs_have_cc_option = yes])])
 dnl ----------------------------------------------------------------------
-
-dnl OVS_CONDITIONAL_CC_OPTION_DEFINE([OPTION], [CONDITIONAL])
-dnl Check whether the given C compiler OPTION is accepted.
-dnl If so, enable the given Automake CONDITIONAL and define it.
-dnl Example: OVS_CONDITIONAL_CC_OPTION_DEFINE([-mavx512f], [HAVE_AVX512F])
-AC_DEFUN([OVS_CONDITIONAL_CC_OPTION_DEFINE],
-  [OVS_CHECK_CC_OPTION(
-    [$1], [ovs_have_cc_option=yes], [ovs_have_cc_option=no])
-   AM_CONDITIONAL([$2], [test $ovs_have_cc_option = yes])
-   if test "$ovs_have_cc_option" = yes; then
-     AC_DEFINE([$2], [1],
-               [Define to 1 if compiler supports the '$1' option.])
-   fi])
 
 dnl OVS_CHECK_SPARSE_TARGET
 dnl

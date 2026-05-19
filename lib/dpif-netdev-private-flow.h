@@ -18,9 +18,6 @@
 #ifndef DPIF_NETDEV_PRIVATE_FLOW_H
 #define DPIF_NETDEV_PRIVATE_FLOW_H 1
 
-#include "dpif.h"
-#include "dpif-netdev-private-dpcls.h"
-
 #include <stdbool.h>
 #include <stdint.h>
 

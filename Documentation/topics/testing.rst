@@ -326,49 +326,6 @@ To invoke the DPDK offloads testsuite with the userspace datapath, run::
    This has only been tested on NVIDIA blades due to the limited availability
    of other blades that support rte_flow.
 
-Userspace datapath: Testing and Validation of CPU-specific Optimizations
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-.. note::
-  The AVX512 CPU-specific optimization features are deprecated and will be
-  removed in a future release.
-
-As multiple versions of the datapath classifier each with different CPU ISA
-optimizations, it is important to validate that they all give the exact same
-results.  To easily test all the implementations, an ``autovalidator``
-implementation of them exists.  This implementation runs all other available
-implementations, and verifies that the results are identical.
-
-Running the OVS unit tests with the autovalidator enabled ensures all
-implementations provide the same results.  Note that the performance of the
-autovalidator is lower than all other implementations, as it tests the scalar
-implementation against itself, and against all other enabled implementations.
-
-To adjust the autovalidator priority for a datapath classifier, use this
-command::
-
-    $ ovs-appctl dpif-netdev/subtable-lookup-prio-set autovalidator 7
-
-To run the OVS unit test suite with the autovalidator as the default
-implementation, it is required to recompile OVS.  During the recompilation,
-the default priority of the `autovalidator` implementation is set to the
-maximum priority, ensuring every test will be run with every implementation::
-
-    $ ./configure --enable-autovalidator
-
-The following line should be seen in the configuration log when the above
-options are used::
-
-    checking whether DPCLS Autovalidator is default implementation... yes
-
-Compile OVS in debug mode to have `ovs_assert` statements error out if
-there is a mismatch in the datapath classifier lookup.
-
-.. note::
-  Run all the available testsuites including `make check`,
-  `make check-system-userspace` and `make check-dpdk` to ensure the optimal
-  test coverage.
-
 Kernel datapath
 +++++++++++++++
 

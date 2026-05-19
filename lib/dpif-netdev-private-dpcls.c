@@ -17,7 +17,7 @@
 
 #include <config.h>
 #include "dpif-netdev.h"
-#include "dpif-netdev-lookup.h"
+#include "dpif-netdev-private-dpcls.h"
 
 #include "bitmap.h"
 #include "cmap.h"
@@ -31,7 +31,7 @@
 #include "packets.h"
 #include "pvector.h"
 
-VLOG_DEFINE_THIS_MODULE(dpif_lookup_generic);
+VLOG_DEFINE_THIS_MODULE(dpif_netdev_dpcls);
 
 /* Lookup functions below depends on the internal structure of flowmap. */
 BUILD_ASSERT_DECL(FLOWMAP_UNITS == 2);
@@ -176,12 +176,12 @@ netdev_rule_matches_key(const struct dpcls_rule *rule,
  * compiler might decide to not inline, and performance will suffer.
  */
 static inline uint32_t ALWAYS_INLINE
-lookup_generic_impl(struct dpcls_subtable *subtable,
-                    uint32_t keys_map,
-                    const struct netdev_flow_key *keys[],
-                    struct dpcls_rule **rules,
-                    const uint32_t bit_count_u0,
-                    const uint32_t bit_count_u1)
+lookup_impl(struct dpcls_subtable *subtable,
+            uint32_t keys_map,
+            const struct netdev_flow_key *keys[],
+            struct dpcls_rule **rules,
+            const uint32_t bit_count_u0,
+            const uint32_t bit_count_u1)
 {
     const uint32_t n_pkts = count_1bits(keys_map);
     ovs_assert(NETDEV_MAX_BURST >= n_pkts);
@@ -265,9 +265,9 @@ dpcls_subtable_lookup_generic(struct dpcls_subtable *subtable,
      * compilers available optimizations, this function has lower performance
      * than the below specialized functions.
      */
-    return lookup_generic_impl(subtable, keys_map, keys, rules,
-                               subtable->mf_bits_set_unit0,
-                               subtable->mf_bits_set_unit1);
+    return lookup_impl(subtable, keys_map, keys, rules,
+                       subtable->mf_bits_set_unit0,
+                       subtable->mf_bits_set_unit1);
 }
 
 /* Expand out specialized functions with U0 and U1 bit attributes. */
@@ -279,7 +279,7 @@ dpcls_subtable_lookup_generic(struct dpcls_subtable *subtable,
                                          const struct netdev_flow_key *keys[],\
                                          struct dpcls_rule **rules)           \
     {                                                                         \
-        return lookup_generic_impl(subtable, keys_map, keys, rules, U0, U1);  \
+        return lookup_impl(subtable, keys_map, keys, rules, U0, U1);          \
     }                                                                         \
 
 DECLARE_OPTIMIZED_LOOKUP_FUNCTION(9, 4)
@@ -297,14 +297,9 @@ DECLARE_OPTIMIZED_LOOKUP_FUNCTION(4, 0)
         f = dpcls_subtable_lookup_mf_u0w##U0##_u1w##U1;                       \
     }
 
-/* Probe function to lookup an available specialized function.
- * If capable to run the requested miniflow fingerprint, this function returns
- * the most optimal implementation for that miniflow fingerprint.
- * @retval Non-NULL A valid function to handle the miniflow bit pattern
- * @retval NULL The requested miniflow is not supported by this implementation.
- */
+/* Probe function to lookup an available specialized function. */
 dpcls_subtable_lookup_func
-dpcls_subtable_generic_probe(uint32_t u0_bits, uint32_t u1_bits)
+dpcls_subtable_lookup_probe(uint32_t u0_bits, uint32_t u1_bits)
 {
     dpcls_subtable_lookup_func f = NULL;
 
@@ -318,10 +313,10 @@ dpcls_subtable_generic_probe(uint32_t u0_bits, uint32_t u1_bits)
     CHECK_LOOKUP_FUNCTION(4, 0);
 
     if (f) {
-        VLOG_DBG("Subtable using Generic Optimized for u0 %d, u1 %d\n",
+        VLOG_DBG("Subtable using lookup function optimized for u0 %d, u1 %d\n",
                  u0_bits, u1_bits);
     } else {
-        /* Always return the generic function. */
+        /* Return generic function, if there is no specialized variant. */
         f = dpcls_subtable_lookup_generic;
     }
 
