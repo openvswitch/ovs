@@ -9075,7 +9075,7 @@ static uint32_t
 eviction_group_priority(size_t n_rules)
 {
     uint16_t size = MIN(UINT16_MAX, n_rules);
-    return (size << 16) | random_uint16();
+    return ((uint32_t) size << 16) | random_uint16();
 }
 
 /* Updates 'evg', an eviction_group within 'table', following a change that
