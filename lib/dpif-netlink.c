@@ -4405,7 +4405,7 @@ dpif_netlink_flow_to_ofpbuf(const struct dpif_netlink_flow *flow,
             put_exclude_packet_type(buf, OVS_FLOW_ATTR_MASK, flow->mask,
                                            flow->mask_len);
         }
-        if (flow->actions || flow->actions_len) {
+        if (flow->actions) {
             nl_msg_put_unspec(buf, OVS_FLOW_ATTR_ACTIONS,
                               flow->actions, flow->actions_len);
         }
