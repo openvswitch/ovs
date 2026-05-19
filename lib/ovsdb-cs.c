@@ -2140,6 +2140,7 @@ ovsdb_cs_parse_schema(const struct json *schema_json)
 
         struct shash *columns = xmalloc(sizeof *columns);
         shash_init(columns);
+        shash_add(schema, table_name, columns);
 
         struct shash_node *node2;
         SHASH_FOR_EACH (node2, json_object(columns_json)) {
@@ -2170,7 +2171,6 @@ ovsdb_cs_parse_schema(const struct json *schema_json)
                 free(type);
             }
         }
-        shash_add(schema, table_name, columns);
     }
     return schema;
 
