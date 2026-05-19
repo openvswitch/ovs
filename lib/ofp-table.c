@@ -2392,8 +2392,6 @@ ofputil_decode_table_status(const struct ofp_header *oh,
     } else {
         return OFPERR_OFPBRC_BAD_VERSION;
     }
-
-    return 0;
 }
 
 void
