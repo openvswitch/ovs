@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef DPIF_NETDEV_PRIVATE_DPCLS_H
-#define DPIF_NETDEV_PRIVATE_DPCLS_H 1
+#ifndef DPIF_NETDEV_DPCLS_H
+#define DPIF_NETDEV_DPCLS_H 1
 
 #include "dpif.h"
 
@@ -138,4 +138,4 @@ dpcls_lookup(struct dpcls *cls, const struct netdev_flow_key *keys[],
 }
 #endif
 
-#endif /* dpif-netdev-private-dpcls.h */
+#endif /* dpif-netdev-dpcls.h */

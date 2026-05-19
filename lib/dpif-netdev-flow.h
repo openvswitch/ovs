@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef DPIF_NETDEV_PRIVATE_FLOW_H
-#define DPIF_NETDEV_PRIVATE_FLOW_H 1
+#ifndef DPIF_NETDEV_FLOW_H
+#define DPIF_NETDEV_FLOW_H 1
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -156,4 +156,4 @@ struct dp_netdev_actions {
 }
 #endif
 
-#endif /* dpif-netdev-private-flow.h */
+#endif /* dpif-netdev-flow.h */

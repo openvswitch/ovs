@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-#ifndef DPIF_NETDEV_PRIVATE_DFC_H
-#define DPIF_NETDEV_PRIVATE_DFC_H 1
+#ifndef DPIF_NETDEV_DFC_H
+#define DPIF_NETDEV_DFC_H 1
 
 #include "dpif.h"
-#include "dpif-netdev-private-dpcls.h"
-#include "dpif-netdev-private-flow.h"
+#include "dpif-netdev-dpcls.h"
+#include "dpif-netdev-flow.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -187,4 +187,4 @@ smc_lookup_single(struct dp_netdev_pmd_thread *pmd,
 }
 #endif
 
-#endif /* dpif-netdev-private-dfc.h */
+#endif /* dpif-netdev-dfc.h */

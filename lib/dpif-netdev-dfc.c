@@ -18,7 +18,7 @@
 
 #include <config.h>
 
-#include "dpif-netdev-private-dfc.h"
+#include "dpif-netdev-dfc.h"
 
 static void
 emc_clear_entry(struct emc_entry *ce)

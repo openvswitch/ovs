@@ -17,7 +17,7 @@
 
 #include <config.h>
 #include "dpif-netdev.h"
-#include "dpif-netdev-private-dpcls.h"
+#include "dpif-netdev-dpcls.h"
 
 #include "bitmap.h"
 #include "cmap.h"

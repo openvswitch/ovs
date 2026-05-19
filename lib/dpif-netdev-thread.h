@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef DPIF_NETDEV_PRIVATE_THREAD_H
-#define DPIF_NETDEV_PRIVATE_THREAD_H 1
+#ifndef DPIF_NETDEV_THREAD_H
+#define DPIF_NETDEV_THREAD_H 1
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -24,7 +24,7 @@
 #include "ccmap.h"
 #include "cmap.h"
 
-#include "dpif-netdev-private-dfc.h"
+#include "dpif-netdev-dfc.h"
 #include "dpif-netdev-perf.h"
 #include "openvswitch/thread.h"
 
@@ -219,4 +219,4 @@ struct dp_netdev_pmd_thread {
 }
 #endif
 
-#endif /* dpif-netdev-private-thread.h */
+#endif /* dpif-netdev-thread.h */
