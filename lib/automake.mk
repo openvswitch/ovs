@@ -37,7 +37,6 @@ lib_libopenvswitchavx512_la_CFLAGS += \
 	-mavx512bw \
 	-mavx512vl
 lib_libopenvswitchavx512_la_SOURCES += \
-	lib/dpif-netdev-extract-avx512.c \
 	lib/dpif-netdev-lookup-avx512-gather.c
 endif # HAVE_AVX512VL
 endif # HAVE_AVX512BW
@@ -115,7 +114,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dp-packet-gso.c \
 	lib/dp-packet-gso.h \
 	lib/dpdk.h \
-	lib/dpif-netdev-extract-study.c \
 	lib/dpif-netdev-lookup.h \
 	lib/dpif-netdev-lookup.c \
 	lib/dpif-netdev-lookup-autovalidator.c \
@@ -127,8 +125,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dpif-netdev-private-dpcls.h \
 	lib/dpif-netdev-private-dpif.c \
 	lib/dpif-netdev-private-dpif.h \
-	lib/dpif-netdev-private-extract.c \
-	lib/dpif-netdev-private-extract.h \
 	lib/dpif-netdev-private-flow.h \
 	lib/dpif-netdev-private-thread.h \
 	lib/dpif-netdev-private.h \

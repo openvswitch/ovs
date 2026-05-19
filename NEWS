@@ -11,6 +11,7 @@ Post-v3.7.0
    - The following deprecated AVX512-specific features of the userspace
      datapath are now removed:
      * AVX512-optimized action handling.
+     * AVX512-optimized packet parsing (miniflow extraction).
    - Windows:
      * The previously deprecated Windows kernel datapath implementation is
        now fully removed as well as support for running or building userspace

@@ -257,7 +257,6 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
             "  Rx packets:         %12"PRIu64"  (%.0f Kpps, %.0f cycles/pkt)\n"
             "  Datapath passes:    %12"PRIu64"  (%.2f passes/pkt)\n"
             "  - PHWOL hits:       %12"PRIu64"  (%5.1f %%)\n"
-            "  - MFEX Opt hits:    %12"PRIu64"  (%5.1f %%)\n"
             "  - Simple Match hits:%12"PRIu64"  (%5.1f %%)\n"
             "  - EMC hits:         %12"PRIu64"  (%5.1f %%)\n"
             "  - SMC hits:         %12"PRIu64"  (%5.1f %%)\n"
@@ -270,8 +269,6 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
             passes, 1.0 * passes / rx_packets,
             stats[PMD_STAT_PHWOL_HIT],
             100.0 * stats[PMD_STAT_PHWOL_HIT] / passes,
-            stats[PMD_STAT_MFEX_OPT_HIT],
-            100.0 * stats[PMD_STAT_MFEX_OPT_HIT] / passes,
             stats[PMD_STAT_SIMPLE_HIT],
             100.0 * stats[PMD_STAT_SIMPLE_HIT] / passes,
             stats[PMD_STAT_EXACT_HIT],

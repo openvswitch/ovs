@@ -47,7 +47,6 @@
 #include "dpif.h"
 #include "dpif-netdev-lookup.h"
 #include "dpif-netdev-perf.h"
-#include "dpif-netdev-private-extract.h"
 #include "dpif-provider.h"
 #include "dummy.h"
 #include "fat-rwlock.h"
@@ -124,7 +123,7 @@ COVERAGE_DEFINE(datapath_drop_hw_post_process);
 COVERAGE_DEFINE(datapath_drop_hw_post_process_consumed);
 
 /* Protects against changes to 'dp_netdevs'. */
-struct ovs_mutex dp_netdev_mutex = OVS_MUTEX_INITIALIZER;
+static struct ovs_mutex dp_netdev_mutex = OVS_MUTEX_INITIALIZER;
 
 /* Contains all 'struct dp_netdev's. */
 static struct shash dp_netdevs OVS_GUARDED_BY(dp_netdev_mutex)
@@ -676,7 +675,6 @@ pmd_info_show_stats(struct ds *reply,
                   "  packet recirculations: %"PRIu64"\n"
                   "  avg. datapath passes per packet: %.02f\n"
                   "  phwol hits: %"PRIu64"\n"
-                  "  mfex opt hits: %"PRIu64"\n"
                   "  simple match hits: %"PRIu64"\n"
                   "  emc hits: %"PRIu64"\n"
                   "  smc hits: %"PRIu64"\n"
@@ -687,7 +685,6 @@ pmd_info_show_stats(struct ds *reply,
                   "  avg. packets per output batch: %.02f\n",
                   total_packets, stats[PMD_STAT_RECIRC],
                   passes_per_pkt, stats[PMD_STAT_PHWOL_HIT],
-                  stats[PMD_STAT_MFEX_OPT_HIT],
                   stats[PMD_STAT_SIMPLE_HIT],
                   stats[PMD_STAT_EXACT_HIT],
                   stats[PMD_STAT_SMC_HIT],
@@ -1110,220 +1107,6 @@ dpif_netdev_impl_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
-dpif_miniflow_extract_impl_get(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                               const char *argv[] OVS_UNUSED,
-                               void *aux OVS_UNUSED)
-{
-    struct ds reply = DS_EMPTY_INITIALIZER;
-    struct shash_node *node;
-
-    ovs_mutex_lock(&dp_netdev_mutex);
-    SHASH_FOR_EACH (node, &dp_netdevs) {
-        struct dp_netdev_pmd_thread **pmd_list;
-        struct dp_netdev *dp = node->data;
-        size_t n;
-
-        /* Get PMD threads list, required to get the DPIF impl used by each PMD
-         * thread. */
-        sorted_poll_thread_list(dp, &pmd_list, &n);
-        dp_mfex_impl_get(&reply, pmd_list, n);
-        free(pmd_list);
-    }
-    ovs_mutex_unlock(&dp_netdev_mutex);
-    unixctl_command_reply(conn, ds_cstr(&reply));
-    ds_destroy(&reply);
-}
-
-static void
-dpif_miniflow_extract_impl_set(struct unixctl_conn *conn, int argc,
-                               const char *argv[], void *aux OVS_UNUSED)
-{
-    /* This command takes some optional and mandatory arguments. The function
-     * here first parses all of the options, saving results in local variables.
-     * Then the parsed values are acted on.
-     */
-    unsigned int pmd_thread_to_change = NON_PMD_CORE_ID;
-    unsigned int study_count = MFEX_MAX_PKT_COUNT;
-    struct ds reply = DS_EMPTY_INITIALIZER;
-    bool pmd_thread_update_done = false;
-    bool mfex_name_is_study = false;
-    const char *mfex_name = NULL;
-    const char *reply_str = NULL;
-    struct shash_node *node;
-    int err;
-
-    while (argc > 1) {
-        /* Optional argument "-pmd" limits the commands actions to just this
-         * PMD thread.
-         */
-        if ((!strcmp(argv[1], "-pmd") && !mfex_name)) {
-            if (argc < 3) {
-                ds_put_format(&reply,
-                              "Error: -pmd option requires a thread id"
-                              " argument.\n");
-                goto error;
-            }
-
-            /* Ensure argument can be parsed to an integer. */
-            if (!str_to_uint(argv[2], 10, &pmd_thread_to_change) ||
-                (pmd_thread_to_change == NON_PMD_CORE_ID)) {
-                ds_put_format(&reply,
-                              "Error: miniflow extract parser not changed,"
-                              " PMD thread passed is not valid: '%s'."
-                              " Pass a valid pmd thread ID.\n",
-                              argv[2]);
-                goto error;
-            }
-
-            argc -= 2;
-            argv += 2;
-
-        } else if (!mfex_name) {
-            /* Name of MFEX impl requested by user. */
-            mfex_name = argv[1];
-            mfex_name_is_study = strcmp("study", mfex_name) == 0;
-            argc -= 1;
-            argv += 1;
-
-        /* If name is study and more args exist, parse study_count value. */
-        } else if (mfex_name && mfex_name_is_study) {
-            if (!str_to_uint(argv[1], 10, &study_count) ||
-                (study_count == 0)) {
-                ds_put_format(&reply,
-                              "Error: invalid study_pkt_cnt value: %s.\n",
-                              argv[1]);
-                goto error;
-            }
-
-            argc -= 1;
-            argv += 1;
-        } else {
-            ds_put_format(&reply, "Error: unknown argument %s.\n", argv[1]);
-            goto error;
-        }
-    }
-
-    /* Ensure user passed an MFEX name. */
-    if (!mfex_name) {
-        ds_put_format(&reply, "Error: no miniflow extract name provided."
-                      " Output of miniflow-parser-get shows implementation"
-                      " list.\n");
-        goto error;
-    }
-
-    /* If the MFEX name is "study", set the study packet count. */
-    if (mfex_name_is_study) {
-        err = mfex_set_study_pkt_cnt(study_count, mfex_name);
-        if (err) {
-            ds_put_format(&reply, "Error: failed to set study count %d for"
-                          " miniflow extract implementation %s.\n",
-                          study_count, mfex_name);
-            goto error;
-        }
-    }
-
-    /* Set the default MFEX impl only if the command was applied to all PMD
-     * threads. If a PMD thread was selected, do NOT update the default.
-     */
-    if (pmd_thread_to_change == NON_PMD_CORE_ID) {
-        err = dp_mfex_impl_set_default_by_name(mfex_name);
-        if (err == -ENODEV) {
-            ds_put_format(&reply,
-                          "Error: miniflow extract not available due to CPU"
-                          " ISA requirements: %s",
-                          mfex_name);
-            goto error;
-        } else if (err) {
-            ds_put_format(&reply,
-                          "Error: unknown miniflow extract implementation %s.",
-                          mfex_name);
-            goto error;
-        }
-    }
-
-    /* Get the desired MFEX function pointer and error check its usage. */
-    miniflow_extract_func mfex_func = NULL;
-    err = dp_mfex_impl_get_by_name(mfex_name, &mfex_func);
-    if (err) {
-        if (err == -ENODEV) {
-            ds_put_format(&reply,
-                          "Error: miniflow extract not available due to CPU"
-                          " ISA requirements: %s", mfex_name);
-        } else {
-            ds_put_format(&reply,
-                          "Error: unknown miniflow extract implementation %s.",
-                          mfex_name);
-        }
-        goto error;
-    }
-
-    /* Apply the MFEX pointer to each pmd thread in each netdev, filtering
-     * by the users "-pmd" argument if required.
-     */
-    ovs_mutex_lock(&dp_netdev_mutex);
-
-    SHASH_FOR_EACH (node, &dp_netdevs) {
-        struct dp_netdev_pmd_thread **pmd_list;
-        struct dp_netdev *dp = node->data;
-        size_t n;
-
-        sorted_poll_thread_list(dp, &pmd_list, &n);
-
-        for (size_t i = 0; i < n; i++) {
-            struct dp_netdev_pmd_thread *pmd = pmd_list[i];
-            if (pmd->core_id == NON_PMD_CORE_ID) {
-                continue;
-            }
-
-            /* If -pmd specified, skip all other pmd threads. */
-            if ((pmd_thread_to_change != NON_PMD_CORE_ID) &&
-                (pmd->core_id != pmd_thread_to_change)) {
-                continue;
-            }
-
-            pmd_thread_update_done = true;
-            atomic_store_relaxed(&pmd->miniflow_extract_opt, mfex_func);
-        };
-
-        free(pmd_list);
-    }
-
-    ovs_mutex_unlock(&dp_netdev_mutex);
-
-    /* If PMD thread was specified, but it wasn't found, return error. */
-    if (pmd_thread_to_change != NON_PMD_CORE_ID && !pmd_thread_update_done) {
-        ds_put_format(&reply,
-                      "Error: miniflow extract parser not changed, "
-                      "PMD thread %d not in use, pass a valid pmd"
-                      " thread ID.\n", pmd_thread_to_change);
-        goto error;
-    }
-
-    /* Reply with success to command. */
-    ds_put_format(&reply, "Miniflow extract implementation set to %s",
-                  mfex_name);
-    if (pmd_thread_to_change != NON_PMD_CORE_ID) {
-        ds_put_format(&reply, ", on pmd thread %d", pmd_thread_to_change);
-    }
-    if (mfex_name_is_study) {
-        ds_put_format(&reply, ", studying %d packets", study_count);
-    }
-    ds_put_format(&reply, ".\n");
-
-    reply_str = ds_cstr(&reply);
-    VLOG_INFO("%s", reply_str);
-    unixctl_command_reply(conn, reply_str);
-    ds_destroy(&reply);
-    return;
-
-error:
-    reply_str = ds_cstr(&reply);
-    VLOG_ERR("%s", reply_str);
-    unixctl_command_reply_error(conn, reply_str);
-    ds_destroy(&reply);
-}
-
-static void
 dpif_netdev_pmd_rebalance(struct unixctl_conn *conn, int argc,
                           const char *argv[], void *aux OVS_UNUSED)
 {
@@ -1606,14 +1389,6 @@ dpif_netdev_init(void)
     unixctl_command_register("dpif-netdev/dpif-impl-get", "",
                              0, 0, dpif_netdev_impl_get,
                              NULL);
-    unixctl_command_register("dpif-netdev/miniflow-parser-set",
-                             "[-pmd core] miniflow_implementation_name"
-                             " [study_pkt_cnt]",
-                             1, 5, dpif_miniflow_extract_impl_set,
-                             NULL);
-    unixctl_command_register("dpif-netdev/miniflow-parser-get", "",
-                             0, 0, dpif_miniflow_extract_impl_get,
-                             NULL);
     return 0;
 }
 
@@ -1817,8 +1592,6 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->upcall_cb = NULL;
 
     dp->conntrack = conntrack_init();
-
-    dpif_miniflow_extract_init();
 
     atomic_init(&dp->emc_insert_min, DEFAULT_EM_FLOW_INSERT_MIN);
     atomic_init(&dp->tx_flush_interval, DEFAULT_TX_FLUSH_INTERVAL);
@@ -7193,9 +6966,6 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     /* Initialize DPIF function pointer to the default configured version. */
     atomic_init(&pmd->netdev_input_func, dp_netdev_impl_get_default());
 
-    /* Init default miniflow_extract function */
-    atomic_init(&pmd->miniflow_extract_opt, dp_mfex_impl_get_default());
-
     /* init the 'flow_cache' since there is no
      * actual thread created for NON_PMD_CORE_ID. */
     if (core_id == NON_PMD_CORE_ID) {
@@ -7829,11 +7599,10 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
                size_t *n_flows, uint8_t *index_map,
                bool md_is_valid, odp_port_t port_no)
 {
+    size_t n_missed = 0, n_emc_hit = 0, n_phwol_hit = 0, n_simple_hit = 0;
     const bool offload_enabled = dpif_offload_enabled();
     const uint32_t recirc_depth = *recirc_depth_get();
     const size_t cnt = dp_packet_batch_size(packets_);
-    size_t n_missed = 0, n_emc_hit = 0, n_phwol_hit = 0;
-    size_t n_mfex_opt_hit = 0, n_simple_hit = 0;
     struct dfc_cache *cache = &pmd->flow_cache;
     struct netdev_flow_key *key = &keys[0];
     struct dp_packet *packet;
@@ -7946,8 +7715,6 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
     *n_flows = map_cnt;
 
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_PHWOL_HIT, n_phwol_hit);
-    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MFEX_OPT_HIT,
-                            n_mfex_opt_hit);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_SIMPLE_HIT,
                             n_simple_hit);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_EXACT_HIT, n_emc_hit);

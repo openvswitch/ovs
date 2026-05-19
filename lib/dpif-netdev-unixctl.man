@@ -17,9 +17,6 @@ datapath. Beware that a recirculated packet experiences one additional lookup
 per recirculation, so there may be more lookups than forwarded packets in the
 datapath.
 
-The MFEX Opt hits displays the number of packets that are processed by the
-optimized miniflow extract implementations.
-
 Cycles are counted using the TSC or similar facilities (when available on
 the platform). The duration of one cycle depends on the processing platform.
 
@@ -140,7 +137,6 @@ pmd thread numa_id 0 core_id 1:
   Rx packets:             2399607  (2381 Kpps, 848 cycles/pkt)
   Datapath passes:        3599415  (1.50 passes/pkt)
   - PHWOL hits:                 0  (  0.0 %)
-  - MFEX Opt hits:        3570133  ( 99.2 %)
   - Simple Match hits:          0  (  0.0 %)
   - EMC hits:              336472  (  9.3 %)
   - SMC hits:                   0  (  0.0 %)
@@ -251,14 +247,3 @@ Lists the DPIF implementations that are available.
 .
 .IP "\fBdpif-netdev/dpif-impl-set\fR \fIdpif_impl\fR"
 Sets the DPIF to be used to \fIdpif_impl\fR. By default "dpif_scalar" is used.
-.
-.IP "\fBdpif-netdev/miniflow-parser-get\fR
-Lists the miniflow extract implementations that are available.
-.
-.IP "\fBdpif-netdev/miniflow-parser-set\fR [\fB-pmd\fR \fIcore\fR] \
-\fIminiflow_impl\fR [\fIstudy_cnt\fR]"
-Sets the miniflow extract to \fIminiflow_impl\fR for a specified PMD or all
-PMDs in the case where no value is specified.  By default "scalar" is used.
-\fIstudy_cnt\fR defaults to 128 and indicates the number of packets that the
-"study" miniflow implementation must parse before choosing an optimal
-implementation.

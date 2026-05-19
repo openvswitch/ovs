@@ -533,7 +533,6 @@ tests_test_type_props_SOURCES = tests/test-type-props.c
 CHECK_PYFILES = \
 	tests/appctl.py \
 	tests/flowgen.py \
-	tests/genpkts.py \
 	tests/ovsdb-monitor-sort.py \
 	tests/system-dpdk-find-device.py \
 	tests/test-daemon.py \

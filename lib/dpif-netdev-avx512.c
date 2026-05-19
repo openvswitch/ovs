@@ -182,14 +182,6 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
         goto action_stage;
     }
 
-    /* Do a batch minfilow extract into keys. */
-    uint32_t mf_mask = 0;
-    miniflow_extract_func mfex_func;
-    atomic_read_relaxed(&pmd->miniflow_extract_opt, &mfex_func);
-    if (mfex_func) {
-        mf_mask = mfex_func(packets, keys, batch_size, in_port, pmd);
-    }
-
     uint32_t iter = lookup_pkts_bitmask;
     while (iter) {
         uint32_t i = raw_ctz(iter);
@@ -209,12 +201,6 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
         struct dp_netdev_flow *f = NULL;
         struct netdev_flow_key *key = &keys[i];
 
-        /* Check the minfiflow mask to see if the packet was correctly
-         * classifed by vector mfex else do a scalar miniflow extract
-         * for that packet.
-         */
-        bool mfex_hit = !!(mf_mask & (UINT32_C(1) << i));
-
         /* Check for a partial hardware offload match. */
         if (hwol_enabled) {
             if (OVS_UNLIKELY(dp_netdev_hw_flow(pmd, packet, &f))) {
@@ -224,14 +210,8 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
             }
             if (f) {
                 rules[i] = &f->cr;
-                /* If AVX512 MFEX already classified the packet, use it. */
-                if (mfex_hit) {
-                    pkt_meta[i].tcp_flags = miniflow_get_tcp_flags(&key->mf);
-                } else {
-                    pkt_meta[i].tcp_flags = parse_tcp_flags(packet,
-                                                            NULL, NULL, NULL);
-                }
-
+                pkt_meta[i].tcp_flags = parse_tcp_flags(packet,
+                                                        NULL, NULL, NULL);
                 pkt_meta[i].bytes = dp_packet_size(packet);
                 phwol_hits++;
                 hwol_emc_smc_hitmask |= (UINT32_C(1) << i);
@@ -239,10 +219,8 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
             }
         }
 
-        if (!mfex_hit) {
-            /* Do a scalar miniflow extract into keys. */
-            miniflow_extract(packet, &key->mf);
-        }
+        /* Do a scalar miniflow extract into keys. */
+        miniflow_extract(packet, &key->mf);
 
         /* Cache TCP and byte values for all packets. */
         pkt_meta[i].bytes = dp_packet_size(packet);
@@ -342,10 +320,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
     }
 
     /* At this point we don't return error anymore, so commit stats here. */
-    uint32_t mfex_hit_cnt = __builtin_popcountll(mf_mask);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_PHWOL_HIT, phwol_hits);
-    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MFEX_OPT_HIT,
-                            mfex_hit_cnt);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_EXACT_HIT, emc_hits);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_SMC_HIT, smc_hits);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MASKED_HIT,
