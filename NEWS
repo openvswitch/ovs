@@ -8,6 +8,9 @@ Post-v3.7.0
        wasting resources on unused devices. This breaks DPDK netdev ports
        using the "class=eth,mac=" syntax (though it can be restored via the
        'dpdk-probe-at-init' config option, see ovs-vswitchd.conf.db(5)).
+   - The following deprecated AVX512-specific features of the userspace
+     datapath are now removed:
+     * AVX512-optimized action handling.
    - Windows:
      * The previously deprecated Windows kernel datapath implementation is
        now fully removed as well as support for running or building userspace

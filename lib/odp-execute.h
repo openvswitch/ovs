@@ -24,16 +24,7 @@
 #include "openvswitch/types.h"
 
 struct nlattr;
-struct dp_packet;
-struct pkt_metadata;
 struct dp_packet_batch;
-
-
-/* Called once at initialization time. */
-void odp_execute_init(void);
-
-typedef void (*odp_execute_action_cb)(struct dp_packet_batch *batch,
-                                      const struct nlattr *action);
 
 typedef void (*odp_execute_cb)(void *dp, struct dp_packet_batch *batch,
                                const struct nlattr *action, bool should_steal);
