@@ -253,35 +253,3 @@ match with the numbers in the provided command output
 
 Please send an email to the OVS mailing list ovs-dev@openvswitch.org with
 the output of the ``dp-extra-info:miniflow_bits(4,1)`` values.
-
-Datapath Interface Performance
-------------------------------
-
-.. note::
-
-   The AVX512 Datapath Interface Performance feature is deprecated and will be
-   removed in a future release.
-
-The datapath interface (DPIF) is responsible for taking packets through the
-major components of the userspace datapath; such as packet parsing, caches and
-datapath classifier lookups.
-
-Just like with the datapath classifier, SIMD instructions can be applied to the
-datapath interface implementation to improve performance.
-
-OVS provides multiple implementations of the userspace datapath interface.
-Available implementations can be listed with the following command::
-
-    $ ovs-appctl dpif-netdev/dpif-impl-get
-    Available DPIF implementations:
-      dpif_scalar (pmds: none)
-      dpif_avx512 (pmds: 1,2,6,7)
-
-By default, ``dpif_scalar`` is used.  Implementations can be selected by
-name::
-
-    $ ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512
-    DPIF implementation set to dpif_avx512.
-
-    $ ovs-appctl dpif-netdev/dpif-impl-set dpif_scalar
-    DPIF implementation set to dpif_scalar.

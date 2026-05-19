@@ -12,6 +12,7 @@ Post-v3.7.0
      datapath are now removed:
      * AVX512-optimized action handling.
      * AVX512-optimized packet parsing (miniflow extraction).
+     * AVX512-optimized DPIF input processing.
    - Windows:
      * The previously deprecated Windows kernel datapath implementation is
        now fully removed as well as support for running or building userspace

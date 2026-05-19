@@ -36,26 +36,6 @@ AC_DEFUN([OVS_CHECK_DPCLS_AUTOVALIDATOR], [
   fi
 ])
 
-dnl Set OVS DPIF default implementation at configure time for running the unit
-dnl tests on the whole codebase without modifying tests per DPIF impl
-AC_DEFUN([OVS_CHECK_DPIF_AVX512_DEFAULT], [
-  AC_ARG_ENABLE([dpif-default-avx512],
-                [AS_HELP_STRING([--enable-dpif-default-avx512],
-                                [Enable DPIF AVX512 implementation as default.])],
-                [dpifavx512=yes],[dpifavx512=no])
-  AC_MSG_CHECKING([whether DPIF AVX512 is default implementation])
-  if test "$dpifavx512" != yes; then
-    AC_MSG_RESULT([no])
-  else
-    AC_DEFINE([DPIF_AVX512_DEFAULT], [1],
-              [DPIF AVX512 is a default implementation of the userspace
-               datapath interface.])
-    AC_MSG_RESULT([yes])
-    AC_MSG_WARN(
-      [Explicit AVX512 feature support will be deprecated in the next release.])
-  fi
-])
-
 dnl OVS_CHECK_AVX512
 dnl
 dnl Checks if compiler and binutils supports various AVX512 ISA.

@@ -241,9 +241,3 @@ priority, \fIprio\fR, which should be a positive integer value.  The highest
 priority lookup function is used for classification.
 
 The number of affected dpcls ports and subtables is returned.
-.
-.IP "\fBdpif-netdev/dpif-impl-get\fR
-Lists the DPIF implementations that are available.
-.
-.IP "\fBdpif-netdev/dpif-impl-set\fR \fIdpif_impl\fR"
-Sets the DPIF to be used to \fIdpif_impl\fR. By default "dpif_scalar" is used.

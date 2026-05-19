@@ -21,7 +21,6 @@
 #include "dpif.h"
 #include "dpif-netdev-perf.h"
 #include "dpif-netdev-private-dfc.h"
-#include "dpif-netdev-private-dpif.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -30,7 +29,6 @@
 #include "cmap.h"
 
 #include "dpif-netdev-private-dfc.h"
-#include "dpif-netdev-private-dpif.h"
 #include "dpif-netdev-perf.h"
 #include "openvswitch/thread.h"
 
@@ -119,12 +117,6 @@ struct dp_netdev_pmd_thread {
 
     /* Current context of the PMD thread. */
     struct dp_netdev_pmd_thread_ctx ctx;
-
-    /* Function pointer to call for dp_netdev_input() functionality. */
-    ATOMIC(dp_netdev_input_func) netdev_input_func;
-
-    /* Pointer for per-DPIF implementation scratch space. */
-    void *netdev_input_func_userdata;
 
     struct seq *reload_seq;
     uint64_t last_reload_seq;

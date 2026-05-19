@@ -364,17 +364,6 @@ options are used::
 Compile OVS in debug mode to have `ovs_assert` statements error out if
 there is a mismatch in the datapath classifier lookup.
 
-Since the AVX512 implementation of the datapath interface is disabled by
-default, a compile time option is available in order to test it with the OVS
-unit test suite::
-
-    $ ./configure --enable-dpif-default-avx512
-
-The following line should be seen in the configuration log when the above
-option is used::
-
-    checking whether DPIF AVX512 is default implementation... yes
-
 .. note::
   Run all the available testsuites including `make check`,
   `make check-system-userspace` and `make check-dpdk` to ensure the optimal

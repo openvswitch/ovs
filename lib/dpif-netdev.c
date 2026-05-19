@@ -16,9 +16,6 @@
 
 #include <config.h>
 #include "dpif-netdev.h"
-#include "dpif-netdev-private.h"
-#include "dpif-netdev-private-dfc.h"
-#include "dpif-offload.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -47,6 +44,11 @@
 #include "dpif.h"
 #include "dpif-netdev-lookup.h"
 #include "dpif-netdev-perf.h"
+#include "dpif-netdev-private-dfc.h"
+#include "dpif-netdev-private-dpcls.h"
+#include "dpif-netdev-private-flow.h"
+#include "dpif-netdev-private-thread.h"
+#include "dpif-offload.h"
 #include "dpif-provider.h"
 #include "dummy.h"
 #include "fat-rwlock.h"
@@ -486,6 +488,8 @@ static void dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
                                       const struct flow *flow,
                                       const struct nlattr *actions,
                                       size_t actions_len);
+static void dp_netdev_input(struct dp_netdev_pmd_thread *,
+                            struct dp_packet_batch *, odp_port_t port_no);
 static void dp_netdev_recirculate(struct dp_netdev_pmd_thread *,
                                   struct dp_packet_batch *);
 
@@ -559,9 +563,8 @@ dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
                                bool purge);
 static int dpif_netdev_xps_get_tx_qid(const struct dp_netdev_pmd_thread *pmd,
                                       struct tx_port *tx);
-inline struct dpcls *
-dp_netdev_pmd_lookup_dpcls(struct dp_netdev_pmd_thread *pmd,
-                           odp_port_t in_port);
+static inline struct dpcls *dp_netdev_pmd_lookup_dpcls(
+    struct dp_netdev_pmd_thread *pmd, odp_port_t in_port);
 
 static void dp_netdev_request_reconfigure(struct dp_netdev *dp);
 static inline bool
@@ -1022,91 +1025,6 @@ dpif_netdev_subtable_lookup_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
-dpif_netdev_impl_get(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
-{
-    struct ds reply = DS_EMPTY_INITIALIZER;
-    struct shash_node *node;
-
-    ovs_mutex_lock(&dp_netdev_mutex);
-    SHASH_FOR_EACH (node, &dp_netdevs) {
-        struct dp_netdev_pmd_thread **pmd_list;
-        struct dp_netdev *dp = node->data;
-        size_t n;
-
-        /* Get PMD threads list, required to get the DPIF impl used by each PMD
-         * thread. */
-        sorted_poll_thread_list(dp, &pmd_list, &n);
-        dp_netdev_impl_get(&reply, pmd_list, n);
-        free(pmd_list);
-    }
-    ovs_mutex_unlock(&dp_netdev_mutex);
-    unixctl_command_reply(conn, ds_cstr(&reply));
-    ds_destroy(&reply);
-}
-
-static void
-dpif_netdev_impl_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                     const char *argv[], void *aux OVS_UNUSED)
-{
-    /* This function requires just one parameter, the DPIF name. */
-    const char *dpif_name = argv[1];
-    struct shash_node *node;
-
-    static const char *error_description[2] = {
-        "Unknown DPIF implementation",
-        "CPU doesn't support the required instruction for",
-    };
-
-    ovs_mutex_lock(&dp_netdev_mutex);
-    int32_t err = dp_netdev_impl_set_default_by_name(dpif_name);
-
-    if (err) {
-        struct ds reply = DS_EMPTY_INITIALIZER;
-        ds_put_format(&reply, "DPIF implementation not available: %s %s.\n",
-                      error_description[ (err == -ENOTSUP) ], dpif_name);
-        const char *reply_str = ds_cstr(&reply);
-        unixctl_command_reply_error(conn, reply_str);
-        VLOG_ERR("%s", reply_str);
-        ds_destroy(&reply);
-        ovs_mutex_unlock(&dp_netdev_mutex);
-        return;
-    }
-
-    SHASH_FOR_EACH (node, &dp_netdevs) {
-        struct dp_netdev *dp = node->data;
-
-        /* Get PMD threads list, required to get DPCLS instances. */
-        size_t n;
-        struct dp_netdev_pmd_thread **pmd_list;
-        sorted_poll_thread_list(dp, &pmd_list, &n);
-
-        for (size_t i = 0; i < n; i++) {
-            struct dp_netdev_pmd_thread *pmd = pmd_list[i];
-            if (pmd->core_id == NON_PMD_CORE_ID) {
-                continue;
-            }
-
-            /* Initialize DPIF function pointer to the newly configured
-             * default. */
-            atomic_store_relaxed(&pmd->netdev_input_func,
-                                 dp_netdev_impl_get_default());
-        };
-
-        free(pmd_list);
-    }
-    ovs_mutex_unlock(&dp_netdev_mutex);
-
-    /* Reply with success to command. */
-    struct ds reply = DS_EMPTY_INITIALIZER;
-    ds_put_format(&reply, "DPIF implementation set to %s.\n", dpif_name);
-    const char *reply_str = ds_cstr(&reply);
-    unixctl_command_reply(conn, reply_str);
-    VLOG_INFO("%s", reply_str);
-    ds_destroy(&reply);
-}
-
-static void
 dpif_netdev_pmd_rebalance(struct unixctl_conn *conn, int argc,
                           const char *argv[], void *aux OVS_UNUSED)
 {
@@ -1381,13 +1299,6 @@ dpif_netdev_init(void)
                              NULL);
     unixctl_command_register("dpif-netdev/subtable-lookup-prio-get", NULL,
                              0, 0, dpif_netdev_subtable_lookup_get,
-                             NULL);
-    unixctl_command_register("dpif-netdev/dpif-impl-set",
-                             "dpif_implementation_name",
-                             1, 1, dpif_netdev_impl_set,
-                             NULL);
-    unixctl_command_register("dpif-netdev/dpif-impl-get", "",
-                             0, 0, dpif_netdev_impl_get,
                              NULL);
     return 0;
 }
@@ -2139,7 +2050,7 @@ void dp_netdev_flow_unref(struct dp_netdev_flow *flow)
     }
 }
 
-inline struct dpcls *
+static inline struct dpcls *
 dp_netdev_pmd_lookup_dpcls(struct dp_netdev_pmd_thread *pmd,
                            odp_port_t in_port)
 {
@@ -3077,7 +2988,7 @@ dp_netdev_get_mega_ufid(const struct match *match, ovs_u128 *mega_ufid)
     odp_flow_key_hash(&key, sizeof key, mega_ufid);
 }
 
-uint64_t
+static uint64_t
 dp_netdev_simple_match_mark(odp_port_t in_port, ovs_be16 dl_type,
                             uint8_t nw_frag, ovs_be16 vlan_tci)
 {
@@ -3117,7 +3028,7 @@ dp_netdev_simple_match_mark(odp_port_t in_port, ovs_be16 dl_type,
            | (OVS_FORCE uint16_t) (vlan_tci & htons(VLAN_VID_MASK | VLAN_CFI));
 }
 
-struct dp_netdev_flow *
+static struct dp_netdev_flow *
 dp_netdev_simple_match_lookup(const struct dp_netdev_pmd_thread *pmd,
                               odp_port_t in_port, ovs_be16 dl_type,
                               uint8_t nw_frag, ovs_be16 vlan_tci)
@@ -3138,7 +3049,7 @@ dp_netdev_simple_match_lookup(const struct dp_netdev_pmd_thread *pmd,
     return found ? flow : NULL;
 }
 
-bool
+static bool
 dp_netdev_simple_match_enabled(const struct dp_netdev_pmd_thread *pmd,
                                odp_port_t in_port)
 {
@@ -4752,10 +4663,7 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
         }
 
         /* Process packet batch. */
-        int ret = pmd->netdev_input_func(pmd, &batch, port_no);
-        if (ret) {
-            dp_netdev_input(pmd, &batch, port_no);
-        }
+        dp_netdev_input(pmd, &batch, port_no);
 
         /* Assign processing cycles to rx queue. */
         cycles = cycle_timer_stop(&pmd->perf_stats, &timer);
@@ -6963,9 +6871,6 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
 
     pmd_init_max_sleep(dp, pmd);
 
-    /* Initialize DPIF function pointer to the default configured version. */
-    atomic_init(&pmd->netdev_input_func, dp_netdev_impl_get_default());
-
     /* init the 'flow_cache' since there is no
      * actual thread created for NON_PMD_CORE_ID. */
     if (core_id == NON_PMD_CORE_ID) {
@@ -7004,7 +6909,6 @@ dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd)
     seq_destroy(pmd->reload_seq);
     ovs_mutex_destroy(&pmd->port_mutex);
     ovs_mutex_destroy(&pmd->bond_mutex);
-    free(pmd->netdev_input_func_userdata);
     free(pmd);
 }
 
@@ -7368,24 +7272,6 @@ packet_batch_per_flow_execute(struct packet_batch_per_flow *batch,
                               actions->actions, actions->size);
 }
 
-void
-dp_netdev_batch_execute(struct dp_netdev_pmd_thread *pmd,
-                        struct dp_packet_batch *packets,
-                        struct dpcls_rule *rule,
-                        uint32_t bytes,
-                        uint16_t tcp_flags)
-{
-    /* Gets action* from the rule. */
-    struct dp_netdev_flow *flow = dp_netdev_flow_cast(rule);
-    struct dp_netdev_actions *actions = dp_netdev_flow_get_actions(flow);
-
-    dp_netdev_flow_used(flow, dp_packet_batch_size(packets), bytes,
-                        tcp_flags, pmd->ctx.now / 1000);
-    const uint32_t steal = 1;
-    dp_netdev_execute_actions(pmd, packets, steal, &flow->flow,
-                              actions->actions, actions->size);
-}
-
 static inline void
 dp_netdev_queue_batches(struct dp_packet *pkt,
                         struct dp_netdev_flow *flow, uint16_t tcp_flags,
@@ -7514,7 +7400,7 @@ smc_lookup_single(struct dp_netdev_pmd_thread *pmd,
     return NULL;
 }
 
-inline int
+static inline int
 dp_netdev_hw_flow(const struct dp_netdev_pmd_thread *pmd,
                   struct dp_packet *packet,
                   struct dp_netdev_flow **flow)
@@ -7993,13 +7879,12 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     }
 }
 
-int32_t
+static void
 dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
                 struct dp_packet_batch *packets,
                 odp_port_t port_no)
 {
     dp_netdev_input__(pmd, packets, false, port_no);
-    return 0;
 }
 
 static void
