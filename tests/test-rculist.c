@@ -33,12 +33,6 @@ struct element {
     struct rculist node;
 };
 
-static void
-do_usleep(unsigned int usecs)
-{
-    usleep(usecs);
-}
-
 /* Continuously check the integrity of the list until it's empty. */
 static void *
 checker_main(void *aux)
@@ -57,7 +51,7 @@ checker_main(void *aux)
             if (!checked) {
                 checked = true;
             }
-            do_usleep(10);
+            usleep(10);
         }
 
         ovsrcu_quiesce();
@@ -99,7 +93,7 @@ test_rculist_insert_delete__(struct rculist *list, bool long_version)
         elem->value = i;
         rculist_insert(list, &elem->node);
         /* Leave some time for checkers to iterate through. */
-        do_usleep(random_range(1000));
+        usleep(random_range(1000));
     }
 
     ovsrcu_quiesce();
@@ -116,14 +110,14 @@ test_rculist_insert_delete__(struct rculist *list, bool long_version)
             rculist_remove(&elem->node);
             ovsrcu_postpone(free, elem);
             /* Leave some time for checkers to iterate through. */
-            do_usleep(random_range(1000));
+            usleep(random_range(1000));
         }
     } else {
         RCULIST_FOR_EACH_SAFE_PROTECTED (elem, node, list) {
             rculist_remove(&elem->node);
             ovsrcu_postpone(free, elem);
             /* Leave some time for checkers to iterate through. */
-            do_usleep(random_range(1000));
+            usleep(random_range(1000));
         }
     }
 }
@@ -150,7 +144,7 @@ test_rculist_push_front_pop_back(struct rculist *list)
         elem->value = i;
         rculist_push_front(list, &elem->node);
         /* Leave some time for checkers to iterate through. */
-        do_usleep(random_range(1000));
+        usleep(random_range(1000));
     }
 
     ovsrcu_quiesce();
@@ -159,7 +153,7 @@ test_rculist_push_front_pop_back(struct rculist *list)
         elem = CONTAINER_OF(rculist_pop_back(list), struct element, node);
         ovsrcu_postpone(free, elem);
         /* Leave some time for checkers to iterate through. */
-        do_usleep(random_range(1000));
+        usleep(random_range(1000));
     }
 }
 
@@ -173,7 +167,7 @@ test_rculist_push_back_pop_front(struct rculist *list)
         elem->value = i;
         rculist_push_back(list, &elem->node);
         /* Leave some time for checkers to iterate through. */
-        do_usleep(random_range(1000));
+        usleep(random_range(1000));
     }
 
     ovsrcu_quiesce();
@@ -182,7 +176,7 @@ test_rculist_push_back_pop_front(struct rculist *list)
         elem = CONTAINER_OF(rculist_pop_front(list), struct element, node);
         ovsrcu_postpone(free, elem);
         /* Leave some time for checkers to iterate through. */
-        do_usleep(random_range(1000));
+        usleep(random_range(1000));
     }
 }
 
@@ -202,7 +196,7 @@ test_rculist_splice(struct rculist *list)
         rculist_splice_hidden(list, rculist_next_protected(&other), &other);
         rculist_init(&other);
         /* Leave some time for checkers to iterate through. */
-        do_usleep(random_range(1000));
+        usleep(random_range(1000));
     }
 
     ovsrcu_quiesce();
@@ -213,7 +207,7 @@ test_rculist_splice(struct rculist *list)
         elem = CONTAINER_OF(rculist_pop_front(list), struct element, node);
         ovsrcu_postpone(free, elem);
         /* Leave some time for checkers to iterate through. */
-        do_usleep(random_range(1000));
+        usleep(random_range(1000));
     }
 }
 
