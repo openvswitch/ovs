@@ -215,10 +215,9 @@ AT_CHECK([cd $longname && $PYTHON3 $abs_srcdir/test-unix-socket.py ../$longname/
 AT_CLEANUP
 
 AT_SETUP([ovs_assert])
-# SIGABRT + 128
-exit_status=134
-AT_CHECK([ovstest test-util -voff -vfile:info '-vPATTERN:file:%c|%p|%m' --log-file assert],
-  [$exit_status], [], [stderr])
+AT_CHECK([ovstest test-util -voff -vfile:info '-vPATTERN:file:%c|%p|%m' --log-file assert || kill -l $?],
+  [0], [ABRT
+], [stderr])
 
 AT_CHECK([sed 's/\(opened log file\) .*/\1/
 s/|[[^|]]*: /|/
