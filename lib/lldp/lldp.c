@@ -373,7 +373,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
     struct lldpd_aa_isid_vlan_maps_tlv *isid_vlan_map = NULL;
     u_int8_t msg_auth_digest[LLDP_TLV_AA_ISID_VLAN_DIGEST_LENGTH];
     struct lldpd_mgmt *mgmt;
-    u_int8_t addr_str_length, addr_str_buffer[32];
+    u_int8_t addr_str_length, addr_str_buffer[32] = { 0 };
     u_int8_t addr_family, addr_length, *addr_ptr, iface_subtype;
     u_int32_t iface_number, iface;
 
