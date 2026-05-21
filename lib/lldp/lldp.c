@@ -424,22 +424,25 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
         switch (tlv_type) {
         case LLDP_TLV_CHASSIS_ID:
             if (tlv_count != 1) {
-                VLOG_WARN("first TLV should be a chassis ID on %s, not %d",
-                          hardware->h_ifname, tlv_type);
+                VLOG_WARN("Chassis ID TLV should be first on %s,"
+                          " but it is on position %d",
+                          hardware->h_ifname, tlv_count);
                 goto malformed;
             }
             break;
         case LLDP_TLV_PORT_ID:
             if (tlv_count != 2) {
-                VLOG_WARN("second TLV should be a port ID on %s, not %d",
-                          hardware->h_ifname, tlv_type);
+                VLOG_WARN("Port ID TLV should be second on %s,"
+                          " but it is on position %d",
+                          hardware->h_ifname, tlv_count);
                 goto malformed;
             }
             break;
         case LLDP_TLV_TTL:
             if (tlv_count != 3) {
-                VLOG_WARN("third TLV should be a TTL on %s, not %d",
-                          hardware->h_ifname, tlv_type);
+                VLOG_WARN("TTL TLV should be third on %s,"
+                          " but it is on position %d",
+                          hardware->h_ifname, tlv_count);
                 goto malformed;
             }
             break;
