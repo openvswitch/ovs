@@ -691,7 +691,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                       tlv_type,
                       hardware->h_ifname);
             hardware->h_rx_unrecognized_cnt++;
-            goto malformed;
+            break;
         }
         if (pos > tlv + tlv_size) {
             VLOG_WARN("BUG: already past TLV!");
