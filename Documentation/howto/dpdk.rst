@@ -68,11 +68,6 @@ is suggested::
     all available devices (including PCI devices) be probed at initialization
     (setting ``dpdk-probe-at-init`` to true).
 
-    Hotplugging physical interfaces is not supported using the above syntax.
-    This is expected to change with the release of DPDK v18.05. For information
-    on hotplugging physical interfaces, you should instead refer to
-    :ref:`port-hotplug`.
-
 After the DPDK ports get added to switch, a polling thread continuously polls
 DPDK devices and consumes 100% of the core, as can be checked from ``top`` and
 ``ps`` commands::

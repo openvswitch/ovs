@@ -258,8 +258,6 @@ traffic in OVS-DPDK because the checksum validation of tunnel packets is
 offloaded to the NIC. Also enabling Rx checksum may slightly reduce the
 performance of non-tunnel traffic, specifically for smaller size packet.
 
-.. _port-hotplug:
-
 Hotplugging
 -----------
 
