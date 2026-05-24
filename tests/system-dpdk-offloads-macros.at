@@ -109,8 +109,8 @@ m4_define([ADD_VF],
       AT_CHECK([test -n "$VF"])
 
       AT_CHECK([ip link set $VF down])
-      AT_CHECK([ip link set $VF name $1])
-      AT_CHECK([ip link set $1 netns $2])
+      AT_CHECK([ip link set $VF netns $2])
+      AT_CHECK([ip netns exec $2 ip link set $VF name $1 && printf '%s\n' "$VF" > ORIG_$1])
       AT_CHECK([ovs-vsctl add-port $3 ovs-$1 -- \
                 set interface ovs-$1 external-ids:iface-id="$1" -- \
                 set interface ovs-$1 type=dpdk -- \
@@ -127,9 +127,11 @@ m4_define([ADD_VF],
       if test -n "$6"; then
         NS_CHECK_EXEC([$2], [ip route add default via $6])
       fi
-      on_exit "ip netns exec $2 ip link set $1 netns 1; \
-               ip link property del dev $1 altname $VF; \
-               ip link set $1 name $VF"
+      on_exit "orig=\$(cat ORIG_$1); \
+               rm -f ORIG_$1; \
+               ip netns exec $2 ip link set $1 down; \
+               ip netns exec $2 ip link set $1 name \"\$orig\"; \
+               ip netns exec $2 ip link set \"\$orig\" netns 1"
     ]
 )
 m4_define([ADD_VETH], [ADD_VF($@)])
