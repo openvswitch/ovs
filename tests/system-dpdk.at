@@ -1016,7 +1016,7 @@ OVS_DPDK_PRE_CHECK()
 dnl This test uses 2 IPv6 VxLAN encapsulations (140 bytes of tunnel headers)
 dnl to ensure that the headroom can't fit those headers.
 AT_SKIP_IF([test $DPDK_MBUF_HEADROOM -ge 140])
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START()
 
 ADD_BR([br0])
 ADD_BR([br1])

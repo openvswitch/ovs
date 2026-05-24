@@ -68,21 +68,7 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
   [
    OVS_DPDK_OFFLOAD_PRE_CHECK()
    OVS_WAIT_WHILE([ip link show ovs-netdev])
-   ALLOW_LIST=$(echo "$OVS_DPDK_VF_PCI_ADDRS" | awk '{
-     for (i=1; i<=NF; i++) {
-       split($i, parts, ",");
-       addr = parts[1];
-       if (addr != "" && !seen[addr]) {
-         seen[addr] = 1;
-         if (result == "")
-           result = "--allow " addr;
-         else
-           result = result " --allow " addr;
-        }
-     }
-     print result;
-   }')
-   OVS_DPDK_START([$ALLOW_LIST], [--disable-system],
+   OVS_DPDK_START([--disable-system],
                   [-- set Open_vSwitch . other_config:hw-offload=true $3])
    dnl Add bridges, ports, etc.
    OVS_WAIT_WHILE([ip link show br0])

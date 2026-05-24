@@ -30,10 +30,10 @@ m4_define([OVS_DPDK_PRE_PHY_SKIP],
 #
 m4_define([OVS_DPDK_START],
   [dnl start ovs dpdk
-   OVS_DPDK_START_OVSDB($3)
+   OVS_DPDK_START_OVSDB($2)
    dnl Enable DPDK functionality
    AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
-   OVS_DPDK_START_VSWITCHD([$1], [$2])
+   OVS_DPDK_START_VSWITCHD([$1])
 ])
 
 
@@ -65,10 +65,10 @@ m4_define([OVS_DPDK_START_OVSDB],
 #
 m4_define([OVS_DPDK_START_VSWITCHD],
   [dnl Change DPDK drivers log levels so that tests only catch errors
-   AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-extra="--log-level=pmd.*:error $1"])
+   AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-extra="--log-level=pmd.*:error"])
 
    dnl Start ovs-vswitchd.
-   AT_CHECK([ovs-vswitchd $2 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [stdout], [stderr])
+   AT_CHECK([ovs-vswitchd $1 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [stdout], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    on_exit "kill_ovs_vswitchd `cat ovs-vswitchd.pid`"
 ])
@@ -139,7 +139,7 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
    OVS_DPDK_PRE_CHECK()
    OVS_WAIT_WHILE([ip link show ovs-netdev])
    dnl For functional tests, no need for DPDK PCI probing.
-   OVS_DPDK_START([], [--disable-system], [$3])
+   OVS_DPDK_START([--disable-system], [$3])
    dnl Add bridges, ports, etc.
    OVS_WAIT_WHILE([ip link show br0])
    AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
