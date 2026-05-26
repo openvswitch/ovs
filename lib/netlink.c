@@ -579,6 +579,17 @@ nl_msg_put_nested(struct ofpbuf *msg,
     nl_msg_end_nested(msg, offset);
 }
 
+/* Inserts a Netlink attribute header of the given 'type' at 'offset' in
+ * 'msg', enclosing 'size' bytes of existing data as its payload. */
+void
+nl_msg_wrap_nested(struct ofpbuf *msg, uint16_t type,
+                   size_t offset, size_t size)
+{
+    struct nlattr nla = { .nla_len = NLA_HDRLEN + size, .nla_type = type };
+
+    ofpbuf_insert(msg, offset, &nla, sizeof nla);
+}
+
 /* Reset message size to offset. */
 void
 nl_msg_reset_size(struct ofpbuf *msg, size_t offset)
