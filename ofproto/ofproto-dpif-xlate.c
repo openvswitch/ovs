@@ -638,9 +638,10 @@ static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                              struct xlate_ctx *, bool, bool);
 static void clone_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                                 struct xlate_ctx *, bool, bool);
-static void xlate_normal(struct xlate_ctx *);
+static void xlate_normal(struct xlate_ctx *, bool is_last_action);
 static void xlate_normal_flood(struct xlate_ctx *ct,
-                               struct xbundle *in_xbundle, struct xvlan *);
+                               struct xbundle *in_xbundle, struct xvlan *,
+                               bool is_last_action);
 static void xlate_table_action(struct xlate_ctx *, ofp_port_t in_port,
                                uint8_t table_id, bool may_packet_in,
                                bool honor_table_miss, bool with_ct_orig,
@@ -661,7 +662,7 @@ static void xvlan_output_translate(const struct xbundle *,
                                    const struct xvlan *xvlan,
                                    struct xvlan *out);
 static void output_normal(struct xlate_ctx *, const struct xbundle *,
-                          const struct xvlan *);
+                          const struct xvlan *, bool is_last_action);
 
 /* Optional bond recirculation parameter to compose_output_action(). */
 struct xlate_bond_recirc {
@@ -2355,7 +2356,7 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
             struct xbundle *out_xbundle = xbundle_lookup(ctx->xcfg,
                                                          mc.out_bundle);
             if (out_xbundle) {
-                output_normal(ctx, out_xbundle, &xvlan);
+                output_normal(ctx, out_xbundle, &xvlan, false);
             }
         } else if (xvlan.v[0].vid != mc.out_vlan
                    && !eth_addr_is_reserved(ctx->xin->flow.dl_dst)) {
@@ -2366,7 +2367,7 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
             LIST_FOR_EACH (xb, list_node, &xbridge->xbundles) {
                 if (xbundle_includes_vlan(xb, &xvlan)
                     && !xbundle_mirror_out(xbridge, xb)) {
-                    output_normal(ctx, xb, &xvlan);
+                    output_normal(ctx, xb, &xvlan, false);
                 }
             }
             xvlan.v[0].vid = old_vid;
@@ -2614,7 +2615,7 @@ check_and_set_cvlan_mask(struct flow_wildcards *wc,
 
 static void
 output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
-              const struct xvlan *xvlan)
+              const struct xvlan *xvlan, bool is_last_action)
 {
     uint16_t vid;
     union flow_vlan_hdr old_vlans[FLOW_MAX_VLAN_HEADERS];
@@ -2699,7 +2700,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
     xvlan_put(&ctx->xin->flow, &out_xvlan, out_xbundle->use_priority_tags);
 
     compose_output_action(ctx, xport->ofp_port, use_recirc ? &xr : NULL,
-                          false, false);
+                          is_last_action, false);
     memcpy(&ctx->xin->flow.vlans, &old_vlans, sizeof(old_vlans));
 }
 
@@ -3006,13 +3007,15 @@ mcast_output_add(struct mcast_output *out, struct xbundle *mcast_xbundle)
  * bundle 'in_xbundle' and the current 'xvlan'. */
 static void
 mcast_output_finish(struct xlate_ctx *ctx, struct mcast_output *out,
-                    struct xbundle *in_xbundle, struct xvlan *xvlan)
+                    struct xbundle *in_xbundle, struct xvlan *xvlan,
+                    bool is_last_action)
 {
     if (out->flood) {
-        xlate_normal_flood(ctx, in_xbundle, xvlan);
+        xlate_normal_flood(ctx, in_xbundle, xvlan, is_last_action);
     } else {
         for (size_t i = 0; i < out->n; i++) {
-            output_normal(ctx, out->xbundles[i], xvlan);
+            output_normal(ctx, out->xbundles[i], xvlan,
+                          is_last_action && i == out->n - 1);
         }
     }
 
@@ -3134,9 +3137,9 @@ xlate_normal_mcast_send_rports(struct xlate_ctx *ctx,
 
 static void
 xlate_normal_flood(struct xlate_ctx *ctx, struct xbundle *in_xbundle,
-                   struct xvlan *xvlan)
+                   struct xvlan *xvlan, bool is_last_action)
 {
-    struct xbundle *xbundle;
+    struct xbundle *xbundle, *last = NULL;
 
     LIST_FOR_EACH (xbundle, list_node, &ctx->xbridge->xbundles) {
         if (xbundle != in_xbundle
@@ -3144,8 +3147,14 @@ xlate_normal_flood(struct xlate_ctx *ctx, struct xbundle *in_xbundle,
             && xbundle_includes_vlan(xbundle, xvlan)
             && xbundle->floodable
             && !xbundle_mirror_out(ctx->xbridge, xbundle)) {
-            output_normal(ctx, xbundle, xvlan);
+            if (last) {
+                output_normal(ctx, last, xvlan, false);
+            }
+            last = xbundle;
         }
+    }
+    if (last) {
+        output_normal(ctx, last, xvlan, is_last_action);
     }
     ctx->nf_output_iface = NF_OUT_FLOOD;
 }
@@ -3165,7 +3174,7 @@ is_ip_local_multicast(const struct flow *flow, struct flow_wildcards *wc)
 }
 
 static void
-xlate_normal(struct xlate_ctx *ctx)
+xlate_normal(struct xlate_ctx *ctx, bool is_last_action)
 {
     struct flow_wildcards *wc = ctx->wc;
     struct flow *flow = &ctx->xin->flow;
@@ -3290,10 +3299,11 @@ xlate_normal(struct xlate_ctx *ctx)
                 xlate_normal_mcast_send_rports(ctx, ms, in_xbundle, &out);
                 ovs_rwlock_unlock(&ms->rwlock);
 
-                mcast_output_finish(ctx, &out, in_xbundle, &xvlan);
+                mcast_output_finish(ctx, &out, in_xbundle, &xvlan,
+                                    is_last_action);
             } else {
                 xlate_report(ctx, OFT_DETAIL, "multicast traffic, flooding");
-                xlate_normal_flood(ctx, in_xbundle, &xvlan);
+                xlate_normal_flood(ctx, in_xbundle, &xvlan, is_last_action);
             }
             return;
         } else if (is_mld(flow, wc)) {
@@ -3311,10 +3321,11 @@ xlate_normal(struct xlate_ctx *ctx)
                 xlate_normal_mcast_send_rports(ctx, ms, in_xbundle, &out);
                 ovs_rwlock_unlock(&ms->rwlock);
 
-                mcast_output_finish(ctx, &out, in_xbundle, &xvlan);
+                mcast_output_finish(ctx, &out, in_xbundle, &xvlan,
+                                    is_last_action);
             } else {
                 xlate_report(ctx, OFT_DETAIL, "MLD query, flooding");
-                xlate_normal_flood(ctx, in_xbundle, &xvlan);
+                xlate_normal_flood(ctx, in_xbundle, &xvlan, is_last_action);
             }
             return;
         } else {
@@ -3324,7 +3335,7 @@ xlate_normal(struct xlate_ctx *ctx)
                  * be forwarded on all ports */
                 xlate_report(ctx, OFT_DETAIL,
                              "RFC4541: section 2.1.2, item 2, flooding");
-                xlate_normal_flood(ctx, in_xbundle, &xvlan);
+                xlate_normal_flood(ctx, in_xbundle, &xvlan, is_last_action);
                 return;
             }
         }
@@ -3356,7 +3367,7 @@ xlate_normal(struct xlate_ctx *ctx)
         }
         ovs_rwlock_unlock(&ms->rwlock);
 
-        mcast_output_finish(ctx, &out, in_xbundle, &xvlan);
+        mcast_output_finish(ctx, &out, in_xbundle, &xvlan, is_last_action);
     } else {
         ovs_rwlock_rdlock(&ctx->xbridge->ml->rwlock);
         mac = mac_learning_lookup(ctx->xbridge->ml, flow->dl_dst, vlan);
@@ -3376,7 +3387,7 @@ xlate_normal(struct xlate_ctx *ctx)
                 && mac_xbundle != in_xbundle
                 && mac_xbundle->ofbundle != in_xbundle->ofbundle) {
                 xlate_report(ctx, OFT_DETAIL, "forwarding to learned port");
-                output_normal(ctx, mac_xbundle, &xvlan);
+                output_normal(ctx, mac_xbundle, &xvlan, is_last_action);
             } else if (!mac_xbundle) {
                 xlate_report(ctx, OFT_WARN,
                              "learned port is unknown, dropping");
@@ -3387,7 +3398,7 @@ xlate_normal(struct xlate_ctx *ctx)
         } else {
             xlate_report(ctx, OFT_DETAIL,
                          "no learned MAC for destination, flooding");
-            xlate_normal_flood(ctx, in_xbundle, &xvlan);
+            xlate_normal_flood(ctx, in_xbundle, &xvlan, is_last_action);
         }
     }
 }
@@ -5608,7 +5619,7 @@ xlate_output_action(struct xlate_ctx *ctx, ofp_port_t port,
                            do_xlate_actions);
         break;
     case OFPP_NORMAL:
-        xlate_normal(ctx);
+        xlate_normal(ctx, is_last_action);
         break;
     case OFPP_FLOOD:
         flood_packets(ctx, false, is_last_action);

@@ -10300,17 +10300,17 @@ AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - patch ports - clone])
 OVS_VSWITCHD_START(
-  [add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 -- \
-   add-port br0 p1 -- set Interface p1 type=patch \
-                                       options:peer=p2 ofport_request=2 -- \
-   add-port br0 p4 -- set Interface p4 type=dummy ofport_request=4 -- \
-   add-br br1 -- \
+  [add-br br1 -- \
    set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
    set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
                   fail-mode=secure -- \
-   add-port br1 p2 -- set Interface p2 type=patch \
-                                       options:peer=p1 -- \
-   add-port br1 p3 -- set Interface p3 type=dummy ofport_request=3])
+   add-port br0 pbr0 -- set Interface pbr0 type=patch \
+                         options:peer=pbr1 ofport_request=5 -- \
+   add-port br1 pbr1 -- set Interface pbr1 type=patch \
+                         options:peer=pbr0 ofport_request=6])
+
+add_of_ports br0 1 4
+add_of_ports br1 3
 
 m4_define([TRACE_PKT], [m4_join([,],
     [in_port(1)],
@@ -10330,10 +10330,10 @@ dnl Meter on peer bridge - wrapped.
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br1 \
               'meter=1 pktps stats bands=type=drop rate=2'])
 AT_DATA([flows-br0.txt], [dnl
-in_port=p0,ip,actions=p1,output:p4
+in_port=p1,ip,actions=pbr0,output:p4
 ])
 AT_DATA([flows-br1.txt], [dnl
-in_port=p2,ip,actions=meter:1,output:p3
+in_port=pbr1,ip,actions=meter:1,output:p3
 ])
 CHECK_CLONE_ACTION([flows-br0.txt], [flows-br1.txt], [TRACE_PKT], [dnl
 Datapath actions: clone(meter(0),3),4
@@ -10342,11 +10342,11 @@ Datapath actions: clone(meter(0),3),4
 dnl CT on peer bridge as last action - not wrapped (trailing clone unwrapped).
 AT_DATA([flows-br0.txt], [dnl
 priority=10,ip,action=push:NXM_OF_IN_PORT[],resubmit(,65),pop:NXM_OF_IN_PORT[]
-table=65,priority=10,ip,in_port=p0,action=p1
+table=65,priority=10,ip,in_port=p1,action=pbr0
 ])
 AT_DATA([flows-br1.txt], [dnl
-priority=100,in_port=p2,ip,ct_state=-trk,action=ct(table=0,zone=1)
-priority=100,in_port=p2,ip,ct_state=+trk+est,ct_zone=1,action=p3
+priority=100,in_port=pbr1,ip,ct_state=-trk,action=ct(table=0,zone=1)
+priority=100,in_port=pbr1,ip,ct_state=+trk+est,ct_zone=1,action=p3
 ])
 CHECK_CLONE_ACTION([flows-br0.txt], [flows-br1.txt], [TRACE_PKT], [dnl
 Datapath actions: ct(zone=1),recirc(X)
@@ -10355,10 +10355,10 @@ Datapath actions: 3
 
 dnl Non-reversible through resubmit on peer - wrapped.
 AT_DATA([flows-br0.txt], [dnl
-in_port=p0,ip,actions=p1,output:p4
+in_port=p1,ip,actions=pbr0,output:p4
 ])
 AT_DATA([flows-br1.txt], [dnl
-in_port=p2,ip,actions=resubmit(,1)
+in_port=pbr1,ip,actions=resubmit(,1)
 table=1,ip,actions=ct(commit),output:p3
 ])
 CHECK_CLONE_ACTION([flows-br0.txt], [flows-br1.txt], [TRACE_PKT], [dnl
@@ -10367,10 +10367,29 @@ Datapath actions: clone(ct(commit),3),4
 
 dnl Only reversible actions on peer - not wrapped.
 AT_DATA([flows-br1.txt], [dnl
-in_port=p2,ip,actions=set_field:192.168.1.1->ip_dst,output:p3
+in_port=pbr1,ip,actions=set_field:192.168.1.1->ip_dst,output:p3
 ])
 CHECK_CLONE_ACTION([flows-br0.txt], [flows-br1.txt], [TRACE_PKT], [dnl
 Datapath actions: set(ipv4(dst=192.168.1.1)),3,set(ipv4(dst=10.10.10.1)),4
+])
+
+dnl NORMAL with ct on peer, more actions after patch port - wrapped.
+AT_DATA([flows-br0.txt], [dnl
+in_port=p1,ip,actions=pbr0,output:p4
+])
+AT_DATA([flows-br1.txt], [dnl
+in_port=pbr1,ip,actions=ct(commit),normal
+])
+CHECK_CLONE_ACTION([flows-br0.txt], [flows-br1.txt], [TRACE_PKT], [dnl
+Datapath actions: clone(ct(commit),101,3),4
+])
+
+dnl NORMAL with ct on peer, patch port is the last action - not wrapped.
+AT_DATA([flows-br0.txt], [dnl
+in_port=p1,ip,actions=pbr0
+])
+CHECK_CLONE_ACTION([flows-br0.txt], [flows-br1.txt], [TRACE_PKT], [dnl
+Datapath actions: ct(commit),101,3
 ])
 
 OVS_VSWITCHD_STOP
