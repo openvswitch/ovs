@@ -847,7 +847,7 @@ Datapath actions: tnl_push(tnl_port(6081),header(size=70,type=5,dnl
 eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x86dd),dnl
 ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=17,tclass=0x0,hlimit=64),dnl
 udp(src=0,dst=6081,csum=0xffff),geneve(vni=0x7b)),out_port(100)),dnl
-hash(l4(0)),recirc(0x1)
+clone(hash(l4(0)),recirc(0x1))
 ])
 
 dnl Now check that the packet is actually encapsulated and delivered.
@@ -879,7 +879,7 @@ actions:tnl_push(tnl_port(6081),header(size=70,type=5,dnl
 eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x86dd),dnl
 ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=17,tclass=0x0,hlimit=64),dnl
 udp(src=0,dst=6081,csum=0xffff),geneve(vni=0x7b)),out_port(100)),dnl
-hash(l4(0)),recirc(0x2)
+clone(hash(l4(0)),recirc(0x2))
 ])
 
 OVS_VSWITCHD_STOP
