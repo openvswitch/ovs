@@ -11,6 +11,7 @@ LimitNOFILE=1048576
 Type=forking
 PIDFile=/run/openvswitch/ovsdb-server.pid
 Restart=on-failure
+RestartMode=direct
 EnvironmentFile=-/etc/default/openvswitch-switch
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
           --no-ovs-vswitchd --no-monitor --system-id=random \
