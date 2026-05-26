@@ -10,6 +10,7 @@ PartOf=openvswitch.service
 Type=forking
 PIDFile=/run/openvswitch/ovs-vswitchd.pid
 Restart=on-failure
+RestartMode=direct
 Environment=XDG_RUNTIME_DIR=/run/openvswitch
 EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch

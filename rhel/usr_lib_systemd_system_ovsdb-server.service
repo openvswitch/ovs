@@ -10,6 +10,7 @@ PartOf=openvswitch.service
 Type=forking
 PIDFile=/run/openvswitch/ovsdb-server.pid
 Restart=on-failure
+RestartMode=direct
 EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch
 EnvironmentFile=-/run/openvswitch.useropts
