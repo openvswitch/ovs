@@ -71,7 +71,6 @@ EXTRA_DIST = \
 	.ci/linux-prepare.sh \
 	.ci/osx-build.sh \
 	.ci/osx-prepare.sh \
-	.cirrus.yml \
 	.editorconfig \
 	.github/workflows/build-and-test.yml \
 	.github/workflows/freebsd.yml \
