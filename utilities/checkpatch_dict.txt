@@ -183,6 +183,7 @@ nicira
 nics
 ns
 nsec
+nuageinit
 num
 numa
 odp
