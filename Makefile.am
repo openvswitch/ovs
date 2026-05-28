@@ -79,6 +79,9 @@ EXTRA_DIST = \
 	NOTICE \
 	.ci/dpdk-build.sh \
 	.ci/dpdk-prepare.sh \
+	.ci/freebsd-build.sh \
+	.ci/freebsd-prepare-image.sh \
+	.ci/freebsd-vm.sh \
 	.ci/linux-build.sh \
 	.ci/linux-prepare.sh \
 	.ci/osx-build.sh \
@@ -88,6 +91,7 @@ EXTRA_DIST = \
 	.cirrus.yml \
 	.editorconfig \
 	.github/workflows/build-and-test.yml \
+	.github/workflows/freebsd.yml \
 	.readthedocs.yaml \
 	appveyor.yml \
 	boot.sh \
