@@ -1,0 +1,80 @@
+name: FreeBSD Build and Test
+
+on: [push, pull_request]
+
+env:
+  FREEBSD_VER: "15.0"
+  CC: clang
+  FREEBSD_PACKAGES: >-
+    automake libtool gmake openssl python3 rsync
+    py311-sphinx py311-netaddr py311-pyparsing
+  dependencies: >-
+    qemu-system-x86 qemu-utils genisoimage rsync openssh-client ovmf
+    wget xz-utils
+
+jobs:
+  build-freebsd:
+    name: freebsd
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v6
+
+    - name: update APT cache
+      run:  sudo apt update || true
+    - name: install common dependencies
+      run:  sudo apt install -y ${{ env.dependencies }}
+
+    - name: enable KVM access
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+          | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: generate image cache key
+      id: gen_key
+      run: |
+        key="freebsd-${{ env.FREEBSD_VER }}-"
+        key+="${{ hashFiles('.github/workflows/freebsd.yml',
+                            '.ci/freebsd-build.sh',
+                            '.ci/freebsd-prepare-image.sh',
+                            '.ci/freebsd-vm.sh') }}"
+        echo "key=${key}" >> "$GITHUB_OUTPUT"
+
+    - name: restore image cache
+      id: image_cache
+      uses: actions/cache@v5
+      with:
+        path: freebsd-${{ env.FREEBSD_VER }}.qcow2
+        key:  ${{ steps.gen_key.outputs.key }}
+
+    - name: prepare image
+      if: steps.image_cache.outputs.cache-hit != 'true'
+      run: ./.ci/freebsd-prepare-image.sh
+
+    - name: build and test
+      run: ./.ci/freebsd-build.sh
+
+    - name: copy logs on failure
+      if: failure() || cancelled()
+      run: |
+        # upload-artifact throws exceptions if it tries to upload socket
+        # files and we could have some socket files in testsuite.dir.
+        # Also, upload-artifact doesn't work well enough with wildcards.
+        # So, we're just archiving everything here to avoid any issues.
+        mkdir logs
+        cp config.log ./logs/ || true
+        cp -r ./tests/testsuite.* ./logs/ || true
+        cp nuageinit.log ./logs/ || true
+        cp freebsd-console.log ./logs/ || true
+        sudo tar -czvf logs.tgz logs/
+
+    - name: upload logs on failure
+      if: failure() || cancelled()
+      uses: actions/upload-artifact@v7
+      with:
+        name: logs-freebsd-${{ env.FREEBSD_VER }}-${{ env.CC }}
+        path: logs.tgz
