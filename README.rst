@@ -8,8 +8,8 @@ Open vSwitch
 
 .. image:: https://github.com/openvswitch/ovs/workflows/Build%20and%20Test/badge.svg
     :target: https://github.com/openvswitch/ovs/actions
-.. image:: https://api.cirrus-ci.com/github/openvswitch/ovs.svg
-    :target: https://cirrus-ci.com/github/openvswitch/ovs
+.. image:: https://github.com/openvswitch/ovs/workflows/FreeBSD%20Build%20and%20Test/badge.svg
+    :target: https://github.com/openvswitch/ovs/actions
 .. image:: https://readthedocs.org/projects/openvswitch/badge/?version=latest
     :target: https://docs.openvswitch.org/en/latest/
 
