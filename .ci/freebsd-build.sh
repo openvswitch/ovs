@@ -55,7 +55,11 @@ freebsd_wait_firstboot 30 5
 freebsd_ssh "mkdir -p /root/ovs"
 freebsd_rsync_to "$(pwd)/" /root/ovs/
 
+# POSIX async I/O is disabled because FreeBSD doesn't honor the order of
+# aio_write operations on the same O_APPEND file descriptor causing log
+# reordering, even though the man page says otherwise.
 freebsd_ssh "cd /root/ovs && ./boot.sh && \
-    ./configure CC=${CC} CFLAGS='-g -O2 -Wall' MAKE=gmake --enable-Werror"
+    ./configure CC=${CC} CFLAGS='-g -O2 -Wall' MAKE=gmake \
+        --disable-posix-aio --enable-Werror"
 
 freebsd_ssh "cd /root/ovs && gmake -j8 check TESTSUITEFLAGS=-j8 RECHECK=yes"
