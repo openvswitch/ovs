@@ -448,8 +448,27 @@ AC_DEFUN([OVS_CHECK_ATOMIC_ALWAYS_LOCK_FREE],
 
 dnl OVS_CHECK_POSIX_AIO
 AC_DEFUN([OVS_CHECK_POSIX_AIO],
-  [AC_SEARCH_LIBS([aio_write], [rt])
-   AM_CONDITIONAL([HAVE_POSIX_AIO], [test "$ac_cv_search_aio_write" != no])])
+  [AC_ARG_ENABLE(
+     [posix-aio],
+     [AS_HELP_STRING([--disable-posix-aio],
+                     [Disable POSIX asynchronous I/O for logging])],
+     [case "${enableval}" in
+        (yes) posix_aio=true ;;
+        (no)  posix_aio=false ;;
+        (*) AC_MSG_ERROR([bad value ${enableval} for --enable-posix-aio]) ;;
+      esac],
+     [posix_aio=check])
+
+   if test "$posix_aio" != false; then
+      AC_SEARCH_LIBS([aio_write], [rt])
+   fi
+
+   if test "$posix_aio" = true && test "$ac_cv_search_aio_write" = no; then
+      AC_MSG_ERROR([POSIX AIO support requested, but aio_write not found])
+   fi
+
+   AM_CONDITIONAL([HAVE_POSIX_AIO],
+     [test "$posix_aio" != false && test "$ac_cv_search_aio_write" != no])])
 
 dnl OVS_CHECK_INCLUDE_NEXT
 AC_DEFUN([OVS_CHECK_INCLUDE_NEXT],
