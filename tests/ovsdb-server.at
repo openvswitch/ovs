@@ -935,13 +935,10 @@ AT_CHECK_UNQUOTED(
 ], 
   [ignore])
 # The error message for being unable to negotiate a shared ciphersuite
-# is 'sslv3 alert handshake failure'. This is not the clearest message.
-# In openssl 3.2.0 all the error messages were updated to replace 'sslv3'
-# with 'ssl/tls'.
-AT_CHECK_UNQUOTED(
-  [grep -E "(sslv3|ssl/tls) alert handshake failure" output], [0],
-  [stdout],
-  [ignore])
+# is 'alert handshake failure'.  This is not the clearest message and
+# the exact text around it varies depending on the version of OpenSSL.
+AT_CHECK([grep "alert handshake failure" output], [0], [ignore])
+
 OVSDB_SERVER_SHUTDOWN(["
   /stream_ssl|WARN/d
   /Protocol error/d
