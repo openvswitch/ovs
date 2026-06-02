@@ -103,7 +103,7 @@ the packet itself and others (for example, VLAN tag or Ethernet type) can be
 extracted without fully parsing the packet.  This allows OVS to significantly
 speed up packet forwarding for these flows with simple match criteria.
 Statistics on the number of packets matched in this way can be found in a
-`simple match hits` counter of `ovs-appctl dpif-netdev/pmd-stats-show` command.
+`Simple Match hits` counter of `ovs-appctl dpif-netdev/pmd-perf-show` command.
 
 EMC Insertion Probability
 -------------------------
@@ -127,7 +127,7 @@ If ``N`` is set to 1, an insertion will be performed for every flow. If set to
 With default ``N`` set to 100, higher megaflow hits will occur initially as
 observed with pmd stats::
 
-    $ ovs-appctl dpif-netdev/pmd-stats-show
+    $ ovs-appctl dpif-netdev/pmd-perf-show
 
 For certain traffic profiles with many parallel flows, it's recommended to set
 ``N`` to '0' to achieve higher forwarding performance.

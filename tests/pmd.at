@@ -440,19 +440,12 @@ dummy@ovs-dummy: hit:0 missed:0
     p0 7/1: (dummy-pmd: n_rxq=4, n_txq=1, numa_id=0)
 ])
 
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 11], [0], [dnl
+AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | sed SED_NUMA_CORE_PATTERN \
+            | sed '/cycles/d' | sed '/[[Ii]]teration/d' | grep pmd -A 3], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
-  packets received: 0
-  packet recirculations: 0
-  avg. datapath passes per packet: 0.00
-  phwol hits: 0
-  simple match hits: 0
-  emc hits: 0
-  smc hits: 0
-  megaflow hits: 0
-  avg. subtable lookups per megaflow hit: 0.00
-  miss with success upcall: 0
-  miss with failed upcall: 0
+
+  Rx packets:                    0
+  Tx packets:                    0
 ])
 
 ovs-appctl time/stop
@@ -473,19 +466,22 @@ AT_CHECK([cat ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:77,dst=50:54:00:00:01:78),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 11], [0], [dnl
+AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | sed SED_NUMA_CORE_PATTERN \
+            | sed '/cycles/d' | sed '/[[Ii]]teration/d' \
+            | sed 's/, .* us/, <cleared> us/' \
+            | sed 's/[[0-9]]* Kpps/<cleared> Kpps/' | grep pmd -A 11], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
-  packets received: 20
-  packet recirculations: 0
-  avg. datapath passes per packet: 1.00
-  phwol hits: 0
-  simple match hits: 0
-  emc hits: 19
-  smc hits: 0
-  megaflow hits: 0
-  avg. subtable lookups per megaflow hit: 0.00
-  miss with success upcall: 1
-  miss with failed upcall: 0
+
+  Datapath passes:              20  (1.00 passes/pkt)
+  - PHWOL hits:                  0  (  0.0 %)
+  - Simple Match hits:           0  (  0.0 %)
+  - EMC hits:                   19  ( 95.0 %)
+  - SMC hits:                    0  (  0.0 %)
+  - Megaflow hits:               0  (  0.0 %, 0.00 subtbl lookups/hit)
+  - Upcalls:                     1  (  5.0 %, <cleared> us/upcall)
+  - Lost upcalls:                0  (  0.0 %)
+  Tx packets:                   20  (<cleared> Kpps)
+  Tx batches:                   20  (1.00 pkts/batch)
 ])
 
 OVS_VSWITCHD_STOP

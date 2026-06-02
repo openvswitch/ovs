@@ -316,7 +316,7 @@ void pmd_perf_read_counters(struct pmd_perf_stats *s,
  * NON-PMD they might be updated from multiple threads, but we can live
  * with losing a rare update as 100% accuracy is not required.
  * However, as counters are read for display from outside the PMD thread
- * with e.g. pmd-stats-show, we make sure that the 64-bit read and store
+ * with e.g. pmd-perf-show, we make sure that the 64-bit read and store
  * operations are atomic also on 32-bit systems so that readers cannot
  * not read garbage. On 64-bit systems this incurs no overhead. */
 
@@ -422,7 +422,7 @@ struct pmd_perf_params {
 };
 
 void pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
-                                   double duration);
+                                   double duration, bool format_iterations);
 void pmd_perf_format_histograms(struct ds *str, struct pmd_perf_stats *s);
 void pmd_perf_format_iteration_history(struct ds *str,
                                        struct pmd_perf_stats *s,

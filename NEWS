@@ -9,6 +9,10 @@ Post-v3.7.0
        using the "class=eth,mac=" syntax (though it can be restored via the
        'dpdk-probe-at-init' config option, see ovs-vswitchd.conf.db(5)).
      * OVS validated with DPDK 25.11.2.
+   - ovs-appctl:
+     * 'dpif-netdev/pmd-stats-show' command was removed in favor of the more
+       informative and better structured 'dpif-netdev/pmd-perf-show', which
+       now also provides statistics for the "main" thread.
    - The following deprecated AVX512-specific features of the userspace
      datapath are now removed:
      * AVX512-optimized DPCLS lookups.

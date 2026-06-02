@@ -6,41 +6,22 @@ argument can be omitted. By default the commands present data for all pmd
 threads in the datapath. By specifying the "-pmd Core" option one can filter
 the output for a single pmd in the datapath.
 .
-.IP "\fBdpif-netdev/pmd-stats-show\fR [\fB-pmd\fR \fIcore\fR] [\fIdp\fR]"
-Shows performance statistics for one or all pmd threads of the datapath
-\fIdp\fR. The special thread "main" sums up the statistics of every non pmd
-thread.
-
-The sum of "phwol hits", "simple match hits", "emc hits", "smc hits",
-"megaflow hits" and "miss" is the number of packet lookups performed by the
-datapath. Beware that a recirculated packet experiences one additional lookup
-per recirculation, so there may be more lookups than forwarded packets in the
-datapath.
-
-Cycles are counted using the TSC or similar facilities (when available on
-the platform). The duration of one cycle depends on the processing platform.
-
-"idle cycles" refers to cycles spent in PMD iterations not forwarding any
-any packets. "processing cycles" refers to cycles spent in PMD iterations
-forwarding at least one packet, including the cost for polling, processing and
-transmitting said packets.
-
-To reset these counters use \fBdpif-netdev/pmd-stats-clear\fR.
-.
 .IP "\fBdpif-netdev/pmd-stats-clear\fR [\fIdp\fR]"
 Resets to zero the per pmd thread performance numbers shown by the
-\fBdpif-netdev/pmd-stats-show\fR and \fBdpif-netdev/pmd-perf-show\fR commands.
-It will NOT reset datapath or bridge statistics, only the values shown by
-the above commands.
+\fBdpif-netdev/pmd-perf-show\fR command.  It will NOT reset datapath or bridge
+statistics, only the values shown by the above command.
 .
 .IP "\fBdpif-netdev/pmd-perf-show\fR [\fB-nh\fR] [\fB-it\fR \fIiter_len\fR] \
 [\fB-ms\fR \fIms_len\fR] [\fB-pmd\fR \fIcore\fR] [\fIdp\fR]"
 Shows detailed performance metrics for one or all pmds threads of the
-user space datapath.
+user space datapath.  The special thread "main" sums up the statistics of every
+non pmd thread.
 
-The collection of detailed statistics can be controlled by a new
-configuration parameter "other_config:pmd-perf-metrics". By default it
-is disabled. The run-time overhead, when enabled, is in the order of 1%.
+The collection of additional detailed statistics can be controlled by a
+configuration parameter \fBother-config:pmd-perf-metrics\fR.  By default it is
+disabled.  The run-time overhead, when enabled, is in the order of 1%.
+
+Collected statistics include:
 
 .RS
 .IP
@@ -149,8 +130,26 @@ pmd thread numa_id 0 core_id 1:
 .RE
 .IP
 Here "Rx packets" actually reflects the number of packets forwarded by the
-datapath. "Datapath passes" matches the number of packet lookups as
-reported by the \fBdpif-netdev/pmd-stats-show\fR command.
+datapath.
+
+The sum of "PHWOL hits", "Simple Match hits", "EMC hits", "SMC hits",
+"Megaflow hits" and "Upcalls" is the number of packet lookups performed by the
+datapath and it is reported as "Datapath passes".  Beware that a recirculated
+packet experiences one additional lookup per recirculation, so there may be
+more lookups than forwarded packets in the datapath.
+
+The "MFEX Opt hits" displays the number of packets that are processed by the
+optimized miniflow extract implementations.
+
+Cycles are counted using the TSC or similar facilities (when available on
+the platform).  The duration of one cycle depends on the processing platform.
+Statistics based on cycles are not reported for the "main" thread, since the
+accurate accounting of CPU cycles is not possible in this case.
+
+"idle iterations" refers to PMD iterations that did not result in processing
+any packets.  "busy iterations" refers to PMD iterations that included
+processing of at least one packet.  The reported used TSC cycles include the
+cost for polling, processing and transmitting said packets.
 
 To reset the counters and start a new measurement use
 \fBdpif-netdev/pmd-stats-clear\fR.

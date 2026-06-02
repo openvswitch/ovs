@@ -144,8 +144,8 @@ AT_CHECK([ovs-appctl dpctl/dump-flows type=dpdk,partially-offloaded \
 in_port(2),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:954, used:0.0s, actions:check_pkt_len(size=200,gt(4),le(5)),3
 ])
 
-AT_CHECK([test $(ovs-appctl dpif-netdev/pmd-stats-show | \
-                 awk '/phwol hits:/ {sum += $3} END {print sum}') -ge 8])
+AT_CHECK([test $(ovs-appctl dpif-netdev/pmd-perf-show | \
+                 awk '/PHWOL hits:/ {sum += $4} END {print sum}') -ge 8])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -216,8 +216,8 @@ OVS_WAIT_UNTIL_EQUAL(
 in_port(ovs-p0),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:50, bytes:3000, used:0.0s, actions:ovs-p1
 in_port(ovs-p1),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:50, bytes:3000, used:0.0s, actions:ovs-p0])
 
-AT_CHECK([test $(ovs-appctl dpif-netdev/pmd-stats-show | \
-              awk '/packets received:/ {sum += $3} END {print sum}') -lt 10])
+AT_CHECK([test $(ovs-appctl dpif-netdev/pmd-perf-show | \
+              awk '/Rx packets:/ {sum += $3} END {print sum}') -lt 10])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP

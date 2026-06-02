@@ -620,8 +620,7 @@ get_dp_netdev(const struct dpif *dpif)
 }
 
 enum pmd_info_type {
-    PMD_INFO_SHOW_STATS,  /* Show how cpu cycles are spent. */
-    PMD_INFO_CLEAR_STATS, /* Set the cycles count to 0. */
+    PMD_INFO_CLEAR_STATS, /* Set the cycle and the packet counters to 0. */
     PMD_INFO_SHOW_RXQ,    /* Show poll lists of pmd threads. */
     PMD_INFO_PERF_SHOW,   /* Show pmd performance details. */
     PMD_INFO_SLEEP_SHOW,  /* Show max sleep configuration details. */
@@ -642,124 +641,42 @@ format_pmd_thread(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
 }
 
 static void
-pmd_info_show_stats(struct ds *reply,
-                    struct dp_netdev_pmd_thread *pmd)
-{
-    uint64_t stats[PMD_N_STATS];
-    uint64_t total_cycles, total_packets;
-    double passes_per_pkt = 0;
-    double lookups_per_hit = 0;
-    double packets_per_batch = 0;
-
-    pmd_perf_read_counters(&pmd->perf_stats, stats);
-    total_cycles = stats[PMD_CYCLES_ITER_IDLE]
-                         + stats[PMD_CYCLES_ITER_BUSY];
-    total_packets = stats[PMD_STAT_RECV];
-
-    format_pmd_thread(reply, pmd);
-
-    if (total_packets > 0) {
-        passes_per_pkt = (total_packets + stats[PMD_STAT_RECIRC])
-                            / (double) total_packets;
-    }
-    if (stats[PMD_STAT_MASKED_HIT] > 0) {
-        lookups_per_hit = stats[PMD_STAT_MASKED_LOOKUP]
-                            / (double) stats[PMD_STAT_MASKED_HIT];
-    }
-    if (stats[PMD_STAT_SENT_BATCHES] > 0) {
-        packets_per_batch = stats[PMD_STAT_SENT_PKTS]
-                            / (double) stats[PMD_STAT_SENT_BATCHES];
-    }
-
-    ds_put_format(reply,
-                  "  packets received: %"PRIu64"\n"
-                  "  packet recirculations: %"PRIu64"\n"
-                  "  avg. datapath passes per packet: %.02f\n"
-                  "  phwol hits: %"PRIu64"\n"
-                  "  simple match hits: %"PRIu64"\n"
-                  "  emc hits: %"PRIu64"\n"
-                  "  smc hits: %"PRIu64"\n"
-                  "  megaflow hits: %"PRIu64"\n"
-                  "  avg. subtable lookups per megaflow hit: %.02f\n"
-                  "  miss with success upcall: %"PRIu64"\n"
-                  "  miss with failed upcall: %"PRIu64"\n"
-                  "  avg. packets per output batch: %.02f\n",
-                  total_packets, stats[PMD_STAT_RECIRC],
-                  passes_per_pkt, stats[PMD_STAT_PHWOL_HIT],
-                  stats[PMD_STAT_SIMPLE_HIT],
-                  stats[PMD_STAT_EXACT_HIT],
-                  stats[PMD_STAT_SMC_HIT],
-                  stats[PMD_STAT_MASKED_HIT],
-                  lookups_per_hit, stats[PMD_STAT_MISS], stats[PMD_STAT_LOST],
-                  packets_per_batch);
-
-    if (total_cycles == 0) {
-        return;
-    }
-
-    ds_put_format(reply,
-                  "  idle cycles: %"PRIu64" (%.02f%%)\n"
-                  "  processing cycles: %"PRIu64" (%.02f%%)\n",
-                  stats[PMD_CYCLES_ITER_IDLE],
-                  stats[PMD_CYCLES_ITER_IDLE] / (double) total_cycles * 100,
-                  stats[PMD_CYCLES_ITER_BUSY],
-                  stats[PMD_CYCLES_ITER_BUSY] / (double) total_cycles * 100);
-
-    if (total_packets == 0) {
-        return;
-    }
-
-    ds_put_format(reply,
-                  "  avg cycles per packet: %.02f (%"PRIu64"/%"PRIu64")\n",
-                  total_cycles / (double) total_packets,
-                  total_cycles, total_packets);
-
-    ds_put_format(reply,
-                  "  avg processing cycles per packet: "
-                  "%.02f (%"PRIu64"/%"PRIu64")\n",
-                  stats[PMD_CYCLES_ITER_BUSY] / (double) total_packets,
-                  stats[PMD_CYCLES_ITER_BUSY], total_packets);
-}
-
-static void
 pmd_info_show_perf(struct ds *reply,
                    struct dp_netdev_pmd_thread *pmd,
                    struct pmd_perf_params *par)
 {
-    if (pmd->core_id != NON_PMD_CORE_ID) {
-        char *time_str =
-                xastrftime_msec("%H:%M:%S.###", time_wall_msec(), true);
-        long long now = time_msec();
-        double duration = (now - pmd->perf_stats.start_ms) / 1000.0;
+    char *time_str = xastrftime_msec("%H:%M:%S.###", time_wall_msec(), true);
+    long long now = time_msec();
+    double duration = (now - pmd->perf_stats.start_ms) / 1000.0;
 
-        ds_put_cstr(reply, "\n");
-        ds_put_format(reply, "Time: %s\n", time_str);
-        ds_put_format(reply, "Measurement duration: %.3f s\n", duration);
-        ds_put_cstr(reply, "\n");
-        format_pmd_thread(reply, pmd);
-        ds_put_cstr(reply, "\n");
-        pmd_perf_format_overall_stats(reply, &pmd->perf_stats, duration);
-        if (pmd_perf_metrics_enabled(pmd)) {
-            /* Prevent parallel clearing of perf metrics. */
-            ovs_mutex_lock(&pmd->perf_stats.clear_mutex);
-            if (par->histograms) {
-                ds_put_cstr(reply, "\n");
-                pmd_perf_format_histograms(reply, &pmd->perf_stats);
-            }
-            if (par->iter_hist_len > 0) {
-                ds_put_cstr(reply, "\n");
-                pmd_perf_format_iteration_history(reply, &pmd->perf_stats,
-                        par->iter_hist_len);
-            }
-            if (par->ms_hist_len > 0) {
-                ds_put_cstr(reply, "\n");
-                pmd_perf_format_ms_history(reply, &pmd->perf_stats,
-                        par->ms_hist_len);
-            }
-            ovs_mutex_unlock(&pmd->perf_stats.clear_mutex);
+    ds_put_cstr(reply, "\n");
+    ds_put_format(reply, "Time: %s\n", time_str);
+    ds_put_format(reply, "Measurement duration: %.3f s\n", duration);
+    ds_put_cstr(reply, "\n");
+    format_pmd_thread(reply, pmd);
+    ds_put_cstr(reply, "\n");
+    pmd_perf_format_overall_stats(reply, &pmd->perf_stats, duration,
+                                  pmd->core_id != NON_PMD_CORE_ID);
+    if (pmd_perf_metrics_enabled(pmd) && pmd->core_id != NON_PMD_CORE_ID) {
+        /* Prevent parallel clearing of perf metrics. */
+        ovs_mutex_lock(&pmd->perf_stats.clear_mutex);
+        if (par->histograms) {
+            ds_put_cstr(reply, "\n");
+            pmd_perf_format_histograms(reply, &pmd->perf_stats);
         }
-        free(time_str);
+        if (par->iter_hist_len > 0) {
+            ds_put_cstr(reply, "\n");
+            pmd_perf_format_iteration_history(reply, &pmd->perf_stats,
+                    par->iter_hist_len);
+        }
+        if (par->ms_hist_len > 0) {
+            ds_put_cstr(reply, "\n");
+            pmd_perf_format_ms_history(reply, &pmd->perf_stats,
+                    par->ms_hist_len);
+        }
+        ovs_mutex_unlock(&pmd->perf_stats.clear_mutex);
     }
+    free(time_str);
 }
 
 static int
@@ -1050,8 +967,6 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
             pmd_info_show_rxq(&reply, pmd, secs);
         } else if (type == PMD_INFO_CLEAR_STATS) {
             pmd_perf_stats_clear(&pmd->perf_stats);
-        } else if (type == PMD_INFO_SHOW_STATS) {
-            pmd_info_show_stats(&reply, pmd);
         } else if (type == PMD_INFO_PERF_SHOW) {
             pmd_info_show_perf(&reply, pmd, (struct pmd_perf_params *)aux);
         } else if (type == PMD_INFO_SLEEP_SHOW) {
@@ -1161,14 +1076,10 @@ dpif_netdev_bond_show(struct unixctl_conn *conn, int argc,
 static int
 dpif_netdev_init(void)
 {
-    static enum pmd_info_type show_aux = PMD_INFO_SHOW_STATS,
-                              clear_aux = PMD_INFO_CLEAR_STATS,
+    static enum pmd_info_type clear_aux = PMD_INFO_CLEAR_STATS,
                               poll_aux = PMD_INFO_SHOW_RXQ,
                               sleep_aux = PMD_INFO_SLEEP_SHOW;
 
-    unixctl_command_register("dpif-netdev/pmd-stats-show", "[-pmd core] [dp]",
-                             0, 3, dpif_netdev_pmd_info,
-                             (void *)&show_aux);
     unixctl_command_register("dpif-netdev/pmd-stats-clear", "[-pmd core] [dp]",
                              0, 3, dpif_netdev_pmd_info,
                              (void *)&clear_aux);
@@ -1185,6 +1096,10 @@ dpif_netdev_init(void)
                              " [-pmd core] [dp]",
                              0, 8, pmd_perf_show_cmd,
                              NULL);
+    /* 'pmd-stats-show' is just an undocumented alias for 'pmd-perf-show',
+     * for compatibility with old muscle memory. */
+    unixctl_command_register("dpif-netdev/pmd-stats-show", NULL,
+                             0, 8, pmd_perf_show_cmd, NULL);
     unixctl_command_register("dpif-netdev/pmd-rxq-rebalance", "[dp]",
                              0, 1, dpif_netdev_pmd_rebalance,
                              NULL);

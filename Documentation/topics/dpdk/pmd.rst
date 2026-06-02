@@ -57,10 +57,6 @@ PMD Thread Statistics
 
 To show current stats::
 
-    $ ovs-appctl dpif-netdev/pmd-stats-show
-
-or::
-
     $ ovs-appctl dpif-netdev/pmd-perf-show
 
 Detailed performance metrics for ``pmd-perf-show`` can also be enabled::

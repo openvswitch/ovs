@@ -685,7 +685,7 @@ level:
 
 The average number of packets per output batch can be checked in PMD stats::
 
-    $ ovs-appctl dpif-netdev/pmd-stats-show
+    $ ovs-appctl dpif-netdev/pmd-perf-show
 
 Limitations
 ------------

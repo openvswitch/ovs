@@ -1207,32 +1207,32 @@ AT_CHECK([cat good_frame | sed -e "s/6b72/dead/" > bad_frame])
 
 CHECK_FWD_PACKET(p1, p2, , [bad_frame], [bad_frame])
 dnl First packet, no simple matching.
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0], [dnl
-  simple match hits: 0
+AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | grep 'Simple Match hits'], [0], [dnl
+  - Simple Match hits:           0  (  0.0 %)
 ])
 
 dnl No Rx flag.
 CHECK_FWD_PACKET(p1, p2, , [bad_frame], [bad_frame])
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0], [dnl
-  simple match hits: 1
+AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | grep 'Simple Match hits'], [0], [dnl
+  - Simple Match hits:           1  ( 50.0 %)
 ])
 
 dnl Flag as Rx good.
 CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [bad_frame])
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0], [dnl
-  simple match hits: 2
+AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | grep 'Simple Match hits'], [0], [dnl
+  - Simple Match hits:           2  ( 66.7 %)
 ])
 
 dnl Flag as Rx bad.
 CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_bad, [bad_frame], [bad_frame])
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0], [dnl
-  simple match hits: 3
+AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | grep 'Simple Match hits'], [0], [dnl
+  - Simple Match hits:           3  ( 75.0 %)
 ])
 
 dnl Flag as Rx partial.
 CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_partial, [bad_frame], [good_frame])
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | grep 'simple match hits'], [0], [dnl
-  simple match hits: 4
+AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | grep 'Simple Match hits'], [0], [dnl
+  - Simple Match hits:           4  ( 80.0 %)
 ])
 
 OVS_VSWITCHD_STOP

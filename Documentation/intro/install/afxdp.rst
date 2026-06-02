@@ -273,7 +273,7 @@ Measure your system call rate by doing::
 
 Or, use OVS pmd tool::
 
-  ovs-appctl dpif-netdev/pmd-stats-show
+  ovs-appctl dpif-netdev/pmd-perf-show
 
 
 Example Script
