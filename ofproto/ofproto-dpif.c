@@ -2811,12 +2811,20 @@ set_rstp(struct ofproto *ofproto_, const struct ofproto_rstp_settings *s)
         rstp_set_bridge_transmit_hold_count(ofproto->rstp,
                                             s->transmit_hold_count);
     } else {
+        struct ofbundle *bundle;
         struct ofport *ofport;
+
         HMAP_FOR_EACH (ofport, hmap_node, &ofproto->up.ports) {
             set_rstp_port(ofport, NULL);
         }
         rstp_unref(ofproto->rstp);
         ofproto->rstp = NULL;
+
+        /* Now that ofproto no longer has RSTP configured, bundles need to
+         * have their 'floodable' states updated. */
+        HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+            bundle_update(bundle);
+        }
     }
 }
 
@@ -2955,6 +2963,7 @@ set_stp(struct ofproto *ofproto_, const struct ofproto_stp_settings *s)
         stp_set_max_age(ofproto->stp, s->max_age);
         stp_set_forward_delay(ofproto->stp, s->fwd_delay);
     }  else {
+        struct ofbundle *bundle;
         struct ofport *ofport;
 
         HMAP_FOR_EACH (ofport, hmap_node, &ofproto->up.ports) {
@@ -2963,6 +2972,12 @@ set_stp(struct ofproto *ofproto_, const struct ofproto_stp_settings *s)
 
         stp_unref(ofproto->stp);
         ofproto->stp = NULL;
+
+        /* Now that ofproto no longer has STP configured, bundles need to
+         * have their 'floodable' states updated. */
+        HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+            bundle_update(bundle);
+        }
     }
 
     return 0;
