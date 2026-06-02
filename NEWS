@@ -8,6 +8,7 @@ Post-v3.7.0
        wasting resources on unused devices. This breaks DPDK netdev ports
        using the "class=eth,mac=" syntax (though it can be restored via the
        'dpdk-probe-at-init' config option, see ovs-vswitchd.conf.db(5)).
+     * OVS validated with DPDK 25.11.2.
    - The following deprecated AVX512-specific features of the userspace
      datapath are now removed:
      * AVX512-optimized DPCLS lookups.
