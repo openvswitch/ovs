@@ -36,6 +36,7 @@
 #include "coverage.h"
 #include "csum.h"
 #include "dp-packet.h"
+#include "dpif-offload.h"
 #include "netdev.h"
 #include "netdev-vport.h"
 #include "netdev-vport-private.h"
@@ -301,6 +302,7 @@ tnl_ol_pop(struct dp_packet *packet, int off)
 
 void
 netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
+                           const struct netdev *ingress_netdev,
                            struct dp_packet *packet,
                            const struct ovs_action_push_tnl *data)
 {
@@ -312,7 +314,10 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
 
     /* We may need to re-calculate the hash and this has to be done before
      * modifying the packet. */
-    udp_src = netdev_tnl_get_src_port(packet);
+    if (!ingress_netdev || !dpif_offload_netdev_udp_tnl_get_src_port(
+                               ingress_netdev, packet, &udp_src)) {
+        udp_src = netdev_tnl_get_src_port(packet);
+    }
 
     tnl_ol_push(packet, data);
     udp = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
@@ -532,6 +537,7 @@ err:
 
 void
 netdev_gre_push_header(const struct netdev *netdev,
+                       const struct netdev *ingress_netdev OVS_UNUSED,
                        struct dp_packet *packet,
                        const struct ovs_action_push_tnl *data)
 {
@@ -695,6 +701,7 @@ err:
 
 void
 netdev_erspan_push_header(const struct netdev *netdev,
+                          const struct netdev *ingress_netdev OVS_UNUSED,
                           struct dp_packet *packet,
                           const struct ovs_action_push_tnl *data)
 {
@@ -868,6 +875,7 @@ err:
 
 void
 netdev_gtpu_push_header(const struct netdev *netdev,
+                        const struct netdev *ingress_netdev OVS_UNUSED,
                         struct dp_packet *packet,
                         const struct ovs_action_push_tnl *data)
 {
@@ -1001,6 +1009,7 @@ netdev_srv6_build_header(const struct netdev *netdev,
 
 void
 netdev_srv6_push_header(const struct netdev *netdev OVS_UNUSED,
+                        const struct netdev *ingress_netdev OVS_UNUSED,
                         struct dp_packet *packet,
                         const struct ovs_action_push_tnl *data)
 {

@@ -995,6 +995,7 @@ int netdev_build_header(const struct netdev *netdev,
  * that netdev_has_tunnel_push_pop() returns true. */
 int
 netdev_push_header(const struct netdev *netdev,
+                   const struct netdev *ingress_netdev,
                    struct dp_packet_batch *batch,
                    const struct ovs_action_push_tnl *data)
 {
@@ -1030,7 +1031,8 @@ netdev_push_header(const struct netdev *netdev,
                 }
                 dp_packet_ol_send_prepare(packet, 0);
             }
-            netdev->netdev_class->push_header(netdev, packet, data);
+            netdev->netdev_class->push_header(netdev, ingress_netdev, packet,
+                                              data);
 
             pkt_metadata_init(&packet->md, data->out_port);
             dp_packet_batch_refill(batch, packet, i);

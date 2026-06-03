@@ -336,8 +336,13 @@ struct netdev_class {
     /* build_header() can not build entire header for all packets for given
      * flow.  Push header is called for packet to build header specific to
      * a packet on actual transmit.  It uses partial header build by
-     * build_header() which is passed as data. */
-    void (*push_header)(const struct netdev *,
+     * build_header() which is passed as data.
+     *
+     * The 'ingress_netdev' points to the original ingress netdev for the
+     * 'packet'.  This variable is valid only if hardware offload is enabled;
+     * otherwise, it will be NULL. */
+    void (*push_header)(const struct netdev *netdev,
+                        const struct netdev *ingress_netdev,
                         struct dp_packet *packet,
                         const struct ovs_action_push_tnl *data);
 

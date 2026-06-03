@@ -275,6 +275,19 @@ struct dpif_offload_class {
                                   unsigned pmd_id, struct dp_packet *,
                                   void **flow_reference);
 
+    /* Allows the offload provider to override the default UDP tunnel source
+     * port selection.  Called during tunnel encapsulation to determine the
+     * source port for UDP-based tunnels (VXLAN, Geneve, etc.).
+     *
+     * If implemented, should return true and set 'src_port' to the desired
+     * source port value.  If not implemented or if default behavior is
+     * desired, should return false to use the standard source port
+     * calculation. */
+    bool (*netdev_udp_tnl_get_src_port)(const struct dpif_offload *,
+                                        const struct netdev *ingress_netdev,
+                                        struct dp_packet *packet,
+                                        ovs_be16 *src_port);
+
     /* Add or modify the specified flow directly in the offload datapath.
      * The actual implementation may choose to handle the offload
      * asynchronously by returning EINPROGRESS and invoking the supplied

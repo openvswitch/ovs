@@ -22,6 +22,7 @@
 #include "dpif-offload-provider.h"
 #include "dummy.h"
 #include "id-fpool.h"
+#include "netdev-native-tnl.h"
 #include "netdev-provider.h"
 #include "odp-util.h"
 #include "util.h"
@@ -610,6 +611,35 @@ dummy_offload_hw_post_process(const struct dpif_offload *offload_,
     return 0;
 }
 
+static ovs_be16
+dummy_offload_udp_tnl_get_src_port__(struct dp_packet *packet)
+{
+    /* Use FNV-1a hash to ensure consistent results across all platforms.  The
+     * standard OVS hash functions have architecture-specific implementations
+     * (SSE4.2, ARM64 optimizations, etc.) that produce different outputs for
+     * identical inputs, making tests non-deterministic. */
+    const uint8_t *data = dp_packet_data(packet);
+    size_t len = dp_packet_size(packet);
+    uint32_t hash = 2166136261U;
+    uint32_t prime = 16777619U;
+
+    for (size_t i = 0; i < len; i++) {
+        hash ^= data[i];
+        hash *= prime;
+    }
+    return htons((uint16_t) hash);
+}
+
+static bool
+dummy_offload_udp_tnl_get_src_port(
+    const struct dpif_offload *offload OVS_UNUSED,
+    const struct netdev *ingress_netdev OVS_UNUSED,
+    struct dp_packet *packet, ovs_be16 *src_port)
+{
+    *src_port = dummy_offload_udp_tnl_get_src_port__(packet);
+    return true;
+}
+
 static bool
 dummy_offload_are_all_actions_supported(const struct dpif_offload *offload_,
                                         odp_port_t in_odp,
@@ -628,7 +658,10 @@ dummy_offload_are_all_actions_supported(const struct dpif_offload *offload_,
      * that they provide full protection when calling netdev_send() from any
      * thread, via a netdev-level mutex. */
     NL_ATTR_FOR_EACH (nla, left, actions, actions_len) {
-        if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
+        enum ovs_action_attr action = nl_attr_type(nla);
+
+        switch (action) {
+        case OVS_ACTION_ATTR_OUTPUT: {
             odp_port_t out_odp = nl_attr_get_odp_port(nla);
             struct dummy_offload_port *out_port;
 
@@ -638,7 +671,49 @@ dummy_offload_are_all_actions_supported(const struct dpif_offload *offload_,
                           netdev_get_type(out_port->pm_port.netdev))) {
                 return false;
             }
-        } else {
+            break;
+        }
+
+        case OVS_ACTION_ATTR_TUNNEL_PUSH: {
+            /* We only support UDP tunnels, i.e. VXLAN and Geneve. */
+            const struct ovs_action_push_tnl *data = nl_attr_get(nla);
+
+            if (data->tnl_type != OVS_VPORT_TYPE_VXLAN
+                && data->tnl_type != OVS_VPORT_TYPE_GENEVE) {
+                return false;
+            }
+            break;
+        }
+
+        case OVS_ACTION_ATTR_UNSPEC:
+        case OVS_ACTION_ATTR_USERSPACE:
+        case OVS_ACTION_ATTR_SET:
+        case OVS_ACTION_ATTR_PUSH_VLAN:
+        case OVS_ACTION_ATTR_POP_VLAN:
+        case OVS_ACTION_ATTR_SAMPLE:
+        case OVS_ACTION_ATTR_RECIRC:
+        case OVS_ACTION_ATTR_HASH:
+        case OVS_ACTION_ATTR_PUSH_MPLS:
+        case OVS_ACTION_ATTR_POP_MPLS:
+        case OVS_ACTION_ATTR_SET_MASKED:
+        case OVS_ACTION_ATTR_CT:
+        case OVS_ACTION_ATTR_TRUNC:
+        case OVS_ACTION_ATTR_PUSH_ETH:
+        case OVS_ACTION_ATTR_POP_ETH:
+        case OVS_ACTION_ATTR_CT_CLEAR:
+        case OVS_ACTION_ATTR_PUSH_NSH:
+        case OVS_ACTION_ATTR_POP_NSH:
+        case OVS_ACTION_ATTR_METER:
+        case OVS_ACTION_ATTR_CLONE:
+        case OVS_ACTION_ATTR_CHECK_PKT_LEN:
+        case OVS_ACTION_ATTR_ADD_MPLS:
+        case OVS_ACTION_ATTR_DEC_TTL:
+        case OVS_ACTION_ATTR_DROP:
+        case OVS_ACTION_ATTR_PSAMPLE:
+        case OVS_ACTION_ATTR_TUNNEL_POP:
+        case OVS_ACTION_ATTR_LB_OUTPUT:
+        case __OVS_ACTION_ATTR_MAX:
+        default:
             return false;
         }
     }
@@ -661,8 +736,10 @@ dummy_offload_hw_process_pkt(const struct dpif_offload *offload_,
 
     NL_ATTR_FOR_EACH (nla, left, flow->actions, flow->actions_len) {
         bool last_action = (left <= NLA_ALIGN(nla->nla_len));
+        enum ovs_action_attr action = nl_attr_type(nla);
 
-        if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
+        switch (action) {
+        case OVS_ACTION_ATTR_OUTPUT: {
             odp_port_t odp_port = nl_attr_get_odp_port(nla);
             struct dummy_offload_port *port;
             struct dp_packet_batch batch;
@@ -681,6 +758,55 @@ dummy_offload_hw_process_pkt(const struct dpif_offload *offload_,
              * for now we assume hash steering based on the number of queues
              * configured for the dummy-netdev. */
             netdev_send(port->pm_port.netdev, hash % n_txq, &batch, false);
+            break;
+        }
+        case OVS_ACTION_ATTR_TUNNEL_PUSH: {
+            const struct ovs_action_push_tnl *data = nl_attr_get(nla);
+            struct udp_header *udp;
+            struct flow ovs_flow;
+            ovs_be16 src_port;
+
+            src_port = dummy_offload_udp_tnl_get_src_port__(pkt);
+            netdev_tnl_push_udp_header(NULL, NULL, pkt, data);
+
+            flow_extract(pkt, &ovs_flow);
+            udp = dp_packet_l4(pkt);
+            ovs_assert(ovs_flow.nw_proto == IPPROTO_UDP && udp);
+
+            udp->udp_src = src_port;
+            break;
+        }
+
+        case OVS_ACTION_ATTR_UNSPEC:
+        case OVS_ACTION_ATTR_USERSPACE:
+        case OVS_ACTION_ATTR_SET:
+        case OVS_ACTION_ATTR_PUSH_VLAN:
+        case OVS_ACTION_ATTR_POP_VLAN:
+        case OVS_ACTION_ATTR_SAMPLE:
+        case OVS_ACTION_ATTR_RECIRC:
+        case OVS_ACTION_ATTR_HASH:
+        case OVS_ACTION_ATTR_PUSH_MPLS:
+        case OVS_ACTION_ATTR_POP_MPLS:
+        case OVS_ACTION_ATTR_SET_MASKED:
+        case OVS_ACTION_ATTR_CT:
+        case OVS_ACTION_ATTR_TRUNC:
+        case OVS_ACTION_ATTR_PUSH_ETH:
+        case OVS_ACTION_ATTR_POP_ETH:
+        case OVS_ACTION_ATTR_CT_CLEAR:
+        case OVS_ACTION_ATTR_PUSH_NSH:
+        case OVS_ACTION_ATTR_POP_NSH:
+        case OVS_ACTION_ATTR_METER:
+        case OVS_ACTION_ATTR_CLONE:
+        case OVS_ACTION_ATTR_CHECK_PKT_LEN:
+        case OVS_ACTION_ATTR_ADD_MPLS:
+        case OVS_ACTION_ATTR_DEC_TTL:
+        case OVS_ACTION_ATTR_DROP:
+        case OVS_ACTION_ATTR_PSAMPLE:
+        case OVS_ACTION_ATTR_TUNNEL_POP:
+        case OVS_ACTION_ATTR_LB_OUTPUT:
+        case __OVS_ACTION_ATTR_MAX:
+        default:
+            OVS_NOT_REACHED();
         }
     }
 
@@ -1035,6 +1161,7 @@ dummy_netdev_hw_offload_run(struct netdev *netdev)
         .port_del = dummy_offload_port_del,                                 \
         .get_netdev = dummy_offload_get_netdev,                             \
         .netdev_hw_post_process = dummy_offload_hw_post_process,            \
+        .netdev_udp_tnl_get_src_port = dummy_offload_udp_tnl_get_src_port,  \
         .netdev_flow_put = dummy_flow_put,                                  \
         .netdev_flow_del = dummy_flow_del,                                  \
         .netdev_flow_stats = dummy_flow_stats,                              \

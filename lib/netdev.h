@@ -259,6 +259,7 @@ int netdev_build_header(const struct netdev *, struct ovs_action_push_tnl *data,
                         const struct netdev_tnl_build_header_params *params);
 
 int netdev_push_header(const struct netdev *netdev,
+                       const struct netdev *ingress_netdev,
                        struct dp_packet_batch *,
                        const struct ovs_action_push_tnl *data);
 void netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *);

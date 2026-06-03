@@ -1463,6 +1463,25 @@ dpif_offload_netdev_hw_post_process(struct netdev *netdev, unsigned pmd_id,
     return rc;
 }
 
+bool
+dpif_offload_netdev_udp_tnl_get_src_port(const struct netdev *ingress_netdev,
+                                         struct dp_packet *packet,
+                                         ovs_be16 *src_port)
+{
+    const struct dpif_offload *offload;
+
+    offload = ovsrcu_get(const struct dpif_offload *,
+                         &ingress_netdev->dpif_offload);
+
+    if (OVS_UNLIKELY(!offload)
+        || !offload->class->netdev_udp_tnl_get_src_port) {
+        return false;
+    }
+
+    return offload->class->netdev_udp_tnl_get_src_port(offload, ingress_netdev,
+                                                       packet, src_port);
+}
+
 void
 dpif_offload_datapath_register_flow_unreference_cb(
     struct dpif *dpif, dpif_offload_flow_unreference_cb *cb)

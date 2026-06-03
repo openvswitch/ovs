@@ -7899,8 +7899,9 @@ push_tnl_action(const struct dp_netdev_pmd_thread *pmd,
                 const struct nlattr *attr,
                 struct dp_packet_batch *batch)
 {
-    struct tx_port *tun_port;
+    const struct netdev *ingress_netdev = NULL;
     const struct ovs_action_push_tnl *data;
+    struct tx_port *tun_port;
     int err;
 
     data = nl_attr_get(attr);
@@ -7910,7 +7911,20 @@ push_tnl_action(const struct dp_netdev_pmd_thread *pmd,
         err = -EINVAL;
         goto error;
     }
-    err = netdev_push_header(tun_port->port->netdev, batch, data);
+
+    if (dpif_offload_enabled() && !dp_packet_batch_is_empty(batch)) {
+        /* To avoid multiple port lookups per batch, assume that all packets
+         * in the batch originate from the same flow and therefore share the
+         * same original input port. */
+        struct tx_port *in_port = pmd_send_port_cache_lookup(
+                                      pmd, batch->packets[0]->md.orig_in_port);
+        if (in_port) {
+            ingress_netdev = in_port->port->netdev;
+        }
+    }
+
+    err = netdev_push_header(tun_port->port->netdev, ingress_netdev, batch,
+                             data);
     if (!err) {
         return 0;
     }

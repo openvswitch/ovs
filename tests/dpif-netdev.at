@@ -77,6 +77,17 @@ strip_metadata () {
 ]
 m4_divert_pop([PREPARE_TESTS])
 
+m4_define([CHECK_FWD_PACKET],
+  [m4_if([$3], [], [], [AT_CHECK([ovs-vsctl set interface $1 options:$3=true])])
+   AT_CHECK([ovs-appctl netdev-dummy/receive $1 $(cat $4)])
+   m4_if([$5], [none], [], [
+     AT_CHECK([awk 1 $5 > expout]) dnl Also normalizes the line endings.
+     AT_CHECK([ovs-pcap $2.pcap > $2.pcap.txt 2>&1])
+     AT_CHECK([tail -n 1 $2.pcap.txt], [0], [expout])
+   ])
+   m4_if([$3], [], [], [AT_CHECK([ovs-vsctl remove interface $1 options $3])])
+])
+
 AT_SETUP([dpif-netdev - netdev-dummy/receive])
 # Create br0 with interfaces p0
 OVS_VSWITCHD_START([add-port br0 p1 -- set interface p1 type=dummy ofport_request=1 -- ])
@@ -761,6 +772,85 @@ rx_offload_pipe_abort:1
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([dpif-netdev - full hw offload - tunnel entropy - dummy-pmd])
+OVS_VSWITCHD_START(
+  [add-br br1 -- set bridge br1 datapath-type=dummy -- \
+   add-port br1 p1 -- \
+       set Interface p1 type=dummy-pmd -- \
+   add-br br2 -- set bridge br2 datapath-type=dummy -- \
+       set bridge br2 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   add-port br2 p2 -- \
+       set Interface p2 type=dummy-pmd], [], [], [--dummy-numa 0])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
+OVS_WAIT_UNTIL([grep "Flow HW offload is enabled" ovs-vswitchd.log])
+
+AT_CHECK([ovs-vsctl add-port br1 t1 \
+                    -- set Interface t1 type=vxlan \
+                       options:remote_ip=1.1.2.92 options:key=123 \
+                       options:csum=false ofport_request=11], [0])
+AT_CHECK([ovs-ofctl add-flow br1 in_port=p1,actions=mod_nw_dst:192.168.1.1,output:11])
+
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br2 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl tnl/neigh/set br2 1.1.2.92 aa:66:aa:66:00:01], [0], [OK
+])
+AT_CHECK([ovs-appctl tnl/egress_port_range 57363 57363], [0], [OK
+])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg \
+            dpif_offload_dummy:file:dbg netdev_dummy:file:dbg])
+
+AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap])
+
+dnl ICMPv6.
+AT_DATA([ndp_frame], m4_join([],
+dnl p = Ether(src='04:bf:1b:d8:2d:2d', dst='33:33:ff:00:00:01')
+[3333ff00000104bf1bd82d2d86dd],
+dnl p /= IPv6(src='fe80::2', dst='ff02::1:ff00:1')
+[6000000000203afffe800000000000000000000000000002ff0200000000000000000001ff000001],
+dnl p /= ICMPv6ND_NS(type=135, tgt='fe80::1')
+[87006e2600000000fe800000000000000000000000000001],
+dnl p /= ICMPv6NDOptSrcLLAddr(lladdr='8a:bf:7e:2f:05:84')
+[01018abf7e2f0584]
+))
+
+AT_DATA([ndp_expected], m4_join([],
+dnl p = Ether(src='aa:66:aa:66:00:00', dst='aa:66:aa:66:00:01')
+[aa66aa660001aa66aa6600000800],
+dnl p /= IP(src='1.1.2.88', dst='1.1.2.92', id=0, flags='DF')
+[4500007a00004000401133be010102580101025c],
+dnl p /= UDP(sport=43938, chksum=0)
+[aba212b500660000],
+dnl p /= VXLAN(vni=123, flags='Instance')
+[0800000000007b00],
+dnl p /= Ether(src='04:bf:1b:d8:2d:2d', dst='33:33:ff:00:00:01')
+[3333ff00000104bf1bd82d2d86dd],
+dnl p /= IPv6(src='fe80::2', dst='ff02::1:ff00:1')
+[6000000000203afffe800000000000000000000000000002ff0200000000000000000001ff000001],
+dnl p /= ICMPv6ND_NS(type=135, tgt='fe80::1')
+[87006e2600000000fe800000000000000000000000000001],
+dnl p /= ICMPv6NDOptSrcLLAddr(lladdr='8a:bf:7e:2f:05:84')
+[01018abf7e2f0584]
+))
+
+# Sent two packets, second should be handled in hardware.
+CHECK_FWD_PACKET(p1, p2, , [ndp_frame], [ndp_expected])
+CHECK_FWD_PACKET(p1, p2, , [ndp_frame], [ndp_expected])
+
+# Check if we do not hit partial hw offload.
+AT_CHECK(
+  [ovs-appctl --format json dpif/offload/show \
+     | sed 's/.*"p1":{\([[^}]]*\)}.*/\1/; s/,/\n/g; s/"//g' \
+     | sed -n '/^rx_offload_/p' | sort], [0], [dnl
+rx_offload_full:1
+rx_offload_miss:1
+rx_offload_partial:0
+rx_offload_pipe_abort:0
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([dpif-netdev - check dpctl/add-flow in_port exact match])
 OVS_VSWITCHD_START(
   [add-port br0 p1 \
@@ -901,17 +991,6 @@ AT_CHECK([test `ovs-vsctl get Interface p2 statistics:tx_q0_packets` -gt 0 -a dn
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
-
-m4_define([CHECK_FWD_PACKET],
-  [m4_if([$3], [], [], [AT_CHECK([ovs-vsctl set interface $1 options:$3=true])])
-   AT_CHECK([ovs-appctl netdev-dummy/receive $1 $(cat $4)])
-   m4_if([$5], [none], [], [
-     AT_CHECK([awk 1 $5 > expout]) dnl Also normalizes the line endings.
-     AT_CHECK([ovs-pcap $2.pcap > $2.pcap.txt 2>&1])
-     AT_CHECK([tail -n 1 $2.pcap.txt], [0], [expout])
-   ])
-   m4_if([$3], [], [], [AT_CHECK([ovs-vsctl remove interface $1 options $3])])
-])
 
 dnl CHECK_IP_CHECKSUMS rx_port tx_port good_pkt bad_pkt good_exp bad_exp
 dnl
