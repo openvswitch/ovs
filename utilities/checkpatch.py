@@ -637,6 +637,10 @@ checks = [
     {'regex': 'AUTHORS.rst$', 'match_name': None,
      'check': lambda x: update_missing_authors(x),
      'print': None},
+
+    {'regex': None, 'match_name': None,
+     'check': lambda x: 'ALLOW_EXPERIMENTAL_API' in x,
+     'print': lambda: print_error("DPDK Experimental API is not allowed")},
 ]
 
 
