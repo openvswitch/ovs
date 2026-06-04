@@ -1773,17 +1773,21 @@ compose_ipv6(struct dp_packet *packet, uint8_t proto,
 
 /* Compose an IPv6 Neighbor Discovery Neighbor Solicitation message. */
 void
-compose_nd_ns(struct dp_packet *b, const struct eth_addr eth_src,
+compose_nd_ns(struct dp_packet *b, bool multicast,
+              struct eth_addr eth_src, struct eth_addr eth_dst,
               const struct in6_addr *ipv6_src, const struct in6_addr *ipv6_dst)
 {
     struct in6_addr sn_addr;
-    struct eth_addr eth_dst;
     struct ovs_nd_msg *ns;
     struct ovs_nd_lla_opt *lla_opt;
     uint32_t icmp_csum;
 
-    in6_addr_solicited_node(&sn_addr, ipv6_dst);
-    ipv6_multicast_to_ethernet(&eth_dst, &sn_addr);
+    if (multicast) {
+        in6_addr_solicited_node(&sn_addr, ipv6_dst);
+        ipv6_multicast_to_ethernet(&eth_dst, &sn_addr);
+    } else {
+        sn_addr = *ipv6_dst;
+    }
 
     eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6, IPV6_HEADER_LEN);
     ns = compose_ipv6(b, IPPROTO_ICMPV6, ipv6_src, &sn_addr,

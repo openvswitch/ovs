@@ -1662,7 +1662,9 @@ void compose_arp(struct dp_packet *, uint16_t arp_op,
                  const struct eth_addr arp_sha,
                  const struct eth_addr arp_tha, bool broadcast,
                  ovs_be32 arp_spa, ovs_be32 arp_tpa);
-void compose_nd_ns(struct dp_packet *, const struct eth_addr eth_src,
+void compose_nd_ns(struct dp_packet *, bool multicast,
+                   struct eth_addr eth_src,
+                   struct eth_addr eth_dst,
                    const struct in6_addr *ipv6_src,
                    const struct in6_addr *ipv6_dst);
 void compose_nd_na(struct dp_packet *, const struct eth_addr eth_src,

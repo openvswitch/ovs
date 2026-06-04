@@ -3691,7 +3691,7 @@ tnl_send_nd_request(struct xlate_ctx *ctx, const struct xport *out_dev,
     struct dp_packet packet;
 
     dp_packet_init(&packet, 0);
-    compose_nd_ns(&packet, eth_src, ipv6_src, ipv6_dst);
+    compose_nd_ns(&packet, true, eth_src, eth_addr_zero, ipv6_src, ipv6_dst);
     compose_table_xlate(ctx, out_dev, &packet);
     dp_packet_uninit(&packet);
 }
