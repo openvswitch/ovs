@@ -64,8 +64,7 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 # kernel conntrack tables when the test is finished.
 #
 m4_define([CHECK_CONNTRACK],
-    [m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6], [nf_nat_ftp],
-                        [nf_nat_tftp]],
+    [m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6]],
                 [modprobe mod || echo "Module mod not loaded."
                  on_exit 'modprobe -r mod'
                 ])
@@ -77,9 +76,13 @@ m4_define([CHECK_CONNTRACK],
 # CHECK_CONNTRACK_ALG()
 #
 # Perform requirements checks for running conntrack ALG tests. The kernel
-# supports ALG, so no check is needed.
+# supports ALG, so no check is needed.  But we need to load the modules.
 #
-m4_define([CHECK_CONNTRACK_ALG])
+m4_define([CHECK_CONNTRACK_ALG],
+    [m4_foreach([mod], [[nf_nat_ftp], [nf_nat_tftp]],
+                [modprobe mod || echo "Module mod not loaded."
+                 on_exit 'modprobe -r mod'])]
+)
 
 # CHECK_CONNTRACK_LOCAL_STACK()
 #
