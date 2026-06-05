@@ -63,8 +63,13 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 # Perform requirements checks for running conntrack tests, and flush the
 # kernel conntrack tables when the test is finished.
 #
+# nf_conntrack_ipv[46] are old names in kernels before 4.18.  These will
+# fail on newer kernels, while nf_conntrack will fail on older ones.  But
+# these failures do not affect the test execution.
+#
 m4_define([CHECK_CONNTRACK],
-    [m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6]],
+    [m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6],
+                        [nf_conntrack], [nf_conntrack_netlink]],
                 [modprobe mod || echo "Module mod not loaded."
                  on_exit 'modprobe -r mod'
                 ])
