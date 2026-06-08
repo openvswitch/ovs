@@ -393,7 +393,9 @@ BFD_CHECK_RX([p0], [300ms], [300ms], [1ms])
 
 # resume the bfd on p1. the bfd should not go to decay mode direclty.
 AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=true])
-ovs-appctl time/warp 1500 500
+# Minimum transmission interval while the state is not Up is 1 second and
+# we need to wait for a few round-trips before the state stabilizes.
+ovs-appctl time/warp 3500 500
 BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
 BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
 
