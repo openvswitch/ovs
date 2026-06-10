@@ -356,7 +356,8 @@ odp_set_nd(struct dp_packet *packet, const struct ovs_key_nd *key,
         struct eth_addr sll_buf = eth_addr_zero;
         struct eth_addr tll_buf = eth_addr_zero;
 
-        while (bytes_remain >= ND_LLA_OPT_LEN && lla_opt->len != 0) {
+        while (bytes_remain >= ND_LLA_OPT_LEN && lla_opt->len != 0
+               && bytes_remain >= (lla_opt->len * ND_LLA_OPT_LEN)) {
             if (lla_opt->type == ND_OPT_SOURCE_LINKADDR
                 && lla_opt->len == 1) {
                 sll_buf = lla_opt->mac;
