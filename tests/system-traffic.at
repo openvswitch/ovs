@@ -2076,6 +2076,8 @@ NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address e6:66:c1:22:22:22])
 NS_CHECK_EXEC([at_ns1], [arp -s 10.1.1.1 e6:66:c1:11:11:11])
 
 dnl Set up (p2 and ovs-p2) as loopback for verifying packet size
+dnl Clear flows before adding both ends of a veth to a bridge to avoid loops.
+AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ip link add p2 type veth peer name ovs-p2])
 on_exit 'ip link del ovs-p2'
 AT_CHECK([ip link set dev ovs-p2 up])
@@ -2087,7 +2089,6 @@ dnl use this file as payload file for ncat
 AT_CHECK([dd if=/dev/urandom of=payload200.bin bs=200 count=1 2> /dev/null])
 on_exit 'rm -f payload200.bin'
 
-AT_CHECK([ovs-ofctl del-flows br0])
 AT_DATA([flows.txt], [dnl
 priority=99,in_port=1,actions=output(port=2,max_len=100),output(port=3,max_len=100)
 priority=99,in_port=2,udp,actions=output(port=1,max_len=100)
@@ -2205,6 +2206,8 @@ NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address e6:66:c1:22:22:22])
 NS_CHECK_EXEC([at_ns1], [arp -s 10.1.1.1 e6:66:c1:11:11:11])
 
 dnl Set up (p2 and ovs-p2) as loopback for verifying packet size
+dnl Clear flows before adding both ends of a veth to a bridge to avoid loops.
+AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ip link add p2 type veth peer name ovs-p2])
 on_exit 'ip link del ovs-p2'
 AT_CHECK([ip link set dev ovs-p2 up])
@@ -2216,7 +2219,6 @@ dnl use this file as payload file for ncat
 AT_CHECK([dd if=/dev/urandom of=payload200.bin bs=200 count=1 2> /dev/null])
 on_exit 'rm -f payload200.bin'
 
-AT_CHECK([ovs-ofctl del-flows br0])
 AT_DATA([flows.txt], [dnl
 priority=99,in_port=1,actions=output(port=2,max_len=100),output(port=3,max_len=100)
 priority=99,in_port=2,udp,actions=output(port=1,max_len=100)
