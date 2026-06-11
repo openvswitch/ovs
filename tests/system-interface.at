@@ -231,3 +231,27 @@ AT_CHECK([grep 'name too long' stderr], [0], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP(["/could not open network device.*name too long/d"])
 AT_CLEANUP
+
+AT_SETUP([interface - patch port name exceeds IFNAMSIZ on vswitchd restart])
+
+OVS_TRAFFIC_VSWITCHD_START()
+
+dnl Kernel datapath only.
+AT_SKIP_IF([! ovs-appctl dpctl/show | grep -q ovs-system])
+
+AT_CHECK([ovs-vsctl -- \
+          add-br br1 -- set bridge br1 fail-mode=secure \
+          -- add-port br0 long_patch_peer_one \
+          -- set interface long_patch_peer_one type=patch \
+          options:peer=long_patch_peer_two \
+          -- add-port br1 long_patch_peer_two \
+          -- set interface long_patch_peer_two type=patch \
+          options:peer=long_patch_peer_one])
+
+dnl Restart ovs-vswitchd. The test will fail if any warnings are detected in logs.
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl],
+         [0], [], [stderr])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
