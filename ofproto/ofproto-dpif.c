@@ -573,7 +573,10 @@ process_dpif_all_ports_changed(struct dpif_backer *backer)
             struct ofport *ofport;
 
             HMAP_FOR_EACH (ofport, hmap_node, &ofproto->up.ports) {
-                sset_add(&devnames, netdev_get_name(ofport->netdev));
+                /* Patch ports are not in the datapath. */
+                if (!netdev_vport_is_patch(ofport->netdev)) {
+                    sset_add(&devnames, netdev_get_name(ofport->netdev));
+                }
             }
         }
     }
@@ -1833,7 +1836,8 @@ construct(struct ofproto *ofproto_)
 
         if (!strcmp(iface_hint->br_name, ofproto->up.name)) {
             /* Check if the datapath already has this port. */
-            if (dpif_port_exists(ofproto->backer->dpif, node->name)) {
+            if (strcmp(iface_hint->iface_type, "patch")
+                && dpif_port_exists(ofproto->backer->dpif, node->name)) {
                 sset_add(&ofproto->ports, node->name);
             }
 
