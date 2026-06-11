@@ -266,6 +266,7 @@ void ofproto_parse_name(const char *name, char **dp_name, char **dp_type);
 struct iface_hint {
     char *br_name;              /* Name of owning bridge. */
     char *br_type;              /* Type of owning bridge. */
+    char *iface_type;           /* Type of interface. */
     ofp_port_t ofp_port;        /* OpenFlow port number. */
 };
 
