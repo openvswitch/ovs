@@ -352,6 +352,7 @@ ofproto_init(const struct shash *iface_hints)
 
         new_hint->br_name = xstrdup(orig_hint->br_name);
         new_hint->br_type = xstrdup(br_type);
+        new_hint->iface_type = xstrdup(orig_hint->iface_type);
         new_hint->ofp_port = orig_hint->ofp_port;
 
         shash_add(&init_ofp_ports, node->name, new_hint);
@@ -2945,6 +2946,7 @@ init_ports(struct ofproto *p)
         if (!strcmp(iface_hint->br_name, p->name)) {
             free(iface_hint->br_name);
             free(iface_hint->br_type);
+            free(iface_hint->iface_type);
             free(iface_hint);
             shash_delete(&init_ofp_ports, node);
         }
