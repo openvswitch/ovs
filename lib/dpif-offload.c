@@ -1278,10 +1278,19 @@ dpif_offload_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
                              dpif_offload_name(offload), op->error);
 
                     switch (op->type) {
-                    case DPIF_OP_FLOW_PUT:
+                    case DPIF_OP_FLOW_PUT: {
+                        int log_error = 0;
+
+                        /* Keep ENOSPC and unhandled operations on the
+                         * existing debug-only path, but include full flow
+                         * details for real offload failures. */
+                        if (op->error > 0 && op->error != ENOSPC) {
+                            log_error = op->error;
+                        }
                         log_flow_put_message(dpif, &this_module,
-                                             &op->flow_put, 0);
+                                             &op->flow_put, log_error);
                         break;
+                    }
                     case DPIF_OP_FLOW_DEL:
                         log_flow_del_message(dpif, &this_module,
                                              &op->flow_del, 0);
