@@ -1245,3 +1245,46 @@ AT_CHECK([ovs-appctl --format json --pretty dpif/offload/show \
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([offloads - many output ports - actions limit])
+OVS_TRAFFIC_VSWITCHD_START([], [],
+  [-- set Open_vSwitch . other_config:hw-offload=true])
+
+AT_CHECK([ovs-appctl vlog/set tc:file:dbg dpif_netlink:file:dbg vconn:file:info])
+
+m4_for([id], [1], [17], [1], [
+  ADD_NAMESPACES(atns-id)
+  ADD_VETH(p-id, atns-id, br0, "10.1.1.id/24")
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 "arp,actions=NORMAL"])
+dnl Forward all non-matching IP traffic towards ovs-p-1 (ICMP replies).
+AT_CHECK([ovs-ofctl add-flow br0 "priority=0,ip,actions=output:ovs-p-1"])
+
+m4_define([OUTPUT_ACTIONS],
+  [m4_for([n], [2], [$1], [1], [,output:ovs-p-n])])
+
+m4_define([DP_FLOW], ["in_port(ovs-p-1),eth(),eth_type(0x0800)"])
+
+dnl Gradually checking broadcast to more and more ports.  The last one should
+dnl hit the actions limit and fall back to kernel datapath.  Actions include
+dnl LOCAL output to check the mismatch between the number of OVS and TC flower
+dnl actions (output to internal port requires additional skbedit).
+m4_for([id], [2], [17], [1], [
+  AT_CHECK([ovs-ofctl add-flow br0 \
+    "priority=id,in_port=ovs-p-1,ip,actions=LOCAL[]OUTPUT_ACTIONS(id)"])
+  AT_CHECK([ovs-appctl revalidator/wait])
+  NS_CHECK_EXEC([atns-1], [ping -q -c 3 -i 0.1 -W 2 10.1.1.id | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+  m4_if(id, [17], [
+    AT_CHECK([ovs-appctl dpctl/dump-flows --names type=tc  | grep DP_FLOW], [1])
+    AT_CHECK([ovs-appctl dpctl/dump-flows --names type=ovs | grep -q DP_FLOW])
+  ], [
+    AT_CHECK([ovs-appctl dpctl/dump-flows --names type=tc  | grep -q DP_FLOW])
+    AT_CHECK([ovs-appctl dpctl/dump-flows --names type=ovs | grep DP_FLOW], [1])
+  ])
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

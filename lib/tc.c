@@ -2133,7 +2133,8 @@ nl_parse_flower_actions(struct nlattr **attrs, struct tc_flower *flower,
                         bool terse)
 {
     const struct nlattr *actions = attrs[TCA_FLOWER_ACT];
-    static struct nl_policy actions_orders_policy[TCA_ACT_MAX_NUM + 1] = {};
+    /* Priorities of flower actions start at one: [1, TCA_ACT_MAX_PRIO]. */
+    static struct nl_policy actions_orders_policy[TCA_ACT_MAX_PRIO + 1] = {};
     struct nlattr *actions_orders[ARRAY_SIZE(actions_orders_policy)];
     const int max_size = ARRAY_SIZE(actions_orders_policy);
     int previous_action_count = 0;
@@ -2402,6 +2403,7 @@ tc_dump_tc_action_start(char *name, struct nl_dump *dump)
 int
 parse_netlink_to_tc_policer(struct ofpbuf *reply, uint32_t police_idx[])
 {
+    /* Action tables are indexed from zero: [0, TCA_ACT_MAX_PRIO - 1]. */
     static struct nl_policy actions_orders_policy[TCA_ACT_MAX_PRIO] = {};
     struct ofpbuf b = ofpbuf_const_initializer(reply->data, reply->size);
     struct nlattr *actions_orders[ARRAY_SIZE(actions_orders_policy)];
@@ -3540,7 +3542,10 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
     }
     nl_msg_end_nested(request, offset);
 
-    return 0;
+    /* Some tc_actions generate more than one actual TC action.  Make sure
+     * we're within the kernel's limit.  'act_index - 1' is the last used
+     * priority / index. */
+    return act_index - 1 <= TCA_ACT_MAX_PRIO ? 0 : -EOPNOTSUPP;
 }
 
 static void
