@@ -413,6 +413,7 @@ Reid Price
 Remi Jouannet                      remi.jouannet@outscale.com
 Remko Tronçon                      git@el-tramo.be
 Renat Nurgaliyev                   impleman@gmail.com
+Reuven Plevinsky                   rplevinsky@nvidia.com
 Rich Lane                          rlane@bigswitch.com
 Richard Oliver                     richard@richard-oliver.co.uk
 Rishi Bamba                        rishi.bamba@tcs.com
