@@ -889,7 +889,7 @@ dummy_flow_put(const struct dpif_offload *offload_, struct netdev *netdev,
     }
 
 exit_unlock:
-    if (put->stats) {
+    if (put->stats && !error) {
         *put->stats = off_flow->stats;
     }
 
