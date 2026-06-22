@@ -47,7 +47,6 @@ time:
    ovs-sim.1
    ovs-tcpdump.8
    ovs-tcpundump.1
-   ovs-vlan-test.8
    ovsdb-server.7
    ovsdb.5
    ovsdb.7
@@ -96,10 +95,6 @@ The remainder are still in roff format can be found below:
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-testcontroller.8.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-testcontroller.8.html>`__
      - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-testcontroller.8.txt>`__
-   * - ovs-vlan-test(8)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-vlan-test.8.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-vlan-test.8.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-vlan-test.8.txt>`__
    * - ovs-vsctl(8)
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-vsctl.8.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-vsctl.8.html>`__

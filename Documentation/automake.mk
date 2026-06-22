@@ -163,7 +163,6 @@ RST_MANPAGES = \
 	ovs-pki.8.rst \
 	ovs-tcpdump.8.rst \
 	ovs-tcpundump.1.rst \
-	ovs-vlan-test.8.rst \
 	ovsdb-server.7.rst \
 	ovsdb.5.rst \
 	ovsdb.7.rst
@@ -201,8 +200,8 @@ set_mandirs = \
 	man8dir='$(man8dir)' \
 	man9dir='$(man9dir)'
 
-# Given an $rst of "ovs-vlan-test.8.rst", sets $stem to
-# "ovs-vlan-test", $section to "8", and $mandir to $man8dir.
+# Given an $rst of "ovs-tcpdump.8.rst", sets $stem to
+# "ovs-tcpdump", $section to "8", and $mandir to $man8dir.
 extract_stem_and_section = \
 	stem=`echo "$$rst" | sed -n 's/^\(.*\)\.\([0-9]\).rst$$/\1/p'`; \
 	section=`echo "$$rst" | sed -n 's/^\(.*\)\.\([0-9]\).rst$$/\2/p'`; \

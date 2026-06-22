@@ -25,6 +25,8 @@ Post-v3.7.0
    - The following utilities are now removed:
      * ovs-test and ovs-l3ping:  Standard tools like iperf are preferred for
        performance testing.
+     * ovs-vlan-test: It was designed to check for VLAN bugs in old Linux
+       kernels that have long been fixed.
    - Windows:
      * The previously deprecated Windows kernel datapath implementation is
        now fully removed as well as support for running or building userspace

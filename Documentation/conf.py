@@ -140,8 +140,6 @@ _man_pages = [
      u'Dump traffic from an Open vSwitch port using tcpdump'),
     ('ovs-tcpundump.1',
      u'convert "tcpdump -xx" output to hex strings'),
-    ('ovs-vlan-test.8',
-     u'Check Linux drivers for problems with vlan traffic'),
     ('ovsdb-server.7',
      u'Open vSwitch Database Server Protocol'),
     ('ovsdb.5',

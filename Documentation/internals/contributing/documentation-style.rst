@@ -347,7 +347,7 @@ In addition to the above, man pages have some specific requirements:
 - The man page must be included in the list of man page documents found in
   `conf.py`__
 
-Refer to existing man pages, such as :doc:`/ref/ovs-vlan-test.8` for a worked
+Refer to existing man pages, such as :doc:`/ref/ovs-tcpdump.8` for a worked
 example.
 
 __ http://www.sphinx-doc.org/en/stable/domains.html#directive-program
