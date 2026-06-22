@@ -210,7 +210,6 @@ Description: Open vSwitch switch implementations
 Package: openvswitch-test
 Architecture: all
 Depends:
- python3-twisted,
  ${misc:Depends},
  ${python3:Depends},
 Breaks:

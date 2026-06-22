@@ -427,7 +427,6 @@ fi
 %{_mandir}/man1/ovs-pcap.1*
 %{_mandir}/man8/ovs-tcpdump.8*
 %{_mandir}/man1/ovs-tcpundump.1*
-%{python3_sitelib}/ovstest
 
 %files devel
 %{_libdir}/lib*.so

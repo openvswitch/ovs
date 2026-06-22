@@ -1,13 +1,3 @@
-ovstest_pyfiles = \
-	python/ovstest/__init__.py \
-	python/ovstest/args.py \
-	python/ovstest/rpcserver.py \
-	python/ovstest/tcp.py \
-	python/ovstest/tests.py \
-	python/ovstest/udp.py \
-	python/ovstest/util.py \
-	python/ovstest/vswitch.py
-
 ovs_pyfiles = \
 	python/ovs/__init__.py \
 	python/ovs/compat/__init__.py \
@@ -98,7 +88,7 @@ EXTRA_DIST += \
 # C extension support.
 EXTRA_DIST += python/ovs/_json.c
 
-PYFILES = $(ovs_pyfiles) python/ovs/dirs.py python/setup.py $(ovstest_pyfiles) $(ovs_pytests) \
+PYFILES = $(ovs_pyfiles) python/ovs/dirs.py python/setup.py $(ovs_pytests) \
 	$(ovs_flowviz)
 
 EXTRA_DIST += $(PYFILES)
@@ -113,7 +103,7 @@ FLAKE8_PYFILES += \
 	python/ovs/dirs.py.template \
 	python/setup.py.template
 
-nobase_pkgdata_DATA = $(ovs_pyfiles) $(ovstest_pyfiles) $(ovs_flowviz)
+nobase_pkgdata_DATA = $(ovs_pyfiles) $(ovs_flowviz)
 nobase_pkgdata_DATA += python/ovs/flowviz/ovs-flowviz.conf
 
 ovs-install-data-local:

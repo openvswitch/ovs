@@ -13,6 +13,9 @@ Post-v3.7.0
      * 'dpif-netdev/pmd-stats-show' command was removed in favor of the more
        informative and better structured 'dpif-netdev/pmd-perf-show', which
        now also provides statistics for the "main" thread.
+   - Python:
+     * The ovstest Python module is now removed.  It was only used by the
+       ovs-test and ovs-l3ping utilities.
    - The following deprecated AVX512-specific features of the userspace
      datapath are now removed:
      * AVX512-optimized DPCLS lookups.
