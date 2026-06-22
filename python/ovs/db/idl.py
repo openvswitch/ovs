@@ -130,15 +130,6 @@ class ConditionState(object):
         if self._new_cond is not None:
             self._req_cond, self._new_cond = (self._new_cond, None)
 
-    def reset(self):
-        """Reset a requested condition change back to new"""
-        if self._req_cond is not None:
-            if self._new_cond is None:
-                self._new_cond = self._req_cond
-            self._req_cond = None
-            return True
-        return False
-
 
 class IdlTable(object):
     def __init__(self, idl, table):
@@ -368,12 +359,10 @@ class Idl(object):
     def sync_conditions(self):
         """Synchronize condition state when the FSM is restarted
 
-        If a non-zero last_id is available for the DB, then upon reconnect
+        If a non-zero 'last_id' is available for the DB, then upon reconnect
         the IDL should first request acked conditions to avoid missing updates
         about records that were added before the transaction with
-        txn-id == last_id. If there were requested condition changes in flight
-        and the IDL client didn't set new conditions, then reset the requested
-        conditions to new to trigger a follow-up monitor_cond_change request.
+        txn-id == last_id.
 
         If there were changes in flight then there are two cases:
         a. either the server already processed the requested monitor condition
@@ -387,19 +376,31 @@ class Idl(object):
         As there's no easy way to differentiate between the two, and given that
         this condition should be rare, reset the 'last_id', essentially
         flushing the local cached DB contents.
-        """
-        ack_all = self.last_id == str(uuid.UUID(int=0))
-        if ack_all:
-            self.cond_changed = False
 
+        If there's no 'last_id' available for the DB or it was reset, then
+        it's safe to use the latest conditions set by the client even if they
+        weren't acked yet, since the local cache will be cleared anyway.
+        """
         for table in self.tables.values():
-            if ack_all:
+            if table.condition_state.requested is not None:
+                # There was an in-flight condition change - reset.
+                self.last_id = str(uuid.UUID(int=0))
+                break
+
+        if self.last_id == str(uuid.UUID(int=0)):
+            # No 'last_id' - use the latest conditions for the monitor request.
+            for table in self.tables.values():
                 table.condition_state.request()
                 table.condition_state.ack()
-            else:
-                if table.condition_state.reset():
-                    self.last_id = str(uuid.UUID(int=0))
+            # Nothing to send after the initial monitor request.
+            self.cond_changed = False
+        else:
+            # No in-flight changes and a non-zero 'last_id'.  Send acknowledged
+            # first, then follow up with the new, if any.
+            for table in self.tables.values():
+                if table.condition_state.new is not None:
                     self.cond_changed = True
+                    break
 
     def restart_fsm(self):
         # Resync data DB table conditions to avoid missing updated due to
