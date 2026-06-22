@@ -160,7 +160,6 @@ RST_MANPAGES = \
 	ovs-appctl.8.rst \
 	ovs-ctl.8.rst \
 	ovs-flowviz.8.rst \
-	ovs-l3ping.8.rst \
 	ovs-pki.8.rst \
 	ovs-tcpdump.8.rst \
 	ovs-tcpundump.1.rst \

@@ -10,7 +10,6 @@ bin_SCRIPTS += utilities/ovs-docker \
 	utilities/ovs-tcpdump \
 	utilities/ovs-tcpundump \
 	utilities/ovs-dpctl-top \
-	utilities/ovs-l3ping \
 	utilities/ovs-test \
 	utilities/ovs-vlan-test
 scripts_SCRIPTS += \
@@ -52,7 +51,6 @@ EXTRA_DIST += \
 	utilities/ovs-docker \
 	utilities/ovs-dpctl-top.in \
 	utilities/ovs-kmod-ctl.in \
-	utilities/ovs-l3ping.in \
 	utilities/ovs-lib.in \
 	utilities/ovs-pcap.in \
 	utilities/ovs-pipegen.py \
@@ -97,7 +95,6 @@ CLEANFILES += \
 	utilities/ovs-dpctl-top \
 	utilities/ovs-dpctl-top.8 \
 	utilities/ovs-kmod-ctl \
-	utilities/ovs-l3ping \
 	utilities/ovs-lib \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-pcap \

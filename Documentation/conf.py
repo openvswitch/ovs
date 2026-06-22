@@ -132,8 +132,6 @@ _man_pages = [
      u'OVS startup helper script'),
     ('ovs-flowviz.8',
      u'utility for visualizing OpenFlow and datapath flows'),
-    ('ovs-l3ping.8',
-     u'check network deployment for L3 tunneling problems'),
     ('ovs-pki.8',
      u'OpenFlow public key infrastructure management utility'),
     ('ovs-sim.1',

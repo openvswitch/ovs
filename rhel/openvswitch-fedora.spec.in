@@ -420,14 +420,12 @@ fi
 %files test
 %{_bindir}/ovs-test
 %{_bindir}/ovs-vlan-test
-%{_bindir}/ovs-l3ping
 %{_bindir}/ovs-pcap
 %{_bindir}/ovs-tcpdump
 %{_bindir}/ovs-tcpundump
 %{_datadir}/openvswitch/scripts/usdt/*
 %{_mandir}/man8/ovs-test.8*
 %{_mandir}/man8/ovs-vlan-test.8*
-%{_mandir}/man8/ovs-l3ping.8*
 %{_mandir}/man1/ovs-pcap.1*
 %{_mandir}/man8/ovs-tcpdump.8*
 %{_mandir}/man1/ovs-tcpundump.1*

@@ -14,8 +14,6 @@
 /ovs-dpctl-top
 /ovs-dpctl-top.8
 /ovs-kmod-ctl
-/ovs-l3ping
-/ovs-l3ping.8
 /ovs-lib
 /ovs-ofctl
 /ovs-ofctl.8
