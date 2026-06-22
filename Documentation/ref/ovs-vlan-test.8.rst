@@ -10,12 +10,6 @@ Synopsis
 Description
 ===========
 
-The :program:`ovs-vlan-test` utility has some limitations, for example, it does
-not use TCP in its tests. Also it does not take into account MTU to detect
-potential edge cases. To overcome those limitations a new tool was developed -
-:program:`ovs-test`. :program:`ovs-test` is currently supported only on Debian
-so, if possible, try to use that on instead of :program:`ovs-vlan-test`.
-
 The :program:`ovs-vlan-test` program may be used to check for problems sending
 802.1Q traffic which may occur when running Open vSwitch. These problems can
 occur when Open vSwitch is used to send 802.1Q traffic through physical
@@ -109,5 +103,4 @@ Run an :program:`ovs-vlan-test` client with a control server located at
 See Also
 ========
 
-`ovs-vswitchd(8)`, `ovs-ofctl(8)`, `ovs-vsctl(8)`, :program:`ovs-test`,
-`ethtool(8)`, `uname(1)`
+`ovs-vswitchd(8)`, `ovs-ofctl(8)`, `ovs-vsctl(8)`, `ethtool(8)`, `uname(1)`

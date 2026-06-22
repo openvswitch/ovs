@@ -10,7 +10,6 @@ bin_SCRIPTS += utilities/ovs-docker \
 	utilities/ovs-tcpdump \
 	utilities/ovs-tcpundump \
 	utilities/ovs-dpctl-top \
-	utilities/ovs-test \
 	utilities/ovs-vlan-test
 scripts_SCRIPTS += \
 	utilities/ovs-check-dead-ifs \
@@ -58,7 +57,6 @@ EXTRA_DIST += \
 	utilities/ovs-save \
 	utilities/ovs-tcpdump.in \
 	utilities/ovs-tcpundump.in \
-	utilities/ovs-test.in \
 	utilities/ovs-vlan-test.in \
 	utilities/ovs-vsctl-bashcomp.bash \
 	utilities/checkpatch.py \
@@ -103,7 +101,6 @@ CLEANFILES += \
 	utilities/ovs-sim \
 	utilities/ovs-tcpdump \
 	utilities/ovs-tcpundump \
-	utilities/ovs-test \
 	utilities/ovs-vlan-test \
 	utilities/ovs-vsctl.8
 

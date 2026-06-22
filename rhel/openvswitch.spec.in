@@ -96,9 +96,7 @@ install -p -m 644 -D selinux/openvswitch-custom.pp \
 # Get rid of stuff we don't want to make RPM happy.
 rm \
     $RPM_BUILD_ROOT/usr/bin/ovs-testcontroller \
-    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-testcontroller.8 \
-    $RPM_BUILD_ROOT/usr/bin/ovs-test \
-    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-test.8
+    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-testcontroller.8
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/%{_lib}/*.la)
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/include)
 

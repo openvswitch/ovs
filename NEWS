@@ -20,8 +20,8 @@ Post-v3.7.0
      * AVX512-optimized packet parsing (miniflow extraction).
      * AVX512-optimized DPIF input processing.
    - The following utilities are now removed:
-     * ovs-l3ping:  Standard tools like iperf are preferred for performance
-       testing.
+     * ovs-test and ovs-l3ping:  Standard tools like iperf are preferred for
+       performance testing.
    - Windows:
      * The previously deprecated Windows kernel datapath implementation is
        now fully removed as well as support for running or building userspace

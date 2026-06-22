@@ -163,7 +163,6 @@ RST_MANPAGES = \
 	ovs-pki.8.rst \
 	ovs-tcpdump.8.rst \
 	ovs-tcpundump.1.rst \
-	ovs-test.8.rst \
 	ovs-vlan-test.8.rst \
 	ovsdb-server.7.rst \
 	ovsdb.5.rst \
