@@ -3566,6 +3566,24 @@ do_idl_compound_index(struct ovs_cmdl_context *ctx)
 }
 
 static void
+idl_wait_for_seqno_change(struct ovsdb_idl *idl, struct jsonrpc *rpc,
+                          unsigned int seqno)
+{
+    for (;;) {
+        ovsdb_idl_run(idl);
+        ovsdb_idl_check_consistency(idl);
+        if (ovsdb_idl_get_seqno(idl) != seqno) {
+            break;
+        }
+        jsonrpc_run(rpc);
+
+        ovsdb_idl_wait(idl);
+        jsonrpc_wait(rpc);
+        poll_block();
+    }
+}
+
+static void
 do_idl_table_column_check(struct ovs_cmdl_context *ctx)
 {
     struct jsonrpc *rpc;
@@ -3577,6 +3595,21 @@ do_idl_table_column_check(struct ovs_cmdl_context *ctx)
     ovsdb_idl_omit(idl, &idltest_link1_col_i);
     ovsdb_idl_omit(idl, &idltest_simple7_col_id);
     ovsdb_idl_set_leader_only(idl, false);
+
+    struct ovsdb_idl_condition cond_link1 =
+        OVSDB_IDL_CONDITION_INIT(&cond_link1);
+    struct uuid uuid;
+
+    uuid_from_string(&uuid, "12345678-dd3f-4616-ab6a-83a490bb0991");
+    idltest_link1_add_clause_l2(&cond_link1, OVSDB_F_EQ, &uuid);
+    idltest_link1_set_condition(idl, &cond_link1);
+
+    struct ovsdb_idl_condition cond_link2 =
+        OVSDB_IDL_CONDITION_INIT(&cond_link2);
+
+    idltest_link2_add_clause_i(&cond_link2, OVSDB_F_EQ, 1);
+    idltest_link2_set_condition(idl, &cond_link2);
+
     struct stream *stream;
 
     error = stream_open_block(jsonrpc_stream_open(ctx->argv[1], &stream,
@@ -3586,23 +3619,12 @@ do_idl_table_column_check(struct ovs_cmdl_context *ctx)
     }
     rpc = jsonrpc_open(stream);
 
-    for (int r = 1; r <= 2; r++) {
+    for (int r = 1; r <= 3; r++) {
         ovsdb_idl_set_remote(idl, ctx->argv[r], true);
         ovsdb_idl_force_reconnect(idl);
 
         /* Wait for update. */
-        for (;;) {
-            ovsdb_idl_run(idl);
-            ovsdb_idl_check_consistency(idl);
-            if (ovsdb_idl_get_seqno(idl) != seqno) {
-                break;
-            }
-            jsonrpc_run(rpc);
-
-            ovsdb_idl_wait(idl);
-            jsonrpc_wait(rpc);
-            poll_block();
-        }
+        idl_wait_for_seqno_change(idl, rpc, seqno);
 
         seqno = ovsdb_idl_get_seqno(idl);
 
@@ -3658,6 +3680,143 @@ do_idl_table_column_check(struct ovs_cmdl_context *ctx)
         printf("--- remote %s done ---\n", ctx->argv[r]);
     }
 
+    ovsdb_idl_condition_destroy(&cond_link1);
+    ovsdb_idl_condition_destroy(&cond_link2);
+
+    jsonrpc_close(rpc);
+    ovsdb_idl_destroy(idl);
+}
+
+static void
+do_idl_set_condition_post_connect(struct ovs_cmdl_context *ctx)
+{
+    struct jsonrpc *rpc;
+    struct ovsdb_idl *idl;
+    unsigned int seqno = 0;
+    int error;
+
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
+    ovsdb_idl_omit(idl, &idltest_link1_col_i);
+    ovsdb_idl_omit(idl, &idltest_simple7_col_id);
+    ovsdb_idl_set_leader_only(idl, false);
+
+    struct stream *stream;
+
+    error = stream_open_block(jsonrpc_stream_open(ctx->argv[1], &stream,
+                              DSCP_DEFAULT), -1, &stream);
+    if (error) {
+        ovs_fatal(error, "failed to connect to \"%s\"", ctx->argv[1]);
+    }
+    rpc = jsonrpc_open(stream);
+
+    ovsdb_idl_set_remote(idl, ctx->argv[1], true);
+
+    /* Wait for initial data to arrive. */
+    idl_wait_for_seqno_change(idl, rpc, seqno);
+
+    /* Set conditions after the schema has been received.
+     * For link1, set two clauses: l2 (not in idltest2 schema, will be
+     * filtered) and i (in idltest2 schema, will pass through). */
+    struct ovsdb_idl_condition cond_link1 =
+        OVSDB_IDL_CONDITION_INIT(&cond_link1);
+    struct uuid uuid;
+    unsigned int link1_seqno;
+    unsigned int link2_seqno;
+
+    uuid_from_string(&uuid, "12345678-dd3f-4616-ab6a-83a490bb0991");
+    idltest_link1_add_clause_l2(&cond_link1, OVSDB_F_EQ, &uuid);
+    idltest_link1_add_clause_i(&cond_link1, OVSDB_F_EQ, 1);
+    link1_seqno = idltest_link1_set_condition(idl, &cond_link1);
+
+    struct ovsdb_idl_condition cond_link2 =
+        OVSDB_IDL_CONDITION_INIT(&cond_link2);
+
+    idltest_link2_add_clause_i(&cond_link2, OVSDB_F_EQ, 1);
+    link2_seqno = idltest_link2_set_condition(idl, &cond_link2);
+
+    printf("link1 set_condition: seqno=%u\n", link1_seqno);
+    printf("link2 set_condition: seqno=%u\n", link2_seqno);
+    printf("current condition seqno: %u\n",
+           ovsdb_idl_get_condition_seqno(idl));
+
+    /* Wait for condition acknowledgement. */
+    for (;;) {
+        ovsdb_idl_run(idl);
+        ovsdb_idl_check_consistency(idl);
+        if (ovsdb_idl_get_condition_seqno(idl) == link1_seqno) {
+            break;
+        }
+        jsonrpc_run(rpc);
+
+        ovsdb_idl_wait(idl);
+        jsonrpc_wait(rpc);
+        poll_block();
+    }
+
+    printf("condition acked: seqno=%u\n",
+           ovsdb_idl_get_condition_seqno(idl));
+
+    ovsdb_idl_condition_destroy(&cond_link1);
+    ovsdb_idl_condition_destroy(&cond_link2);
+
+    jsonrpc_close(rpc);
+    ovsdb_idl_destroy(idl);
+}
+
+static void
+do_idl_reconnect_last_id(struct ovs_cmdl_context *ctx)
+{
+    struct jsonrpc *rpc;
+    struct ovsdb_idl *idl;
+    unsigned int seqno = 0;
+    int error;
+
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
+    ovsdb_idl_set_leader_only(idl, false);
+
+    /* Set a condition on link2 before connecting.  This creates a CS
+     * table entry that will be destroyed on the first connection (link2
+     * is not in idltest2).  On reconnect, the entry is already gone so
+     * ovsdb_cs_clear_condition() must be a no-op and must NOT reset
+     * last_id.
+     *
+     * When later connecting to a server with the full schema (all
+     * tables/columns present), the client must reset last_id to zero
+     * to force a full re-download that covers the newly available
+     * tables. */
+    struct ovsdb_idl_condition cond_link2 =
+        OVSDB_IDL_CONDITION_INIT(&cond_link2);
+    idltest_link2_add_clause_i(&cond_link2, OVSDB_F_EQ, 1);
+    idltest_link2_set_condition(idl, &cond_link2);
+
+    struct stream *stream;
+
+    error = stream_open_block(jsonrpc_stream_open(ctx->argv[1], &stream,
+                              DSCP_DEFAULT), -1, &stream);
+    if (error) {
+        ovs_fatal(error, "failed to connect to \"%s\"", ctx->argv[1]);
+    }
+    rpc = jsonrpc_open(stream);
+
+    /* Step 1: connect to the limited-schema server. */
+    ovsdb_idl_set_remote(idl, ctx->argv[1], true);
+    idl_wait_for_seqno_change(idl, rpc, seqno);
+    seqno = ovsdb_idl_get_seqno(idl);
+
+    /* Step 2: reconnect to the same limited-schema server. */
+    ovsdb_idl_force_reconnect(idl);
+    idl_wait_for_seqno_change(idl, rpc, seqno);
+    seqno = ovsdb_idl_get_seqno(idl);
+
+    /* Step 3: connect to the full-schema server (upgrade scenario). */
+    ovsdb_idl_set_remote(idl, ctx->argv[2], true);
+    ovsdb_idl_force_reconnect(idl);
+    idl_wait_for_seqno_change(idl, rpc, seqno);
+
+    printf("done\n");
+
+    ovsdb_idl_condition_destroy(&cond_link2);
+
     jsonrpc_close(rpc);
     ovsdb_idl_destroy(idl);
 }
@@ -3700,8 +3859,12 @@ static struct ovs_cmdl_command all_commands[] = {
         do_idl_partial_update_map_column, OVS_RO },
     { "idl-partial-update-set-column", NULL, 1, INT_MAX,
         do_idl_partial_update_set_column, OVS_RO },
-    { "idl-table-column-check", NULL, 2, 2,
+    { "idl-table-column-check", NULL, 3, 3,
         do_idl_table_column_check, OVS_RO },
+    { "idl-set-condition-post-connect", NULL, 1, 1,
+        do_idl_set_condition_post_connect, OVS_RO },
+    { "idl-reconnect-last-id", NULL, 2, 2,
+        do_idl_reconnect_last_id, OVS_RO },
     { "help", NULL, 0, INT_MAX, do_help, OVS_RO },
     { NULL, NULL, 0, 0, NULL, OVS_RO },
 };

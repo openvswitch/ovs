@@ -412,12 +412,6 @@ ovsdb_cs_retry_at(struct ovsdb_cs *cs, const char *where)
 static void
 ovsdb_cs_restart_fsm(struct ovsdb_cs *cs)
 {
-    /* Resync data DB table conditions to avoid missing updates due to
-     * conditions that were in flight or changed locally while the connection
-     * was down.
-     */
-    ovsdb_cs_db_sync_condition(&cs->data);
-
     ovsdb_cs_send_schema_request(cs, &cs->server);
     ovsdb_cs_transition(cs, CS_S_SERVER_SCHEMA_REQUESTED);
     cs->data.monitor_version = 0;
@@ -913,16 +907,46 @@ ovsdb_cs_db_get_table(struct ovsdb_cs_db *db, const char *table)
 }
 
 static void
+ovsdb_cs_db_destroy_table(struct ovsdb_cs_db_table *table,
+                          struct ovsdb_cs_db *db)
+{
+    json_destroy(table->ack_cond);
+    json_destroy(table->req_cond);
+    json_destroy(table->new_cond);
+    hmap_remove(&db->tables, &table->hmap_node);
+    free(table->name);
+    free(table);
+}
+
+/* Destroy a given ovsdb_cs_db_table according to the table name. */
+void
+ovsdb_cs_clear_condition(struct ovsdb_cs *cs, const char *table)
+{
+    uint32_t hash = hash_string(table, 0);
+    struct ovsdb_cs_db *db = &cs->data;
+
+    struct ovsdb_cs_db_table *t;
+    HMAP_FOR_EACH_WITH_HASH (t, hmap_node, hash, &db->tables) {
+        if (!strcmp(t->name, table)) {
+            ovsdb_cs_db_destroy_table(t, db);
+            db->last_id = UUID_ZERO;
+            return;
+        }
+    }
+}
+
+void
+ovsdb_cs_reset_last_id(struct ovsdb_cs *cs)
+{
+    cs->data.last_id = UUID_ZERO;
+}
+
+static void
 ovsdb_cs_db_destroy_tables(struct ovsdb_cs_db *db)
 {
     struct ovsdb_cs_db_table *table;
     HMAP_FOR_EACH_SAFE (table, hmap_node, &db->tables) {
-        json_destroy(table->ack_cond);
-        json_destroy(table->req_cond);
-        json_destroy(table->new_cond);
-        hmap_remove(&db->tables, &table->hmap_node);
-        free(table->name);
-        free(table);
+        ovsdb_cs_db_destroy_table(table, db);
     }
     hmap_destroy(&db->tables);
 }
@@ -1500,6 +1524,8 @@ ovsdb_cs_send_monitor_request(struct ovsdb_cs *cs, struct ovsdb_cs_db *db,
         db->schema, db->ops_aux);
     /* XXX handle failure */
     ovs_assert(mrs->type == JSON_OBJECT);
+
+    ovsdb_cs_db_sync_condition(db);
 
     if (version > 1) {
         struct ovsdb_cs_db_table *table;

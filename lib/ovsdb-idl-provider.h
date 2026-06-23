@@ -130,6 +130,9 @@ struct ovsdb_idl_table {
                               * or not. */
     struct ovs_list indexes;    /* Contains "struct ovsdb_idl_index"s */
     struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
+
+    struct ovsdb_idl_condition *req_cond; /* User requested monitor
+                                           * condition. */
 };
 
 struct ovsdb_idl_class {

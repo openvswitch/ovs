@@ -2696,7 +2696,7 @@ dnl idltest2.ovsschema and outputs the presence of tables and columns.
 dnl And then it connectes to the server with the schema idltest.ovsschema
 dnl and does the same.
 AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 dnl
-                 idl-table-column-check unix:socket unix:socket2], [0], [dnl
+                 idl-table-column-check unix:socket unix:socket2 unix:socket], [0], [dnl
 unix:socket remote has table simple
 unix:socket remote has table link1
 unix:socket remote doesn't have table link2
@@ -2715,9 +2715,149 @@ unix:socket2 remote has col l2 in table link1, type: set of up to 1 uuids
 unix:socket2 remote has col i in table link1, type: integer
 unix:socket2 remote has col id in table simple7, type: string
 --- remote unix:socket2 done ---
+unix:socket remote has table simple
+unix:socket remote has table link1
+unix:socket remote doesn't have table link2
+unix:socket remote doesn't have table simple5
+unix:socket remote doesn't have col irefmap in table simple5
+unix:socket remote doesn't have col l2 in table link1
+unix:socket remote has col i in table link1, type: integer
+unix:socket remote doesn't have col id in table simple7
+--- remote unix:socket done ---
 ], [stderr])
 
+# Check we do not have any errors related to conditional monitoring.
+AT_CHECK([grep 'received error' stderr], [1])
+
+# Check the monitor_cond_since request has properly formatted
+# conditions connecting to the idltest2 server.
+AT_CHECK([grep monitor_cond_since stderr | \
+          grep -qF '"l2","==",@<:@"uuid","12345678-dd3f-4616-ab6a-83a490bb0991"@:>@'])
+AT_CHECK([grep monitor_cond_since stderr | grep -qF '"i","==",1'])
+
 OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+AT_SETUP([idl set_condition after connection])
+AT_KEYWORDS([ovsdb server idl set_condition post connect])
+OVSDB_START_IDLTEST([], ["$abs_srcdir/idltest2.ovsschema"])
+
+dnl This test connects to a server with the limited idltest2 schema,
+dnl waits for the initial data, and only then calls set_condition().
+dnl This exercises the code path where conditions are set after a
+dnl successful connection (server_schema_received is already true).
+dnl
+dnl Two conditions are set:
+dnl   - link1.l2 == <uuid>: link1 is in idltest2 but l2 column is not,
+dnl     so the clause must be filtered out.
+dnl   - link2.i == 1: link2 table is not in idltest2 at all, so the
+dnl     condition must be silently dropped.
+AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' \
+                 -vjsonrpc -t10 \
+                 idl-set-condition-post-connect \
+                 unix:socket], [0], [dnl
+link1 set_condition: seqno=1
+link2 set_condition: seqno=0
+current condition seqno: 0
+condition acked: seqno=1
+], [stderr])
+
+# No errors about missing columns/tables in monitor_cond_change.
+AT_CHECK([grep 'received error' stderr], [1])
+
+# The monitor_cond_change must NOT contain the l2 clause
+# (column absent from idltest2 schema).
+AT_CHECK([grep monitor_cond_change stderr | \
+          grep -qF '"l2","==",@<:@"uuid","12345678-dd3f-4616-ab6a-83a490bb0991"@:>@'], \
+          [1])
+
+# The monitor_cond_change must contain the i clause
+# (column present in idltest2 schema).
+AT_CHECK([grep monitor_cond_change stderr | grep -qF '"i","==",1'])
+
+# The monitor_cond_change must NOT contain link2 table
+# (table absent from idltest2 schema).
+AT_CHECK([grep monitor_cond_change stderr | grep -qF '"link2"'], [1])
+
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+AT_SETUP([idl reconnect does not reset last_id for missing tables])
+AT_KEYWORDS([ovsdb server idl reconnect last_id cluster])
+
+dnl Use single-node raft clusters so that the servers maintain
+dnl transaction history and monitor_cond_since with a non-zero
+dnl last_id returns found=true with incremental updates.
+dnl
+dnl Server 1 (socket): limited schema (idltest2) - lacks link2 table
+dnl                     and l2 column in link1.
+dnl Server 2 (socket2): full schema (idltest) - has all tables/columns.
+AT_CHECK([ovsdb-tool create-cluster s1.db \
+              $abs_srcdir/idltest2.ovsschema unix:s1.raft])
+schema_name=$(ovsdb-tool schema-name $abs_srcdir/idltest2.ovsschema)
+on_exit 'kill $(cat s*.pid)'
+AT_CHECK([ovsdb-server -vraft -vconsole:warn -vfile:dbg --detach \
+              --no-chdir --log-file=s1.log --pidfile=s1.pid \
+              --unixctl=s1 --remote=punix:socket s1.db])
+OVS_WAIT_UNTIL([ovs-appctl -t $(pwd)/s1 cluster/status \
+                    ${schema_name} | grep -q 'Status: cluster member'])
+
+AT_CHECK([ovsdb-tool create-cluster s2.db \
+              $abs_srcdir/idltest.ovsschema unix:s2.raft])
+AT_CHECK([ovsdb-server -vraft -vconsole:warn -vfile:dbg --detach \
+              --no-chdir --log-file=s2.log --pidfile=s2.pid \
+              --unixctl=s2 --remote=punix:socket2 s2.db])
+OVS_WAIT_UNTIL([ovs-appctl -t $(pwd)/s2 cluster/status \
+                    ${schema_name} | grep -q 'Status: cluster member'])
+
+dnl This test sets a condition on link2 (not in idltest2 schema) before
+dnl connecting, then:
+dnl   1. Connects to the limited-schema server (socket) and gets data.
+dnl   2. Reconnects to the same server - last_id must be preserved
+dnl      (non-zero) because the CS entry for link2 was already destroyed
+dnl      on the first connection, so ovsdb_cs_clear_condition() is a
+dnl      no-op.
+dnl   3. Connects to the full-schema server (socket2), simulating a
+dnl      schema upgrade.  The client must reset last_id to zero because
+dnl      previously missing tables/columns are now available and the
+dnl      old transaction history does not cover them.
+AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' \
+                 -vjsonrpc -t10 \
+                 idl-reconnect-last-id \
+                 unix:socket unix:socket2], [0], [dnl
+done
+], [stderr])
+
+# There should be three data DB monitor_cond_since requests.
+AT_CHECK([grep monitor_cond_since stderr | grep 'send request' | \
+          grep -c '"idltest"'], [0], [3
+])
+
+# First data DB request (initial connect to limited schema):
+# must use UUID_ZERO as last_id (no prior state).
+AT_CHECK([grep monitor_cond_since stderr | grep 'send request' | \
+          grep '"idltest"' | sed -n '1p' | \
+          grep -qF '"00000000-0000-0000-0000-000000000000"'])
+
+# Second data DB request (reconnect to same limited schema):
+# must NOT use UUID_ZERO, proving last_id was preserved.
+AT_CHECK([grep monitor_cond_since stderr | grep 'send request' | \
+          grep '"idltest"' | sed -n '2p' | \
+          grep -qF '"00000000-0000-0000-0000-000000000000"'], [1])
+
+# Third data DB request (connect to full schema / upgrade):
+# must use UUID_ZERO because previously missing tables are now
+# present and the old transaction history does not cover them.
+AT_CHECK([grep monitor_cond_since stderr | grep 'send request' | \
+          grep '"idltest"' | sed -n '3p' | \
+          grep -qF '"00000000-0000-0000-0000-000000000000"'])
+
+# No errors about missing columns/tables.
+AT_CHECK([grep 'received error' stderr], [1])
+
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([$(pwd)/s1], [s1.pid])
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([$(pwd)/s2], [s2.pid])
+
 AT_CLEANUP
 
 dnl This test checks that inserting and deleting the source of a reference

@@ -99,6 +99,8 @@ struct ovsdb_idl {
     struct ovs_list rows_to_reparse; /* Stores rows that might need to be
                                       * re-parsed due to insertion of a
                                       * referenced row. */
+    bool server_schema_received; /* Set to true when the IDL has received
+                                  * the DB schema from the server. */
 };
 
 static struct ovsdb_cs_ops ovsdb_idl_cs_ops;
@@ -205,6 +207,17 @@ static void ovsdb_idl_add_to_indexes(const struct ovsdb_idl_row *);
 static void ovsdb_idl_remove_from_indexes(const struct ovsdb_idl_row *);
 static int ovsdb_idl_try_commit_loop_txn(struct ovsdb_idl_loop *loop,
                                          bool *may_need_wakeup);
+static void ovsdb_idl_condition_clone(struct ovsdb_idl_condition *dest,
+                                      const struct ovsdb_idl_condition *);
+static void ovsdb_idl_create_req_condition(
+        struct ovsdb_idl *,
+        const struct ovsdb_idl_table_class *,
+        const struct ovsdb_idl_condition *);
+static void ovsdb_idl_destroy_req_condition(struct ovsdb_idl_table *);
+static unsigned int ovsdb_idl_set_condition__(
+        struct ovsdb_idl *,
+        const struct ovsdb_idl_table_class *,
+        const struct ovsdb_idl_condition *);
 
 static void add_tracked_change_for_references(struct ovsdb_idl_row *);
 
@@ -266,6 +279,7 @@ ovsdb_idl_create_unconnected(const struct ovsdb_idl_class *class,
         .txn = NULL,
         .outstanding_txns = HMAP_INITIALIZER(&idl->outstanding_txns),
         .verify_write_only = false,
+        .server_schema_received = false,
         .deleted_untracked_rows
             = OVS_LIST_INITIALIZER(&idl->deleted_untracked_rows),
         .rows_to_reparse
@@ -298,6 +312,7 @@ ovsdb_idl_create_unconnected(const struct ovsdb_idl_class *class,
             = table->change_seqno[OVSDB_IDL_CHANGE_DELETE] = 0;
         table->idl = idl;
         table->in_server_schema = false;
+        table->req_cond = NULL;
         shash_init(&table->schema_columns);
     }
 
@@ -372,6 +387,7 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
 
             ovsdb_idl_schema_columns_clear(&table->schema_columns);
             shash_destroy(&table->schema_columns);
+            ovsdb_idl_destroy_req_condition(table);
 
             hmap_destroy(&table->rows);
             free(table->modes);
@@ -788,6 +804,7 @@ ovsdb_idl_compose_monitor_request(const struct json *schema_json, void *idl_)
     struct shash *schema = ovsdb_cs_parse_schema(schema_json);
     struct json *monitor_requests = json_object_create();
 
+    idl->server_schema_received = true;
     for (size_t i = 0; i < idl->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
         const struct ovsdb_idl_table_class *tc = table->class_;
@@ -842,8 +859,16 @@ ovsdb_idl_compose_monitor_request(const struct json *schema_json, void *idl_)
                           idl->class_->database, table->class_->name);
                 json_destroy(columns);
                 table->in_server_schema = false;
+                ovsdb_cs_clear_condition(idl->cs, table->class_->name);
                 continue;
             } else if (schema && table_schema) {
+                if (!table->in_server_schema) {
+                    /* The server didn't have this table before and now it
+                     * does.  It should've dropped the transaction history,
+                     * but it's better if we do not ask for it in the first
+                     * place, as our conditions could be out of sync. */
+                    ovsdb_cs_reset_last_id(idl->cs);
+                }
                 table->in_server_schema = true;
             }
 
@@ -851,6 +876,14 @@ ovsdb_idl_compose_monitor_request(const struct json *schema_json, void *idl_)
             json_object_put(monitor_request, "columns", columns);
             json_object_put(monitor_requests, tc->name,
                             json_array_create_1(monitor_request));
+        }
+
+        if (!table->in_server_schema) {
+            ovsdb_cs_clear_condition(idl->cs, table->class_->name);
+        } else if (table->req_cond) {
+            /* Update the monitor condition request according to the
+             * db schema. */
+            ovsdb_idl_set_condition__(idl, tc, table->req_cond);
         }
     }
     ovsdb_cs_free_schema(schema);
@@ -1156,6 +1189,41 @@ ovsdb_idl_condition_add_clause__(struct ovsdb_idl_condition *condition,
     hmap_insert(&condition->clauses, &clause->hmap_node, hash);
 }
 
+static void
+ovsdb_idl_destroy_req_condition(struct ovsdb_idl_table *table)
+{
+    ovsdb_idl_condition_destroy(table->req_cond);
+    free(table->req_cond);
+    table->req_cond = NULL;
+}
+
+static void
+ovsdb_idl_condition_clone(struct ovsdb_idl_condition *dest,
+                          const struct ovsdb_idl_condition *source)
+{
+    ovsdb_idl_condition_init(dest);
+
+    struct ovsdb_idl_clause *clause;
+    HMAP_FOR_EACH (clause, hmap_node, &source->clauses) {
+        ovsdb_idl_condition_add_clause__(dest, clause, clause->hmap_node.hash);
+    }
+    dest->is_true = source->is_true;
+}
+
+static void
+ovsdb_idl_create_req_condition(struct ovsdb_idl *idl,
+                               const struct ovsdb_idl_table_class *tc,
+                               const struct ovsdb_idl_condition *condition)
+{
+    struct ovsdb_idl_table *table = shash_find_data(&idl->table_by_name,
+                                                    tc->name);
+    if (table) {
+        ovsdb_idl_destroy_req_condition(table);
+        table->req_cond = xzalloc(sizeof *table->req_cond);
+        ovsdb_idl_condition_clone(table->req_cond, condition);
+    }
+}
+
 /* Adds a clause to the condition for replicating the table with class 'tc' in
  * 'idl'.
  *
@@ -1234,6 +1302,55 @@ ovsdb_idl_condition_to_json(const struct ovsdb_idl_condition *cnd)
     return json_array_create(clauses, n);
 }
 
+static unsigned int
+ovsdb_idl_set_condition__(struct ovsdb_idl *idl,
+                          const struct ovsdb_idl_table_class *tc,
+                          const struct ovsdb_idl_condition *condition)
+{
+    struct ovsdb_idl_condition filter_cond =
+        OVSDB_IDL_CONDITION_INIT(&filter_cond);
+    struct json *cond_json;
+    unsigned int seqno;
+
+    if (!idl->server_schema_received) {
+        /* Can't filter yet - pass through.  Will be filtered once we know
+         * the server schema. */
+        goto set_condition;
+    }
+
+    struct ovsdb_idl_table *t = ovsdb_idl_table_from_class(idl, tc);
+    if (!t || !t->in_server_schema) {
+        /* Not on the server, should not set. */
+        seqno = ovsdb_idl_get_condition_seqno(idl);
+        goto exit;
+    }
+
+    if (hmap_is_empty(&condition->clauses)) {
+        /* Trivial condition and the table is present on the server. */
+        goto set_condition;
+    }
+
+    /* Non-trivial condition for a table that is in the server schema.
+     * Filter out columns that are not. */
+    struct ovsdb_idl_clause *clause;
+    HMAP_FOR_EACH (clause, hmap_node, &condition->clauses) {
+        if (ovsdb_idl_server_has_column(idl, clause->column)) {
+            ovsdb_idl_condition_add_clause__(&filter_cond, clause,
+                                             clause->hmap_node.hash);
+        }
+    }
+    condition = &filter_cond;
+
+set_condition:
+    cond_json = ovsdb_idl_condition_to_json(condition);
+    seqno = ovsdb_cs_set_condition(idl->cs, tc->name, cond_json);
+    json_destroy(cond_json);
+
+exit:
+    ovsdb_idl_condition_destroy(&filter_cond);
+    return seqno;
+}
+
 /* Sets the replication condition for 'tc' in 'idl' to 'condition' and
  * arranges to send the new condition to the database server.
  *
@@ -1245,10 +1362,8 @@ ovsdb_idl_set_condition(struct ovsdb_idl *idl,
                         const struct ovsdb_idl_table_class *tc,
                         const struct ovsdb_idl_condition *condition)
 {
-    struct json *cond_json = ovsdb_idl_condition_to_json(condition);
-    unsigned int seqno = ovsdb_cs_set_condition(idl->cs, tc->name, cond_json);
-    json_destroy(cond_json);
-    return seqno;
+    ovsdb_idl_create_req_condition(idl, tc, condition);
+    return ovsdb_idl_set_condition__(idl, tc, condition);
 }
 
 /* Turns off OVSDB_IDL_ALERT and OVSDB_IDL_TRACK for 'column' in 'idl'.
