@@ -788,6 +788,7 @@ Taekho Nam                      thnam@smartx.kr
 Takayuki HAMA                   t-hama@cb.jp.nec.com
 Teemu Koponen
 Thomas Morin                    thomas.morin@orange.com
+Tim Rozet                       trozet@nvidia.com
 Timothy Chen
 Torbjorn Tornkvist              kruskakli@gmail.com
 Tulio Ribeiro                   tribeiro@lasige.di.fc.ul.pt
@@ -803,6 +804,7 @@ Yeming Zhao                     zhaoyeming@gmail.com
 Yi Ba                           yby.developer@yahoo.com
 Ying Chen                       yingchen@vmware.com
 Yongqiang Liu                   liuyq7809@gmail.com
+Yuliang Xiao                    xyl1509410143@gmail.com
 ZHANG Zhiming                   zhangzhiming@yunshan.net.cn
 Zhangguanghui                   zhang.guanghui@h3c.com
 Zheng Jingzhou                  glovejmm@163.com
