@@ -486,3 +486,41 @@ Example
      both_modules += brcompat
     -- 
     1.7.7.3
+
+.. _posting-new-versions:
+
+Posting New Versions
+--------------------
+
+When review feedback requires changes, post a revised patch as a new email
+thread (do not reply to the original thread).  Increment the version number in
+the subject prefix, e.g. ``[PATCH v2]``, ``[PATCH v3]``, and so on.  Include a
+changelog below the ``---`` separator line describing what changed since the
+previous version.  For example::
+
+    ---
+    v3: Addressed review comments from Jane Doe:
+        - Fixed off-by-one in foo().
+
+    v2: Addressed review comments from John Doe:
+        - Reworded commit message to clarify intent.
+        - Replaced open-coded loop with existing helper foo().
+
+Always resend the complete patch or series, not just the changed parts.  Before
+reposting, make sure the review thread on the previous version has gone quiet;
+do not post a new version while active discussion is still ongoing unless a
+reviewer explicitly asks you to.
+
+After Submitting
+----------------
+
+After sending your patch to the mailing list, keep an eye on its state in
+`Patchwork <https://patchwork.ozlabs.org/project/openvswitch/list/>`__.
+Maintainers update states manually as review progresses; see
+:ref:`patch-states` in :doc:`/internals/patchwork` for what each state means.
+
+If the patch is marked **Changes Requested**, post a revised version as
+described in :ref:`posting-new-versions` above.
+
+If you have not received any feedback for a while, send a ping to the mailing
+list.

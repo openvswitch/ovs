@@ -43,6 +43,45 @@ vSwitch:
 __ https://github.com/getpatchwork/patchwork
 __ https://patchwork.ozlabs.org/project/openvswitch/list/
 
+.. _patch-states:
+
+Patch States
+------------
+
+Maintainers update the state of a patch in Patchwork manually to reflect its
+current status in the review process.  As a patch author, you should monitor
+your patch's state after submission.  The states you are most likely to
+encounter are:
+
+``New``
+  The patch has been received and not yet triaged.
+
+``Under Review``
+  The patch is being actively reviewed by a maintainer or reviewer.
+
+``Changes Requested``
+  Review discussion has concluded that the patch needs changes before it can
+  be accepted.  You should revise your patch and post a new version (see
+  :ref:`posting-new-versions`).
+
+``Accepted``
+  The patch has been applied to the Open vSwitch repository.  No further
+  action is needed.
+
+``Rejected``
+  The patch will not be applied.  The review thread should explain why.
+
+``Superseded``
+  A newer version of the patch has been posted, making this version obsolete.
+
+``Deferred``
+  The patch cannot be applied right now, for example due to an unresolved
+  dependency.  It should be re-posted when the blocking condition is resolved.
+
+If your patch has been in ``New`` or ``Under Review`` state for an extended
+period without any feedback, check whether the thread went quiet and send a
+polite ping to the mailing list.
+
 .. _git-pw:
 
 git-pw
