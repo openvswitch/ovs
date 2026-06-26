@@ -614,7 +614,12 @@ static int
 netdev_linux_netnsid_update(struct netdev_linux *netdev)
 {
     if (netnsid_is_unset(netdev->netnsid)) {
-        if (netdev_get_class(&netdev->up) == &netdev_tap_class) {
+        const char *dpif_type = netdev_get_dpif_type(&netdev->up);
+
+        if (netdev_get_class(&netdev->up) == &netdev_tap_class
+            || (dpif_type && strcmp(dpif_type, "system"))) {
+            /* vport netlink lookup makes no sense for
+             * non-system dpif types, set nsid to local. */
             netnsid_set_local(&netdev->netnsid);
         } else {
             return netdev_linux_netnsid_update__(netdev);
