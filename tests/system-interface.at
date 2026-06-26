@@ -255,3 +255,51 @@ AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --log-file -vvconn -vofprot
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+dnl Test that peer_ifindex is correctly reported for veth devices.
+AT_SETUP([interface - veth peer_ifindex status])
+AT_SKIP_IF([test $HAVE_ETHTOOL = "no"])
+
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(testns)
+
+dnl Create a veth pair: ovs-veth0 (main ns) <-> ovs-veth1 (testns).
+AT_CHECK([ip link add ovs-veth0 type veth peer name ovs-veth1])
+on_exit 'ip link del ovs-veth0'
+AT_CHECK([ip link set ovs-veth1 netns testns])
+
+AT_CHECK([ovs-vsctl add-port br0 ovs-veth0])
+
+dnl Get the actual ifindex of ovs-veth1 in testns.
+AT_CHECK([ip netns exec testns ip link show ovs-veth1], [0], [stdout])
+peer1_ifindex=$(sed -n 's/^\([[0-9]]*\):.*/\1/p' stdout)
+
+dnl Verify OVS reports the correct peer_ifindex.
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get interface ovs-veth0 status:peer_ifindex],
+                     ["\"$peer1_ifindex\""])
+
+dnl Recreate veth pair with the same name to test stale ifindex detection.
+AT_CHECK([ip link del ovs-veth0])
+AT_CHECK([ip link add ovs-veth0 type veth peer name ovs-veth1])
+AT_CHECK([ip link set ovs-veth1 netns testns])
+
+dnl Get the new peer's ifindex.
+AT_CHECK([ip netns exec testns ip link show ovs-veth1], [0], [stdout])
+peer2_ifindex=$(sed -n 's/^\([[0-9]]*\):.*/\1/p' stdout)
+
+dnl Verify OVS detects the change and reports the new peer_ifindex.
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get interface ovs-veth0 status:peer_ifindex],
+                     ["\"$peer2_ifindex\""])
+
+dnl Verify the two peer ifindexes are different.
+AT_CHECK([test "$peer1_ifindex" != "$peer2_ifindex"])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["dnl
+/could not open network device ovs-veth0/d
+/cannot get .*STP status on nonexistent port/d
+/ethtool command .*on network device ovs-veth0 failed/d
+/error receiving .*ovs-veth0/d
+/ovs-veth0: removing policing failed/d"])
+
+AT_CLEANUP

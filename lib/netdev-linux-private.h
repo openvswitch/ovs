@@ -97,6 +97,7 @@ struct netdev_linux {
     uint8_t current_duplex;          /* Cached from ETHTOOL_GSET. */
 
     struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
+    uint64_t peer_ifindex;           /* Cached from ETHTOOL_GSTATS (veth). */
     struct tc *tc;
 
     /* For devices of class netdev_tap_class only. */

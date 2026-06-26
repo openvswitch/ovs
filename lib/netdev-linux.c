@@ -3814,6 +3814,51 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
     return ENXIO;
 }
 
+/* For veth devices, query peer_ifindex via ethtool statistics. */
+static void
+netdev_linux_get_peer_ifindex(struct netdev_linux *netdev)
+{
+    struct ethtool_gstrings *names = NULL;
+    struct ethtool_stats *stats = NULL;
+    size_t n_stats = netdev->drvinfo.n_stats;
+    struct ethtool_cmd *cmd;
+    int error;
+
+    if (strcmp(netdev->drvinfo.driver, "veth") || !n_stats) {
+        return;
+    }
+
+    error = netdev_linux_read_definitions(netdev, ETH_SS_STATS, &names);
+    if (error) {
+        return;
+    }
+
+    stats = xzalloc(sizeof *stats + n_stats * sizeof stats->data[0]);
+    stats->cmd = ETHTOOL_GSTATS;
+    stats->n_stats = n_stats;
+
+    cmd = (struct ethtool_cmd *) stats;
+    error = netdev_linux_do_ethtool(netdev->up.name, cmd,
+                                    ETHTOOL_GSTATS, "ETHTOOL_GSTATS");
+    if (error) {
+        free(stats);
+        free(names);
+        return;
+    }
+
+    for (uint32_t i = 0; i < names->len && i < stats->n_stats; i++) {
+        char *name = (char *) &names->data[i * ETH_GSTRING_LEN];
+
+        if (!strcmp(name, "peer_ifindex")) {
+            netdev->peer_ifindex = stats->data[i];
+            break;
+        }
+    }
+
+    free(stats);
+    free(names);
+}
+
 int
 netdev_linux_get_status(const struct netdev *netdev_, struct smap *smap)
 {
@@ -3826,11 +3871,13 @@ netdev_linux_get_status(const struct netdev *netdev_, struct smap *smap)
 
         COVERAGE_INC(netdev_get_ethtool);
         memset(&netdev->drvinfo, 0, sizeof netdev->drvinfo);
+        netdev->peer_ifindex = 0;
         error = netdev_linux_do_ethtool(netdev->up.name,
                                         cmd,
                                         ETHTOOL_GDRVINFO,
                                         "ETHTOOL_GDRVINFO");
         if (!error) {
+            netdev_linux_get_peer_ifindex(netdev);
             netdev->cache_valid |= VALID_DRVINFO;
         }
     }
@@ -3839,6 +3886,11 @@ netdev_linux_get_status(const struct netdev *netdev_, struct smap *smap)
         smap_add(smap, "driver_name", netdev->drvinfo.driver);
         smap_add(smap, "driver_version", netdev->drvinfo.version);
         smap_add(smap, "firmware_version", netdev->drvinfo.fw_version);
+
+        if (netdev->peer_ifindex) {
+            smap_add_format(smap, "peer_ifindex",
+                            "%"PRIu64, netdev->peer_ifindex);
+        }
     }
     ovs_mutex_unlock(&netdev->mutex);
 

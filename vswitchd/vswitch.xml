@@ -3762,6 +3762,19 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         The version string of the network adapter's firmware, if available.
       </column>
 
+      <column name="status" key="peer_ifindex">
+        <p>
+          For veth devices on Linux, this column contains the interface index
+          of the peer veth device.  This allows applications to
+          programmatically discover veth pairs without requiring additional
+          system calls or parsing network interface information.
+        </p>
+        <p>
+          Only present for veth devices (when <ref column="status"
+          key="driver_name"/> is "veth").  Not available on non-Linux systems.
+        </p>
+      </column>
+
       <column name="status" key="source_ip">
         The source IP address used for an IPv4/IPv6 tunnel end-point, such as
         <code>gre</code>.
