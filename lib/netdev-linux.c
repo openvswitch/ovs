@@ -2523,7 +2523,9 @@ netdev_internal_get_stats(const struct netdev *netdev_,
 }
 
 static int
-netdev_linux_read_stringset_info(struct netdev_linux *netdev, uint32_t *len)
+netdev_linux_read_stringset_info(struct netdev_linux *netdev,
+                                 enum ethtool_stringset string_set,
+                                 uint32_t *len)
 {
     union {
         struct ethtool_cmd ecmd;
@@ -2537,7 +2539,7 @@ netdev_linux_read_stringset_info(struct netdev_linux *netdev, uint32_t *len)
 
     sset_info.hdr.cmd = ETHTOOL_GSSET_INFO;
     sset_info.hdr.reserved = 0;
-    sset_info.hdr.sset_mask = 1ULL << ETH_SS_FEATURES;
+    sset_info.hdr.sset_mask = 1ULL << string_set;
 
     error = netdev_linux_do_ethtool(netdev_get_name(&netdev->up),
                                     (struct ethtool_cmd *) &sset_info,
@@ -2545,11 +2547,11 @@ netdev_linux_read_stringset_info(struct netdev_linux *netdev, uint32_t *len)
     if (error) {
         return error;
     }
-    if (sset_info.hdr.sset_mask & (1ULL << ETH_SS_FEATURES)) {
+    if (sset_info.hdr.sset_mask & (1ULL << string_set)) {
         *len = sset_info.sset_len[0];
         return 0;
     } else {
-        /* ETH_SS_FEATURES is not supported. */
+        /* String set is not supported. */
         return -EOPNOTSUPP;
     }
 }
@@ -2557,13 +2559,14 @@ netdev_linux_read_stringset_info(struct netdev_linux *netdev, uint32_t *len)
 
 static int
 netdev_linux_read_definitions(struct netdev_linux *netdev,
+                              enum ethtool_stringset string_set,
                               struct ethtool_gstrings **pstrings)
 {
     struct ethtool_gstrings *strings = NULL;
     uint32_t len = 0;
     int error = 0;
 
-    error = netdev_linux_read_stringset_info(netdev, &len);
+    error = netdev_linux_read_stringset_info(netdev, string_set, &len);
     if (error) {
         return error;
     } else if (!len) {
@@ -2573,7 +2576,7 @@ netdev_linux_read_definitions(struct netdev_linux *netdev,
     strings = xzalloc(sizeof *strings + len * ETH_GSTRING_LEN);
 
     strings->cmd = ETHTOOL_GSTRINGS;
-    strings->string_set = ETH_SS_FEATURES;
+    strings->string_set = string_set;
     strings->len = len;
     error = netdev_linux_do_ethtool(netdev_get_name(&netdev->up),
                                     (struct ethtool_cmd *) strings,
@@ -2605,7 +2608,7 @@ netdev_linux_set_ol(struct netdev *netdev_)
 
     COVERAGE_INC(netdev_get_ethtool);
 
-    error = netdev_linux_read_definitions(netdev, &names);
+    error = netdev_linux_read_definitions(netdev, ETH_SS_FEATURES, &names);
     if (error) {
         return;
     }
