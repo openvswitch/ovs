@@ -1,3 +1,2 @@
-openvswitch.spec
 openvswitch-fedora.spec
 usr_lib_systemd_system_ovs-vswitchd.service
