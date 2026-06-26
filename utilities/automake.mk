@@ -144,5 +144,3 @@ FLAKE8_PYFILES += utilities/ovs-pcap.in \
 	utilities/usdt-scripts/kernel_delay.py \
 	utilities/usdt-scripts/upcall_monitor.py \
 	utilities/usdt-scripts/upcall_cost.py
-
-include utilities/bugtool/automake.mk

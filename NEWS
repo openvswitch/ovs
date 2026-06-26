@@ -30,6 +30,7 @@ Post-v3.7.0
        performance testing.
      * ovs-vlan-test: It was designed to check for VLAN bugs in old Linux
        kernels that have long been fixed.
+     * ovs-bugtool: There are much better alternatives like sosreport.
    - The old spec file for RPM packaging on RHEL 5 and 6 is now removed.
    - Windows:
      * The previously deprecated Windows kernel datapath implementation is

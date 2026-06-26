@@ -55,10 +55,6 @@ The remainder are still in roff format can be found below:
 
 .. list-table::
 
-   * - ovs-bugtool(8)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-bugtool.8.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-bugtool.8.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-bugtool.8.txt>`__
    * - ovsdb-client(1)
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovsdb-client.1.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovsdb-client.1.html>`__
