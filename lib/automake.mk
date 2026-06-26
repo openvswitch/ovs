@@ -168,6 +168,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/netflow.h \
 	lib/netlink.c \
 	lib/netlink.h \
+	lib/netnsid.c \
 	lib/netnsid.h \
 	lib/nx-match.c \
 	lib/nx-match.h \

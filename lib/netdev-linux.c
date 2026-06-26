@@ -586,6 +586,88 @@ is_tap_netdev(const struct netdev *netdev)
     return netdev_get_class(netdev) == &netdev_tap_class;
 }
 
+/* Ensures that our own network namespace has a self-referential nsid mapping
+ * and records its value through netnsid_set_self() so that netnsid_is_local()
+ * treats it as the local namespace.
+ *
+ * NETLINK_LISTEN_ALL_NSID workaround: OVS enables this option on its RTNL
+ * notification socket so that it can receive events from remote namespaces.
+ * A side-effect of this option is that the kernel tags every broadcast
+ * (including locally-originated RTM events) with the sender nsid as looked up
+ * in the receiver nsid table.  Normally local events carry no nsid cmsg
+ * (which OVS interprets as NETNSID_LOCAL), but if a self-referential nsid
+ * mapping exists for the local namespace an older kernel may tag them with
+ * that nsid instead, causing OVS to silently reject them.  Some container
+ * runtimes create such a mapping as a side-effect of cross-namespace link
+ * queries.
+ *
+ * To make this deterministic, we create the mapping ourselves (or read back
+ * the existing one) at startup, before the notification socket exists and
+ * record the resulting nsid as local.  A self-referential nsid mapping is
+ * permanent once created, the kernel only removes nsid entries when the
+ * peer namespace is destroyed, which can never happen for our own namespace.
+ * Therefore, the value never changes and no runtime monitoring is required.
+ *
+ * The namespace is identified by our own pid (NETNSA_PID).
+ *
+ * This kernel behavior was fixed in commit 88b126b39f97 ("net: netlink: don't
+ * set nsid on local notifications"), which stops tagging local events with the
+ * self-referential nsid.  This workaround (and the self-nsid check in
+ * netnsid_is_local()) is only needed for older kernels that lack that fix and
+ * can be removed once such kernels are no longer supported. */
+static void
+netdev_linux_init_self_nsid(void)
+{
+#ifdef HAVE_LINUX_NET_NAMESPACE_H
+    const int rta_offset = NLMSG_ALIGN(sizeof(struct rtgenmsg));
+    struct ofpbuf request;
+    struct ofpbuf *reply = NULL;
+    uint32_t pid = getpid();
+    int error;
+
+    /* Create a self-referential nsid mapping for our own namespace.  Passing
+     * NETNSA_NSID == -1 lets the kernel allocate a free id. If the mapping
+     * already exists the request fails with EEXIST, which is harmless. */
+    ofpbuf_init(&request, 0);
+    nl_msg_put_nlmsghdr(&request,
+                        rta_offset + 2 * NL_ATTR_SIZE(sizeof(uint32_t)),
+                        RTM_NEWNSID, NLM_F_REQUEST | NLM_F_ACK);
+    ofpbuf_put_zeros(&request, rta_offset);
+    nl_msg_put_u32(&request, NETNSA_PID, pid);
+    nl_msg_put_u32(&request, NETNSA_NSID, NETNSID_LOCAL);
+    nl_transact(NETLINK_ROUTE, &request, NULL);
+    ofpbuf_uninit(&request);
+
+    /* Read back the nsid that the kernel assigned to our namespace. */
+    ofpbuf_init(&request, 0);
+    nl_msg_put_nlmsghdr(&request, rta_offset + NL_ATTR_SIZE(sizeof(uint32_t)),
+                        RTM_GETNSID, NLM_F_REQUEST);
+    ofpbuf_put_zeros(&request, rta_offset);
+    nl_msg_put_u32(&request, NETNSA_PID, pid);
+
+    error = nl_transact(NETLINK_ROUTE, &request, &reply);
+    if (!error && reply) {
+        const struct nlattr *a;
+
+        a = nl_attr_find(reply, NLMSG_HDRLEN + rta_offset, NETNSA_NSID);
+        if (a) {
+            int nsid = nl_attr_get_u32(a);
+
+            if (nsid >= 0) {
+                netnsid_set_self(nsid);
+                VLOG_DBG("local network namespace has nsid %d", nsid);
+            }
+        }
+    } else {
+        VLOG_WARN("could not query local network namespace nsid: %s",
+                  ovs_strerror(error));
+    }
+
+    ofpbuf_uninit(&request);
+    ofpbuf_delete(reply);
+#endif
+}
+
 static int
 netdev_linux_netnsid_update__(struct netdev_linux *netdev)
 {
@@ -664,6 +746,11 @@ netdev_linux_notify_sock(void)
 
     if (ovsthread_once_start(&once)) {
         int error;
+
+        /* Discover (creating it if necessary) the nsid that the kernel uses
+         * for our own namespace, before the notification socket starts
+         * receiving namespace-tagged events. */
+        netdev_linux_init_self_nsid();
 
         error = nl_sock_create(NETLINK_ROUTE, &sock);
         if (!error) {

@@ -19,6 +19,8 @@
 
 #include <stdbool.h>
 
+#include "util.h"
+
 #ifdef HAVE_LINUX_NET_NAMESPACE_H
 #include <linux/net_namespace.h>
 #endif
@@ -67,6 +69,14 @@
 #endif
 #define NETNSID_UNSET (NETNSID_LOCAL - 1)
 
+/* The nsid that the local kernel assigns to our own network namespace when a
+ * self-referential mapping exists, or NETNSID_LOCAL otherwise.  It is defined
+ * in netnsid.c and set once at startup by the platform-specific netdev code
+ * (see netdev-linux.c).  netnsid_is_local() treats this value as equivalent
+ * to the local namespace. */
+extern int netnsid_self;
+void netnsid_set_self(int nsid);
+
 /* Prototypes */
 static inline void netnsid_set_local(int *nsid);
 static inline bool netnsid_is_local(int nsid);
@@ -86,7 +96,7 @@ netnsid_set_local(int *nsid)
 static inline bool
 netnsid_is_local(int nsid)
 {
-    return nsid == NETNSID_LOCAL;
+    return nsid == NETNSID_LOCAL || nsid == netnsid_self;
 }
 
 static inline void
@@ -127,6 +137,13 @@ netnsid_eq(int nsid1, int nsid2)
 {
     if (netnsid_is_unset(nsid1) || netnsid_is_unset(nsid2)) {
         return false;
+    }
+
+    /* The local namespace may be represented either as NETNSID_LOCAL or as the
+     * self-referential nsid the kernel assigned to it (see netnsid_self), so
+     * two local nsids are equal regardless of their exact representation. */
+    if (netnsid_is_local(nsid1) && netnsid_is_local(nsid2)) {
+        return true;
     }
 
     if (nsid1 == nsid2) {
