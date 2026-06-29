@@ -298,36 +298,6 @@ def run():
 commands.append(run)
 
 
-def modinst():
-    if not os.path.exists("/lib/modules"):
-        print("Missing modules directory.  Is this a Linux system?")
-        sys.exit(1)
-
-    sudo()
-    try:
-        _sh("rmmod", "openvswitch")
-    except subprocess.CalledProcessError:
-        pass  # Module isn't loaded
-
-    try:
-        _sh("rm -f /lib/modules/%s/extra/openvswitch.ko" % uname())
-        _sh("rm -f /lib/modules/%s/extra/vport-*.ko" % uname())
-    except subprocess.CalledProcessError:
-        pass  # Module isn't installed
-
-    conf()
-    make()
-    make("modules_install")
-
-    _sh("modprobe", "openvswitch")
-    _sh("dmesg | grep openvswitch | tail -1")
-    _sh("find /lib/modules/%s/ -iname vport-*.ko -exec insmod '{}' \\;"
-        % uname())
-
-
-commands.append(modinst)
-
-
 def env():
     print("export PATH=" + ENV["PATH"])
 
@@ -370,13 +340,12 @@ Commands:
     kill    - Kill all running instances of ovs.
     reset   - Reset any runtime configuration in %(run)s.
     run     - Run ovs.
-    modinst - Build ovs and install the kernel module.
     env     - Print the required path environment variable.
     doc     - Print this message.
 
 Note:
-    If running as non-root user, "kill", "reset", "run" and "modinst"
-    will always run as the root user, by rerun the commands with "sudo".
+    If running as non-root user, "kill", "reset" and "run" will always run
+    as the root user, by rerun the commands with "sudo".
 """ % {"ovs": OVS_SRC, "v": sys.argv[0], "run": RUNDIR})
     sys.exit(0)
 
