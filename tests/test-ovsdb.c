@@ -3600,7 +3600,8 @@ do_idl_table_column_check(struct ovs_cmdl_context *ctx)
         OVSDB_IDL_CONDITION_INIT(&cond_link1);
     struct uuid uuid;
 
-    uuid_from_string(&uuid, "12345678-dd3f-4616-ab6a-83a490bb0991");
+    ovs_assert(uuid_from_string(&uuid,
+                                "12345678-dd3f-4616-ab6a-83a490bb0991"));
     idltest_link1_add_clause_l2(&cond_link1, OVSDB_F_EQ, &uuid);
     idltest_link1_set_condition(idl, &cond_link1);
 
@@ -3723,7 +3724,8 @@ do_idl_set_condition_post_connect(struct ovs_cmdl_context *ctx)
     unsigned int link1_seqno;
     unsigned int link2_seqno;
 
-    uuid_from_string(&uuid, "12345678-dd3f-4616-ab6a-83a490bb0991");
+    ovs_assert(uuid_from_string(&uuid,
+                                "12345678-dd3f-4616-ab6a-83a490bb0991"));
     idltest_link1_add_clause_l2(&cond_link1, OVSDB_F_EQ, &uuid);
     idltest_link1_add_clause_i(&cond_link1, OVSDB_F_EQ, 1);
     link1_seqno = idltest_link1_set_condition(idl, &cond_link1);
