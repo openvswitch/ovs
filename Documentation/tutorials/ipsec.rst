@@ -32,9 +32,8 @@ configuration modes can be found in :doc:`/howto/ipsec`.
 Requirements
 ------------
 
-OVS IPsec tunnel requires Linux kernel (>= v3.10.0) and OVS out-of-tree kernel
-module. The compatible IKE daemons are LibreSwan (>= v3.23) and StrongSwan
-(>= v5.3.5).
+OVS IPsec tunnel requires Linux kernel with XFRM support.  The compatible IKE
+daemons are LibreSwan (>= v3.23) and StrongSwan (>= v5.3.5).
 
 .. _install-ovs-ipsec:
 
@@ -58,8 +57,7 @@ Ubuntu
 Fedora
 ~~~~~~
 
-1. Install the related packages. Fedora 32 does not require installation of
-   the out-of-tree kernel module::
+1. Install the related packages::
 
        # dnf install python3-openvswitch libreswan \
                      openvswitch openvswitch-ipsec
