@@ -3314,7 +3314,7 @@ odp_tun_key_from_attr__(const struct nlattr *attr, bool is_mask,
         uint16_t type = nl_attr_type(a);
         size_t len = nl_attr_get_size(a);
         int expected_len = odp_key_attr_len(ovs_tun_key_attr_lens,
-                                            OVS_TUNNEL_ATTR_MAX, type);
+                                            OVS_TUNNEL_KEY_ATTR_MAX, type);
 
         if (len != expected_len && expected_len >= 0) {
             odp_parse_error(&rl, errorp, "tunnel key attribute %"PRIu16" "
