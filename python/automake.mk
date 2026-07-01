@@ -93,6 +93,7 @@ EXTRA_DIST += \
 EXTRA_DIST += \
 	python/ovs/compat/sortedcontainers/LICENSE \
 	python/ovs/flowviz/ovs-flowviz.conf \
+	python/pyproject.toml \
 	python/README.rst \
 	python/setup.py \
 	python/test_requirements.txt
@@ -135,7 +136,8 @@ ovs-install-data-local:
 	rm python/ovs/dirs.py.tmp
 
 .PHONY: python-sdist
-python-sdist: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py python/setup.py
+python-sdist: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py \
+	python/setup.py python/pyproject.toml
 	cd python/ && $(PYTHON3) -m build --sdist
 
 .PHONY: pypi-upload
