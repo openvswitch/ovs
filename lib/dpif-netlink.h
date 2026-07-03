@@ -39,6 +39,9 @@ struct dpif_netlink_vport {
      *
      * The 'stats' member points to 64-bit data that might only be aligned on
      * 32-bit boundaries, so use get_unaligned_u64() to access its values.
+     *
+     * Note: There are currently no supported vport types that support legacy
+     * options, so the OVS_VPORT_ATTR_OPTIONS is not represented here.
      */
     const char *name;                      /* OVS_VPORT_ATTR_NAME. */
     uint32_t n_upcall_pids;
@@ -46,8 +49,6 @@ struct dpif_netlink_vport {
     const struct ovs_vport_stats *stats;   /* OVS_VPORT_ATTR_STATS. */
     uint64_t upcall_success;               /* OVS_VPORT_UPCALL_ATTR_SUCCESS. */
     uint64_t upcall_fail;                  /* OVS_VPORT_UPCALL_ATTR_FAIL. */
-    const struct nlattr *options;          /* OVS_VPORT_ATTR_OPTIONS. */
-    size_t options_len;
 };
 
 void dpif_netlink_vport_init(struct dpif_netlink_vport *);

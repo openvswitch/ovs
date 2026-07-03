@@ -91,9 +91,9 @@ Q: Are all features available with all datapaths?
     Conntrack NAT                  4.6         2.8
     Conntrack NAT6                 4.6         2.8
     Conntrack Helper Persist.      YES         3.3
-    Tunnel - GRE                   3.11        2.4
-    Tunnel - VXLAN                 3.12        2.4
-    Tunnel - Geneve                3.18        2.4
+    Tunnel - GRE                   4.3         2.4
+    Tunnel - VXLAN                 4.3         2.4
+    Tunnel - Geneve                4.3         2.4
     Tunnel - GRE-IPv6              4.18        2.6
     Tunnel - VXLAN-IPv6            4.3         2.6
     Tunnel - Geneve-IPv6           4.4         2.6
@@ -205,11 +205,17 @@ Q: Why do tunnels not work when using a Linux kernel module?
     ======== ============
     Protocol Linux Kernel
     ======== ============
-    GRE      3.11
-    VXLAN    3.12
-    Geneve   3.18
+    GRE      4.3
+    VXLAN    4.3
+    Geneve   4.3
     ERSPAN   4.18
     ======== ============
+
+    Open vSwitch 3.7 and earlier supported GRE, VXLAN and Geneve on kernels
+    older than specified above by utilizing the legacy OVS-specific kernel
+    vport types.  Newer versions of Open vSwitch no longer support that method
+    and fully rely on standard kernel tunnel devices with ``COLLECT_METADATA``
+    support.  This makes Linux 4.3 a minimal requirement for these tunnels.
 
 Q: Why are UDP tunnel checksums not computed for VXLAN or Geneve?
 

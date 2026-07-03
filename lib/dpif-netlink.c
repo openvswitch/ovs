@@ -226,12 +226,6 @@ static int ovs_ct_limit_family;
  * Initialized by dpif_netlink_init(). */
 static unsigned int ovs_vport_mcgroup;
 
-/* If true, tunnel devices are created using OVS compat/genetlink.
- * If false, tunnel devices are created with rtnetlink and using light weight
- * tunnels. If we fail to create the tunnel the rtnetlink+LWT, then we fallback
- * to using the compat interface. */
-static bool ovs_tunnels_out_of_tree = true;
-
 static int dpif_netlink_init(void);
 static int open_dpif(const struct dpif_netlink_dp *, struct dpif **);
 static uint32_t dpif_netlink_port_get_pid(const struct dpif *,
@@ -860,9 +854,7 @@ netdev_to_ovs_vport_type(const char *type)
 
 static int
 dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
-                        enum ovs_vport_type type,
-                        struct ofpbuf *options,
-                        odp_port_t *port_nop)
+                        enum ovs_vport_type type, odp_port_t *port_nop)
     OVS_REQ_WRLOCK(dpif->upcall_lock)
 {
     struct dpif_netlink_vport request, reply;
@@ -893,11 +885,6 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
     request.port_no = *port_nop;
     request.n_upcall_pids = 1;
     request.upcall_pids = &upcall_pids;
-
-    if (options) {
-        request.options = options->data;
-        request.options_len = options->size;
-    }
 
     error = dpif_netlink_vport_transact(&request, &reply, &buf);
     if (!error) {
@@ -936,118 +923,71 @@ exit:
 }
 
 static int
-dpif_netlink_port_add_compat(struct dpif_netlink *dpif, struct netdev *netdev,
-                             odp_port_t *port_nop)
-    OVS_REQ_WRLOCK(dpif->upcall_lock)
-{
-    const struct netdev_tunnel_config *tnl_cfg;
-    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
-    const char *type = netdev_get_type(netdev);
-    uint64_t options_stub[64 / 8];
-    enum ovs_vport_type ovs_type;
-    struct ofpbuf options;
-    const char *name;
-
-    name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
-
-    ovs_type = netdev_to_ovs_vport_type(netdev_get_type(netdev));
-    if (ovs_type == OVS_VPORT_TYPE_UNSPEC) {
-        VLOG_WARN_RL(&error_rl, "%s: cannot create port `%s' because it has "
-                     "unsupported type `%s'",
-                     dpif_name(&dpif->dpif), name, type);
-        return EINVAL;
-    }
-
-    if (ovs_type == OVS_VPORT_TYPE_NETDEV) {
-        netdev_linux_ethtool_set_flag(netdev, ETH_FLAG_LRO, "LRO", false);
-    }
-
-    tnl_cfg = netdev_get_tunnel_config(netdev);
-    if (tnl_cfg && (tnl_cfg->dst_port != 0 || tnl_cfg->exts)) {
-        ofpbuf_use_stack(&options, options_stub, sizeof options_stub);
-        if (tnl_cfg->dst_port) {
-            nl_msg_put_u16(&options, OVS_TUNNEL_ATTR_DST_PORT,
-                           ntohs(tnl_cfg->dst_port));
-        }
-        if (tnl_cfg->exts) {
-            size_t ext_ofs;
-            int i;
-
-            ext_ofs = nl_msg_start_nested(&options, OVS_TUNNEL_ATTR_EXTENSION);
-            for (i = 0; i < 32; i++) {
-                if (tnl_cfg->exts & (UINT32_C(1) << i)) {
-                    nl_msg_put_flag(&options, i);
-                }
-            }
-            nl_msg_end_nested(&options, ext_ofs);
-        }
-        return dpif_netlink_port_add__(dpif, name, ovs_type, &options,
-                                       port_nop);
-    } else {
-        return dpif_netlink_port_add__(dpif, name, ovs_type, NULL, port_nop);
-    }
-
-}
-
-static int
-dpif_netlink_rtnl_port_create_and_add(struct dpif_netlink *dpif,
-                                      struct netdev *netdev,
-                                      odp_port_t *port_nop)
-    OVS_REQ_WRLOCK(dpif->upcall_lock)
-{
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
-    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
-    const char *name;
-    int error;
-
-    error = dpif_netlink_rtnl_port_create(netdev);
-    if (error) {
-        if (error != EOPNOTSUPP) {
-            VLOG_WARN_RL(&rl, "Failed to create %s with rtnetlink: %s",
-                         netdev_get_name(netdev), ovs_strerror(error));
-        }
-        return error;
-    }
-
-    name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
-    error = dpif_netlink_port_add__(dpif, name, OVS_VPORT_TYPE_NETDEV, NULL,
-                                    port_nop);
-    if (error) {
-        dpif_netlink_rtnl_port_destroy(name, netdev_get_type(netdev));
-    }
-    return error;
-}
-
-static int
 dpif_netlink_port_add(struct dpif *dpif_, struct netdev *netdev,
                       odp_port_t *port_nop)
 {
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
-    int error = EOPNOTSUPP;
+    const char *type = netdev_get_type(netdev);
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    enum ovs_vport_type ovs_type;
+    const char *name;
+    bool is_tunnel;
+    int error;
 
     fat_rwlock_wrlock(&dpif->upcall_lock);
-    if (!ovs_tunnels_out_of_tree) {
-        error = dpif_netlink_rtnl_port_create_and_add(dpif, netdev, port_nop);
-    }
-    if (error) {
-        error = dpif_netlink_port_add_compat(dpif, netdev, port_nop);
-    }
-    fat_rwlock_unlock(&dpif->upcall_lock);
 
+    name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
+    is_tunnel = netdev_get_tunnel_config(netdev) != NULL;
+
+    if (is_tunnel) {
+        /* Tunnel port: create the tunnel device via rtnetlink then add it
+         * as OVS_VPORT_TYPE_NETDEV. */
+        error = dpif_netlink_rtnl_tunnel_create(netdev);
+        if (error) {
+            if (error != EOPNOTSUPP) {
+                VLOG_WARN_RL(&error_rl,
+                             "Failed to create %s with rtnetlink: %s",
+                             netdev_get_name(netdev), ovs_strerror(error));
+            }
+            goto out;
+        }
+        ovs_type = OVS_VPORT_TYPE_NETDEV;
+    } else {
+        ovs_type = netdev_to_ovs_vport_type(type);
+        if (ovs_type == OVS_VPORT_TYPE_UNSPEC) {
+            VLOG_WARN_RL(&error_rl, "%s: cannot create port '%s' "
+                         "because it has unsupported type '%s'",
+                         dpif_name(&dpif->dpif), name, type);
+            error = EINVAL;
+            goto out;
+        }
+        if (ovs_type == OVS_VPORT_TYPE_NETDEV) {
+            netdev_linux_ethtool_set_flag(netdev, ETH_FLAG_LRO, "LRO", false);
+        }
+    }
+
+    error = dpif_netlink_port_add__(dpif, name, ovs_type, port_nop);
+    if (error && is_tunnel) {
+        dpif_netlink_rtnl_tunnel_destroy(name, type);
+    }
+
+out:
+    fat_rwlock_unlock(&dpif->upcall_lock);
     return error;
 }
 
 static int
-dpif_netlink_port_del__(struct dpif_netlink *dpif, odp_port_t port_no)
-    OVS_REQ_WRLOCK(dpif->upcall_lock)
+dpif_netlink_port_del(struct dpif *dpif_, odp_port_t port_no)
 {
+    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     struct dpif_netlink_vport vport;
     struct dpif_port dpif_port;
     int error;
 
+    fat_rwlock_wrlock(&dpif->upcall_lock);
     error = dpif_netlink_port_query__(dpif, port_no, NULL, &dpif_port);
     if (error) {
-        return error;
+        goto out;
     }
 
     dpif_netlink_vport_init(&vport);
@@ -1059,8 +999,9 @@ dpif_netlink_port_del__(struct dpif_netlink *dpif, odp_port_t port_no)
 
     vport_del_channels(dpif, port_no);
 
-    if (!error && !ovs_tunnels_out_of_tree) {
-        error = dpif_netlink_rtnl_port_destroy(dpif_port.name, dpif_port.type);
+    if (!error) {
+        error = dpif_netlink_rtnl_tunnel_destroy(dpif_port.name,
+                                                 dpif_port.type);
         if (error == EOPNOTSUPP) {
             error = 0;
         }
@@ -1068,19 +1009,8 @@ dpif_netlink_port_del__(struct dpif_netlink *dpif, odp_port_t port_no)
 
     dpif_port_destroy(&dpif_port);
 
-    return error;
-}
-
-static int
-dpif_netlink_port_del(struct dpif *dpif_, odp_port_t port_no)
-{
-    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
-    int error;
-
-    fat_rwlock_wrlock(&dpif->upcall_lock);
-    error = dpif_netlink_port_del__(dpif, port_no);
+out:
     fat_rwlock_unlock(&dpif->upcall_lock);
-
     return error;
 }
 
@@ -3861,8 +3791,6 @@ dpif_netlink_init(void)
                       "the conntrack limit feature.", OVS_CT_LIMIT_FAMILY);
         }
 
-        ovs_tunnels_out_of_tree = dpif_netlink_rtnl_probe_oot_tunnels();
-
         unixctl_command_register("dpif-netlink/dispatch-mode", "", 0, 0,
                                  dpif_netlink_unixctl_dispatch_mode, NULL);
 
@@ -3907,7 +3835,6 @@ dpif_netlink_vport_from_ofpbuf(struct dpif_netlink_vport *vport,
         [OVS_VPORT_ATTR_UPCALL_PID] = { .type = NL_A_UNSPEC },
         [OVS_VPORT_ATTR_STATS] = { NL_POLICY_FOR(struct ovs_vport_stats),
                                    .optional = true },
-        [OVS_VPORT_ATTR_OPTIONS] = { .type = NL_A_NESTED, .optional = true },
         [OVS_VPORT_ATTR_NETNSID] = { .type = NL_A_U32, .optional = true },
         [OVS_VPORT_ATTR_UPCALL_STATS] = { .type = NL_A_NESTED,
                                           .optional = true },
@@ -3957,10 +3884,6 @@ dpif_netlink_vport_from_ofpbuf(struct dpif_netlink_vport *vport,
         vport->upcall_success = UINT64_MAX;
         vport->upcall_fail = UINT64_MAX;
     }
-    if (a[OVS_VPORT_ATTR_OPTIONS]) {
-        vport->options = nl_attr_get(a[OVS_VPORT_ATTR_OPTIONS]);
-        vport->options_len = nl_attr_get_size(a[OVS_VPORT_ATTR_OPTIONS]);
-    }
     if (a[OVS_VPORT_ATTR_NETNSID]) {
         netnsid_set(&vport->netnsid,
                     nl_attr_get_u32(a[OVS_VPORT_ATTR_NETNSID]));
@@ -4005,11 +3928,6 @@ dpif_netlink_vport_to_ofpbuf(const struct dpif_netlink_vport *vport,
     if (vport->stats) {
         nl_msg_put_unspec(buf, OVS_VPORT_ATTR_STATS,
                           vport->stats, sizeof *vport->stats);
-    }
-
-    if (vport->options) {
-        nl_msg_put_nested(buf, OVS_VPORT_ATTR_OPTIONS,
-                          vport->options, vport->options_len);
     }
 }
 

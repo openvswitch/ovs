@@ -19,6 +19,12 @@ Post-v3.7.0
    - Python:
      * The ovstest Python module is now removed.  It was only used by the
        ovs-test and ovs-l3ping utilities.
+   - Removed previously deprecated support for running Open vSwitch with the
+     legacy tunnel vport implementation (e.g., from the old OOT kernel module).
+     Tunnel ports in the kernel datapath now require support for standard
+     kernel tunnel devices with COLLECT_METADATA.  And so the minimum kernel
+     version for GRE, VXLAN, and Geneve tunnels is raised from 3.11/3.12/3.18
+     to 4.3.
    - The following deprecated AVX512-specific features of the userspace
      datapath are now removed:
      * AVX512-optimized DPCLS lookups.

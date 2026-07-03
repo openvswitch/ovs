@@ -14,16 +14,9 @@ m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 protocols=OpenFlow10,OpenFlow1
 # specifies the expected output after filtering through uuidfilt.
 # 'dbinit-aux-args' are passed as additional commands to 'ovs-vsctl init'
 # before starting ovs-vswitchd.
-#
-# Best-effort loading of all available vport modules is performed.
-#
 m4_define([OVS_TRAFFIC_VSWITCHD_START],
   [AT_CHECK([modprobe openvswitch])
    on_exit 'modprobe -r openvswitch'
-   m4_foreach([mod], [[vport_geneve], [vport_gre], [vport_vxlan]],
-              [modprobe -q mod || echo "Module mod not loaded."
-               on_exit 'modprobe -q -r mod'
-              ])
    on_exit 'ovs-dpctl del-dp ovs-system'
    on_exit 'ovs-appctl dpctl/flush-conntrack'
    _OVS_VSWITCHD_START([], [$3])

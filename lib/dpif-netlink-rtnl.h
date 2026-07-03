@@ -22,31 +22,23 @@
 #include "netdev.h"
 
 /* Declare these to keep sparse happy. */
-int dpif_netlink_rtnl_port_create(struct netdev *netdev);
-int dpif_netlink_rtnl_port_destroy(const char *name, const char *type);
-
-bool dpif_netlink_rtnl_probe_oot_tunnels(void);
+int dpif_netlink_rtnl_tunnel_create(struct netdev *netdev);
+int dpif_netlink_rtnl_tunnel_destroy(const char *name, const char *type);
 
 #ifndef __linux__
 /* Dummy implementations for non Linux builds. */
 
 static inline int
-dpif_netlink_rtnl_port_create(struct netdev *netdev OVS_UNUSED)
+dpif_netlink_rtnl_tunnel_create(struct netdev *netdev OVS_UNUSED)
 {
     return EOPNOTSUPP;
 }
 
 static inline int
-dpif_netlink_rtnl_port_destroy(const char *name OVS_UNUSED,
-                               const char *type OVS_UNUSED)
+dpif_netlink_rtnl_tunnel_destroy(const char *name OVS_UNUSED,
+                                 const char *type OVS_UNUSED)
 {
     return EOPNOTSUPP;
-}
-
-static inline bool
-dpif_netlink_rtnl_probe_oot_tunnels(void)
-{
-    return true;
 }
 
 #endif

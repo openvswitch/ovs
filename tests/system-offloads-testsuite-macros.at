@@ -18,10 +18,6 @@ limitations under the License.])
 m4_define([OVS_TRAFFIC_VSWITCHD_START],
   [AT_CHECK([modprobe openvswitch])
    on_exit 'modprobe -r openvswitch'
-   m4_foreach([mod], [[vport_geneve], [vport_gre], [vport_vxlan]],
-              [modprobe -q mod || echo "Module mod not loaded."
-               on_exit 'modprobe -q -r mod'
-              ])
    on_exit 'ovs-dpctl del-dp ovs-system'
    on_exit 'ovs-appctl dpctl/flush-conntrack'
    _OVS_VSWITCHD_START([], [-- set Open_vSwitch . other_config:hw-offload=true $3])
