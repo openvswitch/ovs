@@ -13,7 +13,7 @@ jobs:
     env:
       dependencies: gcc libnuma-dev libxdp-dev ninja-build pkgconf
       CC: gcc
-      DPDK_GIT: https://dpdk.org/git/dpdk-stable
+      DPDK_GIT: https://github.com/DPDK/dpdk
       DPDK_VER: 25.11.2
     name: dpdk gcc
     outputs:
