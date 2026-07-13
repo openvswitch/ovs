@@ -289,7 +289,7 @@ smap_get_uuid(const struct smap *smap, const char *key, struct uuid *uuid)
     return uuid_from_string(uuid, smap_get_def(smap, key, ""));
 }
 
-/* Returns true of there are no elements in 'smap'. */
+/* Returns true if there are no elements in 'smap'. */
 bool
 smap_is_empty(const struct smap *smap)
 {
