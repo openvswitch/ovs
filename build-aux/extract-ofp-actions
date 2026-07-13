@@ -276,7 +276,7 @@ def extract_ofp_actions(fn, definitions):
                     print("      %s," % d["arg_ofs"])
                     print("      %s," % d["arg_len"])
                     print("      \"%s\","
-                          % re.sub(r'_RAW[0-9]*', '', d["enum"], 1))
+                          % re.sub(r'_RAW[0-9]*', '', d["enum"], count=1))
                     if d["deprecation"]:
                         print("      \"%s\","
                               % re.sub(r'(["\\])', r'\\\1', d["deprecation"]))
