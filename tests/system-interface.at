@@ -150,6 +150,7 @@ dnl Wait for the port to be detached from the OVS datapath.
 OVS_WAIT_UNTIL([ip link show | grep "ovs-new-port" | grep -v "ovs-system"])
 
 dnl Check that database indicates the error.
+AT_CHECK([ovs-vsctl wait-until interface ovs-veth0 error!='[[]]'])
 AT_CHECK([ovs-vsctl get interface ovs-veth0 error], [0], [dnl
 "could not open network device ovs-veth0 (No such device)"
 ])
@@ -165,9 +166,7 @@ AT_CHECK([ip l set ovs-new-port name ovs-veth0])
 
 OVS_WAIT_UNTIL([ip link show | grep -q "ovs-veth0.* ovs-system "])
 
-AT_CHECK([ovs-vsctl get interface ovs-veth0 error], [0], [dnl
-[[]]
-])
+AT_CHECK([ovs-vsctl wait-until interface ovs-veth0 error='[[]]'])
 
 AT_CHECK([ovs-appctl dpctl/show | grep port], [0], [dnl
   port 0: ovs-system (internal)
