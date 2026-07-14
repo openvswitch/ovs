@@ -890,6 +890,22 @@ dp_packet_batch_add(struct dp_packet_batch *batch, struct dp_packet *packet)
     dp_packet_batch_add__(batch, packet, NETDEV_MAX_BURST);
 }
 
+static inline void
+dp_packet_batch_add_array(struct dp_packet_batch *batch,
+                          struct dp_packet *packets[], size_t n)
+{
+    size_t count = MIN(n, NETDEV_MAX_BURST - batch->count);
+
+    if (count) {
+        memcpy(&batch->packets[batch->count], packets,
+               count * sizeof packets[0]);
+        batch->count += count;
+    }
+    for (size_t i = count; i < n; i++) {
+        dp_packet_delete(packets[i]);
+    }
+}
+
 static inline size_t
 dp_packet_batch_size(const struct dp_packet_batch *batch)
 {

@@ -123,6 +123,8 @@ COVERAGE_DEFINE(datapath_drop_rx_invalid_packet);
 COVERAGE_DEFINE(datapath_drop_hw_post_process);
 COVERAGE_DEFINE(datapath_drop_hw_post_process_consumed);
 
+COVERAGE_DEFINE(dpif_netdev_recirc_big_batch);
+
 /* Protects against changes to 'dp_netdevs'. */
 static struct ovs_mutex dp_netdev_mutex = OVS_MUTEX_INITIALIZER;
 
@@ -7686,6 +7688,30 @@ static void
 dp_netdev_recirculate(struct dp_netdev_pmd_thread *pmd,
                       struct dp_packet_batch *packets)
 {
+    if (dp_packet_batch_size(packets) > NETDEV_MAX_BURST) {
+        struct dp_packet_batch smaller_batch;
+        size_t processed = 0;
+        size_t batch_cnt;
+
+        COVERAGE_INC(dpif_netdev_recirc_big_batch);
+        batch_cnt = dp_packet_batch_size(packets);
+        dp_packet_batch_init(&smaller_batch);
+
+        do {
+            size_t count = MIN(batch_cnt - processed, NETDEV_MAX_BURST);
+
+            smaller_batch.trunc = packets->trunc;
+            smaller_batch.count = 0;
+            dp_packet_batch_add_array(&smaller_batch,
+                                      &packets->packets[processed], count);
+            dp_netdev_input__(pmd, &smaller_batch, true, 0);
+            processed += count;
+
+        } while (processed < batch_cnt);
+
+        return;
+    }
+
     dp_netdev_input__(pmd, packets, true, 0);
 }
 
