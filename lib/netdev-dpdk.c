@@ -3245,13 +3245,13 @@ dpdk_copy_batch_to_mbuf(struct netdev *netdev, struct dp_packet_batch *batch)
 
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, batch) {
         if (OVS_UNLIKELY(packet->source == DPBUF_DPDK)) {
-            dp_packet_batch_refill(batch, packet, i);
+            dp_packet_batch_add(batch, packet);
         } else {
             struct dp_packet *pktcopy;
 
             pktcopy = dpdk_copy_dp_packet_to_mbuf(dev->dpdk_mp->mp, packet);
             if (pktcopy) {
-                dp_packet_batch_refill(batch, pktcopy, i);
+                dp_packet_batch_add(batch, pktcopy);
             }
 
             dp_packet_delete(packet);

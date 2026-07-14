@@ -18,12 +18,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "coverage.h"
 #include "dp-packet.h"
 #include "netdev-afxdp.h"
 #include "netdev-dpdk.h"
 #include "netdev-provider.h"
 #include "openvswitch/dynamic-string.h"
 #include "util.h"
+
+COVERAGE_DEFINE(dp_packet_batch_grow);
 
 static void
 dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source source)
@@ -664,4 +667,26 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
             packet_udp_complete_csum(p, false);
         }
     }
+}
+
+void
+dp_packet_batch_grow(struct dp_packet_batch *batch, size_t count)
+{
+    struct dp_packet **old_packets;
+
+    COVERAGE_INC(dp_packet_batch_grow);
+
+    if (batch->packets == batch->embedded) {
+        old_packets = NULL;
+    } else {
+        old_packets = batch->packets;
+    }
+
+    batch->packets = xrealloc(old_packets,
+                              (batch->capacity + count)
+                              * sizeof *batch->packets);
+    if (!old_packets) {
+        memcpy(batch->packets, batch->embedded, sizeof batch->embedded);
+    }
+    batch->capacity += count;
 }

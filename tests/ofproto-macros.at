@@ -185,6 +185,15 @@ m4_divert_pop([PREPARE_TESTS])
 
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 
+m4_define([OVS_CHECK_BATCH_GROW],
+  [m4_if([$1], [],
+         [AT_CHECK([test -f exp_batch_grow || echo 0 > exp_batch_grow])
+          AT_CHECK([cat exp_batch_grow > expout])],
+         [AT_CHECK([echo $1 > expout])])
+   AT_CHECK([ovs-appctl coverage/read-counter dp_packet_batch_grow], [0], [expout])
+   AT_CHECK([mv -f expout exp_batch_grow])
+])
+
 # _OVS_VSWITCHD_START([vswitchd-aux-args] [dbinit-aux-args])
 #
 # Creates an empty database and starts ovsdb-server.
@@ -382,6 +391,7 @@ m4_divert_pop([PREPARE_TESTS])
 #   OVS_VSWITCHD_STOP(["/expected error/d"])
 m4_define([OVS_VSWITCHD_STOP],
   [AT_CHECK([check_logs $1])
+   OVS_CHECK_BATCH_GROW()
    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
    OVS_APP_EXIT_AND_WAIT([ovsdb-server])])
 

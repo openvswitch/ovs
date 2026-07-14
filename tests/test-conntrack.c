@@ -154,9 +154,9 @@ prepare_packets(size_t n, bool change, unsigned tid, ovs_be16 *dl_type)
     struct dp_packet_batch *pkt_batch = xzalloc(sizeof *pkt_batch);
     size_t i;
 
-    ovs_assert(n <= ARRAY_SIZE(pkt_batch->packets));
-
     dp_packet_batch_init(pkt_batch);
+    ovs_assert(n <= dp_packet_batch_capacity(pkt_batch));
+
     for (i = 0; i < n; i++) {
         uint16_t udp_dst = change ? 2+1 : 2;
         struct dp_packet *pkt = build_packet(1 + tid, udp_dst, dl_type);

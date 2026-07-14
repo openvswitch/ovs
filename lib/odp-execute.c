@@ -1121,7 +1121,7 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
 
             DP_PACKET_BATCH_REFILL_FOR_EACH (i, num, packet, batch) {
                 if (pop_nsh(packet)) {
-                    dp_packet_batch_refill(batch, packet, i);
+                    dp_packet_batch_add(batch, packet);
                 } else {
                     COVERAGE_INC(datapath_drop_nsh_decap_error);
                     dp_packet_delete(packet);

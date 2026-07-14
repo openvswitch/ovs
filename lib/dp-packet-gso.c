@@ -196,7 +196,7 @@ dp_packet_gso__(struct dp_packet *p, struct dp_packet_batch **batches,
 
     /* Put back the first segment in the batch, it will be trimmed after
      * all segments have been copied. */
-    if (dp_packet_batch_is_full(curr_batch)) {
+    if (dp_packet_batch_size(curr_batch) == NETDEV_MAX_BURST) {
         curr_batch++;
     }
     dp_packet_batch_add(curr_batch, p);
@@ -228,7 +228,7 @@ dp_packet_gso__(struct dp_packet *p, struct dp_packet_batch **batches,
         dp_packet_gso_update_segment(seg, i, n_segs, tso_segsz, udp_tnl,
                                      gre_tnl);
 
-        if (dp_packet_batch_is_full(curr_batch)) {
+        if (dp_packet_batch_size(curr_batch) == NETDEV_MAX_BURST) {
             curr_batch++;
         }
         dp_packet_batch_add(curr_batch, seg);
@@ -241,7 +241,7 @@ last_seg:
     dp_packet_gso_update_segment(seg, n_segs - 1, n_segs, tso_segsz, udp_tnl,
                                  gre_tnl);
 
-    if (dp_packet_batch_is_full(curr_batch)) {
+    if (dp_packet_batch_size(curr_batch) == NETDEV_MAX_BURST) {
         curr_batch++;
     }
     dp_packet_batch_add(curr_batch, seg);

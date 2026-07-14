@@ -6431,7 +6431,7 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
             dp_packet_delete(packet);
         } else {
             /* Meter accepts packet. */
-            dp_packet_batch_refill(packets_, packet, j);
+            dp_packet_batch_add(packets_, packet);
         }
     }
 
@@ -7190,7 +7190,7 @@ smc_lookup_batch(struct dp_netdev_pmd_thread *pmd,
 
         /* SMC missed. Group missed packets together at
          * the beginning of the 'packets' array. */
-        dp_packet_batch_refill(packets_, packet, i);
+        dp_packet_batch_add(packets_, packet);
 
         /* Preserve the order of packet for flow batching. */
         index_map[n_missed] = recv_idx;
@@ -7405,7 +7405,7 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
         } else {
             /* Exact match cache missed. Group missed packets together at
              * the beginning of the 'packets' array. */
-            dp_packet_batch_refill(packets_, packet, i);
+            dp_packet_batch_add(packets_, packet);
 
             /* Preserve the order of packet for flow batching. */
             index_map[n_missed] = map_cnt;

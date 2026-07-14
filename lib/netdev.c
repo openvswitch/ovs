@@ -843,7 +843,7 @@ netdev_send_tso(struct netdev *netdev, int qid,
                 COVERAGE_INC(netdev_soft_seg_good);
             }
         } else {
-            if (dp_packet_batch_is_full(curr_batch)) {
+            if (dp_packet_batch_size(curr_batch) == NETDEV_MAX_BURST) {
                 curr_batch++;
             }
             dp_packet_batch_add(curr_batch, packet);
@@ -960,7 +960,7 @@ netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *batch)
              * recirculated.*/
             dp_packet_reset_offload(packet);
             pkt_metadata_init_conn(&packet->md);
-            dp_packet_batch_refill(batch, packet, i);
+            dp_packet_batch_add(batch, packet);
         }
     }
 }
@@ -1036,7 +1036,7 @@ netdev_push_header(const struct netdev *netdev,
                                               data);
 
             pkt_metadata_init(&packet->md, data->out_port);
-            dp_packet_batch_refill(batch, packet, i);
+            dp_packet_batch_add(batch, packet);
         }
     }
 
