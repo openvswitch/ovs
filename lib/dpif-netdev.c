@@ -123,6 +123,7 @@ COVERAGE_DEFINE(datapath_drop_rx_invalid_packet);
 COVERAGE_DEFINE(datapath_drop_hw_post_process);
 COVERAGE_DEFINE(datapath_drop_hw_post_process_consumed);
 
+COVERAGE_DEFINE(dpif_netdev_output_grow_queues);
 COVERAGE_DEFINE(dpif_netdev_recirc_big_batch);
 
 /* Protects against changes to 'dp_netdevs'. */
@@ -443,7 +444,7 @@ struct tx_port {
     long long flush_time;
     struct dp_packet_batch output_pkts;
     struct dp_packet_batch *txq_pkts; /* Only for hash mode. */
-    struct dp_netdev_rxq *output_pkts_rxqs[NETDEV_MAX_BURST];
+    struct dp_netdev_rxq **output_pkts_rxqs;
 };
 
 /* Contained by struct tx_bond 'member_buckets'. */
@@ -4525,6 +4526,8 @@ tx_port_create(struct dp_netdev_port *port)
     tx->qid = -1;
     tx->flush_time = 0LL;
     dp_packet_batch_init(&tx->output_pkts);
+    tx->output_pkts_rxqs = xcalloc(dp_packet_batch_capacity(&tx->output_pkts),
+                                   sizeof *tx->output_pkts_rxqs);
 
     if (tx->port->txq_mode == TXQ_MODE_XPS_HASH) {
         int n_txq = netdev_n_txq(tx->port->netdev);
@@ -4559,6 +4562,7 @@ tx_port_destroy(struct tx_port *tx)
     }
     free(tx->txq_pkts);
     dp_packet_batch_destroy(&tx->output_pkts);
+    free(tx->output_pkts_rxqs);
     free(tx);
 }
 
@@ -7904,20 +7908,6 @@ dp_execute_userspace_action(struct dp_netdev_pmd_thread *pmd,
     }
 }
 
-static size_t
-dp_execute_output_chunk(struct dp_netdev_pmd_thread *pmd, struct tx_port *p,
-                        struct dp_packet **packets, size_t count)
-{
-    count = MIN(count, NETDEV_MAX_BURST - p->output_pkts.count);
-
-    for (unsigned i = 0; i < count; i++) {
-        p->output_pkts_rxqs[p->output_pkts.count + i] = pmd->ctx.last_rxq;
-    }
-    dp_packet_batch_add_array(&p->output_pkts, packets, count);
-
-    return count;
-}
-
 static bool
 dp_execute_output_action(struct dp_netdev_pmd_thread *pmd,
                          struct dp_packet_batch *packets_,
@@ -7925,8 +7915,9 @@ dp_execute_output_action(struct dp_netdev_pmd_thread *pmd,
 {
     struct tx_port *p = pmd_send_port_cache_lookup(pmd, port_no);
     size_t batch_cnt = dp_packet_batch_size(packets_);
+    size_t output_batch_capacity;
     struct dp_packet_batch out;
-    size_t queued;
+    size_t output_batch_size;
 
     if (!OVS_LIKELY(p)) {
         COVERAGE_ADD(datapath_drop_invalid_port, batch_cnt);
@@ -7939,23 +7930,27 @@ dp_execute_output_action(struct dp_netdev_pmd_thread *pmd,
         packets_ = &out;
     }
     dp_packet_batch_apply_cutlen(packets_);
-    if (dp_packet_batch_size(&p->output_pkts) == NETDEV_MAX_BURST) {
-        dp_netdev_pmd_flush_output_on_port(pmd, p);
-    }
-    if (dp_packet_batch_is_empty(&p->output_pkts)) {
+
+    output_batch_capacity = dp_packet_batch_capacity(&p->output_pkts);
+    output_batch_size = dp_packet_batch_size(&p->output_pkts);
+    if (!output_batch_size) {
         pmd->n_output_batches++;
     }
 
-    queued = dp_execute_output_chunk(pmd, p, packets_->packets, batch_cnt);
-    if (OVS_UNLIKELY(queued < batch_cnt)) {
-        do {
-            dp_netdev_pmd_flush_output_on_port(pmd, p);
-            pmd->n_output_batches++;
-            queued += dp_execute_output_chunk(pmd, p,
-                                              &packets_->packets[queued],
-                                              batch_cnt - queued);
-        } while (queued < batch_cnt);
+    dp_packet_batch_add_array(&p->output_pkts, packets_->packets, batch_cnt);
+    if (OVS_UNLIKELY(output_batch_capacity
+                     != dp_packet_batch_capacity(&p->output_pkts))) {
+        COVERAGE_INC(dpif_netdev_output_grow_queues);
+        p->output_pkts_rxqs =
+            xrealloc(p->output_pkts_rxqs,
+                     dp_packet_batch_capacity(&p->output_pkts)
+                     * sizeof *p->output_pkts_rxqs);
     }
+
+    for (unsigned i = 0; i < batch_cnt; i++) {
+        p->output_pkts_rxqs[output_batch_size + i] = pmd->ctx.last_rxq;
+    }
+
     if (!should_steal) {
         dp_packet_batch_destroy(&out);
     }
