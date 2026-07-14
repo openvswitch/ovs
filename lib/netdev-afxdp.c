@@ -994,8 +994,8 @@ afxdp_complete_tx(struct xsk_socket_info *xsk_info)
 }
 
 static inline int
-__netdev_afxdp_batch_send(struct netdev *netdev, int qid,
-                        struct dp_packet_batch *batch)
+afxdp_batch_send__(struct netdev *netdev, int qid,
+                   struct dp_packet_batch *batch)
 {
     struct netdev_linux *dev = netdev_linux_cast(netdev);
     struct xsk_socket_info *xsk_info;
@@ -1078,6 +1078,39 @@ out:
     return error;
 }
 
+static inline int
+afxdp_batch_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
+{
+    if (dp_packet_batch_size(batch) > NETDEV_MAX_BURST) {
+        struct dp_packet_batch smaller_batch;
+        size_t batch_cnt;
+        size_t sent = 0;
+        int error = 0;
+
+        batch_cnt = dp_packet_batch_size(batch);
+        dp_packet_batch_init(&smaller_batch);
+
+        do {
+            size_t count = MIN(batch_cnt - sent, NETDEV_MAX_BURST);
+            int ret;
+
+            smaller_batch.count = 0;
+            dp_packet_batch_add_array(&smaller_batch, &batch->packets[sent],
+                                      count);
+            ret = afxdp_batch_send__(netdev, qid, &smaller_batch);
+            if (ret && !error) {
+                error = ret;
+            }
+            sent += count;
+
+        } while (sent < batch_cnt);
+
+        return error;
+    }
+
+    return afxdp_batch_send__(netdev, qid, batch);
+}
+
 int
 netdev_afxdp_batch_send(struct netdev *netdev, int qid,
                         struct dp_packet_batch *batch,
@@ -1091,10 +1124,10 @@ netdev_afxdp_batch_send(struct netdev *netdev, int qid,
         qid = qid % netdev_n_txq(netdev);
 
         ovs_spin_lock(&dev->tx_locks[qid].lock);
-        ret = __netdev_afxdp_batch_send(netdev, qid, batch);
+        ret = afxdp_batch_send(netdev, qid, batch);
         ovs_spin_unlock(&dev->tx_locks[qid].lock);
     } else {
-        ret = __netdev_afxdp_batch_send(netdev, qid, batch);
+        ret = afxdp_batch_send(netdev, qid, batch);
     }
 
     return ret;
