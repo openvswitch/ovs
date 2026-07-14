@@ -574,17 +574,12 @@ AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  7'], [0], [dnl
 ])
 
 dnl No drop so far.
-AT_CHECK([ovs-appctl coverage/read-counter datapath_drop_tunnel_pop_error], [0], [0
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_err], [0], [0
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_err], [0], [0
-])
+CHECK_COVERAGE([datapath_drop_tunnel_pop_error], [0])
+CHECK_COVERAGE([native_tnl_l3csum_err], [0])
+CHECK_COVERAGE([native_tnl_l4csum_err], [0])
 dnl Yet csum validation happened on all previous packets.
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_checked], [0], [9
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_checked], [0], [6
-])
+CHECK_COVERAGE([native_tnl_l3csum_checked], [9])
+CHECK_COVERAGE([native_tnl_l4csum_checked], [6])
 
 dnl Send various incorrect bad IP checksum packets.
 dnl GRE
@@ -611,26 +606,17 @@ AT_CHECK([ovs-vsctl set interface p0 options:ol_l4_rx_csum_set_bad=false])
 
 ovs-appctl time/warp 5000
 
-AT_CHECK([ovs-appctl coverage/read-counter datapath_drop_tunnel_pop_error], [0], [8
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_err], [0], [5
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_err], [0], [3
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_checked], [0], [15
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_checked], [0], [7
-])
+CHECK_COVERAGE([datapath_drop_tunnel_pop_error], [8])
+CHECK_COVERAGE([native_tnl_l3csum_err], [5])
+CHECK_COVERAGE([native_tnl_l4csum_err], [3])
+CHECK_COVERAGE([native_tnl_l3csum_checked], [15])
+CHECK_COVERAGE([native_tnl_l4csum_checked], [7])
 
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004503007079464000402fba600101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
 
 ovs-appctl time/warp 5000
 
-AT_CHECK([
-ovs-appctl coverage/read-counter drop_action_congestion
-], [0], [dnl
-1
-])
+CHECK_COVERAGE([drop_action_congestion], [1])
 
 
 dnl Check GREL3 only accepts non-fragmented packets?

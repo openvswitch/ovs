@@ -595,32 +595,22 @@ AT_CHECK([tail -1 stdout], [0],
 ])
 
 dnl No drop so far.
-AT_CHECK([ovs-appctl coverage/read-counter datapath_drop_tunnel_pop_error], [0], [0
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_err], [0], [0
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_err], [0], [0
-])
+CHECK_COVERAGE([datapath_drop_tunnel_pop_error], [0])
+CHECK_COVERAGE([native_tnl_l3csum_err], [0])
+CHECK_COVERAGE([native_tnl_l4csum_err], [0])
 dnl Yet csum validation happened on all previous packets (with non null checksums).
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_checked], [0], [0
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_checked], [0], [1
-])
+CHECK_COVERAGE([native_tnl_l3csum_checked], [0])
+CHECK_COVERAGE([native_tnl_l4csum_checked], [1])
 
 
 dnl Send a VXLAN packet with bad UDP checksum.
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000f8bc1244cafe86dd60000000003a11402001cafe0000000000000000000000922001cafe000000000000000000000088c85312b5003aDEAD0c00000300007b00ffffffffffff00000000000008004500001c0001000040117cce7f0000017f0000010035003500080172'])
 
-AT_CHECK([ovs-appctl coverage/read-counter datapath_drop_tunnel_pop_error], [0], [1
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_err], [0], [0
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_err], [0], [1
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l3csum_checked], [0], [0
-])
-AT_CHECK([ovs-appctl coverage/read-counter native_tnl_l4csum_checked], [0], [2
-])
+CHECK_COVERAGE([datapath_drop_tunnel_pop_error], [1])
+CHECK_COVERAGE([native_tnl_l3csum_err], [0])
+CHECK_COVERAGE([native_tnl_l4csum_err], [1])
+CHECK_COVERAGE([native_tnl_l3csum_checked], [0])
+CHECK_COVERAGE([native_tnl_l4csum_checked], [2])
 
 AT_CHECK([ovs-appctl tnl/arp/show | tail -n+3 | sort], [0], [dnl
 2001:cafe::92                                 f8:bc:12:44:ca:fe   br0

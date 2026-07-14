@@ -30,11 +30,7 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), p
 
 ovs-appctl time/warp 5000
 
-AT_CHECK([
-ovs-appctl coverage/read-counter drop_action_of_pipeline
-], [0], [dnl
-3
-])
+CHECK_COVERAGE([drop_action_of_pipeline], [3])
 
 
 OVS_VSWITCHD_STOP
@@ -65,11 +61,7 @@ AT_CHECK([
 
 ovs-appctl time/warp 5000
 
-AT_CHECK([
-ovs-appctl coverage/read-counter drop_action_of_pipeline
-], [0], [dnl
-1
-])
+CHECK_COVERAGE([drop_action_of_pipeline], [1])
 
 
 AT_DATA([flows.txt], [dnl
@@ -92,11 +84,7 @@ AT_CHECK([
 
 ovs-appctl time/warp 5000
 
-AT_CHECK([
-ovs-appctl coverage/read-counter drop_action_recursion_too_deep
-], [0], [dnl
-1
-])
+CHECK_COVERAGE([drop_action_recursion_too_deep], [1])
 
 
 OVS_VSWITCHD_STOP(["/|WARN|/d"])
@@ -119,11 +107,7 @@ ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:
 
 ovs-appctl time/warp 5000
 
-AT_CHECK([
-ovs-appctl coverage/read-counter drop_action_too_many_resubmit
-], [0], [dnl
-1
-])
+CHECK_COVERAGE([drop_action_too_many_resubmit], [1])
 
 OVS_VSWITCHD_STOP(["/|WARN|/d"])
 AT_CLEANUP
@@ -145,11 +129,7 @@ ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:
 
 ovs-appctl time/warp 5000
 
-AT_CHECK([
-ovs-appctl coverage/read-counter drop_action_stack_too_deep
-], [0], [dnl
-1
-])
+CHECK_COVERAGE([drop_action_stack_too_deep], [1])
 
 
 OVS_VSWITCHD_STOP(["/resubmits yielded over 64 kB of stack/d"])
@@ -182,11 +162,7 @@ AT_CHECK([
 
 ovs-appctl time/warp 5000
 
-AT_CHECK([
-ovs-appctl coverage/read-counter drop_action_too_many_mpls_labels
-], [0], [dnl
-1
-])
+CHECK_COVERAGE([drop_action_too_many_mpls_labels], [1])
 
 
 OVS_VSWITCHD_STOP(["/|WARN|/d"])
@@ -229,9 +205,7 @@ actions:userspace(pid=0,ipfix(output_port=4294967295))
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
-AT_CHECK([ovs-appctl coverage/read-counter drop_action_of_pipeline], [0], [dnl
-0
-])
+CHECK_COVERAGE([drop_action_of_pipeline], [0])
 
 dnl Now activate explicit sampled drops.
 AT_CHECK([ovs-vsctl set Open_vSwitch . other-config:explicit-sampled-drops=true])
@@ -250,9 +224,7 @@ actions:userspace(pid=0,ipfix(output_port=4294967295)),drop
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
-AT_CHECK([ovs-appctl coverage/read-counter drop_action_of_pipeline], [0], [dnl
-3
-])
+CHECK_COVERAGE([drop_action_of_pipeline], [3])
 
 OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
 AT_CLEANUP
@@ -294,9 +266,7 @@ actions:USERSPACE_SAMPLE_ACTION(65535)
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
-AT_CHECK([ovs-appctl coverage/read-counter drop_action_of_pipeline], [0], [dnl
-0
-])
+CHECK_COVERAGE([drop_action_of_pipeline], [0])
 
 dnl Now activate explicit sampled drops.
 AT_CHECK([ovs-vsctl set Open_vSwitch . other-config:explicit-sampled-drops=true])
@@ -315,9 +285,7 @@ actions:USERSPACE_SAMPLE_ACTION(65535),drop
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
-AT_CHECK([ovs-appctl coverage/read-counter drop_action_of_pipeline], [0], [dnl
-3
-])
+CHECK_COVERAGE([drop_action_of_pipeline], [3])
 
 AT_CHECK([ovs-appctl dpctl/del-flows])
 
@@ -334,9 +302,7 @@ actions:sample(sample=50.0%,actions(USERSPACE_SAMPLE_ACTION(32767))),drop
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
-AT_CHECK([ovs-appctl coverage/read-counter drop_action_of_pipeline], [0], [dnl
-6
-])
+CHECK_COVERAGE([drop_action_of_pipeline], [6])
 
 AT_CHECK([ovs-appctl dpctl/del-flows])
 
@@ -353,9 +319,7 @@ actions:USERSPACE_SAMPLE_ACTION(65535),drop
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
-AT_CHECK([ovs-appctl coverage/read-counter drop_action_of_pipeline], [0], [dnl
-9
-])
+CHECK_COVERAGE([drop_action_of_pipeline], [9])
 
 OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
 AT_CLEANUP

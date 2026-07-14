@@ -779,9 +779,7 @@ recirc_id(<recirc>),in_port(2),eth(),eth_type(0x0800),ipv4(frag=no), packets:10,
 recirc_id(<recirc>),in_port(3),eth(),eth_type(0x0800),ipv4(frag=no), packets:10, bytes:840, used:0.0s, actions:2
 ])
 
-AT_CHECK([ovs-appctl coverage/read-counter ukey_invalid_stat_reset], [0], [dnl
-0
-])
+CHECK_COVERAGE([ukey_invalid_stat_reset], [0])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
