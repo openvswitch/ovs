@@ -6276,16 +6276,14 @@ static void
 dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
                     uint32_t meter_id, long long int now_ms)
 {
+    unsigned long failed_bands[BITMAP_N_LONGS(MAX_BANDS)];
     const size_t cnt = dp_packet_batch_size(packets_);
-    uint32_t exceeded_rate[NETDEV_MAX_BURST];
-    uint32_t exceeded_band[NETDEV_MAX_BURST];
     uint64_t bytes, volume, meter_used, old;
     uint64_t band_packets[MAX_BANDS];
     uint64_t band_bytes[MAX_BANDS];
     struct dp_meter_band *band;
     struct dp_packet *packet;
     struct dp_meter *meter;
-    bool exceeded = false;
 
     if (meter_id >= MAX_METERS) {
         return;
@@ -6295,11 +6293,6 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
     if (!meter) {
         return;
     }
-
-    /* Initialize as negative values. */
-    memset(exceeded_band, 0xff, cnt * sizeof *exceeded_band);
-    /* Initialize as zeroes. */
-    memset(exceeded_rate, 0, cnt * sizeof *exceeded_rate);
 
     atomic_read_relaxed(&meter->used, &meter_used);
     do {
@@ -6351,6 +6344,7 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
     }
 
     /* Find the band hit with the highest rate for each packet (if any). */
+    memset(failed_bands, 0, sizeof failed_bands);
     for (int m = 0; m < meter->n_bands; m++) {
         band = &meter->bands[m];
 
@@ -6359,26 +6353,11 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
             continue;
         }
 
-        /* Band limit hit, must process packet-by-packet. */
-        DP_PACKET_BATCH_FOR_EACH (i, packet, packets_) {
-            uint64_t packet_volume = (meter->flags & OFPMF13_PKTPS)
-                                     ? 1000 : (dp_packet_size(packet) * 8);
-
-            if (!atomic_bound_sub(&band->bucket, packet_volume, 0)) {
-                /* Update the exceeding band for the exceeding packet.
-                 * Only one band will be fired by a packet, and that can
-                 * be different for each packet. */
-                if (band->rate > exceeded_rate[i]) {
-                    exceeded_rate[i] = band->rate;
-                    exceeded_band[i] = m;
-                    exceeded = true;
-                }
-            }
-        }
+        bitmap_set1(failed_bands, m);
     }
 
     /* No need to iterate over packets if there are no drops. */
-    if (!exceeded) {
+    if (bitmap_is_all_zeros(failed_bands, meter->n_bands)) {
         return;
     }
 
@@ -6390,9 +6369,26 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
 
     size_t j;
     DP_PACKET_BATCH_REFILL_FOR_EACH (j, cnt, packet, packets_) {
-        uint32_t m = exceeded_band[j];
+        uint64_t packet_volume = (meter->flags & OFPMF13_PKTPS)
+                                 ? 1000 : (dp_packet_size(packet) * 8);
+        uint32_t exceeded_rate = 0;
+        int m = -1;
+        int b;
 
-        if (m != UINT32_MAX) {
+        BITMAP_FOR_EACH_1 (b, meter->n_bands, failed_bands) {
+            band = &meter->bands[b];
+            if (!atomic_bound_sub(&band->bucket, packet_volume, 0)) {
+                /* Update the exceeding band for the exceeding packet.
+                 * Only one band will be fired by a packet, and that can
+                 * be different for each packet. */
+                if (band->rate > exceeded_rate) {
+                    exceeded_rate = band->rate;
+                    m = b;
+                }
+            }
+        }
+
+        if (m >= 0) {
             /* Meter drop packet. */
             band_packets[m]++;
             band_bytes[m] += dp_packet_size(packet);
