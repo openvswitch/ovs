@@ -4513,6 +4513,44 @@ tx_port_lookup(const struct hmap *hmap, odp_port_t port_no)
     return NULL;
 }
 
+static struct tx_port *
+tx_port_create(struct dp_netdev_port *port)
+{
+    struct tx_port *tx = xzalloc(sizeof *tx);
+
+    tx->port = port;
+    tx->qid = -1;
+    tx->flush_time = 0LL;
+    dp_packet_batch_init(&tx->output_pkts);
+
+    if (tx->port->txq_mode == TXQ_MODE_XPS_HASH) {
+        int n_txq = netdev_n_txq(tx->port->netdev);
+
+        tx->txq_pkts = xzalloc(n_txq * sizeof *tx->txq_pkts);
+        for (int i = 0; i < n_txq; i++) {
+            dp_packet_batch_init(&tx->txq_pkts[i]);
+        }
+    }
+
+    return tx;
+}
+
+static struct tx_port *
+tx_port_clone(const struct tx_port *tx_port)
+{
+    struct tx_port *clone = tx_port_create(tx_port->port);
+
+    clone->qid = tx_port->qid;
+    return clone;
+}
+
+static void
+tx_port_destroy(struct tx_port *tx)
+{
+    free(tx->txq_pkts);
+    free(tx);
+}
+
 static struct tx_bond *
 tx_bond_lookup(const struct cmap *tx_bonds, uint32_t bond_id)
 {
@@ -5907,12 +5945,10 @@ pmd_free_cached_ports(struct dp_netdev_pmd_thread *pmd)
     dpif_netdev_xps_revalidate_pmd(pmd, true);
 
     HMAP_FOR_EACH_POP (tx_port_cached, node, &pmd->tnl_port_cache) {
-        free(tx_port_cached->txq_pkts);
-        free(tx_port_cached);
+        tx_port_destroy(tx_port_cached);
     }
     HMAP_FOR_EACH_POP (tx_port_cached, node, &pmd->send_port_cache) {
-        free(tx_port_cached->txq_pkts);
-        free(tx_port_cached);
+        tx_port_destroy(tx_port_cached);
     }
 }
 
@@ -5931,27 +5967,14 @@ pmd_load_cached_ports(struct dp_netdev_pmd_thread *pmd)
     hmap_shrink(&pmd->tnl_port_cache);
 
     HMAP_FOR_EACH (tx_port, node, &pmd->tx_ports) {
-        int n_txq = netdev_n_txq(tx_port->port->netdev);
-        struct dp_packet_batch *txq_pkts_cached;
-
         if (netdev_has_tunnel_push_pop(tx_port->port->netdev)) {
-            tx_port_cached = xmemdup(tx_port, sizeof *tx_port_cached);
-            if (tx_port->txq_pkts) {
-                txq_pkts_cached = xmemdup(tx_port->txq_pkts,
-                                          n_txq * sizeof *tx_port->txq_pkts);
-                tx_port_cached->txq_pkts = txq_pkts_cached;
-            }
+            tx_port_cached = tx_port_clone(tx_port);
             hmap_insert(&pmd->tnl_port_cache, &tx_port_cached->node,
                         hash_port_no(tx_port_cached->port->port_no));
         }
 
-        if (n_txq) {
-            tx_port_cached = xmemdup(tx_port, sizeof *tx_port_cached);
-            if (tx_port->txq_pkts) {
-                txq_pkts_cached = xmemdup(tx_port->txq_pkts,
-                                          n_txq * sizeof *tx_port->txq_pkts);
-                tx_port_cached->txq_pkts = txq_pkts_cached;
-            }
+        if (netdev_n_txq(tx_port->port->netdev)) {
+            tx_port_cached = tx_port_clone(tx_port);
             hmap_insert(&pmd->send_port_cache, &tx_port_cached->node,
                         hash_port_no(tx_port_cached->port->port_no));
         }
@@ -6794,8 +6817,7 @@ dp_netdev_pmd_clear_ports(struct dp_netdev_pmd_thread *pmd)
         free(poll);
     }
     HMAP_FOR_EACH_POP (port, node, &pmd->tx_ports) {
-        free(port->txq_pkts);
-        free(port);
+        tx_port_destroy(port);
     }
     ovs_mutex_unlock(&pmd->port_mutex);
 
@@ -6858,22 +6880,7 @@ dp_netdev_add_port_tx_to_pmd(struct dp_netdev_pmd_thread *pmd,
         return;
     }
 
-    tx = xzalloc(sizeof *tx);
-
-    tx->port = port;
-    tx->qid = -1;
-    tx->flush_time = 0LL;
-    dp_packet_batch_init(&tx->output_pkts);
-
-    if (tx->port->txq_mode == TXQ_MODE_XPS_HASH) {
-        int i, n_txq = netdev_n_txq(tx->port->netdev);
-
-        tx->txq_pkts = xzalloc(n_txq * sizeof *tx->txq_pkts);
-        for (i = 0; i < n_txq; i++) {
-            dp_packet_batch_init(&tx->txq_pkts[i]);
-        }
-    }
-
+    tx = tx_port_create(port);
     hmap_insert(&pmd->tx_ports, &tx->node, hash_port_no(tx->port->port_no));
     pmd->need_reload = true;
 }
@@ -6886,8 +6893,7 @@ dp_netdev_del_port_tx_from_pmd(struct dp_netdev_pmd_thread *pmd,
     OVS_REQUIRES(pmd->port_mutex)
 {
     hmap_remove(&pmd->tx_ports, &tx->node);
-    free(tx->txq_pkts);
-    free(tx);
+    tx_port_destroy(tx);
     pmd->need_reload = true;
 }
 
