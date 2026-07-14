@@ -1668,7 +1668,7 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
         }
     }
 
-    dp_packet_batch_init(batch);
+    dp_packet_batch_reset(batch);
     retval = (rx->is_tap
               ? netdev_linux_batch_rxq_recv_tap(rx, mtu, batch)
               : netdev_linux_batch_rxq_recv_sock(rx, mtu, batch));

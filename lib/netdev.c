@@ -862,6 +862,7 @@ netdev_send_tso(struct netdev *netdev, int qid,
         } else {
             retval = error;
         }
+        dp_packet_batch_destroy(curr_batch);
     }
     free(batches);
     return retval;

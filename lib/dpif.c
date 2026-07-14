@@ -1309,6 +1309,7 @@ dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
     dp_packet_batch_init_packet(&pb, execute->packet);
     odp_execute_actions(&aux, &pb, false, execute->actions,
                         execute->actions_len, dpif_execute_helper_cb);
+    dp_packet_batch_destroy(&pb);
     ofpbuf_uninit(&aux.meter_actions);
     return aux.error;
 }

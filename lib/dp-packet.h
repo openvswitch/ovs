@@ -866,10 +866,16 @@ struct dp_packet_batch {
 };
 
 static inline void
-dp_packet_batch_init(struct dp_packet_batch *batch)
+dp_packet_batch_reset(struct dp_packet_batch *batch)
 {
     batch->count = 0;
     batch->trunc = false;
+}
+
+static inline void
+dp_packet_batch_init(struct dp_packet_batch *batch)
+{
+    dp_packet_batch_reset(batch);
 }
 
 static inline void
@@ -988,6 +994,11 @@ dp_packet_batch_clone(struct dp_packet_batch *dst,
 }
 
 static inline void
+dp_packet_batch_destroy(struct dp_packet_batch *batch OVS_UNUSED)
+{
+}
+
+static inline void
 dp_packet_delete_batch(struct dp_packet_batch *batch, bool should_steal)
 {
     if (should_steal) {
@@ -996,7 +1007,7 @@ dp_packet_delete_batch(struct dp_packet_batch *batch, bool should_steal)
         DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
             dp_packet_delete(packet);
         }
-        dp_packet_batch_init(batch);
+        dp_packet_batch_reset(batch);
     }
 }
 

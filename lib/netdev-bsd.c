@@ -647,7 +647,8 @@ netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
     if (retval) {
         dp_packet_delete(packet);
     } else {
-        dp_packet_batch_init_packet(batch, packet);
+        dp_packet_batch_reset(batch);
+        dp_packet_batch_add(batch, packet);
     }
 
     if (qfill) {

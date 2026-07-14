@@ -3619,6 +3619,7 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
          * tunnel push. */
         dp_packet_delete_batch(&pp, true);
     }
+    dp_packet_batch_destroy(&pp);
 
     return 0;
 }
@@ -4375,7 +4376,7 @@ dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
                 continue;
             }
             netdev_send(p->port->netdev, i, &p->txq_pkts[i], true);
-            dp_packet_batch_init(&p->txq_pkts[i]);
+            dp_packet_batch_reset(&p->txq_pkts[i]);
         }
     } else {
         if (p->port->txq_mode == TXQ_MODE_XPS) {
@@ -4387,7 +4388,7 @@ dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
         }
         netdev_send(p->port->netdev, tx_qid, &p->output_pkts, concurrent_txqs);
     }
-    dp_packet_batch_init(&p->output_pkts);
+    dp_packet_batch_reset(&p->output_pkts);
 
     /* Update time of the next flush. */
     atomic_read_relaxed(&pmd->dp->tx_flush_interval, &tx_flush_interval);
@@ -4494,6 +4495,8 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
         }
     }
 
+    dp_packet_batch_destroy(&batch);
+
     pmd->ctx.last_rxq = NULL;
 
     return batch_cnt;
@@ -4547,7 +4550,15 @@ tx_port_clone(const struct tx_port *tx_port)
 static void
 tx_port_destroy(struct tx_port *tx)
 {
+    if (tx->txq_pkts) {
+        int n_txq = netdev_n_txq(tx->port->netdev);
+
+        for (int i = 0; i < n_txq; i++) {
+            dp_packet_batch_destroy(&tx->txq_pkts[i]);
+        }
+    }
     free(tx->txq_pkts);
+    dp_packet_batch_destroy(&tx->output_pkts);
     free(tx);
 }
 
@@ -7478,6 +7489,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
     dp_packet_batch_init_packet(&b, packet);
     dp_netdev_execute_actions(pmd, &b, true, &match.flow,
                               actions->data, actions->size);
+    dp_packet_batch_destroy(&b);
 
     add_actions = put_actions->size ? put_actions : actions;
     if (OVS_LIKELY(error != ENOSPC)) {
@@ -7679,6 +7691,7 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
 
     for (i = 0; i < n_batches; i++) {
         packet_batch_per_flow_execute(&batches[i], pmd);
+        dp_packet_batch_destroy(&batches[i].array);
     }
 }
 
@@ -7706,8 +7719,8 @@ dp_netdev_recirculate(struct dp_netdev_pmd_thread *pmd,
         do {
             size_t count = MIN(batch_cnt - processed, NETDEV_MAX_BURST);
 
+            dp_packet_batch_reset(&smaller_batch);
             smaller_batch.trunc = packets->trunc;
-            smaller_batch.count = 0;
             dp_packet_batch_add_array(&smaller_batch,
                                       &packets->packets[processed], count);
             dp_netdev_input__(pmd, &smaller_batch, true, 0);
@@ -7715,6 +7728,7 @@ dp_netdev_recirculate(struct dp_netdev_pmd_thread *pmd,
 
         } while (processed < batch_cnt);
 
+        dp_packet_batch_destroy(&smaller_batch);
         return;
     }
 
@@ -7883,6 +7897,7 @@ dp_execute_userspace_action(struct dp_netdev_pmd_thread *pmd,
         dp_packet_batch_init_packet(&b, packet);
         dp_netdev_execute_actions(pmd, &b, should_steal, flow,
                                   actions->data, actions->size);
+        dp_packet_batch_destroy(&b);
     } else if (should_steal) {
         dp_packet_delete(packet);
         COVERAGE_INC(datapath_drop_userspace_action_error);
@@ -7941,6 +7956,9 @@ dp_execute_output_action(struct dp_netdev_pmd_thread *pmd,
                                               batch_cnt - queued);
         } while (queued < batch_cnt);
     }
+    if (!should_steal) {
+        dp_packet_batch_destroy(&out);
+    }
     return true;
 }
 
@@ -7984,6 +8002,11 @@ dp_execute_lb_output_action(struct dp_netdev_pmd_thread *pmd,
             non_atomic_ullong_add(&s_entry->n_packets, 1);
             non_atomic_ullong_add(&s_entry->n_bytes, size);
         }
+        dp_packet_batch_destroy(&output_pkt);
+    }
+
+    if (!should_steal) {
+        dp_packet_batch_destroy(&out);
     }
 }
 
@@ -8053,6 +8076,9 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
                                  packets_dropped);
                 }
                 if (dp_packet_batch_is_empty(packets_)) {
+                    if (!should_steal) {
+                        dp_packet_batch_destroy(&tnl_pkt);
+                    }
                     return;
                 }
 
@@ -8064,6 +8090,10 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
                 (*depth)++;
                 dp_netdev_recirculate(pmd, packets_);
                 (*depth)--;
+
+                if (!should_steal) {
+                    dp_packet_batch_destroy(&tnl_pkt);
+                }
                 return;
             }
             COVERAGE_ADD(datapath_drop_invalid_tnl_port,
@@ -8107,7 +8137,8 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             }
 
             if (clone) {
-                dp_packet_delete_batch(packets_, true);
+                dp_packet_delete_batch(&usr_pkt, true);
+                dp_packet_batch_destroy(&usr_pkt);
             }
 
             ofpbuf_uninit(&actions);
@@ -8137,6 +8168,9 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             dp_netdev_recirculate(pmd, packets_);
             (*depth)--;
 
+            if (!should_steal) {
+                dp_packet_batch_destroy(&recirc_pkts);
+            }
             return;
         }
 

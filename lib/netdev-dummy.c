@@ -1283,7 +1283,8 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
 
     ovs_mutex_unlock(&netdev->mutex);
 
-    dp_packet_batch_init_packet(batch, packet);
+    dp_packet_batch_reset(batch);
+    dp_packet_batch_add(batch, packet);
 
     if (qfill) {
         *qfill = -ENOTSUP;

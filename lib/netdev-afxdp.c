@@ -924,7 +924,7 @@ free_afxdp_buf_batch(struct dp_packet_batch *batch)
         elems[i] = (void *)addr;
     }
     umem_elem_push_n(xpacket->mpool, dp_packet_batch_size(batch), elems);
-    dp_packet_batch_init(batch);
+    dp_packet_batch_reset(batch);
 }
 
 static inline bool
@@ -1094,7 +1094,7 @@ afxdp_batch_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
             size_t count = MIN(batch_cnt - sent, NETDEV_MAX_BURST);
             int ret;
 
-            smaller_batch.count = 0;
+            dp_packet_batch_reset(&smaller_batch);
             dp_packet_batch_add_array(&smaller_batch, &batch->packets[sent],
                                       count);
             ret = afxdp_batch_send__(netdev, qid, &smaller_batch);
@@ -1104,6 +1104,7 @@ afxdp_batch_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
             sent += count;
 
         } while (sent < batch_cnt);
+        dp_packet_batch_destroy(&smaller_batch);
 
         return error;
     }

@@ -758,6 +758,7 @@ odp_execute_sample(void *dp, struct dp_packet *packet, bool steal,
     dp_packet_batch_init_packet(&pb, packet);
     odp_execute_actions(dp, &pb, true, nl_attr_get(subactions),
                         nl_attr_get_size(subactions), dp_execute_action);
+    dp_packet_batch_destroy(&pb);
 }
 
 static void
@@ -776,6 +777,7 @@ odp_execute_clone(void *dp, struct dp_packet_batch *batch, bool steal,
         dp_packet_batch_reset_cutlen(batch);
         odp_execute_actions(dp, &clone_pkt_batch, true, nl_attr_get(actions),
                         nl_attr_get_size(actions), dp_execute_action);
+        dp_packet_batch_destroy(&clone_pkt_batch);
     }
     else {
         odp_execute_actions(dp, batch, true, nl_attr_get(actions),
@@ -844,6 +846,7 @@ odp_execute_check_pkt_len(void *dp, struct dp_packet *packet, bool steal,
     dp_packet_batch_init_packet(&pb, packet);
     odp_execute_actions(dp, &pb, true, nl_attr_get(a), nl_attr_get_size(a),
                         dp_execute_action);
+    dp_packet_batch_destroy(&pb);
 }
 
 static bool
