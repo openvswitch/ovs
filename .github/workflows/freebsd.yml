@@ -3,11 +3,11 @@ name: FreeBSD Build and Test
 on: [push, pull_request]
 
 env:
-  FREEBSD_VER: "15.0"
+  FREEBSD_VER: "15.1"
   CC: clang
   FREEBSD_PACKAGES: >-
     automake libtool gmake openssl python3 rsync
-    py311-sphinx py311-netaddr py311-pyparsing
+    py312-sphinx py312-netaddr py312-pyparsing
   dependencies: >-
     qemu-system-x86 qemu-utils genisoimage rsync openssh-client ovmf
     wget xz-utils
