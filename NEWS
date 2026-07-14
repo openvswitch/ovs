@@ -8,6 +8,8 @@ Post-v3.7.0
        wasting resources on unused devices. This breaks DPDK netdev ports
        using the "class=eth,mac=" syntax (though it can be restored via the
        'dpdk-probe-at-init' config option, see ovs-vswitchd.conf.db(5)).
+     * Removed support for the experimental offload of the tnl_pop() action
+       that relied on DPDK's experimental API.
      * OVS validated with DPDK 25.11.2.
    - Linux:
      * For veth interfaces, the interface index of the peer veth device is

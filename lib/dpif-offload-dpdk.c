@@ -786,10 +786,7 @@ static bool
 dpdk_can_offload(struct dpif_offload *offload OVS_UNUSED,
                  struct netdev *netdev)
 {
-    if (netdev_vport_is_vport_class(netdev->netdev_class)
-        && strcmp(netdev_get_dpif_type(netdev), "netdev")) {
-        VLOG_DBG("%s: vport doesn't belong to the netdev datapath, skipping",
-                 netdev_get_name(netdev));
+    if (netdev_vport_is_vport_class(netdev->netdev_class)) {
         return false;
     }
 

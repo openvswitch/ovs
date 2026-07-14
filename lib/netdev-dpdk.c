@@ -1277,23 +1277,12 @@ dpdk_eth_dev_init_rx_metadata(struct netdev_dpdk *dev)
     /* For the fallback offload (non-"transfer" rules). */
     rx_metadata |= RTE_ETH_RX_METADATA_USER_MARK;
 
-#ifdef ALLOW_EXPERIMENTAL_API
-    /* For the tunnel offload.  */
-    rx_metadata |= RTE_ETH_RX_METADATA_TUNNEL_ID;
-#endif /* ALLOW_EXPERIMENTAL_API */
-
     ret = rte_eth_rx_metadata_negotiate(dev->port_id, &rx_metadata);
     if (ret == 0) {
         if (!(rx_metadata & RTE_ETH_RX_METADATA_USER_MARK)) {
             VLOG_DBG("%s: The NIC will not provide per-packet USER_MARK",
                      netdev_get_name(&dev->up));
         }
-#ifdef ALLOW_EXPERIMENTAL_API
-        if (!(rx_metadata & RTE_ETH_RX_METADATA_TUNNEL_ID)) {
-            VLOG_DBG("%s: The NIC will not provide per-packet TUNNEL_ID",
-                     netdev_get_name(&dev->up));
-        }
-#endif /* ALLOW_EXPERIMENTAL_API */
     } else {
         VLOG(ret == -ENOTSUP ? VLL_DBG : VLL_WARN,
              "%s: Cannot negotiate Rx metadata: %s",
@@ -6552,13 +6541,6 @@ netdev_dpdk_flow_api_supported(struct netdev *netdev, bool check_only)
     struct netdev_dpdk *dev;
     bool ret = false;
 
-    if ((!strcmp(netdev_get_type(netdev), "vxlan") ||
-         !strcmp(netdev_get_type(netdev), "gre")) &&
-        !strcmp(netdev_get_dpif_type(netdev), "netdev")) {
-        ret = true;
-        goto out;
-    }
-
     if (!is_dpdk_class(netdev->netdev_class)) {
         goto out;
     }
@@ -6634,118 +6616,6 @@ netdev_dpdk_rte_flow_query_count(struct netdev *netdev,
     ret = rte_flow_query(dev->port_id, rte_flow, actions, query, error);
     return ret;
 }
-
-#ifdef ALLOW_EXPERIMENTAL_API
-
-int
-netdev_dpdk_rte_flow_tunnel_decap_set(struct netdev *netdev,
-                                      struct rte_flow_tunnel *tunnel,
-                                      struct rte_flow_action **actions,
-                                      uint32_t *num_of_actions,
-                                      struct rte_flow_error *error)
-{
-    struct netdev_dpdk *dev;
-    int ret;
-
-    if (!is_dpdk_class(netdev->netdev_class)) {
-        return -1;
-    }
-
-    dev = netdev_dpdk_cast(netdev);
-    ovs_mutex_lock(&dev->mutex);
-    ret = rte_flow_tunnel_decap_set(dev->port_id, tunnel, actions,
-                                    num_of_actions, error);
-    ovs_mutex_unlock(&dev->mutex);
-    return ret;
-}
-
-int
-netdev_dpdk_rte_flow_tunnel_match(struct netdev *netdev,
-                                  struct rte_flow_tunnel *tunnel,
-                                  struct rte_flow_item **items,
-                                  uint32_t *num_of_items,
-                                  struct rte_flow_error *error)
-{
-    struct netdev_dpdk *dev;
-    int ret;
-
-    if (!is_dpdk_class(netdev->netdev_class)) {
-        return -1;
-    }
-
-    dev = netdev_dpdk_cast(netdev);
-    ovs_mutex_lock(&dev->mutex);
-    ret = rte_flow_tunnel_match(dev->port_id, tunnel, items, num_of_items,
-                                error);
-    ovs_mutex_unlock(&dev->mutex);
-    return ret;
-}
-
-int
-netdev_dpdk_rte_flow_get_restore_info(struct netdev *netdev,
-                                      struct dp_packet *p,
-                                      struct rte_flow_restore_info *info,
-                                      struct rte_flow_error *error)
-{
-    struct rte_mbuf *m = (struct rte_mbuf *) p;
-    struct netdev_dpdk *dev;
-    int ret;
-
-    if (!is_dpdk_class(netdev->netdev_class)) {
-        return -1;
-    }
-
-    dev = netdev_dpdk_cast(netdev);
-    ovs_mutex_lock(&dev->mutex);
-    ret = rte_flow_get_restore_info(dev->port_id, m, info, error);
-    ovs_mutex_unlock(&dev->mutex);
-    return ret;
-}
-
-int
-netdev_dpdk_rte_flow_tunnel_action_decap_release(
-    struct netdev *netdev,
-    struct rte_flow_action *actions,
-    uint32_t num_of_actions,
-    struct rte_flow_error *error)
-{
-    struct netdev_dpdk *dev;
-    int ret;
-
-    if (!is_dpdk_class(netdev->netdev_class)) {
-        return -1;
-    }
-
-    dev = netdev_dpdk_cast(netdev);
-    ovs_mutex_lock(&dev->mutex);
-    ret = rte_flow_tunnel_action_decap_release(dev->port_id, actions,
-                                               num_of_actions, error);
-    ovs_mutex_unlock(&dev->mutex);
-    return ret;
-}
-
-int
-netdev_dpdk_rte_flow_tunnel_item_release(struct netdev *netdev,
-                                         struct rte_flow_item *items,
-                                         uint32_t num_of_items,
-                                         struct rte_flow_error *error)
-{
-    struct netdev_dpdk *dev;
-    int ret;
-
-    if (!is_dpdk_class(netdev->netdev_class)) {
-        return -1;
-    }
-
-    dev = netdev_dpdk_cast(netdev);
-    ovs_mutex_lock(&dev->mutex);
-    ret = rte_flow_tunnel_item_release(dev->port_id, items, num_of_items,
-                                       error);
-    ovs_mutex_unlock(&dev->mutex);
-    return ret;
-}
-
-#endif /* ALLOW_EXPERIMENTAL_API */
 
 static void
 parse_mempool_config(const struct smap *ovs_other_config)

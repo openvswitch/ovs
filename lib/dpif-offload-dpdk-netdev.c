@@ -28,7 +28,6 @@
 #include "dpif-offload.h"
 #include "dpif-offload-dpdk-private.h"
 #include "netdev-provider.h"
-#include "netdev-vport.h"
 #include "odp-util.h"
 #include "openvswitch/match.h"
 #include "openvswitch/vlog.h"
@@ -91,7 +90,6 @@ struct dpdk_offload_netdev_data {
     struct cmap mark_to_rte_flow;
     uint64_t *rte_flow_counters;
     struct ovs_mutex map_lock;
-    atomic_bool tunnel_restore_api_supported;
 };
 
 static struct pmd_data *
@@ -244,7 +242,6 @@ offload_data_init(struct netdev *netdev, unsigned int offload_thread_count)
     ovs_mutex_init(&data->map_lock);
     cmap_init(&data->ufid_to_rte_flow);
     cmap_init(&data->mark_to_rte_flow);
-    atomic_init(&data->tunnel_restore_api_supported, true);
     data->rte_flow_counters = xcalloc(offload_thread_count,
                                       sizeof *data->rte_flow_counters);
 
@@ -535,44 +532,21 @@ struct flow_patterns {
     int cnt;
     int current_max;
     struct netdev *physdev;
-    /* tnl_pmd_items is the opaque array of items returned by the PMD. */
-    struct rte_flow_item *tnl_pmd_items;
-    uint32_t tnl_pmd_items_cnt;
-    struct ds s_tnl;
 };
 
 struct flow_actions {
     struct rte_flow_action *actions;
     int cnt;
     int current_max;
-    struct netdev *tnl_netdev;
-    /* tnl_pmd_actions is the opaque array of actions returned by the PMD. */
-    struct rte_flow_action *tnl_pmd_actions;
-    uint32_t tnl_pmd_actions_cnt;
-    /* tnl_pmd_actions_pos is where the tunnel actions starts within the
-     * 'actions' field.
-     */
-    int tnl_pmd_actions_pos;
-    struct ds s_tnl;
 };
 
 static void
-dump_flow_attr(struct ds *s, struct ds *s_extra,
-               const struct rte_flow_attr *attr,
-               struct flow_patterns *flow_patterns,
-               struct flow_actions *flow_actions)
+dump_flow_attr(struct ds *s, const struct rte_flow_attr *attr)
 {
-    if (flow_actions->tnl_pmd_actions_cnt) {
-        ds_clone(s_extra, &flow_actions->s_tnl);
-    } else if (flow_patterns->tnl_pmd_items_cnt) {
-        ds_clone(s_extra, &flow_patterns->s_tnl);
-    }
-    ds_put_format(s, "%s%spriority %"PRIu32" group %"PRIu32" %s%s%s",
+    ds_put_format(s, "%s%spriority %"PRIu32" group %"PRIu32" %s",
                   attr->ingress  ? "ingress " : "",
                   attr->egress   ? "egress " : "", attr->priority, attr->group,
-                  attr->transfer ? "transfer " : "",
-                  flow_actions->tnl_pmd_actions_cnt ? "tunnel_set 1 " : "",
-                  flow_patterns->tnl_pmd_items_cnt ? "tunnel_match 1 " : "");
+                  attr->transfer ? "transfer " : "");
 }
 
 /* Adds one pattern item 'field' with the 'mask' to dynamic string 's' using
@@ -598,9 +572,6 @@ dump_flow_pattern(struct ds *s,
 
     if (item->type == RTE_FLOW_ITEM_TYPE_END) {
         ds_put_cstr(s, "end ");
-    } else if (flow_patterns->tnl_pmd_items_cnt &&
-               pattern_index < flow_patterns->tnl_pmd_items_cnt) {
-        return;
     } else if (item->type == RTE_FLOW_ITEM_TYPE_ETH) {
         const struct rte_flow_item_eth *eth_spec = item->spec;
         const struct rte_flow_item_eth *eth_mask = item->mask;
@@ -976,12 +947,6 @@ dump_flow_action(struct ds *s, struct ds *s_extra,
 
     if (actions->type == RTE_FLOW_ACTION_TYPE_END) {
         ds_put_cstr(s, "end");
-    } else if (flow_actions->tnl_pmd_actions_cnt &&
-               act_index >= flow_actions->tnl_pmd_actions_pos &&
-               act_index < flow_actions->tnl_pmd_actions_pos +
-                           flow_actions->tnl_pmd_actions_cnt) {
-        /* Opaque PMD tunnel actions are skipped. */
-        return;
     } else if (actions->type == RTE_FLOW_ACTION_TYPE_MARK) {
         const struct rte_flow_action_mark *mark = actions->conf;
 
@@ -1139,7 +1104,7 @@ dump_flow(struct ds *s, struct ds *s_extra,
     int i;
 
     if (attr) {
-        dump_flow_attr(s, s_extra, attr, flow_patterns, flow_actions);
+        dump_flow_attr(s, attr);
     }
     ds_put_cstr(s, "pattern ");
     for (i = 0; i < flow_patterns->cnt; i++) {
@@ -1242,61 +1207,11 @@ add_flow_action(struct flow_actions *actions, enum rte_flow_action_type type,
 }
 
 static void
-add_flow_tnl_actions(struct flow_actions *actions,
-                     struct netdev *tnl_netdev,
-                     struct rte_flow_action *tnl_pmd_actions,
-                     uint32_t tnl_pmd_actions_cnt)
-{
-    int i;
-
-    actions->tnl_netdev = tnl_netdev;
-    actions->tnl_pmd_actions_pos = actions->cnt;
-    actions->tnl_pmd_actions = tnl_pmd_actions;
-    actions->tnl_pmd_actions_cnt = tnl_pmd_actions_cnt;
-    for (i = 0; i < tnl_pmd_actions_cnt; i++) {
-        add_flow_action(actions, tnl_pmd_actions[i].type,
-                        tnl_pmd_actions[i].conf);
-    }
-}
-
-static void
-add_flow_tnl_items(struct flow_patterns *patterns,
-                   struct netdev *physdev,
-                   struct rte_flow_item *tnl_pmd_items,
-                   uint32_t tnl_pmd_items_cnt)
-{
-    int i;
-
-    patterns->physdev = physdev;
-    patterns->tnl_pmd_items = tnl_pmd_items;
-    patterns->tnl_pmd_items_cnt = tnl_pmd_items_cnt;
-    for (i = 0; i < tnl_pmd_items_cnt; i++) {
-        add_flow_pattern(patterns, tnl_pmd_items[i].type,
-                         tnl_pmd_items[i].spec, tnl_pmd_items[i].mask, NULL);
-    }
-}
-
-static void
 free_flow_patterns(struct flow_patterns *patterns)
 {
-    struct rte_flow_error error;
     int i;
 
-    if (patterns->tnl_pmd_items) {
-        struct rte_flow_item *tnl_pmd_items = patterns->tnl_pmd_items;
-        uint32_t tnl_pmd_items_cnt = patterns->tnl_pmd_items_cnt;
-        struct netdev *physdev = patterns->physdev;
-
-        if (netdev_dpdk_rte_flow_tunnel_item_release(physdev, tnl_pmd_items,
-                                                     tnl_pmd_items_cnt,
-                                                     &error)) {
-            VLOG_DBG_RL(&rl, "%s: netdev_dpdk_rte_flow_tunnel_item_release "
-                        "failed: %d (%s).", netdev_get_name(physdev),
-                        error.type, error.message);
-        }
-    }
-
-    for (i = patterns->tnl_pmd_items_cnt; i < patterns->cnt; i++) {
+    for (i = 0; i < patterns->cnt; i++) {
         if (patterns->items[i].spec) {
             free(CONST_CAST(void *, patterns->items[i].spec));
         }
@@ -1310,325 +1225,19 @@ free_flow_patterns(struct flow_patterns *patterns)
     free(patterns->items);
     patterns->items = NULL;
     patterns->cnt = 0;
-    ds_destroy(&patterns->s_tnl);
 }
 
 static void
 free_flow_actions(struct flow_actions *actions)
 {
-    struct rte_flow_error error;
     int i;
 
     for (i = 0; i < actions->cnt; i++) {
-        if (actions->tnl_pmd_actions_cnt &&
-            i == actions->tnl_pmd_actions_pos) {
-            if (netdev_dpdk_rte_flow_tunnel_action_decap_release(
-                    actions->tnl_netdev, actions->tnl_pmd_actions,
-                    actions->tnl_pmd_actions_cnt, &error)) {
-                VLOG_DBG_RL(&rl, "%s: "
-                            "netdev_dpdk_rte_flow_tunnel_action_decap_release "
-                            "failed: %d (%s).",
-                            netdev_get_name(actions->tnl_netdev),
-                            error.type, error.message);
-            }
-            i += actions->tnl_pmd_actions_cnt - 1;
-            continue;
-        }
-        if (actions->actions[i].conf) {
-            free(CONST_CAST(void *, actions->actions[i].conf));
-        }
+        free(CONST_CAST(void *, actions->actions[i].conf));
     }
     free(actions->actions);
     actions->actions = NULL;
     actions->cnt = 0;
-    ds_destroy(&actions->s_tnl);
-}
-
-static int
-vport_to_rte_tunnel(struct netdev *vport,
-                    struct rte_flow_tunnel *tunnel,
-                    struct netdev *netdev,
-                    struct ds *s_tnl)
-{
-    const struct netdev_tunnel_config *tnl_cfg;
-
-    memset(tunnel, 0, sizeof *tunnel);
-
-    tnl_cfg = netdev_get_tunnel_config(vport);
-    if (!tnl_cfg) {
-        return -1;
-    }
-
-    if (!IN6_IS_ADDR_V4MAPPED(&tnl_cfg->ipv6_dst)) {
-        tunnel->is_ipv6 = true;
-    }
-
-    if (!strcmp(netdev_get_type(vport), "vxlan")) {
-        tunnel->type = RTE_FLOW_ITEM_TYPE_VXLAN;
-        tunnel->tp_dst = tnl_cfg->dst_port;
-        if (!VLOG_DROP_DBG(&rl)) {
-            ds_put_format(s_tnl, "flow tunnel create %d type vxlan; ",
-                          netdev_dpdk_get_port_id(netdev));
-        }
-    } else if (!strcmp(netdev_get_type(vport), "gre")) {
-        tunnel->type = RTE_FLOW_ITEM_TYPE_GRE;
-        if (!VLOG_DROP_DBG(&rl)) {
-            ds_put_format(s_tnl, "flow tunnel create %d type gre; ",
-                          netdev_dpdk_get_port_id(netdev));
-        }
-    } else {
-        VLOG_DBG_RL(&rl, "vport type '%s' is not supported",
-                    netdev_get_type(vport));
-        return -1;
-    }
-
-    return 0;
-}
-
-static int
-add_vport_match(struct dpdk_offload *offload,
-                struct flow_patterns *patterns,
-                odp_port_t orig_in_port,
-                struct netdev *tnldev)
-{
-    struct rte_flow_item *tnl_pmd_items;
-    struct rte_flow_tunnel tunnel;
-    struct rte_flow_error error;
-    uint32_t tnl_pmd_items_cnt;
-    struct netdev *physdev;
-    int ret;
-
-    physdev = dpdk_offload_get_netdev(offload, orig_in_port);
-    if (physdev == NULL) {
-        return -1;
-    }
-
-    ret = vport_to_rte_tunnel(tnldev, &tunnel, physdev, &patterns->s_tnl);
-    if (ret) {
-        goto out;
-    }
-    ret = netdev_dpdk_rte_flow_tunnel_match(physdev, &tunnel, &tnl_pmd_items,
-                                            &tnl_pmd_items_cnt, &error);
-    if (ret) {
-        VLOG_DBG_RL(&rl, "%s: netdev_dpdk_rte_flow_tunnel_match failed: "
-                    "%d (%s).", netdev_get_name(physdev), error.type,
-                    error.message);
-        goto out;
-    }
-    add_flow_tnl_items(patterns, physdev, tnl_pmd_items, tnl_pmd_items_cnt);
-
-out:
-    return ret;
-}
-
-static int
-parse_tnl_ip_match(struct flow_patterns *patterns,
-                   struct match *match,
-                   uint8_t proto)
-{
-    struct flow *consumed_masks;
-
-    consumed_masks = &match->wc.masks;
-    /* IP v4 */
-    if (match->wc.masks.tunnel.ip_src || match->wc.masks.tunnel.ip_dst) {
-        struct rte_flow_item_ipv4 *spec, *mask;
-
-        spec = xzalloc(sizeof *spec);
-        mask = xzalloc(sizeof *mask);
-
-        spec->hdr.type_of_service = match->flow.tunnel.ip_tos;
-        spec->hdr.time_to_live    = match->flow.tunnel.ip_ttl;
-        spec->hdr.next_proto_id   = proto;
-        spec->hdr.src_addr        = match->flow.tunnel.ip_src;
-        spec->hdr.dst_addr        = match->flow.tunnel.ip_dst;
-
-        mask->hdr.type_of_service = match->wc.masks.tunnel.ip_tos;
-        mask->hdr.time_to_live    = match->wc.masks.tunnel.ip_ttl;
-        mask->hdr.next_proto_id   = UINT8_MAX;
-        mask->hdr.src_addr        = match->wc.masks.tunnel.ip_src;
-        mask->hdr.dst_addr        = match->wc.masks.tunnel.ip_dst;
-
-        consumed_masks->tunnel.ip_tos = 0;
-        consumed_masks->tunnel.ip_ttl = 0;
-        consumed_masks->tunnel.ip_src = 0;
-        consumed_masks->tunnel.ip_dst = 0;
-
-        add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_IPV4, spec, mask, NULL);
-    } else if (!is_all_zeros(&match->wc.masks.tunnel.ipv6_src,
-                             sizeof(struct in6_addr)) ||
-               !is_all_zeros(&match->wc.masks.tunnel.ipv6_dst,
-                             sizeof(struct in6_addr))) {
-        /* IP v6 */
-        struct rte_flow_item_ipv6 *spec, *mask;
-
-        spec = xzalloc(sizeof *spec);
-        mask = xzalloc(sizeof *mask);
-
-        spec->hdr.proto = proto;
-        spec->hdr.hop_limits = match->flow.tunnel.ip_ttl;
-        spec->hdr.vtc_flow = htonl((uint32_t) match->flow.tunnel.ip_tos <<
-                                   RTE_IPV6_HDR_TC_SHIFT);
-        memcpy(&spec->hdr.src_addr, &match->flow.tunnel.ipv6_src,
-               sizeof spec->hdr.src_addr);
-        memcpy(&spec->hdr.dst_addr, &match->flow.tunnel.ipv6_dst,
-               sizeof spec->hdr.dst_addr);
-
-        mask->hdr.proto = UINT8_MAX;
-        mask->hdr.hop_limits = match->wc.masks.tunnel.ip_ttl;
-        mask->hdr.vtc_flow = htonl((uint32_t) match->wc.masks.tunnel.ip_tos <<
-                                   RTE_IPV6_HDR_TC_SHIFT);
-        memcpy(&mask->hdr.src_addr, &match->wc.masks.tunnel.ipv6_src,
-               sizeof mask->hdr.src_addr);
-        memcpy(&mask->hdr.dst_addr, &match->wc.masks.tunnel.ipv6_dst,
-               sizeof mask->hdr.dst_addr);
-
-        consumed_masks->tunnel.ip_tos = 0;
-        consumed_masks->tunnel.ip_ttl = 0;
-        memset(&consumed_masks->tunnel.ipv6_src, 0,
-               sizeof consumed_masks->tunnel.ipv6_src);
-        memset(&consumed_masks->tunnel.ipv6_dst, 0,
-               sizeof consumed_masks->tunnel.ipv6_dst);
-
-        add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_IPV6, spec, mask, NULL);
-    } else {
-        VLOG_ERR_RL(&rl, "Tunnel L3 protocol is neither IPv4 nor IPv6");
-        return -1;
-    }
-
-    return 0;
-}
-
-static void
-parse_tnl_udp_match(struct flow_patterns *patterns,
-                    struct match *match)
-{
-    struct flow *consumed_masks;
-    struct rte_flow_item_udp *spec, *mask;
-
-    consumed_masks = &match->wc.masks;
-
-    spec = xzalloc(sizeof *spec);
-    mask = xzalloc(sizeof *mask);
-
-    spec->hdr.src_port = match->flow.tunnel.tp_src;
-    spec->hdr.dst_port = match->flow.tunnel.tp_dst;
-
-    mask->hdr.src_port = match->wc.masks.tunnel.tp_src;
-    mask->hdr.dst_port = match->wc.masks.tunnel.tp_dst;
-
-    consumed_masks->tunnel.tp_src = 0;
-    consumed_masks->tunnel.tp_dst = 0;
-
-    add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_UDP, spec, mask, NULL);
-}
-
-static int
-parse_vxlan_match(struct flow_patterns *patterns,
-                  struct match *match)
-{
-    struct rte_flow_item_vxlan *vx_spec, *vx_mask;
-    struct flow *consumed_masks;
-    int ret;
-
-    ret = parse_tnl_ip_match(patterns, match, IPPROTO_UDP);
-    if (ret) {
-        return -1;
-    }
-    parse_tnl_udp_match(patterns, match);
-
-    consumed_masks = &match->wc.masks;
-    /* VXLAN */
-    vx_spec = xzalloc(sizeof *vx_spec);
-    vx_mask = xzalloc(sizeof *vx_mask);
-
-    put_16aligned_be32(&ALIGNED_CAST(struct vxlanhdr *, &vx_spec->hdr)->vx_vni,
-                       htonl(ntohll(match->flow.tunnel.tun_id) << 8));
-    put_16aligned_be32(&ALIGNED_CAST(struct vxlanhdr *, &vx_mask->hdr)->vx_vni,
-                       htonl(ntohll(match->wc.masks.tunnel.tun_id) << 8));
-
-    consumed_masks->tunnel.tun_id = 0;
-    consumed_masks->tunnel.flags = 0;
-
-    add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_VXLAN, vx_spec, vx_mask,
-                     NULL);
-    return 0;
-}
-
-static int
-parse_gre_match(struct flow_patterns *patterns,
-                struct match *match)
-{
-    struct rte_flow_item_gre *gre_spec, *gre_mask;
-    struct rte_gre_hdr *greh_spec, *greh_mask;
-    rte_be32_t *key_spec, *key_mask;
-    struct flow *consumed_masks;
-    int ret;
-
-
-    ret = parse_tnl_ip_match(patterns, match, IPPROTO_GRE);
-    if (ret) {
-        return -1;
-    }
-
-    gre_spec = xzalloc(sizeof *gre_spec);
-    gre_mask = xzalloc(sizeof *gre_mask);
-    add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_GRE, gre_spec, gre_mask,
-                     NULL);
-
-    consumed_masks = &match->wc.masks;
-
-    greh_spec = (struct rte_gre_hdr *) gre_spec;
-    greh_mask = (struct rte_gre_hdr *) gre_mask;
-
-    if (match->wc.masks.tunnel.flags & FLOW_TNL_F_CSUM) {
-        greh_spec->c = !!(match->flow.tunnel.flags & FLOW_TNL_F_CSUM);
-        greh_mask->c = 1;
-        consumed_masks->tunnel.flags &= ~FLOW_TNL_F_CSUM;
-    }
-
-    if (match->wc.masks.tunnel.flags & FLOW_TNL_F_KEY) {
-        greh_spec->k = !!(match->flow.tunnel.flags & FLOW_TNL_F_KEY);
-        greh_mask->k = 1;
-
-        key_spec = xzalloc(sizeof *key_spec);
-        key_mask = xzalloc(sizeof *key_mask);
-
-        *key_spec = htonl(ntohll(match->flow.tunnel.tun_id));
-        *key_mask = htonl(ntohll(match->wc.masks.tunnel.tun_id));
-
-        consumed_masks->tunnel.tun_id = 0;
-        consumed_masks->tunnel.flags &= ~FLOW_TNL_F_KEY;
-        add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_GRE_KEY, key_spec,
-                         key_mask, NULL);
-    }
-
-    consumed_masks->tunnel.flags &= ~FLOW_TNL_F_DONT_FRAGMENT;
-
-    return 0;
-}
-
-static int OVS_UNUSED
-parse_flow_tnl_match(struct dpdk_offload *offload,
-                     struct netdev *tnldev,
-                     struct flow_patterns *patterns,
-                     odp_port_t orig_in_port,
-                     struct match *match)
-{
-    int ret;
-
-    ret = add_vport_match(offload, patterns, orig_in_port, tnldev);
-    if (ret) {
-        return ret;
-    }
-
-    if (!strcmp(netdev_get_type(tnldev), "vxlan")) {
-        ret = parse_vxlan_match(patterns, match);
-    }
-    else if (!strcmp(netdev_get_type(tnldev), "gre")) {
-        ret = parse_gre_match(patterns, match);
-    }
-
-    return ret;
 }
 
 static int
@@ -1649,12 +1258,6 @@ parse_flow_match(struct dpdk_offload *offload OVS_UNUSED,
     }
 
     patterns->physdev = netdev;
-#ifdef ALLOW_EXPERIMENTAL_API /* Packet restoration API required. */
-    if (netdev_vport_is_vport_class(netdev->netdev_class) &&
-        parse_flow_tnl_match(offload, netdev, patterns, orig_in_port, match)) {
-        return -1;
-    }
-#endif
     memset(&consumed_masks->in_port, 0, sizeof consumed_masks->in_port);
     /* recirc id must be zero. */
     if (match->wc.masks.recirc_id & match->flow.recirc_id) {
@@ -2023,7 +1626,6 @@ dpdk_offload_mark_rss(struct flow_patterns *patterns, struct netdev *netdev,
     struct flow_actions actions = {
         .actions = NULL,
         .cnt = 0,
-        .s_tnl = DS_EMPTY_INITIALIZER,
     };
     const struct rte_flow_attr flow_attr = {
         .group = 0,
@@ -2395,59 +1997,6 @@ parse_clone_actions(struct dpdk_offload *offload,
     return 0;
 }
 
-static void
-add_jump_action(struct flow_actions *actions, uint32_t group)
-{
-    struct rte_flow_action_jump *jump = xzalloc (sizeof *jump);
-
-    jump->group = group;
-    add_flow_action(actions, RTE_FLOW_ACTION_TYPE_JUMP, jump);
-}
-
-static int OVS_UNUSED
-add_tnl_pop_action(struct dpdk_offload *offload,
-                   struct netdev *netdev,
-                   struct flow_actions *actions,
-                   const struct nlattr *nla)
-{
-    struct rte_flow_action *tnl_pmd_actions = NULL;
-    uint32_t tnl_pmd_actions_cnt = 0;
-    struct rte_flow_tunnel tunnel;
-    struct rte_flow_error error;
-    struct netdev *vport;
-    odp_port_t port;
-    int ret;
-
-    port = nl_attr_get_odp_port(nla);
-    vport = dpdk_offload_get_netdev(offload, port);
-    if (vport == NULL) {
-        return -1;
-    }
-    ret = vport_to_rte_tunnel(vport, &tunnel, netdev, &actions->s_tnl);
-    if (ret) {
-        return ret;
-    }
-    ret = netdev_dpdk_rte_flow_tunnel_decap_set(netdev, &tunnel,
-                                                &tnl_pmd_actions,
-                                                &tnl_pmd_actions_cnt,
-                                                &error);
-    if (ret) {
-        VLOG_DBG_RL(&rl, "%s: netdev_dpdk_rte_flow_tunnel_decap_set failed: "
-                    "%d (%s).", netdev_get_name(netdev), error.type,
-                    error.message);
-        return ret;
-    }
-    add_flow_tnl_actions(actions, netdev, tnl_pmd_actions,
-                         tnl_pmd_actions_cnt);
-    /* After decap_set, the packet processing should continue. In SW, it is
-     * done by recirculation (recirc_id = 0). In rte_flow, the group is
-     * equivalent to recirc_id, thus jump to group 0 is added to instruct the
-     * the HW to proceed processing.
-     */
-    add_jump_action(actions, 0);
-    return 0;
-}
-
 static int
 parse_flow_actions(struct dpdk_offload *offload,
                    struct netdev *netdev,
@@ -2495,12 +2044,6 @@ parse_flow_actions(struct dpdk_offload *offload,
                                     clone_actions_len)) {
                 return -1;
             }
-#ifdef ALLOW_EXPERIMENTAL_API /* Packet restoration API required. */
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_TUNNEL_POP) {
-            if (add_tnl_pop_action(offload, netdev, actions, nla)) {
-                return -1;
-            }
-#endif
         } else {
             VLOG_DBG_RL(&rl, "Unsupported action type %d", nl_attr_type(nla));
             return -1;
@@ -2527,7 +2070,6 @@ dpdk_offload_with_actions(struct dpdk_offload *offload,
     struct flow_actions actions = {
         .actions = NULL,
         .cnt = 0,
-        .s_tnl = DS_EMPTY_INITIALIZER,
     };
     struct rte_flow *flow = NULL;
     struct rte_flow_error error;
@@ -2554,7 +2096,6 @@ dpdk_offload_add_flow(struct dpdk_offload *offload,
     struct flow_patterns patterns = {
         .items = NULL,
         .cnt = 0,
-        .s_tnl = DS_EMPTY_INITIALIZER,
     };
     struct ufid_to_rte_flow_data *flows_data = NULL;
     bool actions_offloaded = true;
@@ -2568,7 +2109,7 @@ dpdk_offload_add_flow(struct dpdk_offload *offload,
 
     flow = dpdk_offload_with_actions(offload, patterns.physdev, &patterns,
                                      nl_actions, actions_len);
-    if (!flow && !netdev_vport_is_vport_class(netdev->netdev_class)) {
+    if (!flow) {
         /* If we failed to offload the rule actions fallback to MARK+RSS
          * actions.
          */
@@ -2794,20 +2335,10 @@ int
 dpdk_netdev_offload_init(struct netdev *netdev,
                          unsigned int offload_thread_count)
 {
-    int ret = EOPNOTSUPP;
-
-    if (netdev_vport_is_vport_class(netdev->netdev_class)
-        && !strcmp(netdev_get_dpif_type(netdev), "system")) {
-        VLOG_DBG("%s: vport belongs to the system datapath. Skipping.",
-                 netdev_get_name(netdev));
-        return EOPNOTSUPP;
-    }
-
     if (netdev_dpdk_flow_api_supported(netdev, false)) {
-        ret = offload_data_init(netdev, offload_thread_count);
+        return offload_data_init(netdev, offload_thread_count);
     }
-
-    return ret;
+    return EOPNOTSUPP;
 }
 
 void
@@ -2895,123 +2426,22 @@ flush_netdev_flows_in_related(struct dpdk_offload *offload,
         }
     }
 }
-struct flush_in_vport_aux {
-    struct dpdk_offload *offload;
-    struct netdev *netdev;
-};
-
-static bool
-flush_in_vport_cb(struct netdev *vport,
-                  odp_port_t odp_port OVS_UNUSED,
-                  void *aux_)
-{
-    struct flush_in_vport_aux *aux = aux_;
-
-    /* Only vports are related to physical devices. */
-    if (netdev_vport_is_vport_class(vport->netdev_class)) {
-        flush_netdev_flows_in_related(aux->offload, aux->netdev, vport);
-    }
-
-    return false;
-}
 
 int
 dpdk_netdev_flow_flush(struct dpdk_offload *offload, struct netdev *netdev)
 {
     flush_netdev_flows_in_related(offload, netdev, netdev);
-
-    if (!netdev_vport_is_vport_class(netdev->netdev_class)) {
-        struct flush_in_vport_aux aux = {
-            .offload = offload,
-            .netdev = netdev
-        };
-
-        dpdk_offload_traverse_ports(offload, flush_in_vport_cb, &aux);
-    }
-
     return 0;
 }
 
-struct get_vport_netdev_aux {
-    struct rte_flow_tunnel *tunnel;
-    odp_port_t *odp_port;
-    struct netdev *vport;
-    const char *type;
-};
-
-static bool
-get_vport_netdev_cb(struct netdev *netdev,
-                    odp_port_t odp_port,
-                    void *aux_)
-{
-    const struct netdev_tunnel_config *tnl_cfg;
-    struct get_vport_netdev_aux *aux = aux_;
-
-    if (!aux->type || strcmp(netdev_get_type(netdev), aux->type)) {
-        return false;
-    }
-    if (!strcmp(netdev_get_type(netdev), "gre")) {
-        goto out;
-    }
-
-    tnl_cfg = netdev_get_tunnel_config(netdev);
-    if (!tnl_cfg) {
-        VLOG_ERR_RL(&rl, "Cannot get a tunnel config for netdev %s",
-                    netdev_get_name(netdev));
-        return false;
-    }
-
-    if (tnl_cfg->dst_port != aux->tunnel->tp_dst) {
-        return false;
-    }
-
-out:
-    /* Found the netdev. Store the results and stop the traversing. */
-    aux->vport = netdev_ref(netdev);
-    *aux->odp_port = odp_port;
-
-    return true;
-}
-
-static struct netdev *
-get_vport_netdev(struct dpdk_offload *offload,
-                 struct rte_flow_tunnel *tunnel,
-                 odp_port_t *odp_port)
-{
-    struct get_vport_netdev_aux aux = {
-        .tunnel = tunnel,
-        .odp_port = odp_port,
-        .vport = NULL,
-        .type = NULL,
-    };
-
-    if (tunnel->type == RTE_FLOW_ITEM_TYPE_VXLAN) {
-        aux.type = "vxlan";
-    } else if (tunnel->type == RTE_FLOW_ITEM_TYPE_GRE) {
-        aux.type = "gre";
-    }
-    dpdk_offload_traverse_ports(offload, get_vport_netdev_cb, &aux);
-
-    return aux.vport;
-}
-
 int
-dpdk_netdev_hw_miss_packet_recover(struct dpdk_offload *offload,
+dpdk_netdev_hw_miss_packet_recover(struct dpdk_offload *offload OVS_UNUSED,
                                    struct netdev *netdev, unsigned pmd_id,
                                    struct dp_packet *packet,
                                    void **flow_reference)
 {
     struct pmd_id_to_flow_ref_data *pmd_data = NULL;
-    struct rte_flow_restore_info rte_restore_info;
-    struct dpdk_offload_netdev_data *netdev_data;
-    bool tunnel_restore_api_supported;
-    struct rte_flow_tunnel *rte_tnl;
-    struct netdev *vport_netdev;
-    struct pkt_metadata *md;
-    struct flow_tnl *md_tnl;
-    odp_port_t vport_odp;
     uint32_t flow_mark;
-    int ret = 0;
 
     if (dp_packet_has_flow_mark(packet, &flow_mark)) {
         struct ufid_to_rte_flow_data *data;
@@ -3027,95 +2457,7 @@ dpdk_netdev_hw_miss_packet_recover(struct dpdk_offload *offload,
         *flow_reference = NULL;
     }
 
-    netdev_data = ovsrcu_get(void *, &netdev->hw_info.offload_data);
-    if (!netdev_data) {
-        return 0;
-    }
-
-    atomic_read_relaxed(&netdev_data->tunnel_restore_api_supported,
-                        &tunnel_restore_api_supported);
-    if (!tunnel_restore_api_supported) {
-        return 0;
-    }
-
-    ret = netdev_dpdk_rte_flow_get_restore_info(netdev, packet,
-                                                &rte_restore_info, NULL);
-    if (ret) {
-        if (ret == -ENOTSUP) {
-            /* Tunnel restore API not supported, avoid subsequent calls. */
-            atomic_store_relaxed(&netdev_data->tunnel_restore_api_supported,
-                                 false);
-        }
-        /* This function is called for every packet, and in most cases there
-         * will be no restore info from the HW, thus error is expected.
-         */
-        return 0;
-    }
-
-    if (!(rte_restore_info.flags & RTE_FLOW_RESTORE_INFO_TUNNEL)) {
-        return EOPNOTSUPP;
-    }
-
-    rte_tnl = &rte_restore_info.tunnel;
-    vport_netdev = get_vport_netdev(offload, rte_tnl, &vport_odp);
-    if (!vport_netdev) {
-        VLOG_WARN_RL(&rl, "Could not find vport netdev");
-        return EOPNOTSUPP;
-    }
-
-    md = &packet->md;
-    /* For tunnel recovery (RTE_FLOW_RESTORE_INFO_TUNNEL), it is possible
-     * to have the packet to still be encapsulated, or not.  This is reflected
-     * by the RTE_FLOW_RESTORE_INFO_ENCAPSULATED flag.
-     * In the case it is on, the packet is still encapsulated, and we do
-     * the pop in SW.
-     * In the case it is off, the packet is already decapsulated by HW, and
-     * the tunnel info is provided in the tunnel struct.  For this case we
-     * take it to OVS metadata.
-     */
-    if (rte_restore_info.flags & RTE_FLOW_RESTORE_INFO_ENCAPSULATED) {
-        if (!vport_netdev->netdev_class ||
-            !vport_netdev->netdev_class->pop_header) {
-            VLOG_ERR_RL(&rl, "vport netdev=%s with no pop_header method",
-                        netdev_get_name(vport_netdev));
-            ret = EOPNOTSUPP;
-            goto close_vport_netdev;
-        }
-        parse_tcp_flags(packet, NULL, NULL, NULL);
-        if (vport_netdev->netdev_class->pop_header(packet) == NULL) {
-            /* If there is an error with popping the header, the packet is
-             * freed. In this case it should not continue SW processing.
-             */
-            ret = EINVAL;
-            goto close_vport_netdev;
-        }
-    } else {
-        md_tnl = &md->tunnel;
-        if (rte_tnl->is_ipv6) {
-            memcpy(&md_tnl->ipv6_src, &rte_tnl->ipv6.src_addr,
-                   sizeof md_tnl->ipv6_src);
-            memcpy(&md_tnl->ipv6_dst, &rte_tnl->ipv6.dst_addr,
-                   sizeof md_tnl->ipv6_dst);
-        } else {
-            md_tnl->ip_src = rte_tnl->ipv4.src_addr;
-            md_tnl->ip_dst = rte_tnl->ipv4.dst_addr;
-        }
-        md_tnl->tun_id = htonll(rte_tnl->tun_id);
-        md_tnl->flags = rte_tnl->tun_flags;
-        md_tnl->ip_tos = rte_tnl->tos;
-        md_tnl->ip_ttl = rte_tnl->ttl;
-        md_tnl->tp_src = rte_tnl->tp_src;
-    }
-    /* Change the in_port to the vport's one, in order to continue packet
-     * processing in SW.
-     */
-    md->in_port.odp_port = vport_odp;
-    dp_packet_reset_offload(packet);
-
-close_vport_netdev:
-    netdev_close(vport_netdev);
-
-    return ret;
+    return 0;
 }
 
 uint64_t

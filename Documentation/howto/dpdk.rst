@@ -401,11 +401,6 @@ Supported actions for hardware offload are:
 - VLAN Push/Pop (push_vlan/pop_vlan).
 - Modification of IPv6 (set_field:<ADDR>->ipv6_src/ipv6_dst/mod_nw_ttl).
 - Clone/output (tnl_push/push_vlan/output) for encapsulating over a tunnel.
-- Tunnel pop, for packets received on physical ports.
-
-.. note::
-  Tunnel offloads are experimental APIs in DPDK. In order to enable it,
-  compile with -DALLOW_EXPERIMENTAL_API.
 
 Multiprocess
 ------------
