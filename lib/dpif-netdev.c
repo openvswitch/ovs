@@ -7883,17 +7883,32 @@ dp_execute_userspace_action(struct dp_netdev_pmd_thread *pmd,
     }
 }
 
+static size_t
+dp_execute_output_chunk(struct dp_netdev_pmd_thread *pmd, struct tx_port *p,
+                        struct dp_packet **packets, size_t count)
+{
+    count = MIN(count, NETDEV_MAX_BURST - p->output_pkts.count);
+
+    for (unsigned i = 0; i < count; i++) {
+        p->output_pkts_rxqs[p->output_pkts.count + i] = pmd->ctx.last_rxq;
+    }
+    dp_packet_batch_add_array(&p->output_pkts, packets, count);
+
+    return count;
+}
+
 static bool
 dp_execute_output_action(struct dp_netdev_pmd_thread *pmd,
                          struct dp_packet_batch *packets_,
                          bool should_steal, odp_port_t port_no)
 {
     struct tx_port *p = pmd_send_port_cache_lookup(pmd, port_no);
+    size_t batch_cnt = dp_packet_batch_size(packets_);
     struct dp_packet_batch out;
+    size_t queued;
 
     if (!OVS_LIKELY(p)) {
-        COVERAGE_ADD(datapath_drop_invalid_port,
-                     dp_packet_batch_size(packets_));
+        COVERAGE_ADD(datapath_drop_invalid_port, batch_cnt);
         dp_packet_delete_batch(packets_, should_steal);
         return false;
     }
@@ -7903,20 +7918,22 @@ dp_execute_output_action(struct dp_netdev_pmd_thread *pmd,
         packets_ = &out;
     }
     dp_packet_batch_apply_cutlen(packets_);
-    if (dp_packet_batch_size(&p->output_pkts)
-        + dp_packet_batch_size(packets_) > NETDEV_MAX_BURST) {
-        /* Flush here to avoid overflow. */
+    if (dp_packet_batch_size(&p->output_pkts) == NETDEV_MAX_BURST) {
         dp_netdev_pmd_flush_output_on_port(pmd, p);
     }
     if (dp_packet_batch_is_empty(&p->output_pkts)) {
         pmd->n_output_batches++;
     }
 
-    struct dp_packet *packet;
-    DP_PACKET_BATCH_FOR_EACH (i, packet, packets_) {
-        p->output_pkts_rxqs[dp_packet_batch_size(&p->output_pkts)] =
-            pmd->ctx.last_rxq;
-        dp_packet_batch_add(&p->output_pkts, packet);
+    queued = dp_execute_output_chunk(pmd, p, packets_->packets, batch_cnt);
+    if (OVS_UNLIKELY(queued < batch_cnt)) {
+        do {
+            dp_netdev_pmd_flush_output_on_port(pmd, p);
+            pmd->n_output_batches++;
+            queued += dp_execute_output_chunk(pmd, p,
+                                              &packets_->packets[queued],
+                                              batch_cnt - queued);
+        } while (queued < batch_cnt);
     }
     return true;
 }
