@@ -18,12 +18,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "coverage.h"
 #include "dp-packet.h"
 #include "dp-packet-gso.h"
 #include "netdev-provider.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dp_packet_gso);
+
+COVERAGE_DEFINE(dp_packet_gso);
+COVERAGE_DEFINE(dp_packet_partial_gso);
 
 /* Retuns a new packet that is a segment of packet 'p'.
  *
@@ -176,10 +180,9 @@ dp_packet_gso_update_segment(struct dp_packet *seg, unsigned int seg_no,
 }
 
 static void
-dp_packet_gso__(struct dp_packet *p, struct dp_packet_batch **batches,
+dp_packet_gso__(struct dp_packet *p, struct dp_packet_batch *batch,
                 bool partial_seg)
 {
-    struct dp_packet_batch *curr_batch = *batches;
     struct dp_packet *seg;
     unsigned int n_segs;
     uint16_t tso_segsz;
@@ -196,13 +199,10 @@ dp_packet_gso__(struct dp_packet *p, struct dp_packet_batch **batches,
 
     /* Put back the first segment in the batch, it will be trimmed after
      * all segments have been copied. */
-    if (dp_packet_batch_size(curr_batch) == NETDEV_MAX_BURST) {
-        curr_batch++;
-    }
-    dp_packet_batch_add(curr_batch, p);
+    dp_packet_batch_add(batch, p);
 
     if (n_segs <= 1) {
-        goto out;
+        return;
     }
 
     if (dp_packet_tunnel(p)) {
@@ -227,11 +227,7 @@ dp_packet_gso__(struct dp_packet *p, struct dp_packet_batch **batches,
                                     tso_segsz);
         dp_packet_gso_update_segment(seg, i, n_segs, tso_segsz, udp_tnl,
                                      gre_tnl);
-
-        if (dp_packet_batch_size(curr_batch) == NETDEV_MAX_BURST) {
-            curr_batch++;
-        }
-        dp_packet_batch_add(curr_batch, seg);
+        dp_packet_batch_add(batch, seg);
     }
 
 last_seg:
@@ -240,11 +236,7 @@ last_seg:
                                 data_len - (n_segs - 1) * tso_segsz);
     dp_packet_gso_update_segment(seg, n_segs - 1, n_segs, tso_segsz, udp_tnl,
                                  gre_tnl);
-
-    if (dp_packet_batch_size(curr_batch) == NETDEV_MAX_BURST) {
-        curr_batch++;
-    }
-    dp_packet_batch_add(curr_batch, seg);
+    dp_packet_batch_add(batch, seg);
 
 first_seg:
     if (partial_seg) {
@@ -261,19 +253,39 @@ first_seg:
         dp_packet_set_tso_segsz(p, 0);
     }
     dp_packet_gso_update_segment(p, 0, n_segs, tso_segsz, udp_tnl, gre_tnl);
-
-out:
-    *batches = curr_batch;
 }
 
-/* Perform software segmentation on packet 'p'.
- *
- * Segments packet 'p' into the array of preallocated batches in 'batches',
- * updating the 'batches' pointer as needed. */
-void
-dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
+static void
+dp_packet_gso_batch__(struct dp_packet_batch *batch, bool partial_seg)
 {
-    dp_packet_gso__(p, batches, false);
+    struct dp_packet_batch gso_batch;
+    struct dp_packet *packet;
+
+    dp_packet_batch_init(&gso_batch);
+    gso_batch.trunc = batch->trunc;
+
+    DP_PACKET_BATCH_FOR_EACH (k, packet, batch) {
+        if (dp_packet_get_tso_segsz(packet)) {
+            dp_packet_gso__(packet, &gso_batch, partial_seg);
+            if (partial_seg) {
+                COVERAGE_INC(dp_packet_partial_gso);
+            } else {
+                COVERAGE_INC(dp_packet_gso);
+            }
+        } else {
+            dp_packet_batch_add(&gso_batch, packet);
+        }
+    }
+
+    dp_packet_batch_swap(batch, &gso_batch);
+    dp_packet_batch_destroy(&gso_batch);
+}
+
+/* Segment GSO packets and send them back to caller in the input batch. */
+void
+dp_packet_gso_batch(struct dp_packet_batch *b)
+{
+    dp_packet_gso_batch__(b, false);
 }
 
 /* Perform partial software segmentation on packet 'p'.
@@ -283,7 +295,7 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
  * of preallocated batches in 'batches', updating the 'batches' pointer
  * as needed. */
 void
-dp_packet_gso_partial(struct dp_packet *p, struct dp_packet_batch **batches)
+dp_packet_gso_batch_partial(struct dp_packet_batch *b)
 {
-    dp_packet_gso__(p, batches, true);
+    dp_packet_gso_batch__(b, true);
 }

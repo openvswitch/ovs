@@ -66,8 +66,6 @@ COVERAGE_DEFINE(netdev_sent);
 COVERAGE_DEFINE(netdev_add_router);
 COVERAGE_DEFINE(netdev_get_stats);
 COVERAGE_DEFINE(netdev_push_header_drops);
-COVERAGE_DEFINE(netdev_soft_seg_good);
-COVERAGE_DEFINE(netdev_partial_seg_good);
 
 struct netdev_saved_flags {
     struct netdev *netdev;
@@ -782,92 +780,6 @@ netdev_get_pt_mode(const struct netdev *netdev)
             : NETDEV_PT_LEGACY_L2);
 }
 
-/* Attempts to segment GSO flagged packets and send them as multiple bundles.
- * This function is only used if at least one packet in the current batch is
- * flagged for TSO and the netdev does not support this.
- *
- * The return value is 0 if all batches sent successfully, and an error code
- * from netdev_class->send() if at least one batch failed to send. */
-static int
-netdev_send_tso(struct netdev *netdev, int qid,
-                struct dp_packet_batch *batch, bool concurrent_txq,
-                bool partial_seg)
-{
-    struct dp_packet_batch *batches;
-    struct dp_packet *packet;
-    int retval = 0;
-    int n_packets;
-    int n_batches;
-    int error;
-
-    /* Calculate the total number of packets in the batch after
-     * the (partial?) segmentation. */
-    n_packets = 0;
-    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-        if (dp_packet_get_tso_segsz(packet)) {
-            if (partial_seg) {
-                n_packets += dp_packet_gso_partial_nr_segs(packet);
-            } else {
-                n_packets += dp_packet_gso_nr_segs(packet);
-            }
-        } else {
-            n_packets++;
-        }
-    }
-
-    if (!n_packets) {
-        return 0;
-    }
-
-    /* Allocate enough batches to store all the packets in order. */
-    n_batches = DIV_ROUND_UP(n_packets, NETDEV_MAX_BURST);
-    batches = xmalloc(n_batches * sizeof *batches);
-
-    struct dp_packet_batch *curr_batch = batches;
-    struct dp_packet_batch *last_batch = &batches[n_batches - 1];
-    for (curr_batch = batches; curr_batch <= last_batch; curr_batch++) {
-        dp_packet_batch_init(curr_batch);
-    }
-
-    /* Do the packet segmentation if TSO is flagged. */
-    size_t size = dp_packet_batch_size(batch);
-    size_t k;
-    curr_batch = batches;
-    DP_PACKET_BATCH_REFILL_FOR_EACH (k, size, packet, batch) {
-        if (dp_packet_get_tso_segsz(packet)) {
-            if (partial_seg) {
-                dp_packet_gso_partial(packet, &curr_batch);
-                COVERAGE_INC(netdev_partial_seg_good);
-            } else {
-                dp_packet_gso(packet, &curr_batch);
-                COVERAGE_INC(netdev_soft_seg_good);
-            }
-        } else {
-            if (dp_packet_batch_size(curr_batch) == NETDEV_MAX_BURST) {
-                curr_batch++;
-            }
-            dp_packet_batch_add(curr_batch, packet);
-        }
-    }
-
-    for (curr_batch = batches; curr_batch <= last_batch; curr_batch++) {
-        DP_PACKET_BATCH_FOR_EACH (i, packet, curr_batch) {
-            dp_packet_ol_send_prepare(packet, netdev->ol_flags);
-        }
-
-        error = netdev->netdev_class->send(netdev, qid, curr_batch,
-                                           concurrent_txq);
-        if (!error) {
-            COVERAGE_INC(netdev_sent);
-        } else {
-            retval = error;
-        }
-        dp_packet_batch_destroy(curr_batch);
-    }
-    free(batches);
-    return retval;
-}
-
 /* Sends 'batch' on 'netdev'.  Returns 0 if successful (for every packet),
  * otherwise a positive errno value.  Returns EAGAIN without blocking if
  * at least one the packets cannot be queued immediately.  Returns EMSGSIZE
@@ -905,8 +817,8 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
         if (!(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
                 if (dp_packet_get_tso_segsz(packet)) {
-                    return netdev_send_tso(netdev, qid, batch, concurrent_txq,
-                                           false);
+                    dp_packet_gso_batch(batch);
+                    break;
                 }
             }
         } else if (!(netdev_flags & (NETDEV_TX_VXLAN_TNL_TSO |
@@ -915,16 +827,16 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
                 if (dp_packet_get_tso_segsz(packet)
                     && dp_packet_tunnel(packet)) {
-                    return netdev_send_tso(netdev, qid, batch, concurrent_txq,
-                                           false);
+                    dp_packet_gso_batch(batch);
+                    break;
                 }
             }
         } else if (!(netdev_flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM)) {
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
                 if (dp_packet_get_tso_segsz(packet)
                     && dp_packet_gso_partial_nr_segs(packet) != 1) {
-                    return netdev_send_tso(netdev, qid, batch, concurrent_txq,
-                                           true);
+                    dp_packet_gso_batch_partial(batch);
+                    break;
                 }
             }
         }

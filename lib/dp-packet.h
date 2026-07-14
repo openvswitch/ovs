@@ -978,6 +978,22 @@ dp_packet_batch_clone(struct dp_packet_batch *dst,
     dst->trunc = src->trunc;
 }
 
+/* Swaps content of two batches. */
+static inline void
+dp_packet_batch_swap(struct dp_packet_batch *a, struct dp_packet_batch *b)
+{
+    struct dp_packet_batch c = *a;
+
+    *a = *b;
+    *b = c;
+    if (a->packets == b->embedded) {
+        a->packets = a->embedded;
+    }
+    if (b->packets == a->embedded) {
+        b->packets = b->embedded;
+    }
+}
+
 static inline void
 dp_packet_batch_destroy(struct dp_packet_batch *batch)
 {
