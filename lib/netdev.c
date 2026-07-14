@@ -912,44 +912,46 @@ netdev_push_header(const struct netdev *netdev,
                    struct dp_packet_batch *batch,
                    const struct ovs_action_push_tnl *data)
 {
+    bool supported_offloads = (data->tnl_type == OVS_VPORT_TYPE_GENEVE)
+                              || (data->tnl_type == OVS_VPORT_TYPE_VXLAN)
+                              || (data->tnl_type == OVS_VPORT_TYPE_GRE)
+                              || (data->tnl_type == OVS_VPORT_TYPE_IP6GRE);
     struct dp_packet *packet;
-    size_t i, size = dp_packet_batch_size(batch);
 
-    DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, batch) {
-        if (OVS_UNLIKELY(data->tnl_type != OVS_VPORT_TYPE_GENEVE &&
-                         data->tnl_type != OVS_VPORT_TYPE_VXLAN &&
-                         data->tnl_type != OVS_VPORT_TYPE_GRE &&
-                         data->tnl_type != OVS_VPORT_TYPE_IP6GRE &&
-                         dp_packet_get_tso_segsz(packet))) {
-            COVERAGE_INC(netdev_push_header_drops);
-            dp_packet_delete(packet);
-            VLOG_WARN_RL(&rl, "%s: Tunneling packets with TSO is not "
-                              "supported for %s tunnels: packet dropped",
-                         netdev_get_name(netdev), netdev_get_type(netdev));
-        } else {
-            if (data->tnl_type != OVS_VPORT_TYPE_GENEVE &&
-                data->tnl_type != OVS_VPORT_TYPE_VXLAN &&
-                data->tnl_type != OVS_VPORT_TYPE_GRE &&
-                data->tnl_type != OVS_VPORT_TYPE_IP6GRE) {
-                dp_packet_ol_send_prepare(packet, 0);
-            } else if (dp_packet_tunnel(packet)) {
-                if (dp_packet_get_tso_segsz(packet)) {
+    if (userspace_tso_enabled()) {
+        if (OVS_UNLIKELY(!supported_offloads)) {
+            size_t i, size = dp_packet_batch_size(batch);
+
+            DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, batch) {
+                if (OVS_UNLIKELY(dp_packet_get_tso_segsz(packet))) {
                     COVERAGE_INC(netdev_push_header_drops);
                     dp_packet_delete(packet);
                     VLOG_WARN_RL(&rl, "%s: Tunneling packets with TSO is not "
-                                      "supported with multiple levels of "
-                                      "VXLAN, GENEVE, or GRE encapsulation.",
-                                 netdev_get_name(netdev));
+                                 "supported for %s tunnels: packet dropped",
+                                 netdev_get_name(netdev),
+                                 netdev_get_type(netdev));
                     continue;
                 }
-                dp_packet_ol_send_prepare(packet, 0);
+                dp_packet_batch_add(batch, packet);
             }
-            netdev->netdev_class->push_header(netdev, ingress_netdev, packet,
-                                              data);
-
-            pkt_metadata_init(&packet->md, data->out_port);
-            dp_packet_batch_add(batch, packet);
+        } else {
+            DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+                if (dp_packet_tunnel(packet)
+                    && dp_packet_get_tso_segsz(packet)) {
+                    dp_packet_gso_batch(batch);
+                    break;
+                }
+            }
         }
+    }
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        if (!supported_offloads || dp_packet_tunnel(packet)) {
+            dp_packet_ol_send_prepare(packet, 0);
+        }
+        netdev->netdev_class->push_header(netdev, ingress_netdev, packet,
+                                          data);
+        pkt_metadata_init(&packet->md, data->out_port);
     }
 
     return 0;

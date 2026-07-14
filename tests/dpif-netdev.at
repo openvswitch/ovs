@@ -3663,6 +3663,75 @@ AT_CHECK([ovs-vsctl get interface p2 statistics:tx_packets], [0], [35
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([dpif-netdev - tso + dual tunnel encap])
+AT_KEYWORDS([userspace offload])
+OVS_VSWITCHD_START(
+  [set Open_vSwitch . other_config:userspace-tso-enable=true -- \
+   add-br br1 -- set bridge br1 datapath-type=dummy -- \
+   add-port br1 p1 -- \
+       set Interface p1 type=dummy -- \
+   add-br br2 -- set bridge br2 datapath-type=dummy -- \
+       set bridge br2 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   add-port br2 p2 -- \
+       set Interface p2 type=dummy -- \
+   add-br br3 -- set bridge br3 datapath-type=dummy -- \
+       set bridge br3 other-config:hwaddr=aa:66:bb:66:00:00 -- \
+   add-port br3 p3 -- \
+       set Interface p3 type=dummy])
+
+AT_CHECK([ovs-vsctl add-port br1 t1 \
+                    -- set Interface t1 type=vxlan \
+                       options:remote_ip=1.1.2.92 options:key=123 \
+                       ofport_request=11], [0])
+AT_CHECK([ovs-vsctl add-port br2 t2 \
+                    -- set Interface t2 type=vxlan \
+                       options:remote_ip=1.1.3.92 options:key=456 \
+                       ofport_request=21], [0])
+
+AT_CHECK([ovs-ofctl del-flows br1])
+AT_CHECK([ovs-ofctl add-flow br1 in_port=p1,actions=output:11])
+AT_CHECK([ovs-ofctl del-flows br2])
+AT_CHECK([ovs-ofctl add-flow br2 in_port=br2,actions=output:21])
+
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br2 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl tnl/neigh/set br2 1.1.2.92 aa:66:aa:66:00:01], [0], [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br3 1.1.3.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl tnl/neigh/set br3 1.1.3.92 aa:66:bb:66:00:01], [0], [OK
+])
+
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_tso_segsz=1000])
+
+flow_s="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800), \
+        ipv4(src=10.0.1.1,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no), \
+        tcp(src=1234,dst=80),tcp_flags(ack)"
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "${flow_s}" --len 2000])
+
+dnl Interface statistics and coverage counters take some time to refresh.
+AT_CHECK([ovs-vsctl wait-until interface p1 statistics:rx_packets=1])
+CHECK_COVERAGE([netdev_received], [1])
+CHECK_COVERAGE([dp_packet_gso], [1])
+CHECK_COVERAGE([netdev_sent], [1])
+AT_CHECK([ovs-vsctl get interface p3 statistics:tx_packets], [0], [2
+])
+
+OVS_CHECK_BATCH_GROW([0])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "${flow_s}" --len 35000])
+
+AT_CHECK([ovs-vsctl wait-until interface p1 statistics:rx_packets=2])
+CHECK_COVERAGE([netdev_received], [2])
+OVS_CHECK_BATCH_GROW([2])
+CHECK_COVERAGE([dp_packet_gso], [2])
+CHECK_COVERAGE([dpif_netdev_output_grow_queues], [1])
+CHECK_COVERAGE([netdev_sent], [2])
+AT_CHECK([ovs-vsctl get interface p3 statistics:tx_packets], [0], [37
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([dpif-netdev - revalidators handle dp modification fail correctly])
 OVS_VSWITCHD_START(
   [add-port br0 p1 \
