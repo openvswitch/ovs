@@ -3352,12 +3352,19 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
             cnt -= tx_pkts;
             /* Prepare for possible retry.*/
             pkts = &pkts[tx_pkts];
-            if (OVS_UNLIKELY(cnt && !retries)) {
-                /*
-                 * Read max retries as there are packets not sent
-                 * and no retries have already occurred.
-                 */
-                atomic_read_relaxed(&dev->vhost_tx_retries_max, &max_retries);
+            if (OVS_UNLIKELY(cnt)) {
+                if (!retries) {
+                    /* Read max retries as there are packets not sent
+                     * and no retries have already occurred. */
+                    atomic_read_relaxed(&dev->vhost_tx_retries_max,
+                                        &max_retries);
+                }
+                if (tx_pkts == 32) {
+                    /* As of v25.11, the vhost library only sends 32 mbufs
+                     * at maximum for a reason lost in limbo.
+                     * Extend our max retries for this batch. */
+                    max_retries++;
+                }
             }
         } else {
             /* No packets sent - do not retry.*/
