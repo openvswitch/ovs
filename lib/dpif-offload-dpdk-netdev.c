@@ -91,6 +91,7 @@ struct dpdk_offload_netdev_data {
     struct cmap mark_to_rte_flow;
     uint64_t *rte_flow_counters;
     struct ovs_mutex map_lock;
+    atomic_bool tunnel_restore_api_supported;
 };
 
 static struct pmd_data *
@@ -243,6 +244,7 @@ offload_data_init(struct netdev *netdev, unsigned int offload_thread_count)
     ovs_mutex_init(&data->map_lock);
     cmap_init(&data->ufid_to_rte_flow);
     cmap_init(&data->mark_to_rte_flow);
+    atomic_init(&data->tunnel_restore_api_supported, true);
     data->rte_flow_counters = xcalloc(offload_thread_count,
                                       sizeof *data->rte_flow_counters);
 
@@ -3001,6 +3003,8 @@ dpdk_netdev_hw_miss_packet_recover(struct dpdk_offload *offload,
 {
     struct pmd_id_to_flow_ref_data *pmd_data = NULL;
     struct rte_flow_restore_info rte_restore_info;
+    struct dpdk_offload_netdev_data *netdev_data;
+    bool tunnel_restore_api_supported;
     struct rte_flow_tunnel *rte_tnl;
     struct netdev *vport_netdev;
     struct pkt_metadata *md;
@@ -3023,11 +3027,24 @@ dpdk_netdev_hw_miss_packet_recover(struct dpdk_offload *offload,
         *flow_reference = NULL;
     }
 
+    netdev_data = ovsrcu_get(void *, &netdev->hw_info.offload_data);
+    if (!netdev_data) {
+        return 0;
+    }
+
+    atomic_read_relaxed(&netdev_data->tunnel_restore_api_supported,
+                        &tunnel_restore_api_supported);
+    if (!tunnel_restore_api_supported) {
+        return 0;
+    }
+
     ret = netdev_dpdk_rte_flow_get_restore_info(netdev, packet,
                                                 &rte_restore_info, NULL);
     if (ret) {
-        if (ret == -EOPNOTSUPP) {
-            return -ret;
+        if (ret == -ENOTSUP) {
+            /* Tunnel restore API not supported, avoid subsequent calls. */
+            atomic_store_relaxed(&netdev_data->tunnel_restore_api_supported,
+                                 false);
         }
         /* This function is called for every packet, and in most cases there
          * will be no restore info from the HW, thus error is expected.
