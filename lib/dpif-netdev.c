@@ -7516,15 +7516,9 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                      odp_port_t in_port)
 {
     const size_t cnt = dp_packet_batch_size(packets_);
-#ifndef __CHECKER__
-    const size_t PKT_ARRAY_SIZE = cnt;
-#else
-    /* Sparse doesn't like variable length array. */
-    enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
-#endif
     struct dp_packet *packet;
     struct dpcls *cls;
-    struct dpcls_rule *rules[PKT_ARRAY_SIZE];
+    struct dpcls_rule *rules[NETDEV_MAX_BURST];
     struct dp_netdev *dp = pmd->dp;
     int upcall_ok_cnt = 0, upcall_fail_cnt = 0;
     int lookup_cnt = 0, add_lookup_cnt;
@@ -7633,19 +7627,13 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
                   struct dp_packet_batch *packets,
                   bool md_is_valid, odp_port_t port_no)
 {
-#ifndef __CHECKER__
-    const size_t PKT_ARRAY_SIZE = dp_packet_batch_size(packets);
-#else
-    /* Sparse doesn't like variable length array. */
-    enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
-#endif
     OVS_ALIGNED_VAR(CACHE_LINE_SIZE)
-        struct netdev_flow_key keys[PKT_ARRAY_SIZE];
-    struct netdev_flow_key *missed_keys[PKT_ARRAY_SIZE];
-    struct packet_batch_per_flow batches[PKT_ARRAY_SIZE];
+        struct netdev_flow_key keys[NETDEV_MAX_BURST];
+    struct netdev_flow_key *missed_keys[NETDEV_MAX_BURST];
+    struct packet_batch_per_flow batches[NETDEV_MAX_BURST];
     size_t n_batches;
-    struct dp_packet_flow_map flow_map[PKT_ARRAY_SIZE];
-    uint8_t index_map[PKT_ARRAY_SIZE];
+    struct dp_packet_flow_map flow_map[NETDEV_MAX_BURST];
+    uint8_t index_map[NETDEV_MAX_BURST];
     size_t n_flows, i;
 
     odp_port_t in_port;
