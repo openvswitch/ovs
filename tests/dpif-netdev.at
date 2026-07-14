@@ -412,11 +412,7 @@ meter:2 flow_count:1 packet_in_count:17 byte_in_count:1020 duration:0.0s bands:
 
 ovs-appctl time/warp 5000
 
-AT_CHECK([
-ovs-appctl coverage/read-counter datapath_drop_meter
-], [0], [dnl
-20
-])
+CHECK_COVERAGE([datapath_drop_meter], [20])
 
 AT_CHECK([cat ovs-vswitchd.log | filter_flow_install | strip_xout_keep_actions], [0], [dnl
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:meter(0),7
@@ -3154,10 +3150,8 @@ AT_CHECK([ovs-ofctl compose-packet --bare "${flow_s}" > good_frame])
 
 AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap])
 
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [0
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [0
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [0])
+CHECK_COVERAGE([conntrack_l3csum_err], [0])
 
 dnl Checks for good packet (Tx offloads disabled).
 flow_expected=$(echo "${flow_s}" | sed 's/192.168.123.1/192.168.1.1/g')
@@ -3165,62 +3159,46 @@ AT_CHECK([ovs-ofctl compose-packet --bare "${flow_expected}" > good_expected])
 
 dnl No Rx flag.
 CHECK_FWD_PACKET(p1, p2, , [good_frame], [good_expected])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [1
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [0
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [1])
+CHECK_COVERAGE([conntrack_l3csum_err], [0])
 
 dnl Flag as Rx good.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [good_frame], [good_expected])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [1
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [0
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [1])
+CHECK_COVERAGE([conntrack_l3csum_err], [0])
 
 dnl Flag as Rx bad.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_bad, [good_frame], [none])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [1
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [1
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [1])
+CHECK_COVERAGE([conntrack_l3csum_err], [1])
 
 dnl Flag as Rx partial.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_partial, [good_frame], [good_expected])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [1
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [1
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [1])
+CHECK_COVERAGE([conntrack_l3csum_err], [1])
 
 dnl Checks for bad packet (Tx offloads disabled).
 AT_CHECK([ovs-ofctl compose-packet --bare --bad-csum "${flow_s}" > bad_frame])
 
 dnl No Rx flag.
 CHECK_FWD_PACKET(p1, p2, , [bad_frame], [none])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [2
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [2
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [2])
+CHECK_COVERAGE([conntrack_l3csum_err], [2])
 
 dnl Flag as Rx good.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [bad_frame], [good_expected])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [2
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [2
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [2])
+CHECK_COVERAGE([conntrack_l3csum_err], [2])
 
 dnl Flag as Rx bad.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_bad, [bad_frame], [none])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [2
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [3
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [2])
+CHECK_COVERAGE([conntrack_l3csum_err], [3])
 
 dnl Flag as Rx partial.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_partial, [bad_frame], [good_expected])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [2
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [3
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [2])
+CHECK_COVERAGE([conntrack_l3csum_err], [3])
 
 AT_CHECK([ovs-vsctl set Interface p2 options:ol_ip_tx_csum=true])
 
@@ -3228,61 +3206,45 @@ dnl Checks for good packet (Tx offloads enabled).
 
 dnl No Rx flag.
 CHECK_FWD_PACKET(p1, p2, , [good_frame], [good_expected])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [3
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [3
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [3])
+CHECK_COVERAGE([conntrack_l3csum_err], [3])
 
 dnl Flag as Rx good.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [good_frame], [good_expected])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [3
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [3
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [3])
+CHECK_COVERAGE([conntrack_l3csum_err], [3])
 
 dnl Flag as Rx bad.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_bad, [good_frame], [none])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [3
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [4
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [3])
+CHECK_COVERAGE([conntrack_l3csum_err], [4])
 
 dnl Flag as Rx partial.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_partial, [good_frame], [good_expected])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [3
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [4
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [3])
+CHECK_COVERAGE([conntrack_l3csum_err], [4])
 
 dnl Checks for bad packet (Tx offloads enabled).
 
 dnl No Rx flag.
 CHECK_FWD_PACKET(p1, p2, , [bad_frame], [none])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [4
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [5
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [4])
+CHECK_COVERAGE([conntrack_l3csum_err], [5])
 
 dnl Flag as Rx good.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_good, [bad_frame], [good_expected])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [4
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [5
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [4])
+CHECK_COVERAGE([conntrack_l3csum_err], [5])
 
 dnl Flag as Rx bad.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_bad, [bad_frame], [none])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [4
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [6
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [4])
+CHECK_COVERAGE([conntrack_l3csum_err], [6])
 
 dnl Flag as Rx partial.
 CHECK_FWD_PACKET(p1, p2, ol_ip_rx_csum_set_partial, [bad_frame], [good_expected])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_checked], [0], [4
-])
-AT_CHECK([ovs-appctl coverage/read-counter conntrack_l3csum_err], [0], [6
-])
+CHECK_COVERAGE([conntrack_l3csum_checked], [4])
+CHECK_COVERAGE([conntrack_l3csum_err], [6])
 
 dnl Special case, check natted ICMP (for traffic flagged good).
 icmp_frame="0a8f393fe0738abf7e2f05840800450000440001000040010364c0a87b02c0a87b010303746c0000000045000028000100004006037bc0a87b01c0a87b021451d4780000000000000000500220002fc40000"

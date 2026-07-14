@@ -398,4 +398,10 @@ m4_define([WAIT_FOR_DUMMY_PORTS], \
          OVS_WAIT_WHILE([ovs-appctl netdev-dummy/conn-state dummy_port \
                   | grep 'unknown\|disconnected'])])])
 
-
+# CHECK_COVERAGE(NAME, VALUE)
+#
+# Check the coverage counter NAME value against VALUE
+m4_define([CHECK_COVERAGE],
+  [AT_CHECK([ovs-appctl coverage/read-counter $1], [0], [$2
+])
+])

@@ -56,30 +56,22 @@ OVS_VSWITCHD_START(
     [add-port br0 p1 -- set interface p1 ofport_request=1 type=dummy]
 )
 dnl first revalidation triggered by add interface
-AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
-1
-])
+CHECK_COVERAGE([rev_reconfigure], [1])
 
 dnl enable lldp
 AT_CHECK([ovs-vsctl set interface p1 lldp:enable=true])
 AT_CHECK([ovs-appctl revalidator/wait])
-AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
-2
-])
+CHECK_COVERAGE([rev_reconfigure], [2])
 
 dnl disable lldp
 AT_CHECK([ovs-vsctl set interface p1 lldp:enable=false])
 AT_CHECK([ovs-appctl revalidator/wait])
-AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
-3
-])
+CHECK_COVERAGE([rev_reconfigure], [3])
 
 dnl remove lldp, no revalidation as lldp was disabled
 AT_CHECK([ovs-vsctl remove interface p1 lldp enable])
 AT_CHECK([ovs-appctl revalidator/wait])
-AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
-3
-])
+CHECK_COVERAGE([rev_reconfigure], [3])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -8292,9 +8284,7 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -
 ])
 
 dnl Check mac_move coverage counter mac_learning_static_none_move.
-AT_CHECK([ovs-appctl coverage/read-counter mac_learning_static_none_move], [0], [dnl
-1
-])
+CHECK_COVERAGE([mac_learning_static_none_move], [1])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -8923,27 +8913,19 @@ dnl datapath level.
 AT_SETUP([ofproto-dpif - Bridge IPFIX sanity check])
 OVS_VSWITCHD_START
 dnl first revalidation triggered by add interface
-AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
-1
-])
+CHECK_COVERAGE([rev_reconfigure], [1])
 
 add_of_ports br0 1 2 3
-AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
-2
-])
+CHECK_COVERAGE([rev_reconfigure], [2])
 
 dnl Sample every packet using bridge-based sampling.
 AT_CHECK([ovs-vsctl -- set bridge br0 ipfix=@fix -- \
                     --id=@fix create ipfix targets=\"127.0.0.1:4739\" \
                               sampling=2], [0], [ignore])
-AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
-3
-])
+CHECK_COVERAGE([rev_reconfigure], [3])
 
 AT_CHECK([ovs-vsctl set ipfix `ovs-vsctl get bridge br0 ipfix` sampling=1], [0])
-AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
-4
-])
+CHECK_COVERAGE([rev_reconfigure], [4])
 dnl Send some packets that should be sampled.
 for i in `seq 1 3`; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
@@ -13896,10 +13878,7 @@ AT_CHECK([ovs-appctl upcall/show | grep '(keys' | awk '{print $3}' | \
             grep -qv '0)'], [1])
 
 dnl Verify coverage counter was hit.
-AT_CHECK([ovs-appctl coverage/read-counter revalidate_missing_dp_flow], [0],
-         [dnl
-1
-])
+CHECK_COVERAGE([revalidate_missing_dp_flow], [1])
 
 OVS_VSWITCHD_STOP(["/failed to flow_del (No such file or directory)/d"])
 AT_CLEANUP
