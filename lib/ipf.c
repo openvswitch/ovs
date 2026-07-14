@@ -974,11 +974,9 @@ ipf_extract_frags_from_batch(struct ipf *ipf, struct dp_packet_batch *pb,
             if (!ipf_handle_frag(ipf, pkt, dl_type, zone, now, hash_basis,
                                  &rp)) {
                 dp_packet_batch_add(pb, pkt);
-            } else {
-                if (rp && dp_packet_batch_size(pb) != NETDEV_MAX_BURST) {
-                    dp_packet_batch_add(pb, rp->pkt);
-                    rp->list->reass_execute_ctx = rp->pkt;
-                }
+            } else if (rp) {
+                dp_packet_batch_add(pb, rp->pkt);
+                rp->list->reass_execute_ctx = rp->pkt;
             }
             ovs_mutex_unlock(&ipf->ipf_lock);
         } else {
@@ -1021,33 +1019,23 @@ ipf_purge_list_check(struct ipf *ipf, struct ipf_list *ipf_list,
 
 /* Does the packet batch management and common accounting work associated
  * with 'ipf_send_completed_frags()' and 'ipf_send_expired_frags()'. */
-static bool
+static void
 ipf_send_frags_in_list(struct ipf *ipf, struct ipf_list *ipf_list,
                        struct dp_packet_batch *pb, bool v6, long long now)
     OVS_REQUIRES(ipf->ipf_lock)
 {
     if (ipf_purge_list_check(ipf, ipf_list, now)) {
-        return true;
+        return;
     }
 
     while (ipf_list->last_sent_idx < ipf_list->last_inuse_idx) {
         struct dp_packet *pkt
             = ipf_list->frag_list[ipf_list->last_sent_idx + 1].pkt;
-        if (dp_packet_batch_size(pb) != NETDEV_MAX_BURST) {
-            dp_packet_batch_add(pb, pkt);
-            ipf_list->last_sent_idx++;
-            atomic_count_dec(&ipf->nfrag);
-
-            ipf_count(ipf, v6, IPF_NFRAGS_COMPL_SENT);
-
-            if (ipf_list->last_sent_idx == ipf_list->last_inuse_idx) {
-                return true;
-            }
-        } else {
-            return false;
-        }
+        dp_packet_batch_add(pb, pkt);
+        atomic_count_dec(&ipf->nfrag);
+        ipf_count(ipf, v6, IPF_NFRAGS_COMPL_SENT);
+        ipf_list->last_sent_idx++;
     }
-    OVS_NOT_REACHED();
 }
 
 /* Adds fragments associated with a completed fragment list to a packet batch
@@ -1081,11 +1069,8 @@ ipf_send_completed_frags(struct ipf *ipf, struct dp_packet_batch *pb,
             continue;
         }
 
-        if (ipf_send_frags_in_list(ipf, ipf_list, pb, v6, now)) {
-            ipf_completed_list_clean(&ipf->frag_lists, ipf_list);
-        } else {
-            break;
-        }
+        ipf_send_frags_in_list(ipf, ipf_list, pb, v6, now);
+        ipf_completed_list_clean(&ipf->frag_lists, ipf_list);
     }
 
     ovs_mutex_unlock(&ipf->ipf_lock);
@@ -1147,8 +1132,7 @@ ipf_execute_reass_pkts(struct ipf *ipf, struct dp_packet_batch *pb,
 
     LIST_FOR_EACH_SAFE (rp, rp_list_node, &ipf->reassembled_pkt_list) {
         if (!rp->list->reass_execute_ctx &&
-            rp->list->key.dl_type == dl_type &&
-            dp_packet_batch_size(pb) != NETDEV_MAX_BURST) {
+            rp->list->key.dl_type == dl_type) {
             dp_packet_batch_add(pb, rp->pkt);
             rp->list->reass_execute_ctx = rp->pkt;
         }
@@ -1174,8 +1158,6 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
         const size_t pb_cnt = dp_packet_batch_size(pb);
         int pb_idx;
         struct dp_packet *pkt;
-        /* Inner batch loop is constant time since batch size is <=
-         * NETDEV_MAX_BURST. */
         DP_PACKET_BATCH_REFILL_FOR_EACH (pb_idx, pb_cnt, pkt, pb) {
             if (rp && pkt == rp->list->reass_execute_ctx) {
                 const struct ipf_frag *frag_0 = &rp->list->frag_list[0];

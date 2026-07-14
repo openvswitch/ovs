@@ -5586,7 +5586,7 @@ recirc(),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=l
 dnl Clear ipf state.
 ovs-appctl time/warp 33000
 
-dnl Send a lot of small frags to overload the dp packet batch max.
+dnl Send a lot of small frags to trigger dynamic batch.
 AT_CHECK([ovs-appctl dpctl/ipf-set-min-frag v4 420], [], [dnl
 setting minimum fragment size successful
 ])
@@ -5597,14 +5597,22 @@ GEN_IP_FRAGS([p90], [22:22:22:22:22:22], [11:11:11:11:11:11], [2.2.2.2], [1.1.1.
 for i in $(seq 0 61); do
     AT_CHECK([ovs-appctl netdev-dummy/receive p90 "$(cat p90_$i)"])
 done
+OVS_CHECK_BATCH_GROW([0])
+CHECK_COVERAGE([dpif_netdev_recirc_big_batch], [0])
 AT_CHECK([ovs-appctl netdev-dummy/receive p90 "$(cat p90_62)"])
+OVS_CHECK_BATCH_GROW([2])
+CHECK_COVERAGE([dpif_netdev_recirc_big_batch], [1])
 
 dnl Second zone.
 GEN_IP_FRAGS([p1], [11:11:11:11:11:11], [22:22:22:22:22:22], [1.1.1.1], [2.2.2.2], [1], [2], [448])
 for i in $(seq 0 61); do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$(cat p1_$i)"])
 done
+OVS_CHECK_BATCH_GROW([2])
+CHECK_COVERAGE([dpif_netdev_recirc_big_batch], [1])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$(cat p1_62)"])
+OVS_CHECK_BATCH_GROW([4])
+CHECK_COVERAGE([dpif_netdev_recirc_big_batch], [2])
 
 dnl Bump the remaining queued packets
 AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 04c4 0002 0096 40 06 af61 ac11370d ac11370b dnl
@@ -5625,6 +5633,38 @@ recirc(),in_port(90),packet_type(ns=0,id=0),eth(src=22:22:22:22:22:22),eth_type(
 recirc(),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first), packets:0, bytes:0,  actions:2
 recirc(),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:61, bytes:29198,  actions:2
 ])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - fragment handling - reassembly no recirculation])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_rx_csum_set_good=true])
+
+AT_DATA([flows.txt], [dnl
+dnl Expand flow mask.
+table=0 in_port=1,dl_src=55:55:55:55:55:55, actions=drop
+table=0 in_port=1,ip,nw_src=10.0.0.2, actions=drop
+table=0 in_port=1,ip,tcp actions=ct(commit, zone=10),output:2
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 replace-flows br0 flows.txt])
+
+dnl Send a lot of small frags to trigger dynamic batch.
+AT_CHECK([ovs-appctl dpctl/ipf-set-min-frag v4 420], [], [dnl
+setting minimum fragment size successful
+])
+
+GEN_IP_FRAGS([p1], [11:11:11:11:11:11], [22:22:22:22:22:22], [1.1.1.1], [2.2.2.2], [1], [2], [448])
+
+for i in $(seq 0 61); do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$(cat p1_$i)"])
+done
+OVS_CHECK_BATCH_GROW([0])
+CHECK_COVERAGE([dpif_netdev_output_grow_queues], [0])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$(cat p1_62)"])
+OVS_CHECK_BATCH_GROW([2])
+CHECK_COVERAGE([dpif_netdev_output_grow_queues], [1])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
