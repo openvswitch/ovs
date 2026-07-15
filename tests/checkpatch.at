@@ -750,6 +750,98 @@ try_checkpatch_c_file \
 done
 AT_CLEANUP
 
+AT_SETUP([checkpatch - file contents checks - static inline in C files])
+
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+    static inline bool foo() {
+    }" \
+   "WARNING: Using 'static inline' in a c-file without ALWAYS_INLINE.
+    test.c:4:
+    static inline bool foo() {"
+
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+    static inline
+    bool foo() {
+    }" \
+   "WARNING: Using 'static inline' in a c-file without ALWAYS_INLINE.
+    test.c:4:
+    static inline"
+
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+    static   inline
+    bool foo() {
+    }" \
+   "WARNING: Using 'static inline' in a c-file without ALWAYS_INLINE.
+    test.c:4:
+    static   inline"
+
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+        static inline
+        bool foo() {
+        }" \
+   "WARNING: Using 'static inline' in a c-file without ALWAYS_INLINE.
+    test.c:4:
+        static inline"
+
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+        static inline ALWAYS_INLINE
+        bool foo() {
+        }"
+
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+        ALWAYS_INLINE static inline
+        bool foo() {
+        }"
+
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+        ALWAYS_INLINE static inline bool foo() {
+        }"
+
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+        static inline bool foo() ALWAYS_INLINE {
+        }"
+
+try_checkpatch_c_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+    static void inliner() {
+    }"
+
+dnl This is to confirm that filename selection works
+try_checkpatch_py_file \
+   "#include <foo.h>
+    #include <bar.h>
+
+    static inline bool foo() {
+    }"
+
+AT_CLEANUP
+
 AT_SETUP([checkpatch - spelling checks])
 AT_SKIP_IF([! $PYTHON3 -c 'import enchant' >/dev/null 2>&1])
 

@@ -162,6 +162,8 @@ __regex_if_macros = re.compile(r'^ +(%s) \([\S](?:[\s\S]*?[\S])?\) { +\\' %
                                __parenthesized_constructs)
 __regex_nonascii_characters = re.compile("[^\u0000-\u007f]")
 __regex_efgrep = re.compile(r'.*[ef]grep.*$')
+__regex_static_inline_c_file = re.compile(r'^\s*static\s+inline')
+__regex_always_inline = re.compile(r'\s*ALWAYS_INLINE\s*')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -627,6 +629,15 @@ checks = [
      'interim_line': True,
      'print':
      lambda: print_warning("Empty return followed by brace, consider omitting")
+     },
+
+    {'regex': r'(\.c)(\.in)?$', 'match_name': None,
+     'check':
+     lambda x: __regex_static_inline_c_file.search(x) is not None and
+     __regex_always_inline.search(x) is None,
+     'print':
+     lambda: print_warning(
+         "Using 'static inline' in a c-file without ALWAYS_INLINE.")
      },
 
     {'regex': r'(\.at|\.sh)$', 'match_name': None,
