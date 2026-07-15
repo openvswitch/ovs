@@ -18,6 +18,10 @@ Post-v3.7.0
      * 'dpif-netdev/pmd-stats-show' command was removed in favor of the more
        informative and better structured 'dpif-netdev/pmd-perf-show', which
        now also provides statistics for the "main" thread.
+     * 'fdb/show' now accepts multiple bridge names, and shows all bridges
+       when no bridge is specified.  The JSON output is now an object keyed
+       by bridge name, and the "port" column in the text output was renamed
+       to "Port".
    - Python:
      * The ovstest Python module is now removed.  It was only used by the
        ovs-test and ovs-l3ping utilities.

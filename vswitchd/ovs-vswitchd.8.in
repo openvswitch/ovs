@@ -176,10 +176,16 @@ Deletes \fImac\fR address from a \fIport\fR and \fIvlan\fR on a \fIbridge\fR.
 .IP "\fBfdb/flush\fR [\fIbridge\fR]"
 Flushes \fIbridge\fR MAC address learning table, or all learning tables
 if no \fIbridge\fR is given.
-.IP "\fBfdb/show\fR \fIbridge\fR"
+.IP "\fBfdb/show\fR [\fIbridge\fR...]"
 Lists each MAC address/VLAN pair learned by the specified \fIbridge\fR,
 along with the port on which it was learned and the age of the entry,
-in seconds.
+in seconds.  Multiple bridge names may be given to query several bridges
+in a single call, and if no bridge is given the tables of all bridges are
+shown.  When more than one bridge is shown, text output gains a leading
+"Bridge" column that groups each bridge's entries, printing the bridge
+name only on its first row; a bridge with no entries is listed as a
+name-only row.  JSON output is an object keyed by bridge name, whose
+values are arrays of that bridge's entries.
 .IP "\fBfdb/stats-clear\fR [\fIbridge\fR]"
 Clear \fIbridge\fR MAC address learning table statistics, or all
 statistics if no \fIbridge\fR is given.
