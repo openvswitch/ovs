@@ -182,6 +182,7 @@ Fabrizio D'Angelo                  fdangelo@redhat.com
 Faicker Mo                         faicker.mo@ucloud.cn
 fang                               fangjiannan@cmss.chinamobile.com
 Fangrui Song                       maskray@google.com
+Fei Wang                           fei.wang@jaguarmicro.com
 Felix Huettner                     felix.huettner@digits.schwarz
 Felix Moebius                      felix.moebius@digits.schwarz
 Fengqi Li                          lifengqi@inspur.com
