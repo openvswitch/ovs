@@ -479,6 +479,7 @@ SUGYO Kazushi                      sugyo.org@gmail.com
 Sunyang Wu                         sunyang.wu@jaguarmicro.com
 Surya Rudra                        rudrasurya.r@altencalsoftlabs.com
 Tadaaki Nagao                      nagao@stratosphere.co.jp
+Takeru Hayasaka                    hayatake396@gmail.com
 Tao Liu                            thomas.liu@ucloud.cn
 Tao YunXiang                       taoyunxiang@cmss.chinamobile.com
 Terry Wilson                       twilson@redhat.com
