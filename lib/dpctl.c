@@ -1043,9 +1043,9 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 
     struct dpif_flow_dump_thread *flow_dump_thread;
     struct dpif_flow_dump *flow_dump;
-    struct dpif_flow f;
-    int pmd_id = PMD_ID_NULL;
+    unsigned pmd_id = PMD_ID_NULL;
     bool pmd_id_filter = false;
+    struct dpif_flow f;
     int lastargc = 0;
     int error;
 
@@ -1063,13 +1063,19 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             }
             types_list = xstrdup(argv[--argc] + 5);
         } else if (!strncmp(argv[argc - 1], "pmd=", 4)) {
-            if (!ovs_scan(argv[--argc], "pmd=%d", &pmd_id)) {
+            int pmd_id_arg;
+
+            if (!ovs_scan(argv[--argc], "pmd=%d", &pmd_id_arg)) {
                 error = EINVAL;
                 goto out_free;
             }
-
-            if (pmd_id == -1) {
+            if (pmd_id_arg == -1) {
                 pmd_id = NON_PMD_CORE_ID;
+            } else if (pmd_id_arg < 0) {
+                error = EINVAL;
+                goto out_free;
+            } else {
+                pmd_id = pmd_id_arg;
             }
             pmd_id_filter = true;
         }
