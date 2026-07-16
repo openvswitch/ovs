@@ -51,7 +51,7 @@ Q: Does Open vSwitch support running on Windows (Hyper-V)?
 
    A: Support for the Windows datapath, a.k.a. Hyper-V, was deprecated starting
    with Open vSwitch 3.7, and the source code was completely removed from the
-   Open vSwitch source tree in the next release.
+   Open vSwitch source tree in 4.0.
 
 Q: Are all features available with all datapaths?
 
@@ -169,6 +169,7 @@ Q: What DPDK version does each Open vSwitch release work with?
     3.5.x        24.11.6
     3.6.x        24.11.6
     3.7.x        25.11.2
+    4.0.x        25.11.2
     ============ ========
 
 Q: Are all the DPDK releases that OVS versions work with maintained?
