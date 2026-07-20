@@ -5489,7 +5489,7 @@ m4_define([GEN_IP_FRAGS],
    AT_CHECK([ovs-ofctl compose-packet --bare "${flow_first}"], [0], [stdout])
    hdr=$(cat stdout)
    ip_len=$(printf '%04x' $((20 + frag_len)))
-   payload=$(printf '0%.0s' $(seq $(( (frag_len - 20) * 2 ))))
+   payload=$(printf '%0*d' $(( (frag_len - 20) * 2 )) 0)
    AT_CHECK([echo ${hdr}${payload} \
              | sed "s/^\(.\{32\}\).\{12\}\(.\{4\}\).\{4\}/\1${ip_len}12342000\2dead/"],
             [0], [stdout])
@@ -5498,7 +5498,7 @@ m4_define([GEN_IP_FRAGS],
    AT_CHECK([ovs-ofctl compose-packet --bare "${flow_later}"], [0], [stdout])
    hdr=$(cat stdout)
    ip_len=$(printf '%04x' $((20 + frag_len)))
-   payload=$(printf '0%.0s' $(seq $(( frag_len * 2 ))))
+   payload=$(printf '%0*d' $(( frag_len * 2 )) 0)
    for i in $(seq 1 61); do
        frag_off=$(printf '%04x' $((0x2000 + i * frag_len / 8)))
        AT_CHECK([echo ${hdr}${payload} \
@@ -5508,7 +5508,7 @@ m4_define([GEN_IP_FRAGS],
    done
 
    ip_len=$(printf '%04x' $((40 + frag_len / 2)))
-   payload=$(printf '0%.0s' $(seq $((frag_len + 40))))
+   payload=$(printf '%0*d' $((frag_len + 40)) 0)
    frag_off=$(printf '%04x' $((62 * frag_len / 8)))
    AT_CHECK([echo ${hdr}${payload} \
              | sed "s/^\(.\{32\}\).\{12\}\(.\{4\}\).\{4\}/\1${ip_len}1234${frag_off}\2dead/"],
@@ -5567,7 +5567,7 @@ dnl Make sure all four packets are counted properly in the coverage.
 AT_CHECK([ovs-appctl coverage/show | grep -c "^ipf.*total: 2"], [0], [2
 ])
 
-zero1208=$(printf '0%.0s' $(seq 2416))
+zero1208=$(printf '%0*d' 2416 0)
 dnl Test that reassembled packets flow.
 AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 04c4 0002 2000 40 06 8ff7 ac11370d ac11370b dnl
 0000 0001 00000000 00000000 50 10 8000 604c 0000 dnl
