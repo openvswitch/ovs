@@ -3301,7 +3301,7 @@ dnl  - 4x IPv4 500 byte payloads
 dnl  - 4x IPv6 500 byte payloads
 dnl  - one IPv4 2000 byte payload, and
 dnl  - one IPv6 2000 byte payload
-zero500=$(printf '0%.0s' $(seq 1000))
+zero500=$(printf '%0*d' 1000 0)
 AT_CHECK_UNQUOTED([ovs-pcap p2.pcap], [0], [dnl
 [0a8f394fe0738abf7e2f058408004501021c0000000040060187c0a87b02c0a87b01]dnl
 [d47814510000000000000000501000004dc20000${zero500}]
@@ -3415,8 +3415,8 @@ dnl - IPv4 GRE tunnel with IPv6 payload
 dnl - IPv6 GRE tunnel with IPv4 payload
 dnl - IPv6 GRE tunnel with IPv6 payload
 dnl These are sorted since OVS may send payloads to the tunnels in any order.
-zero400=$(printf '0%.0s' $(seq 800))
-zero100=$(printf '0%.0s' $(seq 200))
+zero400=$(printf '%0*d' 800 0)
+zero100=$(printf '%0*d' 200 0)
 AT_CHECK_UNQUOTED([ovs-pcap p1.pcap | sort], [0], [dnl
 [aabbcc000001aa55aa55000308004500025a00004000402f31c0010102580101025c200065580000007b0a8f394fe0738abf]dnl
 [7e2f058486dd60000000020806002001cafe0000000000000000000000882001cafe000000000000000000000092d4781451]dnl
