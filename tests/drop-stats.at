@@ -319,7 +319,7 @@ AT_CHECK([ovs-appctl coverage/read-counter drop_action_of_pipeline], [0], [dnl
 3
 ])
 
-AT_CHECK([ovs-appctl dpctl/del-flows])
+AT_CHECK([ovs-appctl revalidator/purge])
 
 for i in $(seq 1 3); do
 AT_CHECK([ovs-appctl netdev-dummy/receive p2 'ICMP_PKT'], [0], [ignore])
@@ -338,7 +338,7 @@ AT_CHECK([ovs-appctl coverage/read-counter drop_action_of_pipeline], [0], [dnl
 6
 ])
 
-AT_CHECK([ovs-appctl dpctl/del-flows])
+AT_CHECK([ovs-appctl revalidator/purge])
 
 for i in $(seq 1 3); do
 AT_CHECK([ovs-appctl netdev-dummy/receive p3 'ICMP_PKT'], [0], [ignore])
