@@ -2183,8 +2183,7 @@ ovsdb_idl_index_write(struct ovsdb_idl_row *const_row,
     size_t column_idx = column - class->columns;
 
     if (bitmap_is_set(row->written, column_idx)) {
-        free(row->new_datum[column_idx].values);
-        free(row->new_datum[column_idx].keys);
+        ovsdb_datum_destroy(&row->new_datum[column_idx], &column->type);
     } else {
         bitmap_set1(row->written, column_idx);
      }
