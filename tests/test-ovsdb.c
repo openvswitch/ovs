@@ -3317,6 +3317,16 @@ test_idl_compound_index_single_column(struct ovsdb_idl *idl,
      */
     ++step;
     struct idltest_simple *equal = idltest_simple_index_init_row(s_index);
+    idltest_simple_index_set_s(equal, "List100");
+    ovs_assert(strcmp(equal->s, "List100") == 0);
+    IDLTEST_SIMPLE_FOR_EACH_EQUAL (myRow, equal, s_index) {
+        printf("%03d: s=%s i=%"PRId64" b=%s r=%f\n", step, myRow->s,
+               myRow->i, myRow->b?"True":"False", myRow->r);
+    }
+    /* Display records by string index -> s_index with filtering
+     * where s="List001".  Reuse the 'equal' index.
+     */
+    ++step;
     idltest_simple_index_set_s(equal, "List001");
     ovs_assert(strcmp(equal->s, "List001") == 0);
     IDLTEST_SIMPLE_FOR_EACH_EQUAL (myRow, equal, s_index) {
@@ -3451,6 +3461,18 @@ test_idl_compound_index_double_column(struct ovsdb_idl_index *si_index,
         printf("%03d: s=%s i=%"PRId64" b=%s r=%f\n", step, myRow->s, myRow->i,
                myRow->b?"True":"False", myRow->r);
     }
+
+    /* Display records by string-integer index -> si_index with filtering
+     * where s="List100" and i=10. Reuse the 'equal' index.
+     */
+    step++;
+    idltest_simple_index_set_s(equal, "List100");
+    ovs_assert(strcmp(equal->s, "List100") == 0);
+    IDLTEST_SIMPLE_FOR_EACH_EQUAL (myRow, equal, si_index) {
+        printf("%03d: s=%s i=%"PRId64" b=%s r=%f\n", step, myRow->s, myRow->i,
+               myRow->b?"True":"False", myRow->r);
+    }
+
     /* Display records by string-integer index -> si_index in range i=[0,100]
      * and s=[\"List002\",\"List003\"]
      */
