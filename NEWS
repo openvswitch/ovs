@@ -1,8 +1,9 @@
-v4.0.0 - xx xxx xxxx
+v4.0.0 - 17 Aug 2026
 --------------------
    - Userspace datapath:
      * ARP/ND lookups for native tunnel are now rate limited. The holdout
        timer can be configured with 'tnl/neigh/retrans_time'.
+     * Added support for software GSO for nested tunnels.
      * Removed experimental tag from the userspace TSO implementation.
    - DPDK:
      * Probing of devices at DPDK initialization has been disabled to avoid
@@ -15,6 +16,10 @@ v4.0.0 - xx xxx xxxx
    - Linux:
      * For veth interfaces, the interface index of the peer veth device is
        now reported as 'peer_ifindex' in the Interface status column.
+     * A new ovsdb-server.socket systemd unit to enable socket activation
+       for the ovsdb-server process.
+     * Systemd service units are now using RestartMode=direct, if available,
+       to prevent cascading service stops during auto-restart.
    - ovs-appctl:
      * 'dpif-netdev/pmd-stats-show' command was removed in favor of the more
        informative and better structured 'dpif-netdev/pmd-perf-show', which
@@ -23,6 +28,9 @@ v4.0.0 - xx xxx xxxx
        when no bridge is specified.  The JSON output is now an object keyed
        by bridge name, and the "port" column in the text output was renamed
        to "Port".
+   - OVSDB:
+     * A new 'pfd:<fd>' connection method to listen on a pre-opened file
+       descriptor for use with systemd socket activation.
    - Python:
      * The ovstest Python module is now removed.  It was only used by the
        ovs-test and ovs-l3ping utilities.
@@ -32,6 +40,8 @@ v4.0.0 - xx xxx xxxx
      kernel tunnel devices with COLLECT_METADATA.  And so the minimum kernel
      version for GRE, VXLAN, and Geneve tunnels is raised from 3.11/3.12/3.18
      to 4.3.
+     Note: support for legacy tunnel vport implementation was also removed
+     from the upstream Linux kernel and will not be available in Linux v7.3+.
    - The following deprecated AVX512-specific features of the userspace
      datapath are now removed:
      * AVX512-optimized DPCLS lookups.
@@ -44,6 +54,8 @@ v4.0.0 - xx xxx xxxx
      * ovs-vlan-test: It was designed to check for VLAN bugs in old Linux
        kernels that have long been fixed.
      * ovs-bugtool: There are much better alternatives like sosreport.
+     * ovs-parse-backtrace: Obsolete and non-functional.  addr2line or gdb
+       can be used instead.
    - The old spec file for RPM packaging on RHEL 5 and 6 is now removed.
    - Windows:
      * The previously deprecated Windows kernel datapath implementation is
