@@ -1689,7 +1689,10 @@ xlate_lookup_ofproto_(const struct dpif_backer *backer,
              * the packet originated from OFPP_CONTROLLER passed
              * through a patch port.
              *
-             * OFPP_NONE can also indicate that a bond caused recirculation. */
+             * OFPP_NONE can also indicate that a bond caused recirculation,
+             * or that an OpenFlow action (e.g. load:0xffff->NXM_OF_IN_PORT[])
+             * cleared the OF in_port mid-pipeline before a freeze (as OVN
+             * does at logical-datapath crossings). */
             struct uuid uuid = recirc_id_node->state.ofproto_uuid;
             const struct xbridge *bridge = xbridge_lookup_by_uuid(xcfg, &uuid);
 
@@ -1698,6 +1701,22 @@ xlate_lookup_ofproto_(const struct dpif_backer *backer,
                     !get_ofp_port(bridge, in_port)) {
                     goto xport_lookup;
                 }
+
+                /* If there is a datapath port associated with this flow and
+                 * it no longer exists, the flow is stale and must be evicted,
+                 * so fall through to xport_lookup. */
+                if (flow->in_port.odp_port != ODPP_NONE) {
+                    const struct ofport_dpif *ingress;
+
+                    ingress = tnl_port_should_receive(flow)
+                              ? tnl_port_receive(flow)
+                              : odp_port_to_ofport(backer,
+                                                   flow->in_port.odp_port);
+                    if (!ingress) {
+                        goto xport_lookup;
+                    }
+                }
+
                 if (errorp) {
                     *errorp = NULL;
                 }
