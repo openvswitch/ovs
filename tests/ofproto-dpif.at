@@ -6515,6 +6515,41 @@ OVS_WAIT_UNTIL([ovs-pcap p1-tx.pcap | grep -q "$packet"])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - evict recirculated OFPP_NONE flows on input port removal])
+AT_KEYWORDS([recirc revalidator])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+m4_define([PKT], [m4_join([,],
+    [in_port(1)],
+    [eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a)],
+    [eth_type(0x0800)],
+    [ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no)])])
+
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1,tcp actions=load:0xffff->NXM_OF_IN_PORT[[]],ct(zone=1,table=1)
+table=1,tcp actions=output:2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl A few packets so both datapath flows get hits.
+for i in 1 2 3; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'PKT'])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | strip_used | strip_stats | sort], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no), packets:0, bytes:0, used:0.0s, actions:ct(zone=1),recirc(0x1)
+recirc_id(0x1),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no), packets:0, bytes:0, used:0.0s, actions:2
+])
+
+AT_CHECK([ovs-vsctl del-port br0 p1])
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl dpctl/dump-flows])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - debug_slow action])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
