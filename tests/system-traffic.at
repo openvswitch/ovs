@@ -2204,9 +2204,9 @@ dnl SLOW_ACTION test1: check datapatch actions
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_type=0x800,dl_src=e6:66:c1:11:11:11,dl_dst=e6:66:c1:22:22:22,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,tp_src=8,tp_dst=9"], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace --names br0 "in_port=1,dl_type=0x800,dl_src=e6:66:c1:11:11:11,dl_dst=e6:66:c1:22:22:22,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,tp_src=8,tp_dst=9"], [0], [stdout])
 AT_CHECK([tail -3 stdout], [0],
-[Datapath actions: trunc(100),3,5,trunc(100),3,trunc(100),5,3,trunc(200),5,trunc(65535),3
+[Datapath actions: trunc(100),ovs-p1,ovs-p2,trunc(100),ovs-p1,trunc(100),ovs-p2,ovs-p1,trunc(200),ovs-p2,trunc(65535),ovs-p1
 This flow is handled by the userspace slow path because it:
   - Uses action(s) not supported by datapath.
 ])
@@ -2550,10 +2550,10 @@ AT_CHECK([ovs-ofctl add-flows --bundle br0 flows.txt])
 dnl Generate some traffic.
 NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2], [1], [ignore])
 
-OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/dump-flows | grep "eth_type(0x0800)" | dnl
-                      strip_ptype | strip_eth | strip_recirc | strip_stats | dnl
-                      strip_used | sort], [dnl
-recirc_id(<recirc>),in_port(2),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:drop])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/dump-flows --names | dnl
+                      grep "eth_type(0x0800)" | strip_ptype | strip_eth | dnl
+                      strip_recirc | strip_stats | strip_used | sort], [dnl
+recirc_id(<recirc>),in_port(ovs-p0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:drop])
 
 OVS_TRAFFIC_VSWITCHD_STOP(["/WARN/d"])
 AT_CLEANUP
@@ -2577,12 +2577,12 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0],
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
-AT_CHECK([ovs-appctl dpctl/dump-flows | grep "eth_type(0x0800)" | sort | dnl
-          strip_recirc | strip_used | dnl
+AT_CHECK([ovs-appctl dpctl/dump-flows --names | grep "eth_type(0x0800)" |dnl
+          sort | strip_recirc | strip_used | dnl
           sed 's/,packet_type(ns=[[0-9]]*,id=[[0-9]]*),/,/;s/,eth(),/,/;s/bytes:756/bytes:882/'],
           [0], [dnl
-recirc_id(<recirc>),in_port(2),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:882, used:0.0s, actions:3,1
-recirc_id(<recirc>),in_port(3),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:882, used:0.0s, actions:2,1
+recirc_id(<recirc>),in_port(ovs-p0),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:882, used:0.0s, actions:ovs-p1,br0
+recirc_id(<recirc>),in_port(ovs-p1),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:882, used:0.0s, actions:ovs-p0,br0
 ])
 
 AT_DATA([flows2.txt], [dnl
@@ -2596,12 +2596,12 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0],
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
-AT_CHECK([ovs-appctl dpctl/dump-flows | grep "eth_type(0x0800)" | sort | dnl
-          strip_recirc | strip_used | dnl
+AT_CHECK([ovs-appctl dpctl/dump-flows --names | grep "eth_type(0x0800)" | dnl
+          sort | strip_recirc | strip_used | dnl
           sed -e 's/,packet_type(ns=[[0-9]]*,id=[[0-9]]*),/,/;s/,eth(),/,/;s/bytes:1596/bytes:1862/'],
           [0], [dnl
-recirc_id(<recirc>),in_port(2),eth_type(0x0800),ipv4(frag=no), packets:19, bytes:1862, used:0.0s, actions:3
-recirc_id(<recirc>),in_port(3),eth_type(0x0800),ipv4(frag=no), packets:19, bytes:1862, used:0.0s, actions:2
+recirc_id(<recirc>),in_port(ovs-p0),eth_type(0x0800),ipv4(frag=no), packets:19, bytes:1862, used:0.0s, actions:ovs-p1
+recirc_id(<recirc>),in_port(ovs-p1),eth_type(0x0800),ipv4(frag=no), packets:19, bytes:1862, used:0.0s, actions:ovs-p0
 ])
 
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
@@ -2611,12 +2611,12 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0],
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
-AT_CHECK([ovs-appctl dpctl/dump-flows | grep "eth_type(0x0800)" | sort | dnl
-          strip_recirc | strip_used | dnl
+AT_CHECK([ovs-appctl dpctl/dump-flows --names | grep "eth_type(0x0800)" | dnl
+          sort | strip_recirc | strip_used | dnl
           sed 's/,packet_type(ns=[[0-9]]*,id=[[0-9]]*),/,/;s/,eth(),/,/;s/bytes:2436/bytes:2842/'],
           [0], [dnl
-recirc_id(<recirc>),in_port(2),eth_type(0x0800),ipv4(frag=no), packets:29, bytes:2842, used:0.0s, actions:3,1
-recirc_id(<recirc>),in_port(3),eth_type(0x0800),ipv4(frag=no), packets:29, bytes:2842, used:0.0s, actions:2,1
+recirc_id(<recirc>),in_port(ovs-p0),eth_type(0x0800),ipv4(frag=no), packets:29, bytes:2842, used:0.0s, actions:ovs-p1,br0
+recirc_id(<recirc>),in_port(ovs-p1),eth_type(0x0800),ipv4(frag=no), packets:29, bytes:2842, used:0.0s, actions:ovs-p0,br0
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -2705,11 +2705,11 @@ NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
     $(ovs-ofctl compose-packet --bare 'ND_NS_PKT,nd_target=2001::1:0:392')],
   [0], [ignore])
 
-AT_CHECK([ovs-appctl dpctl/dump-flows | strip_stats | strip_used | dnl
+AT_CHECK([ovs-appctl dpctl/dump-flows --names | strip_stats | strip_used | dnl
           strip_key32 | strip_ptype | strip_eth | strip_recirc | dnl
           grep ",nd" | sort], [0], [dnl
-recirc_id(<recirc>),in_port(2),eth(src=36:b1:ee:7c:01:03,dst=36:b1:ee:7c:01:02),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=2001::1:0:392), packets:0, bytes:0, used:never, actions:1,3
-recirc_id(<recirc>),in_port(2),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=3000::1), packets:0, bytes:0, used:never, actions:drop
+recirc_id(<recirc>),in_port(ovs-p0),eth(src=36:b1:ee:7c:01:03,dst=36:b1:ee:7c:01:02),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=2001::1:0:392), packets:0, bytes:0, used:never, actions:br0,ovs-p1
+recirc_id(<recirc>),in_port(ovs-p0),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=3000::1), packets:0, bytes:0, used:never, actions:drop
 ])
 
 OVS_WAIT_UNTIL([ovs-appctl dpctl/dump-flows | grep ",nd" | wc -l | grep -E ^0])
@@ -2724,11 +2724,11 @@ NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 \
     $(ovs-ofctl compose-packet --bare 'ND_NS_PKT,nd_target=3000::1')],
   [0], [ignore])
 
-AT_CHECK([ovs-appctl dpctl/dump-flows | strip_stats | strip_used | dnl
+AT_CHECK([ovs-appctl dpctl/dump-flows --names | strip_stats | strip_used | dnl
           strip_key32 | strip_ptype | strip_eth | strip_recirc | dnl
           grep ",nd" | sort], [0], [dnl
-recirc_id(<recirc>),in_port(2),eth(src=36:b1:ee:7c:01:03,dst=36:b1:ee:7c:01:02),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=2001::1:0:392), packets:0, bytes:0, used:never, actions:1,3
-recirc_id(<recirc>),in_port(2),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=3000::1), packets:0, bytes:0, used:never, actions:drop
+recirc_id(<recirc>),in_port(ovs-p0),eth(src=36:b1:ee:7c:01:03,dst=36:b1:ee:7c:01:02),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=2001::1:0:392), packets:0, bytes:0, used:never, actions:br0,ovs-p1
+recirc_id(<recirc>),in_port(ovs-p0),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=3000::1), packets:0, bytes:0, used:never, actions:drop
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP

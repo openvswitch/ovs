@@ -135,12 +135,3 @@ m4_define([ADD_VF],
     ]
 )
 m4_define([ADD_VETH], [ADD_VF($@)])
-
-# DUMP_DP_IP_CLEAN_SORTED()
-#
-# Clean up and sort the ovs-dpctl dump-flow output for comparing.
-#
-m4_define([DUMP_DP_IP_CLEAN_SORTED], [dnl
-  grep 'eth_type(0x0800)' \
-    | sed -e 's/eth(src=[[a-z0-9:]]*,dst=[[a-z0-9:]]*)/eth(macs)/;s/recirc_id(0),//' \
-    | strip_used | strip_ptype | sort])

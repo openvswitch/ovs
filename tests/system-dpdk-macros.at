@@ -199,3 +199,13 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
     [AT_CHECK([ethtool -K $1 tx off], [0], [ignore], [ignore])
      AT_CHECK([ethtool -K $1 txvlan off], [0], [ignore], [ignore])]
 )
+
+
+# DUMP_DP_IP_CLEAN_SORTED()
+#
+# Clean up and sort the ovs-appctl dpctl/dump-flows output for comparing.
+#
+m4_define([DUMP_DP_IP_CLEAN_SORTED], [dnl
+  grep 'eth_type(0x0800)' \
+    | sed -e 's/eth(src=[[a-z0-9:]]*,dst=[[a-z0-9:]]*)/eth(macs)/;s/recirc_id(0),//' \
+    | strip_used | strip_ptype | sort])
