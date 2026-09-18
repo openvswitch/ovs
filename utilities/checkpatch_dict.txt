@@ -35,6 +35,7 @@ cpu
 cpus
 cstime
 csum
+ctx
 cutime
 cvlan
 datapath
@@ -233,6 +234,7 @@ rebased
 recirc
 recirculation
 recirculations
+reinitialization
 revalidate
 revalidation
 revalidator

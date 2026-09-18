@@ -331,6 +331,9 @@ struct dp_netdev {
     uint64_t last_reconfigure_seq;
     struct ovsthread_once once_set_config;
 
+    /* When a reconfigure is requested, forcefully reload all PMDs. */
+    bool force_pmd_reload;
+
     /* Cpu mask for pin of pmd threads. */
     char *pmd_cmask;
 
@@ -341,6 +344,7 @@ struct dp_netdev {
 
     struct conntrack *conntrack;
     struct pmd_auto_lb pmd_alb;
+    bool offload_enabled;
 
     /* Bonds. */
     struct ovs_mutex bond_mutex; /* Protects updates of 'tx_bonds'. */
@@ -4061,6 +4065,12 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
         log_all_pmd_sleeps(dp);
     }
 
+    if (!dp->offload_enabled && dpif_offload_enabled()) {
+        dp->offload_enabled = true;
+        dp->force_pmd_reload = true;
+        dp_netdev_request_reconfigure(dp);
+    }
+
     return 0;
 }
 
@@ -5769,6 +5779,14 @@ reconfigure_datapath(struct dp_netdev *dp)
         ovs_mutex_unlock(&pmd->port_mutex);
     }
 
+    /* Do we need to forcefully reload all threads? */
+    if (dp->force_pmd_reload) {
+        CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+            pmd->need_reload = true;
+        }
+        dp->force_pmd_reload = false;
+    }
+
     /* Reload affected pmd threads. */
     reload_affected_pmds(dp);
 
@@ -6054,6 +6072,7 @@ pmd_thread_main(void *f_)
 {
     struct dp_netdev_pmd_thread *pmd = f_;
     struct pmd_perf_stats *s = &pmd->perf_stats;
+    struct dpif_offload_pmd_ctx *offload_ctx = NULL;
     unsigned int lc = 0;
     struct polled_queue *poll_list;
     bool wait_for_reload = false;
@@ -6086,6 +6105,9 @@ reload:
     if (!dpdk_attached) {
         dpdk_attached = dpdk_attach_thread(pmd->core_id);
     }
+
+    dpif_offload_pmd_thread_reload(pmd->dp->full_name, pmd->core_id,
+                                   pmd->numa_id, &offload_ctx);
 
     /* List port/core affinity */
     for (i = 0; i < poll_cnt; i++) {
@@ -6246,6 +6268,7 @@ reload:
         goto reload;
     }
 
+    dpif_offload_pmd_thread_exit(offload_ctx);
     pmd_free_static_tx_qid(pmd);
     dfc_cache_uninit(&pmd->flow_cache);
     free(poll_list);

@@ -54,6 +54,7 @@ static const struct dpif_offload_class *base_dpif_offload_classes[] = {
     &dpif_offload_dummy_x_class,
 };
 
+#define TOTAL_PROVIDERS ARRAY_SIZE(base_dpif_offload_classes)
 #define DEFAULT_PROVIDER_PRIORITY_LIST "tc,dpdk,dummy,dummy_x"
 
 static char *dpif_offload_provider_priority_list = NULL;
@@ -1692,4 +1693,106 @@ dpif_offload_port_mgr_port_count(const struct dpif_offload *offload)
     ovs_assert(offload && offload->ports);
 
     return cmap_count(&offload->ports->odp_port_to_port);
+}
+
+struct dpif_offload_pmd_ctx_node {
+    const struct dpif_offload *offload;
+    void *provider_ctx;
+};
+
+struct dpif_offload_pmd_ctx {
+    unsigned core_id;
+    int numa_id;
+    size_t n_nodes;
+    struct dpif_offload_pmd_ctx_node nodes[TOTAL_PROVIDERS];
+};
+
+void
+dpif_offload_pmd_thread_reload(const char *dpif_name, unsigned core_id,
+                               int numa_id, struct dpif_offload_pmd_ctx **ctx_)
+{
+    struct dpif_offload_pmd_ctx_node old_nodes[TOTAL_PROVIDERS];
+    struct dpif_offload_provider_collection *collection;
+    struct dpif_offload_pmd_ctx *ctx;
+    struct dpif_offload *offload;
+    size_t old_n_nodes = 0;
+
+    if (!dpif_offload_enabled()) {
+        ovs_assert(!*ctx_);
+        return;
+    }
+
+    ovs_mutex_lock(&dpif_offload_mutex);
+    collection = shash_find_data(&dpif_offload_providers, dpif_name);
+    ovs_mutex_unlock(&dpif_offload_mutex);
+
+    if (OVS_UNLIKELY(!collection)) {
+        ovs_assert(!*ctx_);
+        return;
+    }
+
+    if (!*ctx_) {
+        /* XXX: Would be nice if we have a numa specific xzalloc(). */
+        ctx = xzalloc(sizeof *ctx);
+        ctx->core_id = core_id;
+        ctx->numa_id = numa_id;
+        *ctx_ = ctx;
+    } else {
+        ctx = *ctx_;
+        old_n_nodes = ctx->n_nodes;
+
+        if (old_n_nodes) {
+            memcpy(old_nodes, ctx->nodes, old_n_nodes * sizeof old_nodes[0]);
+        }
+
+        /* Reset active nodes array. */
+        memset(ctx->nodes, 0, sizeof ctx->nodes);
+        ctx->n_nodes = 0;
+    }
+
+    LIST_FOR_EACH (offload, dpif_list_node, &collection->list) {
+
+        ovs_assert(ctx->n_nodes < TOTAL_PROVIDERS);
+
+        if (!offload->class->pmd_thread_lifecycle) {
+            continue;
+        }
+
+        /* If this is a reload, try to find previous context. */
+        for (size_t i = 0; i < old_n_nodes; i++) {
+            struct dpif_offload_pmd_ctx_node *node = &old_nodes[i];
+
+            if (offload == node->offload) {
+                ctx->nodes[ctx->n_nodes].provider_ctx = node->provider_ctx;
+                break;
+            }
+        }
+
+        offload->class->pmd_thread_lifecycle(
+            offload, false, core_id, numa_id,
+            &ctx->nodes[ctx->n_nodes].provider_ctx);
+
+        if (ctx->nodes[ctx->n_nodes].provider_ctx) {
+            ctx->nodes[ctx->n_nodes].offload = offload;
+            ctx->n_nodes++;
+        }
+    }
+}
+
+void
+dpif_offload_pmd_thread_exit(struct dpif_offload_pmd_ctx *ctx)
+{
+    if (!ctx) {
+        return;
+    }
+
+    for (size_t i = 0; i < ctx->n_nodes; i++) {
+        struct dpif_offload_pmd_ctx_node *node = &ctx->nodes[i];
+
+        node->offload->class->pmd_thread_lifecycle(node->offload, true,
+                                                   ctx->core_id, ctx->numa_id,
+                                                   &node->provider_ctx);
+    }
+
+    free(ctx);
 }

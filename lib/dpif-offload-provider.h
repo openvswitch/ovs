@@ -318,6 +318,20 @@ struct dpif_offload_class {
      * to netdev_flow_put() is no longer held by the offload provider. */
     void (*register_flow_unreference_cb)(const struct dpif_offload *,
                                          dpif_offload_flow_unreference_cb *);
+
+    /* The API below is specific to PMD (userspace) thread lifecycle handling.
+     *
+     * The lifecycle hook may be invoked multiple times for the same PMD
+     * thread.  For example, when the thread is reinitialized, this function
+     * will be called again and the previous 'ctx' value will be passed back
+     * in.  It is the provider's responsibility to decide whether it should
+     * be reused, replaced, or cleaned up before storing the new 'ctx' value.
+     *
+     * When the PMD thread is terminating, this API is called with
+     * 'exit == true'.  At that point, the provider must release any resources
+     * associated with the previously returned 'ctx'. */
+    void (*pmd_thread_lifecycle)(const struct dpif_offload *, bool exit,
+                                 unsigned core_id, int numa_id, void **ctx);
 };
 
 extern struct dpif_offload_class dpif_offload_dummy_class;

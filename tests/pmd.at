@@ -1599,3 +1599,28 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=10.1.2.
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([PMD - offload thread lifecycle])
+OVS_VSWITCHD_START([], [], [], [DUMMY_NUMA],
+                   [-- set Open_vSwitch . other_config:hw-offload=true])
+
+AT_CHECK([ovs-appctl vlog/set dpif_offload_dummy:dbg])
+AT_CHECK([ovs-vsctl add-port br0 p0 -- set Interface p0 type=dummy-pmd])
+
+CHECK_CPU_DISCOVERED()
+CHECK_PMD_THREADS_CREATED()
+
+OVS_VSWITCHD_STOP
+
+LOG="$(sed -n 's/.*\(pmd_thread_lifecycle.*\)/\1/p' ovs-vswitchd.log)"
+CTX=$(echo "$LOG" | sed -n '2p' | sed -n 's/.*ctx=\(.*\)$/\1/p')
+
+AT_CHECK([echo "$LOG" | sed -n '1p' | sed 's/(nil)/0x0/g'], [0], [dnl
+pmd_thread_lifecycle; exit=false, core=0, numa=0, ctx=0x0
+])
+AT_CHECK([echo "$LOG" | sed -n '2p' \
+          | grep -q "exit=false, core=0, numa=0, ctx=$CTX"])
+AT_CHECK([echo "$LOG" | sed -n '$p' \
+          | grep -q "exit=true, core=0, numa=0, ctx=$CTX"])
+
+AT_CLEANUP

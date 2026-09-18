@@ -1146,6 +1146,27 @@ dummy_netdev_hw_offload_run(struct netdev *netdev)
     }
 }
 
+static void
+dummy_pmd_thread_lifecycle(const struct dpif_offload *dpif_offload, bool exit,
+                           unsigned core_id, int numa_id, void **ctx)
+{
+    /* Only do this for the 'dummy' class, not for 'dummy_x'. */
+    if (strcmp(dpif_offload_type(dpif_offload), "dummy")) {
+        *ctx = NULL;
+        return;
+    }
+
+    VLOG_DBG(
+        "pmd_thread_lifecycle; exit=%s, core=%u, numa=%d, ctx=%p",
+        exit ? "true" : "false", core_id, numa_id, *ctx);
+
+    if (exit) {
+        free(*ctx);
+    } else {
+        *ctx = *ctx ? *ctx : xstrdup("DUMMY_OFFLOAD_WORK");
+    }
+}
+
 #define DEFINE_DPIF_DUMMY_CLASS(NAME, TYPE_STR)                             \
     struct dpif_offload_class NAME = {                                      \
         .type = TYPE_STR,                                                   \
@@ -1166,6 +1187,7 @@ dummy_netdev_hw_offload_run(struct netdev *netdev)
         .netdev_flow_del = dummy_flow_del,                                  \
         .netdev_flow_stats = dummy_flow_stats,                              \
         .register_flow_unreference_cb = dummy_register_flow_unreference_cb, \
+        .pmd_thread_lifecycle = dummy_pmd_thread_lifecycle                  \
 }
 
 DEFINE_DPIF_DUMMY_CLASS(dpif_offload_dummy_class, "dummy");
