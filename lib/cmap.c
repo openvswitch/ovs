@@ -160,7 +160,7 @@ BUILD_ASSERT_DECL(sizeof(struct cmap_bucket) == CACHE_LINE_SIZE);
 
 /* The implementation of a concurrent hash map. */
 struct cmap_impl {
-    PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline0,
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
         unsigned int n;             /* Number of in-use elements. */
         unsigned int max_n;         /* Max elements before enlarging. */
         unsigned int min_n;         /* Min elements before shrinking. */
@@ -169,7 +169,7 @@ struct cmap_impl {
                                        hash values. */
     );
 
-    PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline1,
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
         struct cmap_bucket buckets[1];
     );
 };

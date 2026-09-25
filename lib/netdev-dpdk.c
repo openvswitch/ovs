@@ -452,7 +452,7 @@ enum dpdk_rx_steer_flags {
  */
 
 struct netdev_dpdk {
-    PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline0,
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
         dpdk_port_t port_id;
 
         /* If true, device was attached by rte_eth_dev_attach(). */
@@ -480,7 +480,7 @@ struct netdev_dpdk {
         struct rte_eth_link link;
     );
 
-    PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline1,
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
         struct ovs_mutex mutex OVS_ACQ_AFTER(dpdk_mutex);
         struct dpdk_mp *dpdk_mp;
 
