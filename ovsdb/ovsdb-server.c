@@ -642,7 +642,7 @@ reconfigure_ovsdb_server(struct server_config *server_config)
     FILE *file = NULL;
 
     if (config_file_path) {
-        file = fopen(config_file_path, "r+b");
+        file = fopen(config_file_path, "rb");
         if (!file) {
             VLOG_ERR("failed to open configuration file '%s': %s",
                      config_file_path, ovs_strerror(errno));
