@@ -1098,12 +1098,16 @@ AT_CHECK([ovs-vsctl --db=unix:s1.ovsdb --no-leader-only --no-wait create QoS typ
 AT_CHECK([ovs-vsctl --db=unix:s1.ovsdb --no-leader-only --no-wait create QoS type=m], [0], [ignore], [ignore])
 
 # Check that all the servers are in the cluster and have all the data.
+# A successful transaction reply only guarantees that the entry was
+# committed by a majority.  A follower may not have learned the new
+# commit index and applied it yet, so wait for every server to catch up.
 for i in $(seq $n); do
     AT_CHECK([ovs-appctl -t $(pwd)/s$i cluster/status $schema_name \
                 | grep -qE "Role: (leader|follower)"])
-    AT_CHECK([ovs-vsctl --db=unix:s$i.ovsdb --no-leader-only --bare \
-                --columns=type list QoS | grep . | sort | tr -d '\n'],
-             [0], [lmxyz])
+    OVS_WAIT_UNTIL_EQUAL([ovs-vsctl --db=unix:s$i.ovsdb --no-leader-only \
+                          --bare --columns=type list QoS | grep . | \
+                          sort | paste -s -d '\0' -],
+                         [lmxyz])
 done
 
 # Check that s3 never won a pre-vote.
