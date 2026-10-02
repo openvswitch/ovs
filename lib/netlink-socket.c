@@ -748,6 +748,7 @@ nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
                                       true);
     }
     dump->nl_seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
+    dump->nl_flags = 0;
     ovs_mutex_unlock(&dump->mutex);
 }
 
@@ -790,13 +791,15 @@ nl_dump_refill(struct nl_dump *dump, struct ofpbuf *buffer)
 }
 
 static int
-nl_dump_next__(struct ofpbuf *reply, struct ofpbuf *buffer)
+nl_dump_next__(struct nl_dump *dump, struct ofpbuf *reply,
+               struct ofpbuf *buffer)
 {
     struct nlmsghdr *nlmsghdr = nl_msg_next(buffer, reply);
     if (!nlmsghdr) {
         VLOG_WARN_RL(&rl, "netlink dump contains message fragment");
         return EPROTO;
     } else if (nlmsghdr->nlmsg_type == NLMSG_DONE) {
+        dump->nl_flags = nlmsghdr->nlmsg_flags;
         return EOF;
     } else {
         return 0;
@@ -850,7 +853,7 @@ nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply, struct ofpbuf *buffer)
 
     /* Fetch the next message from the buffer. */
     if (!retval) {
-        retval = nl_dump_next__(reply, buffer);
+        retval = nl_dump_next__(dump, reply, buffer);
         if (retval) {
             /* Record 'retval' as the dump status, but don't overwrite an error
              * with EOF.  */

@@ -248,6 +248,8 @@ struct nl_dump {
     int status OVS_GUARDED;     /* 0: dump in progress,
                                  * positive errno: dump completed with error,
                                  * EOF: dump completed successfully. */
+    uint32_t nl_flags;          /* nlmsg_flags from the NLMSG_DONE message.
+                                 * Only valid after nl_dump_done(). */
 
     /* 'mutex' protects 'status' and serializes access to 'sock'. */
     struct ovs_mutex mutex;     /* Protects 'status', synchronizes recv(). */
