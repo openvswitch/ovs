@@ -13092,11 +13092,16 @@ add_of_ports br0 1 2
 
 AT_CHECK([ovs-ofctl add-flow br0 action=NORMAL])
 
+AT_CHECK([ovs-appctl time/stop])
+
+# Give time for STP to synchronize.
+AT_CHECK([ovs-appctl time/warp 30000 3000], [0], [ignore])
+
 dnl Verify we are in forwarding state.
-OVS_WAIT_UNTIL([ovs-appctl stp/show br0 | grep "p1.*forwarding"])
+AT_CHECK([ovs-appctl stp/show br0 | grep "p1.*forwarding"], [0], [ignore])
 
 AT_CHECK([ovs-vsctl set bridge br0 stp_enable=false])
-OVS_WAIT_UNTIL([test -z "$(ovs-appctl stp/show)"])
+AT_CHECK([ovs-appctl stp/show])
 
 dnl Send a broadcast packet on p2, verify it floods to p1.
 AT_CHECK([ovs-appctl ofproto/trace br0 \
@@ -13120,11 +13125,16 @@ add_of_ports br0 1 2
 
 AT_CHECK([ovs-ofctl add-flow br0 action=NORMAL])
 
+AT_CHECK([ovs-appctl time/stop])
+
+# Give time for RSTP to synchronize.
+AT_CHECK([ovs-appctl time/warp 5000 500], [0], [ignore])
+
 dnl Verify we are in forwarding state.
-OVS_WAIT_UNTIL([ovs-appctl rstp/show br0 | grep "p1.*Designated"])
+AT_CHECK([ovs-appctl rstp/show br0 | grep "p1.*Designated"], [0], [ignore])
 
 AT_CHECK([ovs-vsctl set bridge br0 rstp_enable=false])
-OVS_WAIT_UNTIL([test -z "$(ovs-appctl rstp/show)"])
+AT_CHECK([ovs-appctl rstp/show])
 
 dnl Send a broadcast packet on p2, verify it floods to p1.
 AT_CHECK([ovs-appctl ofproto/trace br0 \
