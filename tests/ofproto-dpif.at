@@ -13138,3 +13138,95 @@ Datapath actions: 100,1
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - bundle floodable flag on internal port - STP])
+AT_KEYWORDS([stp bundle floodable])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2 3
+AT_CHECK([ovs-vsctl set interface p1 type=internal])
+
+AT_CHECK([ovs-vsctl set bridge br0 stp_enable=true])
+AT_CHECK([ovs-ofctl add-flow br0 action=NORMAL])
+
+AT_CHECK([ovs-appctl time/stop])
+
+# Give time for STP to synchronize.
+AT_CHECK([ovs-appctl time/warp 30000 3000], [0], [ignore])
+
+dnl Verify we are in forwarding state.
+AT_CHECK([ovs-appctl stp/show br0 | grep "p2.*forwarding"], [0], [ignore])
+AT_CHECK([ovs-appctl stp/show br0 | grep "p3.*forwarding"], [0], [ignore])
+
+dnl Send a broadcast packet on p2, verify it floods to the bridge port, the
+dnl internal p1 and the dummy p3.
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+          'in_port=p2,eth_src=00:00:00:00:00:01,eth_dst=ff:ff:ff:ff:ff:ff' \
+          -generate --names], [0], [stdout])
+AT_CHECK([tail -1 stdout | sed 's/Datapath actions: //' \
+            | tr "," "\n" | sort | tr "\n" ","], [0], [br0,p1,p3,])
+
+dnl Delete p3 to trigger reconfiguration.
+AT_CHECK([ovs-vsctl del-port p3])
+
+dnl Verify we are still in forwarding state.
+AT_CHECK([ovs-appctl time/warp 30000 3000], [0], [ignore])
+AT_CHECK([ovs-appctl stp/show br0 | grep "p2.*forwarding"], [0], [ignore])
+
+dnl Send a broadcast packet on p2, verify it still floods to both the bridge
+dnl port and the p1.
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+          'in_port=p2,eth_src=00:00:00:00:00:01,eth_dst=ff:ff:ff:ff:ff:ff' \
+          -generate --names], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: br0,p1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - bundle floodable flag on internal port - RSTP])
+AT_KEYWORDS([rstp bundle floodable])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2 3
+AT_CHECK([ovs-vsctl set interface p1 type=internal])
+
+AT_CHECK([ovs-vsctl set bridge br0 rstp_enable=true])
+AT_CHECK([ovs-ofctl add-flow br0 action=NORMAL])
+
+AT_CHECK([ovs-appctl time/stop])
+
+# Give time for RSTP to synchronize.
+AT_CHECK([ovs-appctl time/warp 5000 500], [0], [ignore])
+
+dnl Verify we are in forwarding state.
+AT_CHECK([ovs-appctl rstp/show br0 | grep "p2.*Designated"], [0], [ignore])
+AT_CHECK([ovs-appctl rstp/show br0 | grep "p3.*Designated"], [0], [ignore])
+
+dnl Send a broadcast packet on p2, verify it floods to the bridge port, the
+dnl internal p1 and the dummy p3.
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+          'in_port=p2,eth_src=00:00:00:00:00:01,eth_dst=ff:ff:ff:ff:ff:ff' \
+          -generate --names], [0], [stdout])
+AT_CHECK([tail -1 stdout | sed 's/Datapath actions: //' \
+            | tr "," "\n" | sort | tr "\n" ","], [0], [br0,p1,p3,])
+
+dnl Delete p3 to trigger reconfiguration.
+AT_CHECK([ovs-vsctl del-port p3])
+
+dnl Verify we are still in forwarding state.
+AT_CHECK([ovs-appctl time/warp 5000 500], [0], [ignore])
+AT_CHECK([ovs-appctl rstp/show br0 | grep "p2.*Designated"], [0], [ignore])
+
+dnl Send a broadcast packet on p2, verify it still floods to both the bridge
+dnl port and the p1.
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+          'in_port=p2,eth_src=00:00:00:00:00:01,eth_dst=ff:ff:ff:ff:ff:ff' \
+          -generate --names], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: br0,p1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
