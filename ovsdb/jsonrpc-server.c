@@ -1503,7 +1503,8 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     struct shash_node *node;
     struct json *json;
 
-    if ((version == OVSDB_MONITOR_V2 && json_array_size(params) != 3) ||
+    if ((version == OVSDB_MONITOR_V1 && json_array_size(params) != 3) ||
+        (version == OVSDB_MONITOR_V2 && json_array_size(params) != 3) ||
         (version == OVSDB_MONITOR_V3 && json_array_size(params) != 4)) {
         error = ovsdb_syntax_error(params, NULL, "invalid parameters");
         goto error;
