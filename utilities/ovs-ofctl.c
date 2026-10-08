@@ -762,18 +762,21 @@ bundle_print_errors(struct ovs_list *errors, struct ovs_list *requests,
             const struct ofp_header *ofp_msg = payload.data;
             size_t msg_len = payload.size;
 
-            /* Find the failing message from the requests list to be able to
-             * dump the whole message.  We assume the errors are returned in
-             * the same order as in which the messages are sent to get O(n)
-             * rather than O(n^2) processing here.  If this heuristics fails we
-             * may print the truncated hexdumps instead. */
-            LIST_FOR_EACH_CONTINUE (bmsg, list_node, requests) {
-                const struct ofp_header *oh = bmsg->data;
+            if (bmsg) {
+                /* Find the failing message from the requests list to be able
+                 * to dump the whole message.  We assume the errors are
+                 * returned in the same order as in which the messages are sent
+                 * to get O(n) rather than O(n^2) processing here.  If this
+                 * heuristics fails we may print the truncated hexdumps
+                 * instead. */
+                LIST_FOR_EACH_CONTINUE (bmsg, list_node, requests) {
+                    const struct ofp_header *oh = bmsg->data;
 
-                if (oh->xid == error_xid) {
-                    ofp_msg = oh;
-                    msg_len = bmsg->size;
-                    break;
+                    if (oh->xid == error_xid) {
+                        ofp_msg = oh;
+                        msg_len = bmsg->size;
+                        break;
+                    }
                 }
             }
             fprintf(stderr, "Error %s for: ", ofperr_get_name(ofperr));
