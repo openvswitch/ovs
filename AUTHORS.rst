@@ -160,7 +160,7 @@ Dustin Lundquist                   dustin@null-ptr.net
 Ed Maste                           emaste@freebsd.org
 Ed Swierk                          eswierk@skyportsystems.com
 Edouard Bourguignon                madko@linuxed.net
-Eelco Chaudron                     echaudro@redhat.com
+Eelco Chaudron                     echaudron@ovn.org
 Eiichi Tsukata                     eiichi.tsukata@nutanix.com
 Eli Britstein                      elibr@nvidia.com
 Eli Oliver                         eoliver@redhat.com
