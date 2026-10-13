@@ -31,7 +31,7 @@ vSwitch source code or webpage version control repository.
 ================================== ===============================================
 Name                               Email
 ================================== ===============================================
-Aaron Conole                       aconole@redhat.com
+Aaron Conole                       aconole@ovn.org
 Aaron Rosen                        arosen@clemson.edu
 Abhiram R N                        abhiramrn@gmail.com
 Adrian Guzowski                    adrian.guzowski@exatel.pl

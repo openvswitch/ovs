@@ -42,7 +42,7 @@ This is the current list of active Open vSwitch committers:
    * - Name
      - Email
    * - Aaron Conole
-     - aconole@redhat.com
+     - aconole@ovn.org
    * - Alin Serdean
      - aserdean@ovn.org
    * - Ansis Atteka
