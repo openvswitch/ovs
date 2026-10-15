@@ -8406,6 +8406,21 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/stats-show br0 | grep static], [0], [dnl
   Current static MAC entries in the table : 17
 ])
 
+dnl Check JSON output.
+AT_CHECK([ovs-appctl --format json --pretty fdb/stats-show br0], [0], [dnl
+{
+  "br0": {
+    "entries": {
+      "current": 17,
+      "maximum": 8192,
+      "static": 17},
+    "events": {
+      "evicted": 0,
+      "expired": 0,
+      "learned": 18,
+      "moved": 0}}}
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
