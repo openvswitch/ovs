@@ -2,7 +2,7 @@ Post-v4.0.0
 --------------------
    - ovs-appctl:
      * Added JSON output support (--format json) for 'fdb/stats-show',
-       'upcall/show'.
+       'upcall/show', 'dpif-netdev/pmd-sleep-show'.
    - ovs-vswitchd:
      * Mirror filters now accept masked fields, e.g. "ip,nw_src=10.0.0.0/24"
        in the "filter" column of the Mirror table.

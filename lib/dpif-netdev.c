@@ -65,6 +65,7 @@
 #include "odp-execute.h"
 #include "odp-util.h"
 #include "openvswitch/dynamic-string.h"
+#include "openvswitch/json.h"
 #include "openvswitch/list.h"
 #include "openvswitch/match.h"
 #include "openvswitch/ofp-parse.h"
@@ -884,6 +885,41 @@ dpif_netdev_pmd_rebalance(struct unixctl_conn *conn, int argc,
     ds_destroy(&reply);
 }
 
+static struct json *
+pmd_info_sleep_show_json(struct dp_netdev *dp,
+                         struct dp_netdev_pmd_thread **pmd_list, size_t n)
+{
+    struct json *json_threads = json_object_create();
+    struct json *json_result = json_object_create();
+
+    json_object_put(json_result, "default-max-sleep-us",
+                    json_integer_create(dp->pmd_max_sleep_default));
+
+    for (size_t i = 0; i < n; i++) {
+        struct dp_netdev_pmd_thread *pmd = pmd_list[i];
+        struct json *json_pmd;
+        uint64_t max_sleep;
+        char *key;
+
+        if (!pmd || pmd->core_id == NON_PMD_CORE_ID) {
+            continue;
+        }
+
+        json_pmd = json_object_create();
+        key = xasprintf("pmd-c%02u", pmd->core_id);
+
+        atomic_read_relaxed(&pmd->max_sleep, &max_sleep);
+        json_object_put(json_pmd, "core", json_integer_create(pmd->core_id));
+        json_object_put(json_pmd, "numa", json_integer_create(pmd->numa_id));
+        json_object_put(json_pmd, "max-sleep-us",
+                        json_integer_create(max_sleep));
+        json_object_put_nocopy(json_threads, key, json_pmd);
+    }
+
+    json_object_put(json_result, "threads", json_threads);
+    return json_result;
+}
+
 static void
 pmd_info_show_sleep(struct ds *reply, unsigned core_id, int numa_id,
                     uint64_t pmd_max_sleep)
@@ -951,6 +987,18 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
     }
 
     sorted_poll_thread_list(dp, &pmd_list, &n);
+
+    if (type == PMD_INFO_SLEEP_SHOW
+        && unixctl_command_get_output_format(conn)
+               == UNIXCTL_OUTPUT_FMT_JSON) {
+        struct json *json_result = pmd_info_sleep_show_json(dp, pmd_list, n);
+
+        ovs_mutex_unlock(&dp_netdev_mutex);
+        free(pmd_list);
+        unixctl_command_reply_json(conn, json_result);
+        return;
+    }
+
     for (size_t i = 0; i < n; i++) {
         struct dp_netdev_pmd_thread *pmd = pmd_list[i];
         if (!pmd) {
