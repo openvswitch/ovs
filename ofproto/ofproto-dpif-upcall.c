@@ -28,6 +28,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
 #include "guarded-list.h"
+#include "openvswitch/json.h"
 #include "latch.h"
 #include "openvswitch/list.h"
 #include "netlink.h"
@@ -3160,11 +3161,71 @@ dp_purge_cb(void *aux, unsigned pmd_id)
     udpif_resume_revalidators(udpif);
 }
 
-static void
-upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                    const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+static struct json *
+upcall_unixctl_show_json(void)
 {
-    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct json *json_udpifs = json_object_create();
+    struct udpif *udpif;
+
+    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
+        struct json *json_revalidators = json_object_create();
+        struct json *json_flows = json_object_create();
+        struct json *json_udpif = json_object_create();
+        uint64_t n_offloaded_flows;
+        unsigned int flow_limit;
+        bool ufid_enabled;
+        size_t i;
+
+        atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
+        ufid_enabled = udpif_use_ufid(udpif);
+        n_offloaded_flows = dpif_offload_flow_count(udpif->dpif);
+
+        json_object_put(json_flows, "average",
+                        json_integer_create(udpif->avg_n_flows));
+        json_object_put(json_flows, "current",
+                        json_integer_create(udpif_get_n_flows(udpif)));
+        json_object_put(json_flows, "limit",
+                        json_integer_create(flow_limit));
+        json_object_put(json_flows, "maximum",
+                        json_integer_create(udpif->max_n_flows));
+        json_object_put(json_flows, "offloaded",
+                        json_integer_create(n_offloaded_flows));
+        json_object_put(json_udpif, "dump-duration-ms",
+                        json_integer_create(udpif->dump_duration));
+        json_object_put(json_udpif, "flows", json_flows);
+
+        for (i = 0; i < udpif->n_revalidators; i++) {
+            struct revalidator *revalidator = &udpif->revalidators[i];
+            struct json *json_rv;
+            int j, elements = 0;
+            char *key;
+
+            /* Revalidators that are not fully initialized yet have ID 0.
+             * Skip them, otherwise they would overwrite each other. */
+            if (!revalidator->id) {
+                continue;
+            }
+
+            json_rv = json_object_create();
+            key = xasprintf("%u", revalidator->id);
+            for (j = i; j < N_UMAPS; j += udpif->n_revalidators) {
+                elements += cmap_count(&udpif->ukeys[j].cmap);
+            }
+            json_object_put(json_rv, "keys", json_integer_create(elements));
+            json_object_put_nocopy(json_revalidators, key, json_rv);
+        }
+        json_object_put(json_udpif, "revalidators", json_revalidators);
+        json_object_put(json_udpif, "ufid-enabled",
+                        json_boolean_create(ufid_enabled));
+
+        json_object_put(json_udpifs, dpif_name(udpif->dpif), json_udpif);
+    }
+    return json_udpifs;
+}
+
+static void
+upcall_unixctl_show_text(struct ds *ds)
+{
     uint64_t n_offloaded_flows;
     struct udpif *udpif;
 
@@ -3176,23 +3237,23 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
         ufid_enabled = udpif_use_ufid(udpif);
 
-        ds_put_format(&ds, "%s:\n", dpif_name(udpif->dpif));
-        ds_put_format(&ds, "  flows         : (current %lu)"
+        ds_put_format(ds, "%s:\n", dpif_name(udpif->dpif));
+        ds_put_format(ds, "  flows         : (current %lu)"
             " (avg %u) (max %u) (limit %u)\n", udpif_get_n_flows(udpif),
             udpif->avg_n_flows, udpif->max_n_flows, flow_limit);
         n_offloaded_flows = dpif_offload_flow_count(udpif->dpif);
         if (n_offloaded_flows) {
-            ds_put_format(&ds, "  offloaded flows : %"PRIu64"\n",
+            ds_put_format(ds, "  offloaded flows : %"PRIu64"\n",
                           n_offloaded_flows);
         }
-        ds_put_format(&ds, "  dump duration : %lldms\n", udpif->dump_duration);
-        ds_put_format(&ds, "  ufid enabled : ");
+        ds_put_format(ds, "  dump duration : %lldms\n", udpif->dump_duration);
+        ds_put_format(ds, "  ufid enabled : ");
         if (ufid_enabled) {
-            ds_put_format(&ds, "true\n");
+            ds_put_format(ds, "true\n");
         } else {
-            ds_put_format(&ds, "false\n");
+            ds_put_format(ds, "false\n");
         }
-        ds_put_char(&ds, '\n');
+        ds_put_char(ds, '\n');
 
         for (i = 0; i < udpif->n_revalidators; i++) {
             struct revalidator *revalidator = &udpif->revalidators[i];
@@ -3201,12 +3262,24 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
             for (j = i; j < N_UMAPS; j += udpif->n_revalidators) {
                 elements += cmap_count(&udpif->ukeys[j].cmap);
             }
-            ds_put_format(&ds, "  %u: (keys %d)\n", revalidator->id, elements);
+            ds_put_format(ds, "  %u: (keys %d)\n", revalidator->id, elements);
         }
     }
+}
 
-    unixctl_command_reply(conn, ds_cstr(&ds));
-    ds_destroy(&ds);
+static void
+upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                    const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    if (unixctl_command_get_output_format(conn) == UNIXCTL_OUTPUT_FMT_JSON) {
+        unixctl_command_reply_json(conn, upcall_unixctl_show_json());
+    } else {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+
+        upcall_unixctl_show_text(&ds);
+        unixctl_command_reply(conn, ds_cstr(&ds));
+        ds_destroy(&ds);
+    }
 }
 
 /* Disable using the megaflows.

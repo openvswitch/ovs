@@ -51,6 +51,52 @@ AT_CHECK([ovs-appctl revalidator/wait])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - upcall/show JSON output])
+OVS_VSWITCHD_START([], [], [=override])
+
+dnl Use one revalidator thread for deterministic output.
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:n-revalidator-threads=1])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl upcall/show | grep -c '(keys'], [1])
+
+dnl Add a second datapath to check the output with multiple datapaths.
+dnl Wait for both revalidators to be initialized, i.e. to have a non-zero ID.
+AT_CHECK([ovs-vsctl add-br br1 -- set bridge br1 datapath-type=netdev])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl upcall/show | \
+                       grep -c '^  [[1-9]][[0-9]]*: (keys'], [2])
+
+AT_CHECK([ovs-appctl --format json --pretty upcall/show | \
+          sed -e 's/: [[0-9]][[0-9]]*/: <cleared>/g'      \
+              -e 's/"[[0-9]][[0-9]]*": {/"<revalidator>": {/g'], [0], [dnl
+{
+  "dummy@ovs-dummy": {
+    "dump-duration-ms": <cleared>,
+    "flows": {
+      "average": <cleared>,
+      "current": <cleared>,
+      "limit": <cleared>,
+      "maximum": <cleared>,
+      "offloaded": <cleared>},
+    "revalidators": {
+      "<revalidator>": {
+        "keys": <cleared>}},
+    "ufid-enabled": true},
+  "netdev@ovs-netdev": {
+    "dump-duration-ms": <cleared>,
+    "flows": {
+      "average": <cleared>,
+      "current": <cleared>,
+      "limit": <cleared>,
+      "maximum": <cleared>,
+      "offloaded": <cleared>},
+    "revalidators": {
+      "<revalidator>": {
+        "keys": <cleared>}},
+    "ufid-enabled": true}}
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - lldp revalidator event(REV_RECONFIGURE)])
 OVS_VSWITCHD_START(
     [add-port br0 p1 -- set interface p1 ofport_request=1 type=dummy]
