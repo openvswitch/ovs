@@ -2496,7 +2496,8 @@ out:
         size_t offset = nl_msg_start_nested(actions, OVS_ACTION_ATTR_PUSH_NSH);
         nsh_key_to_attr(actions, &nsh, metadata, md_size, false);
         nl_msg_end_nested(actions, offset);
-        ret = n;
+        /* Consume the closing ')'. */
+        ret = n + 1;
     }
     return ret;
 }
@@ -2795,14 +2796,8 @@ parse_odp_action__(struct parse_odp_context *context, const char *s,
         }
     }
 
-    {
-        if (!strncmp(s, "push_nsh(", 9)) {
-            int retval = parse_odp_push_nsh_action(s, actions);
-            if (retval < 0) {
-                return retval;
-            }
-            return retval + 1;
-        }
+    if (!strncmp(s, "push_nsh(", 9)) {
+        return parse_odp_push_nsh_action(s, actions);
     }
 
     {
