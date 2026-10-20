@@ -9,7 +9,7 @@ jobs:
   build-dpdk:
     strategy:
       matrix:
-        runner: [ubuntu-24.04]
+        runner: [ubuntu-26.04]
     env:
       dependencies: gcc libnuma-dev libxdp-dev ninja-build pkgconf
       CC: gcc
@@ -81,7 +81,7 @@ jobs:
   build-libreswan:
     strategy:
       matrix:
-        runner: [ubuntu-24.04]
+        runner: [ubuntu-26.04]
     env:
       dependencies: build-essential fakeroot devscripts equivs
       libreswan_ver: v5.4
@@ -150,7 +150,7 @@ jobs:
       TEST_RANGE:  ${{ matrix.test_range }}
 
     name: linux ${{ join(matrix.*, ' ') }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
 
     strategy:
@@ -366,7 +366,7 @@ jobs:
     outputs:
       key: ${{ steps.cache_key.outputs.key }}
       outcome: ${{ steps.build_base.outcome }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
 
     steps:
@@ -479,7 +479,7 @@ jobs:
       DPDK: dpdk
       CLANG_ANALYZE: true
     name: clang-analyze
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
 
     steps:
@@ -522,7 +522,7 @@ jobs:
 
   build-oss-fuzz:
     name: build oss-fuzz fuzzers
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
 
     steps:
@@ -588,7 +588,7 @@ jobs:
       python_version: 3.12.11
 
     name: linux gcc (ubuntu-14.04)
-    runs-on:   ubuntu-24.04
+    runs-on:   ubuntu-26.04
     container: ubuntu:14.04
     timeout-minutes: 30
 
@@ -629,7 +629,7 @@ jobs:
       DPDK:        ${{ matrix.dpdk }}
 
     name: linux deb ${{ matrix.dpdk }} dpdk
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
 
     strategy:
@@ -669,7 +669,7 @@ jobs:
 
   build-linux-rpm:
     name: linux rpm fedora
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container: fedora:43
     timeout-minutes: 30
 
