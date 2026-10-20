@@ -84,7 +84,7 @@ jobs:
         runner: [ubuntu-24.04]
     env:
       dependencies: build-essential fakeroot devscripts equivs
-      libreswan_ver: v5.1
+      libreswan_ver: v5.4
     name: libreswan
     outputs:
       libreswan_key: ${{ steps.gen_libreswan_key.outputs.key }}
