@@ -96,6 +96,7 @@ Depends:
  openvswitch-switch (= ${binary:Version}),
  python3-openvswitch (= ${source:Version}),
  strongswan,
+ strongswan-starter,
  ${misc:Depends},
 Suggests: python3:any
 Breaks:
