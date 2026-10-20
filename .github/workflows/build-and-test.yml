@@ -3,7 +3,7 @@ name: Build and Test
 on: [push, pull_request]
 
 env:
-  python_default: 3.12
+  python_default: 3.14
 
 jobs:
   build-dpdk:
