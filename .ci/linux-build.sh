@@ -76,6 +76,21 @@ function clang_analyze()
     fi;
 }
 
+function sudo_preserve_test_env()
+{
+    # Preserve environment variables needed for test execution under sudo.
+    # HOME is needed for python to find site-packages installed for the
+    # current user.  PATH is special and can't be preserved this way.
+    for e in HOME GITHUB_ACTIONS ASAN_OPTIONS DPDK_EAL_OPTIONS; do
+        echo 'Defaults env_keep += "'$e'"' >> ovs-test-env
+    done
+
+    sudo chown root:root ovs-test-env
+    sudo chmod 0440 ovs-test-env
+    sudo visudo -cf ovs-test-env
+    sudo mv ovs-test-env /etc/sudoers.d/
+}
+
 if [ "$DEB_PACKAGE" ]; then
     ./boot.sh && ./configure --with-dpdk=$DPDK && make debian
     mk-build-deps --install --root-cmd sudo --remove debian/control
@@ -156,7 +171,9 @@ else
         run_as_root=
         if [ "$testsuite" != "check" ] && \
            [ "$testsuite" != "check-ovsdb-cluster" ] ; then
-            run_as_root="sudo -E PATH=$PATH GITHUB_ACTIONS=$GITHUB_ACTIONS"
+            sudo_preserve_test_env
+            run_as_root="sudo PATH=$PATH"
+
             sudo ip netns add ovs-system-test-ns
             # Some system tests may rely on traffic loopback.
             sudo ip -netns ovs-system-test-ns link set dev lo up
