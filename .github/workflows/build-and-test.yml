@@ -3,7 +3,7 @@ name: Build and Test
 on: [push, pull_request]
 
 env:
-  python_default: 3.12
+  python_default: 3.14
 
 jobs:
   build-dpdk:
@@ -585,7 +585,7 @@ jobs:
   build-old-linux-distribution:
     env:
       dependencies:   git make automake libtool gcc libnuma-dev zlib1g-dev
-      python_version: 3.12.11
+      python_version: 3.14.8
 
     name: linux gcc (ubuntu-14.04)
     runs-on:   ubuntu-26.04
