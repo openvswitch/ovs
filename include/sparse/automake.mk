@@ -1,6 +1,7 @@
 noinst_HEADERS += \
         include/sparse/rte_byteorder.h \
         include/sparse/immintrin.h \
+        include/sparse/smmintrin.h \
         include/sparse/xmmintrin.h \
         include/sparse/arpa/inet.h \
         include/sparse/bits/floatn.h \
