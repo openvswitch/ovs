@@ -496,13 +496,13 @@ Todd Deshane                       deshantm@gmail.com
 Tom Everman                        teverman@google.com
 Tomasz Konieczny                   tomaszx.konieczny@intel.com
 Toms Atteka                        cpp.code.lv@gmail.com
+Tonghao Zhang                      xiangxia.m.yue@gmail.com
 Tony van der Peet                  tony.vanderpeet@alliedtelesis.co.nz
 Torgny Lindberg                    torgny.lindberg@ericsson.com
+Tristan Madani                     tristan@talencesecurity.com
 Tsvi Slonim                        tsvi@toroki.com
 Tuan Nguyen                        tuan.nguyen@veriksystems.com
 Tyler Coumbes                      coumbes@gmail.com
-Tony van der Peet                  tony.vanderpeet@alliedtelesis.co.nz
-Tonghao Zhang                      xiangxia.m.yue@gmail.com
 Usman Ansari                       ua1422@gmail.com
 Valient Gough                      vgough@pobox.com
 Vasu Dasari                        vdasari@gmail.com
