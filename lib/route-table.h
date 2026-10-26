@@ -141,6 +141,9 @@ struct route_data {
     uint32_t rta_mark;           /* 0 if missing. */
     uint32_t rta_table_id;       /* 0 if missing. */
     uint32_t rta_priority;       /* 0 if missing. */
+    uint32_t rta_nhid;           /* Nexthop object id, 0 if missing.  Resolved
+                                  * by the user; 'nexthops' is empty unless the
+                                  * kernel also reported it inline. */
 };
 
 struct rule_data {

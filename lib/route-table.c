@@ -45,6 +45,7 @@
  * in case we're building with old headers. (We can't test for it with #ifdef
  * because it's an enum.) */
 #define RTA_MARK 16 /* Linux 2.6.36 */
+#define RTA_NH_ID 30 /* Linux 5.3 */
 #define FRA_SUPPRESS_PREFIXLEN 14 /* Linux 3.12 */
 #define FRA_TABLE 15 /* Linux 2.6.19 */
 #define FRA_PROTOCOL 21 /* Linux 4.17 */
@@ -468,6 +469,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
         [RTA_PRIORITY] = { .type = NL_A_U32, .optional = true },
         [RTA_VIA] = { .type = NL_A_RTA_VIA, .optional = true },
         [RTA_MULTIPATH] = { .type = NL_A_NESTED, .optional = true },
+        [RTA_NH_ID] = { .type = NL_A_U32, .optional = true },
     };
 
     static const struct nl_policy policy6[] = {
@@ -480,6 +482,7 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
         [RTA_PRIORITY] = { .type = NL_A_U32, .optional = true },
         [RTA_VIA] = { .type = NL_A_RTA_VIA, .optional = true },
         [RTA_MULTIPATH] = { .type = NL_A_NESTED, .optional = true },
+        [RTA_NH_ID] = { .type = NL_A_U32, .optional = true },
     };
 
     struct nlattr *attrs[ARRAY_SIZE(policy)];
@@ -585,6 +588,9 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
         if (attrs[RTA_PRIORITY]) {
             change->rd.rta_priority = nl_attr_get_u32(attrs[RTA_PRIORITY]);
         }
+        if (attrs[RTA_NH_ID]) {
+            change->rd.rta_nhid = nl_attr_get_u32(attrs[RTA_NH_ID]);
+        }
         if (attrs[RTA_VIA]) {
             const struct rtvia *rtvia = nl_attr_get(attrs[RTA_VIA]);
             ovs_be32 addr;
@@ -673,9 +679,16 @@ route_table_parse__(struct ofpbuf *buf, size_t ofs,
         if (route_type_needs_nexthop(rtm->rtm_type)
             && !attrs[RTA_OIF] && !attrs[RTA_GATEWAY]
             && !attrs[RTA_VIA] && !attrs[RTA_MULTIPATH]) {
-            VLOG_DBG_RL(&rl, "route message needs an RTA_OIF, RTA_GATEWAY, "
-                             "RTA_VIA or RTA_MULTIPATH attribute");
-            goto error_out;
+            if (!attrs[RTA_NH_ID]) {
+                VLOG_DBG_RL(&rl, "route message needs an RTA_OIF, "
+                                 "RTA_GATEWAY, RTA_VIA, RTA_MULTIPATH or "
+                                 "RTA_NH_ID attribute");
+                goto error_out;
+            }
+
+            /* The next hop is in the nexthop object named by RTA_NH_ID, so
+             * the entry added at the start of parsing was never filled in. */
+            route_data_destroy_nexthops__(&change->rd);
         }
         /* Add any additional RTA attribute processing before RTA_MULTIPATH. */
 

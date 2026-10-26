@@ -86,11 +86,12 @@ test_lib_route_table_handle_msg(const struct route_table_msg *change,
 
     printf("%s/%u relevant: %d nlmsg_type: %d rtm_protocol: %s (%u) "
            "rtn_local: %d rta_prefsrc: %s rta_mark: %"PRIu32" "
-           "rta_table_id: %s rta_priority: %"PRIu32"\n",
+           "rta_table_id: %s rta_priority: %"PRIu32" rta_nhid: %"PRIu32"\n",
            ds_cstr(&rta_dst), rd->rtm_dst_len, change->relevant,
            change->nlmsg_type, rt_prot_name(rd->rtm_protocol),
            rd->rtm_protocol, rd->rtn_local, ds_cstr(&rta_prefsrc),
-           rd->rta_mark, rt_table_name(rd->rta_table_id), rd->rta_priority);
+           rd->rta_mark, rt_table_name(rd->rta_table_id), rd->rta_priority,
+           rd->rta_nhid);
 
     LIST_FOR_EACH (rdnh, nexthop_node, &rd->nexthops) {
         ds_clear(&nexthop_addr);

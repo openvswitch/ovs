@@ -333,6 +333,58 @@ AT_CHECK([ovstest test-lib-route-table-dump | \
 
 AT_CLEANUP
 
+AT_SETUP([route-table - route with nexthop id])
+AT_KEYWORDS([route])
+
+dnl Skip if the running kernel / iproute2 does not support nexthop objects.
+AT_SKIP_IF([! ip nexthop show >/dev/null 2>&1])
+
+dnl Create a veth pair with both ends up.  A nexthop object can only reference
+dnl a device that has carrier.
+on_exit 'ip link del p1-route'
+AT_CHECK([ip link add p1-route type veth peer name ovs-p1-route])
+AT_CHECK([ip link set p1-route up])
+AT_CHECK([ip link set ovs-p1-route up])
+
+dnl Add ip addresses.
+AT_CHECK([ip addr add 10.0.0.17/24 dev p1-route], [0], [stdout])
+AT_CHECK([ip -6 addr add fc00:db8:cafe::17/64 dev p1-route], [0], [stdout])
+
+dnl Create nexthop objects and a nexthop group referencing two of them.
+on_exit 'ip nexthop del id 4200'
+AT_CHECK([ip nexthop add id 4200 via 10.0.0.18 dev p1-route])
+on_exit 'ip nexthop del id 4201'
+AT_CHECK([ip nexthop add id 4201 via 10.0.0.19 dev p1-route])
+on_exit 'ip nexthop del id 4210'
+AT_CHECK([ip nexthop add id 4210 group 4200/4201])
+on_exit 'ip nexthop del id 4202'
+AT_CHECK([ip nexthop add id 4202 via fc00:db8:cafe::18 dev p1-route])
+
+dnl Add routes that reference their next hop through a nexthop id.
+on_exit 'ip route flush table 42'
+AT_CHECK([ip route add 192.168.10.12/32 nhid 4200 table 42])
+AT_CHECK([ip route add 192.168.10.13/32 nhid 4210 table 42])
+dnl Until duplicate address detection has finished iproute2 would give us an
+dnl "Invalid source address" error, so wait a while to succeed.
+OVS_WAIT_UNTIL([ip -6 route add fc00:db8:beef::12/128 nhid 4202 table 42])
+
+dnl The nexthop id must be reported, for a single nexthop object as well as
+dnl for a group of them.
+AT_CHECK([ovstest test-lib-route-table-dump | \
+          awk '/^192.168.10.12/{print$1" "$2" "$3" "$19" "$20}'], [0], [dnl
+192.168.10.12/32 relevant: 1 rta_nhid: 4200
+])
+AT_CHECK([ovstest test-lib-route-table-dump | \
+          awk '/^192.168.10.13/{print$1" "$2" "$3" "$19" "$20}'], [0], [dnl
+192.168.10.13/32 relevant: 1 rta_nhid: 4210
+])
+AT_CHECK([ovstest test-lib-route-table-dump | \
+          awk '/^fc00:db8:beef::12/{print$1" "$2" "$3" "$19" "$20}'], [0], [dnl
+fc00:db8:beef::12/128 relevant: 1 rta_nhid: 4202
+])
+
+AT_CLEANUP
+
 dnl Checks that OVS ignores unsupported routing rules.
 AT_SETUP([ovs-route - unsupported rules])
 AT_KEYWORDS([route])
