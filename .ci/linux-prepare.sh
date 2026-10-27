@@ -14,7 +14,11 @@ fi
 # really need this utility being installed.
 if test -d sparse; then
     pushd sparse
-    make -j4 HAVE_SQLITE= install
+    make -j4 HAVE_SQLITE=
+    # Install as a separate command with no parallelization until
+    # rust-coreutils 0.12.0+ lands in Ubuntu 26.04:
+    #   https://github.com/uutils/coreutils/issues/12355
+    make HAVE_SQLITE= install
     popd
 fi
 
