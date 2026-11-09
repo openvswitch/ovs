@@ -479,13 +479,13 @@ get_peer_common_name(const struct ssl_stream *sslv)
         goto error;
     }
 
-    X509_NAME_ENTRY *cn_entry = X509_NAME_get_entry(
+    const X509_NAME_ENTRY *cn_entry = X509_NAME_get_entry(
         X509_get_subject_name(peer_cert), cn_index);
     if (!cn_entry) {
         goto error;
     }
 
-    ASN1_STRING *cn_data = X509_NAME_ENTRY_get_data(cn_entry);
+    const ASN1_STRING *cn_data = X509_NAME_ENTRY_get_data(cn_entry);
     if (!cn_data) {
         goto error;
     }
