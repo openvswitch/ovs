@@ -665,7 +665,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: deb-packages-${{ matrix.dpdk }}-dpdk
-        path: '/home/runner/work/ovs/*.deb'
+        path: /home/runner/work/${{ github.event.repository.name }}/*.deb
 
   build-linux-rpm:
     name: linux rpm fedora
