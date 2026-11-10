@@ -1707,12 +1707,19 @@ common_destruct(struct netdev_dpdk *dev)
     OVS_REQUIRES(dpdk_mutex)
     OVS_EXCLUDED(dev->mutex)
 {
+    struct qos_conf *qos_conf;
+
     rte_free(dev->tx_q);
     dpdk_mp_put(dev->dpdk_mp);
 
     ovs_list_remove(&dev->list_node);
     free(ovsrcu_get_protected(struct ingress_policer *,
                               &dev->ingress_policer));
+    qos_conf = ovsrcu_get_protected(struct qos_conf *,
+                                    &dev->qos_conf);
+    if (qos_conf) {
+        qos_conf->ops->qos_destruct(qos_conf);
+    }
     free(dev->sw_stats);
     ovs_mutex_destroy(&dev->mutex);
 }
