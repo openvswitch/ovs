@@ -665,6 +665,23 @@ try_checkpatch \
     "WARNING: The subject, '<area>: <summary>', is over 70 characters, i.e., 85.
     Subject: netdev: This is a way to long commit summary and therefor it should report a WARNING!"
 
+try_checkpatch \
+   "Author: A
+    Commit: A
+    Subject: netdev: This is a way to long commit summary and therefor it
+     should report a WARNING!
+
+    Signed-off-by: A" \
+    "WARNING: The subject, '<area>: <summary>', is over 70 characters, i.e., 85.
+    Subject: netdev: This is a way to long commit summary and therefor it should report a WARNING!"
+
+try_checkpatch \
+   "Author: A
+    Commit: A
+    Subject: [[PATCH v7 branch-x.y RFC]] area: This one is actually not that long and should not be reported.
+
+    Signed-off-by: A"
+
 AT_CLEANUP
 
 AT_SETUP([checkpatch - ignore committer as signoff])
