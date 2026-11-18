@@ -42,10 +42,10 @@ function build_dpdk()
     DPDK_OPTS="$DPDK_OPTS -Denable_apps=test-pmd"
     enable_drivers="net/null,net/af_xdp,net/tap,net/virtio"
     DPDK_OPTS="$DPDK_OPTS -Denable_drivers=$enable_drivers"
-    # OVS depends on the vhost library (and its dependencies).
+    # OVS depends on the vhost library.
     # dpdk-testpmd depends on cmdline.
     # net/tap depends on the gso library.
-    DPDK_OPTS="$DPDK_OPTS -Denable_libs=cmdline,cryptodev,dmadev,gso,vhost"
+    DPDK_OPTS="$DPDK_OPTS -Denable_libs=cmdline,gso,vhost"
 
     # Install DPDK using prefix.
     DPDK_OPTS="$DPDK_OPTS --prefix=$DPDK_INSTALL_DIR"
