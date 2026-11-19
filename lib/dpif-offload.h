@@ -40,6 +40,12 @@ enum dpif_offload_impl_type {
     DPIF_OFFLOAD_IMPL_FLOWS_PROVIDER_ONLY,
 };
 
+/* Immutable structure that holds a set of actions. */
+struct offload_actions {
+    unsigned int size;       /* Size of 'actions', in bytes. */
+    struct nlattr actions[]; /* Sequence of OVS_ACTION_ATTR_* attributes. */
+};
+
 
 /* Global functions. */
 void dpif_offload_set_global_cfg(const struct ovsrec_open_vswitch *);
@@ -112,6 +118,7 @@ bool dpif_offload_netdev_same_offload(const struct netdev *,
                                       const struct netdev *);
 int dpif_offload_netdev_hw_post_process(struct netdev *, unsigned pmd_id,
                                         struct dp_packet *,
+                                        struct offload_actions **alt_actions,
                                         void **flow_reference);
 bool dpif_offload_netdev_udp_tnl_get_src_port(const struct netdev *,
                                               struct dp_packet *,

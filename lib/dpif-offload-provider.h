@@ -269,10 +269,13 @@ struct dpif_offload_class {
      *
      * When zero (0) is returned, the 'flow_reference' pointer may reference
      * the flow_reference passed to the matching flow.  This can be used to
-     * support partial offloads.  The returned pointer must remain valid until
-     * the end of the next RCU grace period. */
+     * support partial offloads.  The 'alt_actions' pointer may also be set to
+     * override the flow's actions, for example because a subset of the actions
+     * was already executed in hardware.  Any pointers set must remain valid
+     * until the end of the next RCU grace period. */
     int (*netdev_hw_post_process)(const struct dpif_offload *, struct netdev *,
                                   unsigned pmd_id, struct dp_packet *,
+                                  struct offload_actions **alt_actions,
                                   void **flow_reference);
 
     /* Allows the offload provider to override the default UDP tunnel source

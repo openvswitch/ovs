@@ -486,7 +486,7 @@ p1: flow del: mark: 1
    # Check if partial hw offload was hit in dpif-netdev.
    m4_if([$1], [dummy-pmd],
          [AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show \
-                    | grep -q "PHWOL hits:                  1"])])
+                    | grep -q "PHWOL without ACT hits:            1 "])])
 
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
@@ -568,7 +568,7 @@ udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:
    # Check if partial hw offload was hit in dpif-netdev.
    m4_if([$1], [dummy-pmd],
          [AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show \
-                    | grep -q "PHWOL hits:                  1"])])
+                    | grep -q "PHWOL without ACT hits:            1 "])])
 
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
@@ -650,7 +650,7 @@ arp,in_port=ANY,dl_vlan=11,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:
    # Check if partial hw offload was hit in dpif-netdev.
    m4_if([$1], [dummy-pmd],
          [AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show \
-                    | grep -q "PHWOL hits:                  1"])])
+                    | grep -q "PHWOL without ACT hits:            1 "])])
 
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
@@ -726,7 +726,7 @@ p1: flow del: mark: 1
 
 # Check if we do not hit partial hw offload.
 AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show \
-          | grep -q "PHWOL hits:                  0 "])
+          | grep -q "PHWOL without ACT hits:            0 "])
 
 # Verify two packets where received.
 AT_CHECK([[[ $(ovs-pcap p2.pcap | grep -c "$packet_hex") -eq 2 ]]])
@@ -1204,31 +1204,31 @@ AT_CHECK([cat good_frame | sed -e "s/6b72/dead/" > bad_frame])
 CHECK_FWD_PACKET(p1, p2, , [bad_frame], [bad_frame])
 dnl First packet, no simple matching.
 AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | grep 'Simple Match hits'], [0], [dnl
-  - Simple Match hits:           0  (  0.0 %)
+  - Simple Match hits:                 0  (  0.0 %)
 ])
 
 dnl No Rx flag.
 CHECK_FWD_PACKET(p1, p2, , [bad_frame], [bad_frame])
 AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | grep 'Simple Match hits'], [0], [dnl
-  - Simple Match hits:           1  ( 50.0 %)
+  - Simple Match hits:                 1  ( 50.0 %)
 ])
 
 dnl Flag as Rx good.
 CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_good, [bad_frame], [bad_frame])
 AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | grep 'Simple Match hits'], [0], [dnl
-  - Simple Match hits:           2  ( 66.7 %)
+  - Simple Match hits:                 2  ( 66.7 %)
 ])
 
 dnl Flag as Rx bad.
 CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_bad, [bad_frame], [bad_frame])
 AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | grep 'Simple Match hits'], [0], [dnl
-  - Simple Match hits:           3  ( 75.0 %)
+  - Simple Match hits:                 3  ( 75.0 %)
 ])
 
 dnl Flag as Rx partial.
 CHECK_FWD_PACKET(p1, p2, ol_l4_rx_csum_set_partial, [bad_frame], [good_frame])
 AT_CHECK([ovs-appctl dpif-netdev/pmd-perf-show | grep 'Simple Match hits'], [0], [dnl
-  - Simple Match hits:           4  ( 80.0 %)
+  - Simple Match hits:                 4  ( 80.0 %)
 ])
 
 OVS_VSWITCHD_STOP

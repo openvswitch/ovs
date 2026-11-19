@@ -235,12 +235,16 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
 
     if (format_iterations) {
         ds_put_format(str,
-            "  Iterations:         %12"PRIu64"  (%.2f us/it)\n"
-            "  - Used TSC cycles:  %12"PRIu64"  (%5.1f %% of total cycles)\n"
-            "  - idle iterations:  %12"PRIu64"  (%5.1f %% of used cycles)\n"
-            "  - busy iterations:  %12"PRIu64"  (%5.1f %% of used cycles)\n"
-            "  - sleep iterations: %12"PRIu64"  (%5.1f %% of iterations)\n"
-            "  Sleep time (us):    %12.0f  (%3.0f us/iteration avg.)\n",
+            "  Iterations:               %12"PRIu64"  (%.2f us/it)\n"
+            "  - Used TSC cycles:        %12"PRIu64"  (%5.1f %% "
+                                                       "of total cycles)\n"
+            "  - idle iterations:        %12"PRIu64"  (%5.1f %% "
+                                                       "of used cycles)\n"
+            "  - busy iterations:        %12"PRIu64"  (%5.1f %% "
+                                                       "of used cycles)\n"
+            "  - sleep iterations:       %12"PRIu64"  (%5.1f %% "
+                                                       "of iterations)\n"
+            "  Sleep time (us):          %12.0f  (%3.0f us/iteration avg.)\n",
             tot_iter,
             tot_iter
                 ? (tot_cycles + tot_sleep_cycles) * us_per_cycle / tot_iter
@@ -265,16 +269,19 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
         ds_put_cstr(str, ")\n");
 
         ds_put_format(str,
-            "  Datapath passes:    %12"PRIu64"  (%.2f passes/pkt)\n"
-            "  - PHWOL hits:       %12"PRIu64"  (%5.1f %%)\n"
-            "  - Simple Match hits:%12"PRIu64"  (%5.1f %%)\n"
-            "  - EMC hits:         %12"PRIu64"  (%5.1f %%)\n"
-            "  - SMC hits:         %12"PRIu64"  (%5.1f %%)\n"
-            "  - Megaflow hits:    %12"PRIu64"  (%5.1f %%, %.2f "
-                                                 "subtbl lookups/hit)\n",
+            "  Datapath passes:          %12"PRIu64"  (%.2f passes/pkt)\n"
+            "  - PHWOL without ACT hits: %12"PRIu64"  (%5.1f %%)\n"
+            "  - PHWOL with ACT hits :   %12"PRIu64"  (%5.1f %%)\n"
+            "  - Simple Match hits:      %12"PRIu64"  (%5.1f %%)\n"
+            "  - EMC hits:               %12"PRIu64"  (%5.1f %%)\n"
+            "  - SMC hits:               %12"PRIu64"  (%5.1f %%)\n"
+            "  - Megaflow hits:          %12"PRIu64"  (%5.1f %%, %.2f "
+                                                       "subtbl lookups/hit)\n",
             passes, 1.0 * passes / rx_packets,
             stats[PMD_STAT_PHWOL_HIT],
             100.0 * stats[PMD_STAT_PHWOL_HIT] / passes,
+            stats[PMD_STAT_PHWOL_ACT_HIT],
+            100.0 * stats[PMD_STAT_PHWOL_ACT_HIT] / passes,
             stats[PMD_STAT_SIMPLE_HIT],
             100.0 * stats[PMD_STAT_SIMPLE_HIT] / passes,
             stats[PMD_STAT_EXACT_HIT],
@@ -288,7 +295,7 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
             : 0);
 
         ds_put_format(str,
-            "  - Upcalls:          %12"PRIu64"  (%5.1f %%",
+            "  - Upcalls:                %12"PRIu64"  (%5.1f %%",
             upcalls, 100.0 * upcalls / passes);
         if (tot_iter) {
             ds_put_format(str, ", %.1f us/upcall",
@@ -297,21 +304,21 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
         ds_put_cstr(str, ")\n");
 
         ds_put_format(str,
-            "  - Lost upcalls:     %12"PRIu64"  (%5.1f %%)\n",
+            "  - Lost upcalls:           %12"PRIu64"  (%5.1f %%)\n",
             stats[PMD_STAT_LOST], 100.0 * stats[PMD_STAT_LOST] / passes);
     } else {
         ds_put_format(str,
-            "  Rx packets:         %12d\n", 0);
+            "  Rx packets:               %12d\n", 0);
     }
     if (tx_packets > 0) {
         ds_put_format(str,
-            "  Tx packets:         %12"PRIu64"  (%.0f Kpps)\n"
-            "  Tx batches:         %12"PRIu64"  (%.2f pkts/batch)\n",
+            "  Tx packets:               %12"PRIu64"  (%.0f Kpps)\n"
+            "  Tx batches:               %12"PRIu64"  (%.2f pkts/batch)\n",
             tx_packets, (tx_packets / duration) / 1000,
             tx_batches, 1.0 * tx_packets / tx_batches);
     } else {
         ds_put_format(str,
-            "  Tx packets:         %12d\n\n", 0);
+            "  Tx packets:               %12d\n\n", 0);
     }
 }
 

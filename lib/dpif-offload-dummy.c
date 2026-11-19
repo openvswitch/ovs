@@ -580,13 +580,16 @@ dummy_offload_get_port_by_odp_port(const struct dpif_offload *offload_,
 static int
 dummy_offload_hw_post_process(const struct dpif_offload *offload_,
                               struct netdev *netdev, unsigned pmd_id,
-                              struct dp_packet *packet, void **flow_reference_)
+                              struct dp_packet *packet,
+                              struct offload_actions **alt_actions,
+                              void **flow_reference_)
 {
     struct dummy_offloaded_flow *off_flow;
     struct dummy_offload_port *port;
     void *flow_reference = NULL;
     uint32_t flow_mark;
 
+    *alt_actions = NULL;
     port = dummy_offload_get_port_by_netdev(offload_, netdev);
     if (!port || !dp_packet_has_flow_mark(packet, &flow_mark)) {
         *flow_reference_ = NULL;
@@ -607,7 +610,7 @@ dummy_offload_hw_post_process(const struct dpif_offload *offload_,
     }
     ovs_mutex_unlock(&port->port_mutex);
 
-     *flow_reference_ = flow_reference;
+    *flow_reference_ = flow_reference;
     return 0;
 }
 

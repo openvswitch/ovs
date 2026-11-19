@@ -832,10 +832,13 @@ dpdk_flow_count_by_thread(struct dpdk_offload *offload, unsigned int tid)
 static int
 dpdk_offload_hw_post_process(const struct dpif_offload *offload_,
                              struct netdev *netdev, unsigned pmd_id,
-                             struct dp_packet *packet, void **flow_reference)
+                             struct dp_packet *packet,
+                             struct offload_actions **alt_actions,
+                             void **flow_reference)
 {
     struct dpdk_offload *offload = dpdk_offload_cast(offload_);
 
+    *alt_actions = NULL;
     return dpdk_netdev_hw_miss_packet_recover(offload, netdev, pmd_id, packet,
                                               flow_reference);
 }
